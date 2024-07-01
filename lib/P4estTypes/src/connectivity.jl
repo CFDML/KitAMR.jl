@@ -236,7 +236,6 @@ end
     |        | /
     |        |/
     1--------3
- 
 """
 function Connectivity{X}(vertices::AbstractVector, cells::AbstractVector) where {X}
     if X == 4
@@ -292,7 +291,8 @@ function Base.:(==)(x::Connectivity{8}, y::Connectivity{8})
     p8est_connectivity_is_equivalent(x.pointer, y.pointer) == 1
 end
 
-Base.isvalid(c::Connectivity{4}) = GC.@preserve c p4est_connectivity_is_valid(c.pointer) == 1
+Base.isvalid(c::Connectivity{4}) =
+    GC.@preserve c p4est_connectivity_is_valid(c.pointer) == 1
 Base.sizeof(c::Connectivity{4}) = Int(p4est_connectivity_memory_used(c.pointer))
 
 Base.isvalid(c::Connectivity{8}) = p8est_connectivity_is_valid(c.pointer) == 1

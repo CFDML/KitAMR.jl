@@ -16,17 +16,17 @@ using P4est
 An abstract type for p4est and libsc log priorities.  The follow
 priorities are available:
 
-- [`P4estTypes.SC.LP.Default`](@ref Default): the libsc default.
-- [`P4estTypes.SC.LP.Always`](@ref Always): log absolutely everything.
-- [`P4estTypes.SC.LP.Trace`](@ref Trace): prefix file and line number.
-- [`P4estTypes.SC.LP.Debug`](@ref Debug): any information on the internal state.
-- [`P4estTypes.SC.LP.Verbose`](@ref Verbose): information on conditions, decisions.
-- [`P4estTypes.SC.LP.Info`](@ref Info): most relevant things a function is doing.
-- [`P4estTypes.SC.LP.Statistics`](@ref Statistics): important for consistency/performance.
-- [`P4estTypes.SC.LP.Essential`](@ref Essential): a few lines at most for a major api function.
-- [`P4estTypes.SC.LP.Production`](@ref Production): log a few lines max per program.
-- [`P4estTypes.SC.LP.Error`](@ref Error): log errors only.
-- [`P4estTypes.SC.LP.Silent`](@ref Silent): never log anything.
+  - [`P4estTypes.SC.LP.Default`](@ref Default): the libsc default.
+  - [`P4estTypes.SC.LP.Always`](@ref Always): log absolutely everything.
+  - [`P4estTypes.SC.LP.Trace`](@ref Trace): prefix file and line number.
+  - [`P4estTypes.SC.LP.Debug`](@ref Debug): any information on the internal state.
+  - [`P4estTypes.SC.LP.Verbose`](@ref Verbose): information on conditions, decisions.
+  - [`P4estTypes.SC.LP.Info`](@ref Info): most relevant things a function is doing.
+  - [`P4estTypes.SC.LP.Statistics`](@ref Statistics): important for consistency/performance.
+  - [`P4estTypes.SC.LP.Essential`](@ref Essential): a few lines at most for a major api function.
+  - [`P4estTypes.SC.LP.Production`](@ref Production): log a few lines max per program.
+  - [`P4estTypes.SC.LP.Error`](@ref Error): log errors only.
+  - [`P4estTypes.SC.LP.Silent`](@ref Silent): never log anything.
 """
 abstract type LogPriority end
 
