@@ -1,0 +1,23 @@
+name = "P4estTypes"
+uuid = "f636fe8e-398d-42a9-9d15-dd2c0670d30f"
+authors = ["Lucas C Wilcox <lucas@swirlee.com>"]
+version = "0.2.1-pre"
+
+[deps]
+AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
+DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
+MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
+P4est = "7d669430-f675-4ae7-b43e-fab78ec5a902"
+PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
+RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+
+[compat]
+AbstractTrees = "0.4"
+DocStringExtensions = "0.9"
+MPI = "0.19, 0.20"
+P4est = "0.4.6"
+PrecompileTools = "1"
+RecipesBase = "1"
+SparseArrays = "1"
+julia = "1.6"
