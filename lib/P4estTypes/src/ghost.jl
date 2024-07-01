@@ -43,13 +43,14 @@ Construct a ghost layer of quadrants that neighbor the local to the rank
 for the given `forest`.  Here `connection` determines what neighboring
 quadrants to include (across face, edge, corner, or full) and can take the
 values:
-- `P4estTypes.CONNECT_FULL(Val(4))`: get face and corner neighbors.
-- `P4estTypes.CONNECT_FULL(Val(8))`: get face, edge, and corner neighbors.
-- `P4estTypes.CONNECT_FACE(Val(4))`: get face neighbors.
-- `P4estTypes.CONNECT_FACE(Val(8))`: get face neighbors.
-- `P4estTypes.CONNECT_EDGE(Val(8))`: get face and edge neighbors.
-- `P4estTypes.CONNECT_CORNER(Val(4))`: get face and corner neighbors.
-- `P4estTypes.CONNECT_CORNER(Val(8)): `get face, edge, and corner neighbors.
+
+  - `P4estTypes.CONNECT_FULL(Val(4))`: get face and corner neighbors.
+  - `P4estTypes.CONNECT_FULL(Val(8))`: get face, edge, and corner neighbors.
+  - `P4estTypes.CONNECT_FACE(Val(4))`: get face neighbors.
+  - `P4estTypes.CONNECT_FACE(Val(8))`: get face neighbors.
+  - `P4estTypes.CONNECT_EDGE(Val(8))`: get face and edge neighbors.
+  - `P4estTypes.CONNECT_CORNER(Val(4))`: get face and corner neighbors.
+  - `P4estTypes.CONNECT_CORNER(Val(8)): `get face, edge, and corner neighbors.
 """
 function ghostlayer(forest::Pxest{X}; connection = CONNECT_FULL(Val(X))) where {X}
     return GhostLayer{X}((pxest_ghost_new(Val(X)))(forest, connection))
@@ -160,6 +161,7 @@ end
 Returns 0-based indices into `mirror_proc_mirrors` for each rank.  This includes
 an extra entry at the end of the array so that 1-based range into
 `mirror_proc_mirrors` for rank `r` can be built with
+
 ```
 (mirror_proc_offsets[r]+1):mirror_proc_offsets[r+1]
 ```
@@ -184,10 +186,13 @@ end
 Returns 0-based indices into [`ghosts`](@ref) for each rank.  This includes
 an extra entry at the end of the array so that 1-based range into
 [`ghosts`](@ref) for rank `r` can be built with
+
 ```
 (proc_offsets[r]+1):proc_offsets[r+1]
 ```
+
 Thus the ghost quadrants associated with rank `r` can be obtained with
+
 ```
 ghosts(ghost)[(proc_offsets[r]+1):proc_offsets[r+1]]
 ```
@@ -212,10 +217,12 @@ end
 Returns 0-based indices into [`mirrors`](@ref).  This is used in conjunction
 with `mirror_proc_offsets` to get the mirror quadrants associated with
 each rank.  For example
+
 ```
 rrange = (mirror_proc_offsets[r]+1):mirror_proc_offsets[r+1]
 mirrors(ghost)[mirror_proc_mirrors(rrange)]
 ```
+
 selects the mirror quadrants associated with rank `r`.
 
 See `@doc P4estTypes.P4est.p4est_ghost_t` and
