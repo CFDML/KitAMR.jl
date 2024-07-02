@@ -124,6 +124,6 @@ function update_neighbor!(p4est::Ptr{p4est_t}, DVM_data::DVM_Data)
     global_data = DVM_data.global_data
     p4est_mesh_destroy(global_data.mesh)
     global_data.mesh =
-        p4est_mesh_new_ext(ps4est, global_data.ghost, 1, 1, P4EST_CONNECT_FACE)
+        p4est_mesh_new_ext(p4est, global_data.ghost, 1, 1, P4EST_CONNECT_FACE)
     update_neighbor_kernel!(p4est, DVM_data)
 end
