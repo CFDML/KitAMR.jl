@@ -228,7 +228,7 @@ struct Data_Set
     VS_end_time::Float64
 end
 function Data_Set()
-    return Data_Set(0.1, 0.05, 3.0, 0.1)
+    return Data_Set(0.1, 0.05, 0.02, 0.1)
 end
 mutable struct DVM_Data
     global_data::Global_Data
