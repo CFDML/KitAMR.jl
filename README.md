@@ -22,7 +22,9 @@ In kinetic methods, the state of the fluid is described by a distribution functi
 
 $$
 \rho(\mathbf{x},t)=\iiint_{-\infty}^{\infty}f(\mathbf{x},\mathbf{u},t)d\mathbf{u}
-$$, where $\rho(\mathbf{x},t)$ is the density of flows at $\mathbf{x}$ in time $t$. At higher temperatures, molecular internal degrees of freedom are excited, and the distribution function will depend on these degrees of freedom as well. For simplicity, we do not currently consider this situation.
+$$
+
+, where $\rho(\mathbf{x},t)$ is the density of flows at $\mathbf{x}$ in time $t$. At higher temperatures, molecular internal degrees of freedom are excited, and the distribution function will depend on these degrees of freedom as well. For simplicity, we do not currently consider this situation.
 
 <div style="text-align:center">
     <img src="https://i.postimg.cc/pTsjgW3T/20240703151108.jpg)](https://postimg.cc/ygSWRH14" alt="Image 1" width="300" title="distribution function of 2-D" style="margin-right: 1px;">
@@ -42,7 +44,7 @@ $$
 The evolution of the distribution function follows the Boltzmann equation.
 
 $$
-\frac{\partial f}{\partial t}+\mathbf{u}\cdot\frac{\partial f}{\partial \mathbf{x}}+\mathbf{F}\cdot\frac{\partial f}{\partial \mathbf{u}}=\iiint_{-\infty}^{\infty}\int_0^{4\pi}(f^*f_1^*-ff_1)c_r\sigma d\Omega dc_1
+\frac{\partial f}{\partial t}+\mathbf{u}\cdot\frac{\partial f}{\partial \mathbf{x}}+\mathbf{F}\cdot\frac{\partial f}{\partial \mathbf{u}}=\iiint_{-\infty}^{\infty}\int_0^{4\pi}(f^{\*}f_1^{\*}-ff_1)c_r\sigma d\Omega dc_1
 $$
 
 <!-- The Boltzmann equation holds a central position in kinetic theory. In the free molecular flow regime, the collisionless Boltzmann equation is applied, or its equilibrium solution, the Maxwellian distribution, is directly used. In the slip flow regime, the Boltzmann equation is expanded via the Chapman-Enskog method to obtain the first-order approximation, the Navier-Stokes equations, or the second-order approximation, the Burnett equations. Alternatively, a systematic asymptotic expansion yields a set of fluid mechanics equations. In the transition regime, solving flow problems involves approaches derived from the Boltzmann equation or its equivalent methods. -->
@@ -64,11 +66,11 @@ $$
 The underlying discretization of the Boltzmann equation is based on finite volume method, with its discrete form as follows:
 
 $$
-[\bar{U}_j\Omega_j]^{n+1}=[\bar{U}_j\Omega_j]^n-\Delta t\sum_{\partial\Omega}\mathbf F^{*}\cdot\Delta\mathbf{S}+\Delta t \bar{Q}_j\Omega_j
+[\bar{U}_j\Omega_j]^{n+1}=[\bar{U}_j\Omega_j]^n-\Delta t\sum_{\partial\Omega}\mathbf F^{\*}\cdot\Delta\mathbf{S}+\Delta t \bar{Q}_j\Omega_j
 $$
 
-, where $\bar U_j^n\coloneqq\frac{1}{\Omega_j}\int_{\Omega_j}Ud\Omega_j|^n$, $\bar Q_j^n\coloneqq\frac{1}{\Omega_j}\int_{\Omega_j}Qd\Omega_j$ are the cell-averaged conservative variable and source. And $\bar Q_j^*$ and $\mathbf{F}^*$ are respectively cell- and time-averaged sources and numerical flux, which are defined as $\bar Q_j^*\coloneqq\frac{1}{\Delta t}\int_n^{n+1}\bar Q_jdt$ and $\mathbf F^*\cdot \Delta \mathbf{S}\coloneqq \frac{1}{\Delta t}\int_n^{n+1}\mathbf F\cdot\Delta \mathbf{S}dt$.
-It is an exact relation for the time evolution of the space averaged conservative avriables over cell $j$ from time step $n$ to $n+1$. And the numerical flux $\mathbf F^*$ identifies completely a scheme by the way it approximates the time-averaged physical flux along each cell face.
+, where $\bar U_j^n\coloneqq\frac{1}{\Omega_j}\int_{\Omega_j}Ud\Omega_j|^n$, $\bar Q_j^n\coloneqq\frac{1}{\Omega_j}\int_{\Omega_j}Qd\Omega_j$ are the cell-averaged conservative variable and source. And $\bar Q_j^{\*}$ and $\mathbf{F}^{\*}$ are respectively cell- and time-averaged sources and numerical flux, which are defined as $\bar Q_j^{\*}\coloneqq\frac{1}{\Delta t}\int_n^{n+1}\bar Q_jdt$ and $\mathbf F^{\*}\cdot \Delta \mathbf{S}\coloneqq \frac{1}{\Delta t}\int_n^{n+1}\mathbf F\cdot\Delta \mathbf{S}dt$.
+It is an exact relation for the time evolution of the space averaged conservative avriables over cell $j$ from time step $n$ to $n+1$. And the numerical flux $\mathbf F^{\*}$ identifies completely a scheme by the way it approximates the time-averaged physical flux along each cell face.
 ### Numerical Flux
 The numerical scheme that the solver currently supports is UGKS, with interface variables obtained from VanLeer reconstruction. For specific implementation details, please refer to the relevant literature.
 
