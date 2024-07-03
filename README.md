@@ -66,8 +66,8 @@ $$
 The underlying discretization of the Boltzmann equation is based on finite volume method, with its discrete form as follows:
 
 $$
-\{\bar{U}_j\Omega_j\}^{n+1} = 
-\{\bar{U}_j\Omega_j\}^n-\Delta t\sum_{\partial\Omega}\mathbf{F}^{\*}\cdot\Delta\mathbf{S}+\Delta t \bar{Q}_j\Omega_j
+\{\bar U_j\Omega_j\}^{n+1} = 
+\{\bar U_j \Omega_j\}^n-\Delta t\sum_{\partial\Omega}\mathbf{F}^{\*}\cdot\Delta\mathbf{S}+\Delta t \bar{Q}_j\Omega_j
 $$
 
 , where $\bar U_j^n\coloneqq\frac{1}{\Omega_j}\int_{\Omega_j}Ud\Omega_j|^n$, $\bar Q_j^n\coloneqq\frac{1}{\Omega_j}\int_{\Omega_j}Qd\Omega_j$ are the cell-averaged conservative variable and source. And $\bar Q_j^{\*}$ and $\mathbf{F}^{\*}$ are respectively cell- and time-averaged sources and numerical flux, which are defined as $\bar Q_j^{\*}\coloneqq\frac{1}{\Delta t}\int_n^{n+1}\bar Q_jdt$ and $\mathbf F^{\*}\cdot \Delta \mathbf{S}\coloneqq \frac{1}{\Delta t}\int_n^{n+1}\mathbf F\cdot\Delta \mathbf{S}dt$.
