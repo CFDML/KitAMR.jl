@@ -8,13 +8,10 @@ using LinearAlgebra
 using Parameters
 using SpecialFunctions
 using StaticArrays
+using PythonCall
 
 using Reexport
 @reexport using P4est
-
-using PythonCall
-scipy = pyimport("scipy")
-np = pyimport("numpy")
 
 include("../lib/P4estTypes/src/P4estTypes.jl")
 using .P4estTypes
@@ -38,5 +35,12 @@ include("iterate.jl")
 include("partition.jl")
 include("postprocess.jl")
 include("finalize.jl")
+
+const np = Ref{Py}()
+const scipy = Ref{Py}()
+function __init__()
+    np[] = pyimport("numpy")
+    scipy[] = pyimport("scipy")
+end
 
 end # module

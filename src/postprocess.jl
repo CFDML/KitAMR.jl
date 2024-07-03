@@ -74,12 +74,12 @@ function reshape_solutions(
         midpoints[i, :] .= solutions[i].midpoint
         z[i] = getfield(solutions[i], field)[index]
     end
-    itp = scipy.interpolate.CloughTocher2DInterpolator(midpoints, z)
+    itp = scipy[].interpolate.CloughTocher2DInterpolator(midpoints, z)
     dx = (xmax - xmin) / Nx / 2^DVM_PS_MAXLEVEL
     dy = (ymax - ymin) / Ny / 2^DVM_PS_MAXLEVEL
     X = collect(xmin+EPS+dx/2:dx:xmax-EPS-dx/2)
     Y = collect(ymin+EPS+dy/2:dy:ymax-EPS-dy/2)
-    pyZ = np.zeros((length(X), length(Y)))
+    pyZ = np[].zeros((length(X), length(Y)))
     for i in eachindex(X)
         for j in eachindex(Y)
             pyZ[i-1, j-1] = itp(X[i], Y[j])[]
@@ -495,12 +495,12 @@ function reshape_solutions_vs(midpoint::AM, df::AM, global_data::Global_Data)
     Nx, Ny = global_data.vs_trees_num
     xmin, xmax, ymin, ymax = global_data.quadrature
     z = @view(df[:, 1])
-    itp = scipy.interpolate.CloughTocher2DInterpolator(midpoint, PyArray(z))
+    itp = scipy[].interpolate.CloughTocher2DInterpolator(midpoint, PyArray(z))
     dx = (xmax - xmin) / Nx / 2^DVM_VS_MAXLEVEL
     dy = (ymax - ymin) / Ny / 2^DVM_VS_MAXLEVEL
     X = collect(xmin+EPS+dx/2:dx:xmax-EPS-dx/2)
     Y = collect(ymin+EPS+dy/2:dy:ymax-EPS-dy/2)
-    pyZ = np.zeros((length(X), length(Y)))
+    pyZ = np[].zeros((length(X), length(Y)))
     for i in eachindex(X)
         for j in eachindex(Y)
             pyZ[i-1, j-1] = itp(X[i], Y[j])[]

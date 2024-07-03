@@ -1,7 +1,7 @@
 """
-To execute the code:
-- from the main directory: mpiexecjl -n N --project=. julia example/cavity_sim.jl
-- from the file directory: mpiexecjl -n N --project=.. julia cavity_sim.jl
+To execute the code (assuming 16 cores are going to be used):
+- from the main directory: mpiexecjl -n 16 --project=. julia example/cavity_sim.jl
+- from the file directory: mpiexecjl -n 16 --project=.. julia cavity_sim.jl
 """
 
 using KitAMR, MPI, CairoMakie
@@ -58,7 +58,7 @@ end
 KitAMR.save_VS_final(DVM_data)
 meshes = KitAMR.collect_mesh(DVM_data)
 solutions = KitAMR.collect_solution(ps4est, DVM_data)
-# write_result!(ps4est,DVM_data,"write_test")
+
 if MPI.Comm_rank(MPI.COMM_WORLD) == 0
     x, y = KitAMR.reshape_mesh(meshes)
     f = Figure()
@@ -66,13 +66,13 @@ if MPI.Comm_rank(MPI.COMM_WORLD) == 0
     KitAMR.mesh_plot(x, y, ax)
     save("mesh.png", f)
 
-    #=x, y, variable = KitAMR.reshape_solutions(solutions, DVM_data.global_data, :prim, 4)
+    x, y, variable = KitAMR.reshape_solutions(solutions, DVM_data.global_data, :prim, 4)
     variable = 1 ./ variable
     f = Figure()
     ax = Axis(f[1, 1])
     co = contourf!(x, y, variable)
     Colorbar(f[1, 2], co)
-    save("test_vs_adaptive.png", f)=#
+    save("test_vs_adaptive.png", f)
 end
 
 KitAMR.finalize!(ps4est, DVM_data)
