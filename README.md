@@ -66,7 +66,8 @@ $$
 The underlying discretization of the Boltzmann equation is based on finite volume method, with its discrete form as follows:
 
 $$
-(\bar{U}_j\Omega_j)^{n+1} = (\bar{U}_j \Omega_j)^n-\Delta t\sum_{\partial\Omega}\mathbf{F}^{\*}\cdot\Delta\mathbf{S}+\Delta t \bar{Q}_j\Omega_j
+\{\bar{U}_j\Omega_j\}^{n+1} = 
+\{\bar{U}_j\Omega_j\}^n-\Delta t\sum_{\partial\Omega}\mathbf{F}^{\*}\cdot\Delta\mathbf{S}+\Delta t \bar{Q}_j\Omega_j
 $$
 
 , where $\bar U_j^n\coloneqq\frac{1}{\Omega_j}\int_{\Omega_j}Ud\Omega_j|^n$, $\bar Q_j^n\coloneqq\frac{1}{\Omega_j}\int_{\Omega_j}Qd\Omega_j$ are the cell-averaged conservative variable and source. And $\bar Q_j^{\*}$ and $\mathbf{F}^{\*}$ are respectively cell- and time-averaged sources and numerical flux, which are defined as $\bar Q_j^{\*}\coloneqq\frac{1}{\Delta t}\int_n^{n+1}\bar Q_jdt$ and $\mathbf F^{\*}\cdot \Delta \mathbf{S}\coloneqq \frac{1}{\Delta t}\int_n^{n+1}\mathbf F\cdot\Delta \mathbf{S}dt$.
@@ -85,8 +86,7 @@ Considering the above limitations of DVM, we adopt Adaptive Mesh Refinement (AMR
 </div>
 
 <div align="center">
-    <img src="https://i.postimg.cc/7Lvp4xWX/cegur-0qkdq.gif" alt="Image 1" title="physical space" width="300" style="margin-right: 1px;">
-    <img src="https://i.postimg.cc/rwVV31C8/d5ubx-sf3vl.gif" alt="Image 2" title="simultaneously, in velocity space" width = "300"style="margin-left: 1px;">
+    <img src="https://i.postimg.cc/7Lvp4xWX/cegur-0qkdq.gif" alt="Image 1" title="physical space" width="300" style="margin-right: 1px;"><img src="https://i.postimg.cc/rwVV31C8/d5ubx-sf3vl.gif" alt="Image 2" title="simultaneously, in velocity space" width = "300"style="margin-left: 1px;">
 </div>
 <!-- Generally speaking, the criteria for refining or coarsening physical space grids are based on the magnitude of macroscopic variable gradients. This approach aims to use finer grids to capture more pronounced variations, thereby modeling more complex flow fields. On the other hand, criteria for velocity space grids are based on the proportion of energy of particles within the grid relative to the total energy of all particles at that physical point. This is because particles with higher energy proportions exert a more significant influence on the macroscopic behavior of the flow, necessitating more accurate numerical integration.  -->
 The current solver discretizes with tree-based Cartesian grids, adapting the mesh in both physical and velocity space simultaneously, according to characteristics including velocity field gradients, boundary complexity, and energy proportion at phase points. Users can also customize the criteria for grid refinement or coarsening according to their own needs.
