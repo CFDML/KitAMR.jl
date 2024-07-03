@@ -1,12 +1,15 @@
-using Pkg
-Pkg.activate(@__DIR__)
+#using Pkg
+#Pkg.activate(@__DIR__)
 using MPI
 using P4est
-using P4estTypes
+#using P4estTypes
+include("../lib/P4estTypes/src/P4estTypes.jl")
+using .P4estTypes
+
 using StaticArrays
 using Parameters
 using SpecialFunctions
-using Makie
+#using Makie
 using CairoMakie
 using PythonCall
 scipy = pyimport("scipy")
