@@ -66,7 +66,7 @@ $$
 The underlying discretization of the Boltzmann equation is based on finite volume method, with its discrete form as follows:
 
 $$
-[\bar{U}_j\Omega_j]^{n+1}=[\bar{U}_j\Omega_j]^n-\Delta t\sum_{\partial\Omega}\mathbf F^{\*}\cdot\Delta\mathbf{S}+\Delta t \bar{Q}_j\Omega_j
+\[\bar{U}_j\Omega_j\]^{n+1}=[\bar{U}_j\Omega_j]^n-\Delta t\sum_{\partial\Omega}\mathbf F^{\*}\cdot\Delta\mathbf{S}+\Delta t \bar{Q}_j\Omega_j
 $$
 
 , where $\bar U_j^n\coloneqq\frac{1}{\Omega_j}\int_{\Omega_j}Ud\Omega_j|^n$, $\bar Q_j^n\coloneqq\frac{1}{\Omega_j}\int_{\Omega_j}Qd\Omega_j$ are the cell-averaged conservative variable and source. And $\bar Q_j^{\*}$ and $\mathbf{F}^{\*}$ are respectively cell- and time-averaged sources and numerical flux, which are defined as $\bar Q_j^{\*}\coloneqq\frac{1}{\Delta t}\int_n^{n+1}\bar Q_jdt$ and $\mathbf F^{\*}\cdot \Delta \mathbf{S}\coloneqq \frac{1}{\Delta t}\int_n^{n+1}\mathbf F\cdot\Delta \mathbf{S}dt$.
@@ -83,6 +83,7 @@ Considering the above limitations of DVM, we adopt Adaptive Mesh Refinement (AMR
 <div style="text-align:center">
     <img src="https://i.postimg.cc/FzQx9cSD/PV-AMR.png" alt="Image 1" title="Simultaneous AMR" width="700" style="margin-right: 1px;">
 </div>
+
 <div style="text-align:center">
     <img src="https://i.postimg.cc/7Lvp4xWX/cegur-0qkdq.gif)](https://postimg.cc/3kBLCH7D" alt="Image 1" title="physical space" width="300" style="margin-right: 1px;">
     <img src="https://i.postimg.cc/rwVV31C8/d5ubx-sf3vl.gif)](https://postimg.cc/dLfcTTxX" alt="Image 2" title="simultaneously, in velocity space" width = "300"style="margin-left: 1px;">
