@@ -89,10 +89,7 @@ Considering the above limitations of DVM, we adopt Adaptive Mesh Refinement (AMR
 </div>
 
 <div align="center">
-    <img src="https://i.postimg.cc/7Lvp4xWX/cegur-0qkdq.gif" alt="Image 1" title="physical space" width="300" style="margin-right: 1px;">
-</div>
-
-<div align="center">
+    <img src="https://i.postimg.cc/hvp8Z2rk/ps.gif" alt="Image 1" title="physical space" width="300" style="margin-right: 1px;">
     <img src="https://i.postimg.cc/rwVV31C8/d5ubx-sf3vl.gif" alt="Image 2" title="simultaneously, in velocity space" width = "300" style="margin-left: 1px;">
 </div>
 
