@@ -1,7 +1,6 @@
 module KitAMR
 
 using CairoMakie
-using HDF5
 using MPI
 using JLD2
 using LinearAlgebra
