@@ -1,5 +1,8 @@
 # KitAMR.jl
 
+![CI](https://img.shields.io/github/actions/workflow/status/vavrines/KitBase.jl/ci.yml?branch=main)
+[![codecov](https://img.shields.io/codecov/c/github/CFDML/KitAMR.jl)](https://codecov.io/gh/CFDML/KitAMR.jl)
+
 ## Motivation
 **KitAMR.jl** is a distributed adaptive Cartesian grid solver for kinetic equations, developed based on [P4est.jl](https://github.com/trixi-framework/P4est.jl). Its goal is to achieve large-scale parallel solving of 2D and 3D flows across all regimes, leveraging GPUs, differentiable programming, and machine learning to enhance solving efficiency.
 

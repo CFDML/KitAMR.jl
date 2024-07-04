@@ -32,8 +32,7 @@ jobs:
         arch:
           - x64
     steps:
-      - run: |
-          pip3 install meshio scipy --user
+      - run: pip3 install scipy --user
       - uses: actions/checkout@v2
       - uses: julia-actions/setup-julia@v1
         with:
@@ -56,6 +55,8 @@ jobs:
       - uses: julia-actions/julia-runtest@latest
         continue-on-error: ${{ matrix.version == 'nightly' }}
       - uses: julia-actions/julia-processcoverage@v1
-      - uses: codecov/codecov-action@v1
+      - uses: codecov/codecov-action@v4
         with:
           file: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
