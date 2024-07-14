@@ -1051,6 +1051,7 @@ The keyword arguments (`kw...`) for the balancing are:
       + `P4estTypes.CONNECT_EDGE(Val(8))`: enforce across face and edge.
       + `P4estTypes.CONNECT_CORNER(Val(4))`: enforce across face and corner.
       + `P4estTypes.CONNECT_CORNER(Val(8))`: enforce across face, edge, and corner.
+
   - `init = nothing`: callback function with prototype
     `init(forest, treeid, quadrant)` called for each quadrant created to
     initialized the user data.
