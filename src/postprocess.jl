@@ -1,16 +1,35 @@
-function collect_results(ps4est, DVM_data)
+function collect_results(ps4est, amr::AMR{2})
     pp = PointerWrapper(ps4est)
-    trees = DVM_data.trees
-    solutions = Array{Solution}(undef, pp.local_num_quadrants[])
+    trees = amr.field.trees
+    solutions = Array{Solution_2D}(undef, pp.local_num_quadrants[])
     index = 1
     for i in eachindex(trees.data)
         for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
-            solutions[index] = Solution(
-                SVector{DIM,Cdouble}(ps_data.midpoint),
-                SVector{DIM + 2,Cdouble}(ps_data.w),
-                SVector{DIM + 2,Cdouble}(ps_data.prim),
-                SVector{DIM,Cdouble}(ps_data.qf),
+            solutions[index] = Solution_2D(
+                SVector{2,Cdouble}(ps_data.midpoint),
+                SVector{4,Cdouble}(ps_data.w),
+                SVector{4,Cdouble}(ps_data.prim),
+                SVector{2,Cdouble}(ps_data.qf),
+            )
+            index += 1
+        end
+    end
+    return solutions
+end
+function collect_results(ps4est, amr::AMR{3})
+    pp = PointerWrapper(ps4est)
+    trees = amr.field.trees
+    solutions = Array{Solution_3D}(undef, pp.local_num_quadrants[])
+    index = 1
+    for i in eachindex(trees.data)
+        for j in eachindex(trees.data[i])
+            ps_data = trees.data[i][j]
+            solutions[index] = Solution_3D(
+                SVector{3,Cdouble}(ps_data.midpoint),
+                SVector{5,Cdouble}(ps_data.w),
+                SVector{5,Cdouble}(ps_data.prim),
+                SVector{3,Cdouble}(ps_data.qf),
             )
             index += 1
         end
@@ -34,7 +53,7 @@ function communicate_solution(solutions::Vector{T}, num_quadrants) where {T}
         return solutions
     end
 end
-function collect_num_quadrants(ps4est::Ptr{p4est_t})
+function collect_num_quadrants(ps4est::P_pxest_t)
     pp = PointerWrapper(ps4est)
     if MPI.Comm_rank(MPI.COMM_WORLD) != 0
         buffer = Array{Cint}(undef, 1)
@@ -54,32 +73,33 @@ function collect_num_quadrants(ps4est::Ptr{p4est_t})
         return num_quadrants
     end
 end
-function collect_solution(ps4est, DVM_data)
+
+function collect_solution(ps4est, amr)
     num_quadrants = collect_num_quadrants(ps4est)
-    solutions = collect_results(ps4est, DVM_data)
+    solutions = collect_results(ps4est, amr)
     solutions = communicate_solution(solutions, num_quadrants)
     return solutions
 end
 function reshape_solutions(
     solutions::Vector,
-    global_data::Global_Data,
+    global_data::Global_Data{2},
     field::Symbol,
     index::Int,
 )
-    Nx, Ny = global_data.trees_num
-    xmin, xmax, ymin, ymax = global_data.geometry
+    Nx, Ny = global_data.config.trees_num
+    xmin, xmax, ymin, ymax = global_data.config.geometry
     midpoints = zeros(length(solutions), 2)
     z = zeros(length(solutions))
     for i in eachindex(solutions)
         midpoints[i, :] .= solutions[i].midpoint
         z[i] = getfield(solutions[i], field)[index]
     end
-    itp = scipy.interpolate.CloughTocher2DInterpolator(midpoints, z)
-    dx = (xmax - xmin) / Nx / 2^DVM_PS_MAXLEVEL
-    dy = (ymax - ymin) / Ny / 2^DVM_PS_MAXLEVEL
+    itp = scipy[].interpolate.CloughTocher2DInterpolator(midpoints, z)
+    dx = (xmax - xmin) / Nx / 2^global_data.config.solver.AMR_PS_MAXLEVEL
+    dy = (ymax - ymin) / Ny / 2^global_data.config.solver.AMR_PS_MAXLEVEL
     X = collect(xmin+EPS+dx/2:dx:xmax-EPS-dx/2)
     Y = collect(ymin+EPS+dy/2:dy:ymax-EPS-dy/2)
-    pyZ = np.zeros((length(X), length(Y)))
+    pyZ = np[].zeros((length(X), length(Y)))
     for i in eachindex(X)
         for j in eachindex(Y)
             pyZ[i-1, j-1] = itp(X[i], Y[j])[]
@@ -88,68 +108,99 @@ function reshape_solutions(
     Z = pyconvert(Matrix{Float64}, pyZ)
     return X, Y, Z
 end
+function reshape_solutions(
+    solutions::Vector,
+    global_data::Global_Data{3},
+    field::Symbol,
+    index::Int,
+)
+    Nx, Ny, Nz = global_data.config.trees_num
+    xmin, xmax, ymin, ymax, zmin, zmax = global_data.config.geometry
+    midpoints = zeros(length(solutions), 3)
+    sol = zeros(length(solutions))
+    for i in eachindex(solutions)
+        midpoints[i, :] .= solutions[i].midpoint
+        sol[i] = getfield(solutions[i], field)[index]
+    end
+    dx = (xmax - xmin) / Nx / 2^global_data.config.solver.AMR_PS_MAXLEVEL
+    dy = (ymax - ymin) / Ny / 2^global_data.config.solver.AMR_PS_MAXLEVEL
+    dz = (zmax - zmin) / Nz / 2^global_data.config.solver.AMR_PS_MAXLEVEL
+    Xs = collect(xmin+EPS+dx/2:dx:xmax-EPS-dx/2)
+    Ys = collect(ymin+EPS+dy/2:dy:ymax-EPS-dy/2)
+    Zs = collect(zmin+EPS+dz/2:dz:zmax-EPS-dz/2)
+    mx = pybuiltins.slice(xmin+EPS+dx/2,xmax-EPS-dx/2,dx)
+    my = pybuiltins.slice(ymin+EPS+dy/2,ymax-EPS-dy/2,dy)
+    mz = pybuiltins.slice(zmin+EPS+dz/2,zmax-EPS-dz/2,dz)
+    grid = np.mgrid[mx,my,mz]
+    grid_x = grid[0]
+    grid_y = grid[1]
+    grid_z = grid[2]
+    Z = scipy.interpolate.griddata(midpoints, sol, (grid_x,grid_y,grid_z), method="nearest")
+    Zj = pyconvert(Array{Float64},Z)  
+    return Xs,Ys,Zs,Zj
+end
 
-function collect_mesh(DVM_data::DVM_Data)
-    mesh_points = collect_mesh_points(DVM_data)
+function collect_mesh(amr::AMR)
+    mesh_points = collect_mesh_points(amr)
     num_faces = collect_num_faces(mesh_points)
     meshes = communicate_mesh(mesh_points, num_faces)
     return meshes
 end
-function mesh_plot(x::AV, y::AV, ax::Axis)
+function mesh_plot(x::AbstractVector, y::AbstractVector, ax::Axis)
     for i = 1:Int(length(x) / 2)
         # x1 = x[2*i-1];x2 = x[2*i]
         # y1 = y[2*i-1];y2 = y[2*i]
         lines!(ax, @view(x[2*i-1:2*i]), @view(y[2*i-1:2*i]), color = :red, linewidth = 0.5)
     end
 end
-function communicate_mesh(mesh_points::T, num_faces) where {T}
-    if MPI.Comm_rank(MPI.COMM_WORLD) != 0
-        buffer = mesh_points
-        sreq =
-            MPI.Isend(buffer, MPI.COMM_WORLD; dest = 0, tag = MPI.Comm_rank(MPI.COMM_WORLD))
-        stats = MPI.Wait(sreq)
-        return nothing
-    else
-        meshes = Array{Mesh_Points}(undef, 1)
-        meshes[1] = mesh_points
-        for i = 2:MPI.Comm_size(MPI.COMM_WORLD)
-            buffer = Array{Mesh_Points{SVector{num_faces[i],Float64}}}(undef, 1)
-            rreq = MPI.Irecv!(buffer, MPI.COMM_WORLD; source = i - 1, tag = i - 1)
-            state = MPI.Wait(rreq)
-            append!(meshes, buffer)
-        end
-        return meshes
-    end
-end
-function reshape_mesh(meshes::Vector{Mesh_Points})
-    x = Vector{Float64}(undef, 0)
-    y = Vector{Float64}(undef, 0)
-    for i in eachindex(meshes)
-        append!(x, collect(meshes[i].x))
-        append!(y, collect(meshes[i].y))
-    end
-    return x, y
-end
-function collect_num_faces(mesh_points::Mesh_Points{SVector{N,T}}) where {N,T}
-    if MPI.Comm_rank(MPI.COMM_WORLD) != 0
-        buffer = Array{Int}(undef, 1)
-        buffer[1] = N
-        sreq =
-            MPI.Isend(buffer, MPI.COMM_WORLD; dest = 0, tag = MPI.Comm_rank(MPI.COMM_WORLD))
-        stats = MPI.Wait(sreq)
-        return nothing
-    else
-        num_faces = zeros(Int, MPI.Comm_size(MPI.COMM_WORLD))
-        buffer = Array{Int}(undef, 1)
-        for i = 2:MPI.Comm_size(MPI.COMM_WORLD)
-            rreq = MPI.Irecv!(buffer, MPI.COMM_WORLD; source = i - 1, tag = i - 1)
-            state = MPI.Wait(rreq)
-            num_faces[i] = buffer[1]
-        end
-        return num_faces
-    end
-end
-function collect_mesh_points_kernal!(::Val{1}, ps_data::AbstractPsData, x::AV, y::AV)
+# function communicate_mesh(mesh_points::T, num_faces) where {T}
+#     if MPI.Comm_rank(MPI.COMM_WORLD) != 0
+#         buffer = mesh_points
+#         sreq =
+#             MPI.Isend(buffer, MPI.COMM_WORLD; dest = 0, tag = MPI.Comm_rank(MPI.COMM_WORLD))
+#         stats = MPI.Wait(sreq)
+#         return nothing
+#     else
+#         meshes = Array{Mesh_Points}(undef, 1)
+#         meshes[1] = mesh_points
+#         for i = 2:MPI.Comm_size(MPI.COMM_WORLD)
+#             buffer = Array{Mesh_Points{SVector{num_faces[i],Float64}}}(undef, 1)
+#             rreq = MPI.Irecv!(buffer, MPI.COMM_WORLD; source = i - 1, tag = i - 1)
+#             state = MPI.Wait(rreq)
+#             append!(meshes, buffer)
+#         end
+#         return meshes
+#     end
+# end
+# function reshape_mesh(meshes::Vector{Mesh_Points})
+#     x = Vector{Float64}(undef, 0)
+#     y = Vector{Float64}(undef, 0)
+#     for i in eachindex(meshes)
+#         append!(x, collect(meshes[i].x))
+#         append!(y, collect(meshes[i].y))
+#     end
+#     return x, y
+# end
+# function collect_num_faces(mesh_points::Mesh_Points{SVector{N,T}}) where {N,T}
+#     if MPI.Comm_rank(MPI.COMM_WORLD) != 0
+#         buffer = Array{Int}(undef, 1)
+#         buffer[1] = N
+#         sreq =
+#             MPI.Isend(buffer, MPI.COMM_WORLD; dest = 0, tag = MPI.Comm_rank(MPI.COMM_WORLD))
+#         stats = MPI.Wait(sreq)
+#         return nothing
+#     else
+#         num_faces = zeros(Int, MPI.Comm_size(MPI.COMM_WORLD))
+#         buffer = Array{Int}(undef, 1)
+#         for i = 2:MPI.Comm_size(MPI.COMM_WORLD)
+#             rreq = MPI.Irecv!(buffer, MPI.COMM_WORLD; source = i - 1, tag = i - 1)
+#             state = MPI.Wait(rreq)
+#             num_faces[i] = buffer[1]
+#         end
+#         return num_faces
+#     end
+# end
+function collect_mesh_points_kernal!(::Val{1}, ps_data::AbstractPsData, x::AbstractVector, y::AbstractVector)
     x1 = ps_data.midpoint[1] - 0.5 * ps_data.ds[1]
     x2 = ps_data.midpoint[1] - 0.5 * ps_data.ds[1]
     y1 = ps_data.midpoint[2] - 0.5 * ps_data.ds[2]
@@ -157,7 +208,7 @@ function collect_mesh_points_kernal!(::Val{1}, ps_data::AbstractPsData, x::AV, y
     push!(x, x1, x2)
     push!(y, y1, y2)
 end
-function collect_mesh_points_kernal!(::Val{2}, ps_data::AbstractPsData, x::AV, y::AV)
+function collect_mesh_points_kernal!(::Val{2}, ps_data::AbstractPsData, x::AbstractVector, y::AbstractVector)
     x1 = ps_data.midpoint[1] + 0.5 * ps_data.ds[1]
     x2 = ps_data.midpoint[1] + 0.5 * ps_data.ds[1]
     y1 = ps_data.midpoint[2] - 0.5 * ps_data.ds[2]
@@ -165,7 +216,7 @@ function collect_mesh_points_kernal!(::Val{2}, ps_data::AbstractPsData, x::AV, y
     push!(x, x1, x2)
     push!(y, y1, y2)
 end
-function collect_mesh_points_kernal!(::Val{3}, ps_data::AbstractPsData, x::AV, y::AV)
+function collect_mesh_points_kernal!(::Val{3}, ps_data::AbstractPsData, x::AbstractVector, y::AbstractVector)
     x1 = ps_data.midpoint[1] - 0.5 * ps_data.ds[1]
     x2 = ps_data.midpoint[1] + 0.5 * ps_data.ds[1]
     y1 = ps_data.midpoint[2] - 0.5 * ps_data.ds[2]
@@ -173,7 +224,7 @@ function collect_mesh_points_kernal!(::Val{3}, ps_data::AbstractPsData, x::AV, y
     push!(x, x1, x2)
     push!(y, y1, y2)
 end
-function collect_mesh_points_kernal!(::Val{4}, ps_data::AbstractPsData, x::AV, y::AV)
+function collect_mesh_points_kernal!(::Val{4}, ps_data::AbstractPsData, x::AbstractVector, y::AbstractVector)
     x1 = ps_data.midpoint[1] - 0.5 * ps_data.ds[1]
     x2 = ps_data.midpoint[1] + 0.5 * ps_data.ds[1]
     y1 = ps_data.midpoint[2] + 0.5 * ps_data.ds[2]
@@ -181,35 +232,35 @@ function collect_mesh_points_kernal!(::Val{4}, ps_data::AbstractPsData, x::AV, y
     push!(x, x1, x2)
     push!(y, y1, y2)
 end
-function collect_mesh_points!(face::Face{Nothing}, x::AV, y::AV)
-    ps_data = face.data
-    collect_mesh_points_kernal!(Val(Int(face.faceid)), ps_data, x, y)
-end
-function collect_mesh_points!(::Face, ::AV, ::AV)
-    return nothing
-end
-function collect_save_mesh(DVM_data::DVM_Data)
-    x = Vector{Float64}(undef, 0)
-    y = Vector{Float64}(undef, 0)
-    for i in eachindex(DVM_data.faces)
-        face = DVM_data.faces[i]
-        collect_mesh_points!(face, x, y)
-    end
-    return Mesh_Points(x, y)
-end
-function collect_mesh_points(DVM_data::DVM_Data)
-    x = Vector{Float64}(undef, 0)
-    y = Vector{Float64}(undef, 0)
-    for i in eachindex(DVM_data.faces)
-        face = DVM_data.faces[i]
-        collect_mesh_points!(face, x, y)
-    end
-    # return Mesh_Points(
-    #             NTuple{length(x),Float64}(x),
-    #             NTuple{length(y),Float64}(y)
-    #             )
-    return Mesh_Points(SVector{length(x),Float64}(x), SVector{length(y),Float64}(y)) # Not a good idea to use SVectors. Change to Point2Point communication later.
-end
+# function collect_mesh_points!(face::Face{Nothing}, x::AbstractVector, y::AbstractVector)
+#     ps_data = face.data
+#     collect_mesh_points_kernal!(Val(Int(face.faceid)), ps_data, x, y)
+# end
+# function collect_mesh_points!(::Face, ::AbstractVector, ::AbstractVector)
+#     return nothing
+# end
+# function collect_save_mesh(amr::AMR{2})
+#     x = Vector{Float64}(undef, 0)
+#     y = Vector{Float64}(undef, 0)
+#     for i in eachindex(amr.faces)
+#         face = amr.faces[i]
+#         collect_mesh_points!(face, x, y)
+#     end
+#     return Mesh_Points(x, y)
+# end
+# function collect_mesh_points(amr::AMR{2})
+#     x = Vector{Float64}(undef, 0)
+#     y = Vector{Float64}(undef, 0)
+#     for i in eachindex(amr.faces)
+#         face = amr.faces[i]
+#         collect_mesh_points!(face, x, y)
+#     end
+#     # return Mesh_Points(
+#     #             NTuple{length(x),Float64}(x),
+#     #             NTuple{length(y),Float64}(y)
+#     #             )
+#     return Mesh_Points(SVector{length(x),Float64}(x), SVector{length(y),Float64}(y)) # Not a good idea to use SVectors. Change to Point2Point communication later.
+# end
 # function mesh_plot_kernal!(::Val{1},ps_data::AbstractPsData,ax::Axis)
 #     x = Vector{Float64}(undef,2);y = Vector{Float64}(undef,2)
 #     x[1] = ps_data.midpoint[1] - 0.5*ps_data.ds[1]
@@ -242,31 +293,31 @@ end
 #     y[2] = ps_data.midpoint[2] + 0.5*ps_data.ds[2]
 #     lines!(ax,x,y,color = :red, linewidth = 0.5)
 # end
-# function mesh_plot(DVM_data::DVM_Data)
+# function mesh_plot(amr::AMR_2D)
 #     f = Figure()
 #     ax = Axis(f[1, 1],xlabel = L"x",ylabel = L"y")
-#     for i in eachindex(DVM_data.faces)
-#         face = DVM_data.faces[i]
+#     for i in eachindex(amr.faces)
+#         face = amr.faces[i]
 #         mesh_plot_kernal!(Val(Int(face.faceid)),face.data,ax)
 #     end
 #     save("mesh.png",f)
 # end
 
-function collect_save_results(p4est::Ptr{p4est_t}, DVM_data::DVM_Data)
-    pp = PointerWrapper(p4est)
-    field_data = Vector{Field}(undef, pp.local_num_quadrants[])
-    index = 1
-    for i in eachindex(DVM_data.trees.data)
-        for j in eachindex(DVM_data.trees.data[i])
-            ps_data = DVM_data.trees.data[i][j]
-            field_data[index] = Field(ps_data.midpoint, ps_data.w, ps_data.prim, ps_data.qf)
-            index += 1
-        end
-    end
-    return field_data
-end
-function write_result!(p4est::Ptr{p4est_t}, DVM_data::DVM_Data, name::String)
-    results = collect_save_results(p4est, DVM_data)
+# function collect_save_results(p4est::Ptr{p4est_t}, amr::AMR{2})
+#     pp = PointerWrapper(p4est)
+#     field_data = Vector{Field}(undef, pp.local_num_quadrants[])
+#     index = 1
+#     for i in eachindex(amr.field.trees.data)
+#         for j in eachindex(amr.field.trees.data[i])
+#             ps_data = amr.field.trees.data[i][j]
+#             field_data[index] = Field(ps_data.midpoint, ps_data.w, ps_data.prim, ps_data.qf)
+#             index += 1
+#         end
+#     end
+#     return field_data
+# end
+function write_result!(p4est::Ptr{p4est_t}, amr::AMR{2}, name::String)
+    results = collect_save_results(p4est, amr)
     JLD2.save_object(name * "_" * string(MPI.Comm_rank(MPI.COMM_WORLD)) * ".jld", results)
 end
 
@@ -288,7 +339,7 @@ end
 #     scipy.interpolate.CloughTocher2DInterpolator(points,values)
 # end
 
-function collect_vs_mesh_points_kernal!(::Val{1}, midpoint::AV, ds::AV, x::AV, y::AV)
+function collect_vs_mesh_points_kernal!(::Val{1}, midpoint::AbstractVector, ds::AbstractVector, x::AbstractVector, y::AbstractVector)
     x1 = midpoint[1] - 0.5 * ds[1]
     x2 = midpoint[1] - 0.5 * ds[1]
     y1 = midpoint[2] - 0.5 * ds[2]
@@ -296,7 +347,7 @@ function collect_vs_mesh_points_kernal!(::Val{1}, midpoint::AV, ds::AV, x::AV, y
     push!(x, x1, x2)
     push!(y, y1, y2)
 end
-function collect_vs_mesh_points_kernal!(::Val{2}, midpoint::AV, ds::AV, x::AV, y::AV)
+function collect_vs_mesh_points_kernal!(::Val{2}, midpoint::AbstractVector, ds::AbstractVector, x::AbstractVector, y::AbstractVector)
     x1 = midpoint[1] + 0.5 * ds[1]
     x2 = midpoint[1] + 0.5 * ds[1]
     y1 = midpoint[2] - 0.5 * ds[2]
@@ -304,7 +355,7 @@ function collect_vs_mesh_points_kernal!(::Val{2}, midpoint::AV, ds::AV, x::AV, y
     push!(x, x1, x2)
     push!(y, y1, y2)
 end
-function collect_vs_mesh_points_kernal!(::Val{3}, midpoint::AV, ds::AV, x::AV, y::AV)
+function collect_vs_mesh_points_kernal!(::Val{3}, midpoint::AbstractVector, ds::AbstractVector, x::AbstractVector, y::AbstractVector)
     x1 = midpoint[1] - 0.5 * ds[1]
     x2 = midpoint[1] + 0.5 * ds[1]
     y1 = midpoint[2] - 0.5 * ds[2]
@@ -312,7 +363,7 @@ function collect_vs_mesh_points_kernal!(::Val{3}, midpoint::AV, ds::AV, x::AV, y
     push!(x, x1, x2)
     push!(y, y1, y2)
 end
-function collect_vs_mesh_points_kernal!(::Val{4}, midpoint::AV, ds::AV, x::AV, y::AV)
+function collect_vs_mesh_points_kernal!(::Val{4}, midpoint::AbstractVector, ds::AbstractVector, x::AbstractVector, y::AbstractVector)
     x1 = midpoint[1] - 0.5 * ds[1]
     x2 = midpoint[1] + 0.5 * ds[1]
     y1 = midpoint[2] + 0.5 * ds[2]
@@ -320,12 +371,12 @@ function collect_vs_mesh_points_kernal!(::Val{4}, midpoint::AV, ds::AV, x::AV, y
     push!(x, x1, x2)
     push!(y, y1, y2)
 end
-function collect_vs_mesh_points!(midpoint::AV, ds::AV, x::AV, y::AV)
+function collect_vs_mesh_points!(midpoint::AbstractVector, ds::AbstractVector, x::AbstractVector, y::AbstractVector)
     for i = 1:4
         collect_vs_mesh_points_kernal!(Val(i), midpoint, ds, x, y)
     end
 end
-function collect_vs_mesh(ds::AV, midpoint::AM, level::AV)
+function collect_vs_mesh(ds::AbstractVector, midpoint::AbstractMatrix, level::AbstractVector)
     x = Vector{Float64}(undef, 0)
     y = Vector{Float64}(undef, 0)
     for i in axes(midpoint, 1)
@@ -333,21 +384,21 @@ function collect_vs_mesh(ds::AV, midpoint::AM, level::AV)
     end
     return x, y
 end
-function save_result(DVM_data::DVM_Data)
-    global_data = DVM_data.global_data
-    data_set = DVM_data.data_set
+function save_result(amr::AMR{2})
+    global_data = amr.global_data
+    data_set = amr.data_set
     global_data.gas.sim_time >= data_set.PS_time_interval * global_data.ps_save_index &&
-        PS_save(DVM_data)
+        PS_save(amr)
     global_data.gas.sim_time >= data_set.VS_end_time && return
     global_data.gas.sim_time >= data_set.VS_time_interval * global_data.vs_save_index &&
-        VS_save(DVM_data)
+        VS_save(amr)
 end
-function save_set(DVM_data::DVM_Data)
+function save_set(amr::AMR{2})
     dir_path = "./result/"
     !isdir(dir_path) && mkpath(dir_path)
-    data_set = DVM_data.data_set
+    data_set = amr.data_set
     result_set = Result_Set(
-        DVM_data.global_data,
+        amr.global_data,
         data_set.PS_time_interval,
         data_set.VS_time_interval,
         data_set.end_time,
@@ -356,10 +407,10 @@ function save_set(DVM_data::DVM_Data)
     )
     JLD2.save_object(dir_path * "result_set.jld", result_set)
 end
-function PS_save(DVM_data::DVM_Data)
-    global_data = DVM_data.global_data
-    field = collect_save_results(DVM_data.p4est, DVM_data)
-    mesh = collect_save_mesh(DVM_data)
+function PS_save(amr::AMR{2})
+    global_data = amr.global_data
+    field = collect_save_results(amr.p4est, amr)
+    mesh = collect_save_mesh(amr)
     dir_path = "./result/PS_result/" * string(global_data.ps_save_index)
     !isdir(dir_path) && mkpath(dir_path)
     ps_result = PS_Result(global_data.gas.sim_time, field, mesh)
@@ -369,10 +420,10 @@ function PS_save(DVM_data::DVM_Data)
     )
     global_data.ps_save_index += 1
 end
-function VS_save(DVM_data::DVM_Data)
+function VS_save(amr::AMR{2})
     MPI.Comm_rank(MPI.COMM_WORLD) != MPI.Comm_size(MPI.COMM_WORLD) - 1 && return
-    global_data = DVM_data.global_data
-    ps_data = DVM_data.trees.data[end][end]
+    global_data = amr.global_data
+    ps_data = amr.field.trees.data[end][end]
     vs_data = ps_data.vs_data
     dir_path = "./result/VS_result/" * string(global_data.vs_save_index)
     !isdir(dir_path) && mkpath(dir_path)
@@ -390,14 +441,14 @@ function VS_save(DVM_data::DVM_Data)
     )
     global_data.vs_save_index += 1
 end
-function save_VS_final(DVM_data::DVM_Data)
-    global_data = DVM_data.global_data
+function save_VS_final(amr::AMR{2})
+    global_data = amr.global_data
     dir_path = "./result/VS_result/end"
     !isdir(dir_path) && mkpath(dir_path)
     VS_results = Vector{VS_Result}(undef, 0)
-    for i in eachindex(DVM_data.trees.data)
-        for j in eachindex(DVM_data.trees.data[i])
-            ps_data = DVM_data.trees.data[i][j]
+    for i in eachindex(amr.field.trees.data)
+        for j in eachindex(amr.field.trees.data[i])
+            ps_data = amr.field.trees.data[i][j]
             if ps_data.midpoint[2] < 0.7 + ps_data.ds[2]
                 vs_data = ps_data.vs_data
                 vs_result = VS_Result(
@@ -438,7 +489,7 @@ function result2animation()
     index_iter = 0:nframes
 
     record(f, "PS_field.mp4", index_iter; framerate = framerate) do i
-        # x,y,variable = read_resulte_at_index(i,DVM_data.global_data)
+        # x,y,variable = read_resulte_at_index(i,amr.global_data)
         # Axis(f[1, 1])
         # co = contourf!(x,y,variable)
         # Colorbar(f[1, 2], co)
@@ -448,7 +499,7 @@ function result2animation()
 end
 function read_result_at_index!(
     index::Int,
-    global_data::Global_Data,
+    global_data::Global_Data{2},
     mesh_xs::Vector{Vector{Float64}},
     mesh_ys::Vector{Vector{Float64}},
     variables::Vector{Matrix{Float64}},
@@ -472,7 +523,7 @@ function read_result_at_index!(
     push!(mesh_ys, mesh_y)
     return x, y, variable
 end
-function read_result(global_data::Global_Data, nframes::Int, mpi_size::Int)
+function read_result(global_data::Global_Data{2}, nframes::Int, mpi_size::Int)
     mesh_xs = Vector{Vector{Float64}}(undef, 0)
     mesh_ys = Vector{Vector{Float64}}(undef, 0)
     variables = Vector{Matrix{Float64}}(undef, 0)
@@ -482,7 +533,7 @@ function read_result(global_data::Global_Data, nframes::Int, mpi_size::Int)
     end
     return x, y, mesh_xs, mesh_ys, variables
 end
-# function pre_read_resulte_at_index(index::Int,global_data::Global_Data)
+# function pre_read_resulte_at_index(index::Int,global_data::Global_Data_2D)
 #     fields = Vector{Field}(undef,0)
 #     for j = 0:5
 #         PS_results = JLD2.load_object("./result/PS_result/"*string(index)*"/"*string(j)*".jld")
@@ -491,16 +542,16 @@ end
 #     x, y, _ = reshape_solutions(fields,global_data,:prim,4)
 #     return x,y
 # end
-function reshape_solutions_vs(midpoint::AM, df::AM, global_data::Global_Data)
+function reshape_solutions_vs(midpoint::AbstractMatrix, df::AbstractMatrix, global_data::Global_Data{2})
     Nx, Ny = global_data.vs_trees_num
     xmin, xmax, ymin, ymax = global_data.quadrature
     z = @view(df[:, 1])
-    itp = scipy.interpolate.CloughTocher2DInterpolator(midpoint, PyArray(z))
+    itp = scipy[].interpolate.CloughTocher2DInterpolator(midpoint, PyArray(z))
     dx = (xmax - xmin) / Nx / 2^DVM_VS_MAXLEVEL
     dy = (ymax - ymin) / Ny / 2^DVM_VS_MAXLEVEL
     X = collect(xmin+EPS+dx/2:dx:xmax-EPS-dx/2)
     Y = collect(ymin+EPS+dy/2:dy:ymax-EPS-dy/2)
-    pyZ = np.zeros((length(X), length(Y)))
+    pyZ = np[].zeros((length(X), length(Y)))
     for i in eachindex(X)
         for j in eachindex(Y)
             pyZ[i-1, j-1] = itp(X[i], Y[j])[]
@@ -509,7 +560,7 @@ function reshape_solutions_vs(midpoint::AM, df::AM, global_data::Global_Data)
     Z = pyconvert(Matrix{Float64}, pyZ)
     return X, Y, Z
 end
-function read_vs_result(global_data::Global_Data, nframes::Int, mpi_size::Int)
+function read_vs_result(global_data::Global_Data{2}, nframes::Int, mpi_size::Int)
     mesh_xs = Vector{Vector{Float64}}(undef, 0)
     mesh_ys = Vector{Vector{Float64}}(undef, 0)
     hs = Vector{Matrix{Float64}}(undef, 0)
@@ -521,7 +572,7 @@ function read_vs_result(global_data::Global_Data, nframes::Int, mpi_size::Int)
 end
 function read_vs_result_at_index!(
     index::Int,
-    global_data::Global_Data,
+    global_data::Global_Data{2},
     mesh_xs::Vector{Vector{Float64}},
     mesh_ys::Vector{Vector{Float64}},
     hs::Vector{Matrix{Float64}},
@@ -597,9 +648,9 @@ function mat_3d()
             collect_mesh_3d!(vs_results[j], ds, mesh_u, mesh_v, mesh_x)
         end
     end
-    Nx, _ = global_data.trees_num
-    xmin, xmax, _, _ = global_data.geometry
-    dx = (xmax - xmin) / Nx / 2^DVM_PS_MAXLEVEL
+    Nx, _ = global_data.config.trees_num
+    xmin, xmax, _, _ = global_data.config.geometry
+    dx = (xmax - xmin) / Nx / 2^global_data.config.solver.AMR_PS_MAXLEVEL
     gridX = collect(xmin+dx/2:dx:xmax-dx/2)
     Nu, Nv = global_data.vs_trees_num
     umin, umax, vmin, vmax = global_data.quadrature
@@ -639,7 +690,7 @@ function collect_mesh_3d!(vs_result, ds, mesh_x, mesh_y, mesh_z)
         end
     end
 end
-function collect_mesh_3d!(::Val{1}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, Z::AV)
+function collect_mesh_3d!(::Val{1}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
     x1 = x - 0.5 * dx
     x2 = x + 0.5 * dx
     y1 = y - 0.5 * dy
@@ -650,7 +701,7 @@ function collect_mesh_3d!(::Val{1}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, 
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{2}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, Z::AV)
+function collect_mesh_3d!(::Val{2}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
     x1 = x + 0.5 * dx
     x2 = x + 0.5 * dx
     y1 = y - 0.5 * dy
@@ -661,7 +712,7 @@ function collect_mesh_3d!(::Val{2}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, 
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{3}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, Z::AV)
+function collect_mesh_3d!(::Val{3}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
     x1 = x - 0.5 * dx
     x2 = x + 0.5 * dx
     y1 = y + 0.5 * dy
@@ -672,7 +723,7 @@ function collect_mesh_3d!(::Val{3}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, 
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{4}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, Z::AV)
+function collect_mesh_3d!(::Val{4}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
     x1 = x - 0.5 * dx
     x2 = x - 0.5 * dx
     y1 = y - 0.5 * dy
@@ -683,7 +734,7 @@ function collect_mesh_3d!(::Val{4}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, 
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{5}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, Z::AV)
+function collect_mesh_3d!(::Val{5}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
     x1 = x - 0.5 * dx
     x2 = x + 0.5 * dx
     y1 = y - 0.5 * dy
@@ -694,7 +745,7 @@ function collect_mesh_3d!(::Val{5}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, 
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{6}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, Z::AV)
+function collect_mesh_3d!(::Val{6}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
     x1 = x + 0.5 * dx
     x2 = x + 0.5 * dx
     y1 = y - 0.5 * dy
@@ -705,7 +756,7 @@ function collect_mesh_3d!(::Val{6}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, 
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{7}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, Z::AV)
+function collect_mesh_3d!(::Val{7}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
     x1 = x - 0.5 * dx
     x2 = x + 0.5 * dx
     y1 = y + 0.5 * dy
@@ -716,7 +767,7 @@ function collect_mesh_3d!(::Val{7}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, 
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{8}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, Z::AV)
+function collect_mesh_3d!(::Val{8}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
     x1 = x - 0.5 * dx
     x2 = x - 0.5 * dx
     y1 = y - 0.5 * dy
@@ -727,7 +778,7 @@ function collect_mesh_3d!(::Val{8}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, 
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{9}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, Z::AV)
+function collect_mesh_3d!(::Val{9}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
     x1 = x - 0.5 * dx
     x2 = x - 0.5 * dx
     y1 = y - 0.5 * dy
@@ -738,7 +789,7 @@ function collect_mesh_3d!(::Val{9}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, 
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{10}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, Z::AV)
+function collect_mesh_3d!(::Val{10}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
     x1 = x + 0.5 * dx
     x2 = x + 0.5 * dx
     y1 = y - 0.5 * dy
@@ -749,7 +800,7 @@ function collect_mesh_3d!(::Val{10}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV,
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{11}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, Z::AV)
+function collect_mesh_3d!(::Val{11}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
     x1 = x + 0.5 * dx
     x2 = x + 0.5 * dx
     y1 = y + 0.5 * dy
@@ -760,7 +811,7 @@ function collect_mesh_3d!(::Val{11}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV,
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{12}, x::Float64, y, z, dx, dy, dz, X::AV, Y::AV, Z::AV)
+function collect_mesh_3d!(::Val{12}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
     x1 = x - 0.5 * dx
     x2 = x - 0.5 * dx
     y1 = y + 0.5 * dy

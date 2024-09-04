@@ -8,7 +8,7 @@ function vanleer(sL::Real, sR::Real)
     SR = abs(sR)
     (sign(sL) + sign(sR)) * SL * SR / (SL + SR + EPS)
 end
-function diff_L!(vs_data::AbstractVsData, vs_data_n::AbstractVsData, dsL::Float64, sL::AM)
+function diff_L!(vs_data::AbstractVsData{DIM,NDF}, vs_data_n::AbstractVsData{DIM,NDF}, dsL::Float64, sL::AbstractMatrix) where{DIM,NDF}
     index = 1
     flag = 0.0
     level = vs_data.level
@@ -44,7 +44,7 @@ function diff_L!(vs_data::AbstractVsData, vs_data_n::AbstractVsData, dsL::Float6
         end
     end
 end
-function diff_R!(vs_data::AbstractVsData, vs_data_n::AbstractVsData, dsR::Float64, sR::AM)
+function diff_R!(vs_data::AbstractVsData{DIM,NDF}, vs_data_n::AbstractVsData{DIM,NDF}, dsR::Float64, sR::AbstractMatrix) where{DIM,NDF}
     index = 1
     flag = 0.0
     level = vs_data.level
@@ -81,13 +81,13 @@ function diff_R!(vs_data::AbstractVsData, vs_data_n::AbstractVsData, dsR::Float6
     end
 end
 function update_slope_inner_vs!(
-    vs_data::AbstractVsData,
-    L_data::AbstractVsData,
-    R_data::AbstractVsData,
+    vs_data::AbstractVsData{DIM,NDF},
+    L_data::AbstractVsData{DIM,NDF},
+    R_data::AbstractVsData{DIM,NDF},
     dsL::Float64,
     dsR::Float64,
     dir::Int,
-)
+) where{DIM,NDF}
     vs_num = vs_data.vs_num
     sL = zeros(vs_num, NDF)
     sR = zeros(vs_num, NDF)
@@ -96,11 +96,11 @@ function update_slope_inner_vs!(
     vs_data.sdf[:, :, dir] .= vanleer(sL, sR)
 end
 function update_slope_Lbound_vs!(
-    vs_data::AbstractVsData,
-    R_data::AbstractVsData,
+    vs_data::AbstractVsData{DIM,NDF},
+    R_data::AbstractVsData{DIM,NDF},
     dsR::Float64,
     dir::Int,
-)
+) where{DIM,NDF}
     vs_num = vs_data.vs_num
     sR = zeros(vs_num, NDF)
     diff_R!(vs_data, R_data, dsR, sR)
@@ -114,11 +114,11 @@ end
 #     vs_data.sdf[:,:,dir] .= sR
 # end
 function update_slope_Rbound_vs!(
-    vs_data::AbstractVsData,
-    L_data::AbstractVsData,
+    vs_data::AbstractVsData{DIM,NDF},
+    L_data::AbstractVsData{DIM,NDF},
     dsL::Float64,
     dir::Int,
-)
+) where{DIM,NDF}
     vs_num = vs_data.vs_num
     sL = zeros(vs_num, NDF)
     diff_L!(vs_data, L_data, dsL, sL)
@@ -128,17 +128,17 @@ function update_slope_inner!(
     ::Val{1},
     ::Val{1},
     ps_data::T1,
-    global_data::Global_Data,
+    global_data::Global_Data{DIM,NDF},
     Ldata::T2,
     Rdata::T2,
     dir::Integer,
-) where {T1<:AbstractPsData,T2<:Array}
+) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     # sw = (Rdata[1].w-Ldata[1].w)/(2. *ps_data.ds[dir])
     ds = ps_data.ds[dir]
     swL = (ps_data.w - Ldata[1].w) / (ds)
     swR = (Rdata[1].w - ps_data.w) / (ds)
     sw = vanleer(swL, swR)
-    global_data.gradmax = max(global_data.gradmax, maximum(abs.(@view(sw[4, :]))))
+    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata[1].vs_data, Rdata[1].vs_data, ds, ds, dir)
@@ -147,42 +147,38 @@ function update_slope_inner!(
     ::Val{0},
     ::Val{1},
     ps_data::T1,
-    global_data::Global_Data,
+    global_data::Global_Data{DIM,NDF},
     Ldata::T2,
     Rdata::T2,
     dir::Integer,
-) where {T1<:AbstractPsData,T2<:Array}
+) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     sw = (Rdata[1].w - ps_data.w) / ps_data.ds[dir]
-    global_data.gradmax = max(global_data.gradmax, maximum(abs.(@view(sw[4, :]))))
+    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
-    # if ps_data.midpoint==[0.011111111111111112, 0.9888888888888889]
-    #     update_slope_Lbound_vs1!(ps_data.vs_data,Rdata[1].vs_data, ds, dir)
-    # else
     update_slope_Lbound_vs!(ps_data.vs_data, Rdata[1].vs_data, ds, dir)
-    # end
 end
 function update_slope_inner!(
     ::Val{1},
     ::Val{0},
     ps_data::T1,
-    global_data::Global_Data,
+    global_data::Global_Data{DIM,NDF},
     Ldata::T2,
     Rdata::T2,
     dir::Integer,
-) where {T1<:AbstractPsData,T2<:Array}
+) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     sw = (ps_data.w - Ldata[1].w) ./ ps_data.ds[dir]
-    global_data.gradmax = max(global_data.gradmax, maximum(abs.(@view(sw[4, :]))))
+    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_Rbound_vs!(ps_data.vs_data, Ldata[1].vs_data, ds, dir)
 end
 function update_slope_Rbound_vs!(
-    vs_data::AbstractVsData,
+    vs_data::AbstractVsData{DIM,NDF},
     L_datas::Vector,
     dsL::Float64,
     dir::Int,
-)
+) where{DIM,NDF}
     sL = zeros(Float64, vs_data.vs_num, NDF)
     for j = 1:2^(DIM-1)
         L_data = L_datas[j].vs_data
@@ -191,11 +187,11 @@ function update_slope_Rbound_vs!(
     vs_data.sdf[:, :, dir] .= sL / 2^(DIM - 1)
 end
 function update_slope_Lbound_vs!(
-    vs_data::AbstractVsData,
+    vs_data::AbstractVsData{DIM,NDF},
     R_datas::Vector,
     dsR::Float64,
     dir::Int,
-)
+) where{DIM,NDF}
     sR = zeros(Float64, vs_data.vs_num, NDF)
     for j = 1:2^(DIM-1)
         R_data = R_datas[j].vs_data
@@ -204,39 +200,39 @@ function update_slope_Lbound_vs!(
     vs_data.sdf[:, :, dir] .= sR / 2^(DIM - 1)
 end
 function update_slope_inner!(
-    ::Val{2^(DIM - 1)},
+    ::NeighborNum,
     ::Val{0},
     ps_data::T1,
-    global_data::Global_Data,
+    global_data::Global_Data{DIM,NDF},
     Ldata::T2,
     ::T2,
     dir::Integer,
-) where {T1<:AbstractPsData,T2<:Array}
+) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     sw = zeros(Float64, DIM + 2)
     for i = 1:2^(DIM-1)
         sw .+= (ps_data.w - Ldata[i].w)
     end
     sw ./= 2^(DIM - 1) * 0.75 * ps_data.ds[dir]
-    global_data.gradmax = max(global_data.gradmax, maximum(abs.(@view(sw[4, :]))))
+    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_Rbound_vs!(ps_data.vs_data, Ldata, ds, dir)
 end
 function update_slope_inner!(
     ::Val{0},
-    ::Val{2^(DIM - 1)},
+    ::NeighborNum,
     ps_data::T1,
-    global_data::Global_Data,
+    global_data::Global_Data{DIM,NDF},
     ::T2,
     Rdata::T2,
     dir::Integer,
-) where {T1<:AbstractPsData,T2<:Array}
+) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     sw = zeros(Float64, DIM + 2)
     for i = 1:2^(DIM-1)
         sw .+= (Rdata[i].w - ps_data.w)
     end
     sw ./= 2^(DIM - 1) * 0.75 * ps_data.ds[dir]
-    global_data.gradmax = max(global_data.gradmax, maximum(abs.(@view(sw[4, :]))))
+    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_Lbound_vs!(ps_data.vs_data, Rdata, ds, dir)
@@ -246,13 +242,13 @@ function update_slope_inner!(
     ::Val{0},
     ::Val{-1},
     ps_data::T1,
-    global_data::Global_Data,
+    global_data::Global_Data{DIM,NDF},
     Ldata::T2,
     Rdata::T2,
     dir::Integer,
-) where {T1<:AbstractPsData,T2<:Array}
+) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     sw = (Rdata[1].w - ps_data.w) / ps_data.ds[dir] / 1.5
-    global_data.gradmax = max(global_data.gradmax, maximum(abs.(@view(sw[4, :]))))
+    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_Lbound_vs!(ps_data.vs_data, Rdata[1].vs_data, 1.5 * ds, dir)
@@ -261,25 +257,25 @@ function update_slope_inner!(
     ::Val{-1},
     ::Val{0},
     ps_data::T1,
-    global_data::Global_Data,
+    global_data::Global_Data{DIM,NDF},
     Ldata::T2,
     Rdata::T2,
     dir::Integer,
-) where {T1<:AbstractPsData,T2<:Array}
+) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     sw = (ps_data.w - Ldata[1].w) ./ ps_data.ds[dir] / 1.5
-    global_data.gradmax = max(global_data.gradmax, maximum(abs.(@view(sw[4, :]))))
+    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_Rbound_vs!(ps_data.vs_data, Ldata[1].vs_data, 1.5 * ds, dir)
 end
 function update_slope_inner_vs!(
-    vs_data::AbstractVsData,
+    vs_data::AbstractVsData{DIM,NDF},
     L_datas::Vector,
     R_datas::Vector,
     dsL::Float64,
     dsR::Float64,
     dir::Int,
-)
+) where{DIM,NDF}
     sL = zeros(Float64, vs_data.vs_num, NDF)
     sR = zeros(Float64, vs_data.vs_num, NDF)
     nL = length(L_datas)
@@ -296,13 +292,13 @@ function update_slope_inner_vs!(
 end
 function update_slope_inner!(
     ::Val{1},
-    ::Val{2^(DIM - 1)},
+    ::NeighborNum,
     ps_data::T1,
-    global_data::Global_Data,
+    global_data::Global_Data{DIM,NDF},
     Ldata::T2,
     Rdata::T2,
     dir::Integer,
-) where {T1<:AbstractPsData,T2<:Array}
+) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     wR = zeros(DIM + 2)
     for i = 1:2^(DIM-1)
         wR += Rdata[i].w
@@ -312,20 +308,20 @@ function update_slope_inner!(
     swL = (ps_data.w - Ldata[1].w) / (ds)
     swR = (wR / 2^(DIM - 1) - ps_data.w) / (0.75 * ds)
     sw = vanleer(swL, swR)
-    global_data.gradmax = max(global_data.gradmax, maximum(abs.(@view(sw[4, :]))))
+    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ds, 0.75 * ds, dir)
 end
 function update_slope_inner!(
-    ::Val{2^(DIM - 1)},
+    ::NeighborNum,
     ::Val{1},
     ps_data::T1,
-    global_data::Global_Data,
+    global_data::Global_Data{DIM,NDF},
     Ldata::T2,
     Rdata::T2,
     dir::Integer,
-) where {T1<:AbstractPsData,T2<:Array}
+) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     wL = zeros(DIM + 2)
     for i = 1:2^(DIM-1)
         wL += Ldata[i].w
@@ -335,20 +331,20 @@ function update_slope_inner!(
     swL = (ps_data.w - wL / 2^(DIM - 1)) / (0.75 * ds)
     swR = (Rdata[1].w - ps_data.w) / ds
     sw = vanleer(swL, swR)
-    global_data.gradmax = max(global_data.gradmax, maximum(abs.(@view(sw[4, :]))))
+    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, ds, dir)
 end
 function update_slope_inner!(
-    ::Val{2^(DIM - 1)},
-    ::Val{2^(DIM - 1)},
+    ::NeighborNum,
+    ::NeighborNum,
     ps_data::T1,
-    global_data::Global_Data,
+    global_data::Global_Data{DIM,NDF},
     Ldata::T2,
     Rdata::T2,
     dir::Integer,
-) where {T1<:AbstractPsData,T2<:Array}
+) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     wL = zeros(DIM + 2)
     wR = zeros(DIM + 2)
     for i = 1:2^(DIM-1)
@@ -360,7 +356,7 @@ function update_slope_inner!(
     swL = (ps_data.w - wL / 2^(DIM - 1)) / (0.75 * ds)
     swR = (wR / 2^(DIM - 1) - ps_data.w) / (0.75 * ds)
     sw = vanleer(swL, swR)
-    global_data.gradmax = max(global_data.gradmax, maximum(abs.(@view(sw[4, :]))))
+    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, 0.75 * ds, dir)
@@ -369,17 +365,17 @@ function update_slope_inner!(
     ::Val{1},
     ::Val{-1},
     ps_data::T1,
-    global_data::Global_Data,
+    global_data::Global_Data{DIM,NDF},
     Ldata::T2,
     Rdata::T2,
     dir::Integer,
-) where {T1<:AbstractPsData,T2<:Array}
+) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     # sw = (Rdata[1].w-Ldata[1].w)./(2.5*ps_data.ds[dir])
     ds = ps_data.ds[dir]
     swL = (ps_data.w - Ldata[1].w) / ds
     swR = (Rdata[1].w - ps_data.w) / (1.5 * ds)
     sw = vanleer(swL, swR)
-    global_data.gradmax = max(global_data.gradmax, maximum(abs.(@view(sw[4, :]))))
+    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ds, 1.5 * ds, dir)
@@ -388,17 +384,17 @@ function update_slope_inner!(
     ::Val{-1},
     ::Val{1},
     ps_data::T1,
-    global_data::Global_Data,
+    global_data::Global_Data{DIM,NDF},
     Ldata::T2,
     Rdata::T2,
     dir::Integer,
-) where {T1<:AbstractPsData,T2<:Array}
+) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     # sw = (Rdata[1].w-Ldata[1].w)./(2.5*ps_data.ds[dir])
     ds = ps_data.ds[dir]
     swL = (ps_data.w - Ldata[1].w) / (1.5 * ds)
     swR = (Rdata[1].w - ps_data.w) / ds
     sw = vanleer(swL, swR)
-    global_data.gradmax = max(global_data.gradmax, maximum(abs.(@view(sw[4, :]))))
+    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, ds, dir)
@@ -407,30 +403,30 @@ function update_slope_inner!(
     ::Val{-1},
     ::Val{-1},
     ps_data::T1,
-    global_data::Global_Data,
+    global_data::Global_Data{DIM,NDF},
     Ldata::T2,
     Rdata::T2,
     dir::Integer,
-) where {T1<:AbstractPsData,T2<:Array}
+) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     # sw = (Rdata[1].w-Ldata[1].w)./(3*ps_data.ds[dir])
     ds = ps_data.ds[dir]
     swL = (ps_data.w - Ldata[1].w) / (1.5 * ds)
     swR = (Rdata[1].w - ps_data.w) / (1.5 * ds)
     sw = vanleer(swL, swR)
-    global_data.gradmax = max(global_data.gradmax, maximum(abs.(@view(sw[4, :]))))
+    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, 1.5 * ds, dir)
 end
 function update_slope_inner!(
-    ::Val{2^(DIM - 1)},
+    ::NeighborNum,
     ::Val{-1},
     ps_data::T1,
-    global_data::Global_Data,
+    global_data::Global_Data{DIM,NDF},
     Ldata::T2,
     Rdata::T2,
     dir::Integer,
-) where {T1<:AbstractPsData,T2<:Array}
+) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     wL = zeros(DIM + 2)
     for i = 1:2^(DIM-1)
         wL += Ldata[i].w
@@ -440,20 +436,20 @@ function update_slope_inner!(
     swL = (ps_data.w - wL / 2^(DIM - 1)) / (0.75 * ds)
     swR = (Rdata[1].w - ps_data.w) / (1.5 * ds)
     sw = vanleer(swL, swR)
-    global_data.gradmax = max(global_data.gradmax, maximum(abs.(@view(sw[4, :]))))
+    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, 1.5 * ds, dir)
 end
 function update_slope_inner!(
     ::Val{-1},
-    ::Val{2^(DIM - 1)},
+    ::NeighborNum,
     ps_data::T1,
-    global_data::Global_Data,
+    global_data::Global_Data{DIM,NDF},
     Ldata::T2,
     Rdata::T2,
     dir::Integer,
-) where {T1<:AbstractPsData,T2<:Array}
+) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     wR = zeros(DIM + 2)
     for i = 1:2^(DIM-1)
         wR += Rdata[i].w
@@ -463,14 +459,14 @@ function update_slope_inner!(
     swL = (ps_data.w - Ldata[1].w) / (1.5 * ds)
     swR = (wR / 2^(DIM - 1) - ps_data.w) / (0.75 * ds)
     sw = vanleer(swL, swR)
-    global_data.gradmax = max(global_data.gradmax, maximum(abs.(@view(sw[4, :]))))
+    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, 0.75 * ds, dir)
 end
-function update_slope!(DVM_data::DVM_Data)
-    trees = DVM_data.trees
-    global_data = DVM_data.global_data
+function update_slope!(amr::AMR{DIM,NDF}) where{DIM,NDF}
+    trees = amr.field.trees
+    global_data = amr.global_data
     @inbounds @simd for i in eachindex(trees.data)
         @inbounds @simd for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]

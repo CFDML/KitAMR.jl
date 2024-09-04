@@ -414,18 +414,18 @@ are split (based on a space-filling curve order) among the ranks.
 The keyword arguments (`kw...`) that control the construction of the forest
 are:
 
- - `comm = MPI.COMM_WORLD`: the MPI Communicator object of the ranks sharing
+  - `comm = MPI.COMM_WORLD`: the MPI Communicator object of the ranks sharing
     the forest.
- - `min_quadrants = 0`: the minimum number of quadrants per rank.  (This makes
-   the initial refinement pattern `MPI.Comm_size` specific.)
- - `min_level = 0`: the minimum level of quadrant refinement for the forest.
- - `fill_uniform = true`: if `true` the forest will be filled with a uniform
-   mesh otherwise it is the coarsest possible mesh.
- - `data_type = Nothing`: an `isbitstype` of the user data stored for each
-   quadrant.
- - `init_function = nothing`: callback function with
-   prototype `init_function(forest, treeid, quadrant)` called for each quadrant
-   to initialized the user data.
+  - `min_quadrants = 0`: the minimum number of quadrants per rank.  (This makes
+    the initial refinement pattern `MPI.Comm_size` specific.)
+  - `min_level = 0`: the minimum level of quadrant refinement for the forest.
+  - `fill_uniform = true`: if `true` the forest will be filled with a uniform
+    mesh otherwise it is the coarsest possible mesh.
+  - `data_type = Nothing`: an `isbitstype` of the user data stored for each
+    quadrant.
+  - `init_function = nothing`: callback function with
+    prototype `init_function(forest, treeid, quadrant)` called for each quadrant
+    to initialized the user data.
 """
 function pxest(
     connectivity::Connectivity{X};
@@ -528,6 +528,7 @@ Base.IndexStyle(::Pxest) = IndexLinear()
 Returns 0-based indices into global quadrants.  This includes
 an extra entry at the end of the array so that 1-based range into
 the global quadrants for rank `r` can be built with
+
 ```
 (global_first_quadrant[r]+1):global_first_quadrant[r+1]
 ```
@@ -602,16 +603,17 @@ Execute the callbacks passed as keyword arguments for every volume, face,
 edge, and corner of the rank-local forest.
 
 The keyword arguments (`kw...`) for the iteration are:
- - `ghost = nothing`: the ghost layer associated for the mesh.  Used in
-   `face`, `edge`, and `corner` callbacks for neighboring elements not
-   rank local.
- - `volume = nothing`: Callback used for every volume (aka quadrant) of
-   the local forest with the prototype
-   `volume(forest, ghost, quadrant, quadid, treeid, userdata)`.
- - `face = nothing`: Not implemented yet.
- - `edge = nothing`: Not implemented yet.
- - `corner = nothing`: Not implemented yet.
- - `userdata = nothing`: User data passed to the callbacks.
+
+  - `ghost = nothing`: the ghost layer associated for the mesh.  Used in
+    `face`, `edge`, and `corner` callbacks for neighboring elements not
+    rank local.
+  - `volume = nothing`: Callback used for every volume (aka quadrant) of
+    the local forest with the prototype
+    `volume(forest, ghost, quadrant, quadid, treeid, userdata)`.
+  - `face = nothing`: Not implemented yet.
+  - `edge = nothing`: Not implemented yet.
+  - `corner = nothing`: Not implemented yet.
+  - `userdata = nothing`: User data passed to the callbacks.
 
 See `@doc P4estTypes.P4est.p4est_iterate` and
 `@doc P4estTypes.P4est.p8est_iterate` for more information about
@@ -863,14 +865,15 @@ If the callback returns `true` the `siblings` will coarsen into one quadrant
 otherwise they will be untouched.
 
 The other keyword arguments (`kw...`) for the coarsening are:
- - `recursive = false`: if `true` coarsening will be recursive otherwise each
-   set of rank-local siblings will only be visited once.
- - `init = nothing`: callback function with prototype
-   `init(forest, treeid, quadrant)` called for each quadrant created to
-   initialized the user data.
- - `replace = nothing`: callback function with prototype
-   `replace(forest, treeid, outgoing, incoming)` called for each set of
-   `outgoing` quadrants with their associated `incoming` quadrant.  Note
+
+  - `recursive = false`: if `true` coarsening will be recursive otherwise each
+    set of rank-local siblings will only be visited once.
+  - `init = nothing`: callback function with prototype
+    `init(forest, treeid, quadrant)` called for each quadrant created to
+    initialized the user data.
+  - `replace = nothing`: callback function with prototype
+    `replace(forest, treeid, outgoing, incoming)` called for each set of
+    `outgoing` quadrants with their associated `incoming` quadrant.  Note
     both `outgoing` and `incoming` are arrays with `eltype`
     [`QuadrantWrapper`](@ref).
 
@@ -972,17 +975,18 @@ local to the rank. If the callback returns `true` the `quadrant` will
 refine into multiple quadrants otherwise it will be untouched.
 
 The other keyword arguments (`kw...`) for the refining are:
- - `recursive`: if `true` refining will be recursive otherwise each
-   rank-local quadrant will only be visited once.
- - `maxlevel = -1`: the maximum level of refinement possible during this
-   call.
- - `init = nothing`: callback function with prototype
-   `init(forest, treeid, quadrant)` called for each quadrant created to
-   initialized the user data.
- - `replace = nothing`: callback function with prototype
-   `replace(forest, treeid, outgoing, incoming)` called for each
-   `outgoing` quadrant with their associated `incoming` quadrants. Note both
-   `outgoing` and `incoming` are arrays with `eltype` [`QuadrantWrapper`](@ref).
+
+  - `recursive`: if `true` refining will be recursive otherwise each
+    rank-local quadrant will only be visited once.
+  - `maxlevel = -1`: the maximum level of refinement possible during this
+    call.
+  - `init = nothing`: callback function with prototype
+    `init(forest, treeid, quadrant)` called for each quadrant created to
+    initialized the user data.
+  - `replace = nothing`: callback function with prototype
+    `replace(forest, treeid, outgoing, incoming)` called for each
+    `outgoing` quadrant with their associated `incoming` quadrants. Note both
+    `outgoing` and `incoming` are arrays with `eltype` [`QuadrantWrapper`](@ref).
 
 See `@doc P4estTypes.P4est.p4est_refine_ext` and
 `@doc P4estTypes.P4est.p8est_refine_ext` for more information about
@@ -1037,21 +1041,23 @@ Enforce the two-to-one quadrant size constraint across the forest.  By default,
 this constraint is enforced across faces, edges, and corners.
 
 The keyword arguments (`kw...`) for the balancing are:
- - `connect`: type of constraint enforced which can take the values:
-   - `P4estTypes.CONNECT_FULL(Val(4))`: enforce across face, and corner.
-   - `P4estTypes.CONNECT_FULL(Val(8))`: enforce across face, edge, and corner.
-   - `P4estTypes.CONNECT_FACE(Val(4))`: enforce across face.
-   - `P4estTypes.CONNECT_FACE(Val(8))`: enforce across face.
-   - `P4estTypes.CONNECT_EDGE(Val(8))`: enforce across face and edge.
-   - `P4estTypes.CONNECT_CORNER(Val(4))`: enforce across face and corner.
-   - `P4estTypes.CONNECT_CORNER(Val(8))`: enforce across face, edge, and corner.
- - `init = nothing`: callback function with prototype
-   `init(forest, treeid, quadrant)` called for each quadrant created to
-   initialized the user data.
- - `replace = nothing`: callback function with prototype
-   `replace(forest, treeid, outgoing, incoming)` called for each
-   `outgoing` quadrant with their associated `incoming` quadrants. Note both
-   `outgoing` and `incoming` are arrays with `eltype` [`QuadrantWrapper`](@ref).
+
+  - `connect`: type of constraint enforced which can take the values:
+
+      + `P4estTypes.CONNECT_FULL(Val(4))`: enforce across face, and corner.
+      + `P4estTypes.CONNECT_FULL(Val(8))`: enforce across face, edge, and corner.
+      + `P4estTypes.CONNECT_FACE(Val(4))`: enforce across face.
+      + `P4estTypes.CONNECT_FACE(Val(8))`: enforce across face.
+      + `P4estTypes.CONNECT_EDGE(Val(8))`: enforce across face and edge.
+      + `P4estTypes.CONNECT_CORNER(Val(4))`: enforce across face and corner.
+      + `P4estTypes.CONNECT_CORNER(Val(8))`: enforce across face, edge, and corner.
+  - `init = nothing`: callback function with prototype
+    `init(forest, treeid, quadrant)` called for each quadrant created to
+    initialized the user data.
+  - `replace = nothing`: callback function with prototype
+    `replace(forest, treeid, outgoing, incoming)` called for each
+    `outgoing` quadrant with their associated `incoming` quadrants. Note both
+    `outgoing` and `incoming` are arrays with `eltype` [`QuadrantWrapper`](@ref).
 
 See `@doc P4estTypes.P4est.p4est_balance_ext` and
 `@doc P4estTypes.P4est.p8est_balance_ext` for more information about
@@ -1142,14 +1148,15 @@ to the node degree.  This requires the [`GhostLayer`](@ref) which if not
 passed in `ghost` will be created.
 
 The keyword arguments (`kw...`) for the partitioning are:
- - `ghost = nothing`: [`GhostLayer`](@ref) used when partitioning by
-   [`LNodes`](@ref).
- - `lnodes_degree = nothing`: partition based on [`LNodes`](@ref) if this is
-   set to the degree.
- - `allow_for_coarsening = false`: if `true` sibling groups that may be
-   coarsened will be collect on the same rank.
- - `weight = nothing`: callback that give the `Float64` weight of each quadrant
-   to perform a weighted partitioning.
+
+  - `ghost = nothing`: [`GhostLayer`](@ref) used when partitioning by
+    [`LNodes`](@ref).
+  - `lnodes_degree = nothing`: partition based on [`LNodes`](@ref) if this is
+    set to the degree.
+  - `allow_for_coarsening = false`: if `true` sibling groups that may be
+    coarsened will be collect on the same rank.
+  - `weight = nothing`: callback that give the `Float64` weight of each quadrant
+    to perform a weighted partitioning.
 
 See `@doc P4estTypes.P4est.p4est_partition_ext`,
 `@doc P4estTypes.P4est.p8est_partition_ext`,
@@ -1222,13 +1229,14 @@ are created for ease of importing the mesh into Paraview and Visit,
 respectively.
 
 The keyword arguments (`kw...`) are:
- - `scale = 1.0`: a `scale < 1.0` places a visual gap between adjacent
-   quadrants.
- - `writetree = true`: if `true` include the _zero-based_ tree id in VTK cell
-   data.
- - `writelevel = true`: if `true` include the quadrant level in VTK cell data.
- - `writerank = true`: if `true` include the MPI rank in VTK cell data.
- - `wraprank = 0`: if `wraprank > 0` the MPI rank is stored modulo `wraprank`.
+
+  - `scale = 1.0`: a `scale < 1.0` places a visual gap between adjacent
+    quadrants.
+  - `writetree = true`: if `true` include the _zero-based_ tree id in VTK cell
+    data.
+  - `writelevel = true`: if `true` include the quadrant level in VTK cell data.
+  - `writerank = true`: if `true` include the MPI rank in VTK cell data.
+  - `wraprank = 0`: if `wraprank > 0` the MPI rank is stored modulo `wraprank`.
 """
 function savevtk(
     prefix,
