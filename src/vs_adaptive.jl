@@ -1,14 +1,14 @@
-function vs_refine!(DVM_data::DVM_Data)
-    trees = DVM_data.trees
-    global_data = DVM_data.global_data
+function vs_refine!(amr::AMR)
+    trees = amr.field.trees
+    global_data = amr.global_data
     vs_refine!(trees, global_data)
 end
-function vs_refine!(trees::Trees, global_data::Global_Data)
+function vs_refine!(trees::PS_Trees{DIM,NDF}, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     ds = zeros(DIM)
     for i = 1:DIM
         ds[i] =
-            (global_data.quadrature[2*i] - global_data.quadrature[2*i-1]) /
-            global_data.vs_trees_num[i]
+            (global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
+            global_data.config.vs_trees_num[i]
     end
     for i in eachindex(trees.data)
         for j in eachindex(trees.data[i])
@@ -31,22 +31,23 @@ function vs_refine!(trees::Trees, global_data::Global_Data)
                 end
                 midpoint = @view(lnmidpoint[midpoint_index])
                 df = @view(lndf[df_index])
-                if vs_data.level[index] < DVM_VS_MAXLEVEL &&
+                if vs_data.level[index] < global_data.config.solver.AMR_VS_MAXLEVEL &&
                    vs_refine_flag(ps_data.w, U, midpoint, df, vs_data.weight[index])
-                    midpoint_new = midpoint_refine(midpoint, vs_data.level[index], ds)
-                    df_new = df_refine(midpoint, midpoint_new, df)
+                    midpoint_new = midpoint_refine(DIM,midpoint, vs_data.level[index], ds)
+                    df_new = df_refine(DIM,midpoint, midpoint_new, df)
                     vs_data.vs_num += 2^DIM - 1
-                    level_refine_replace!(vs_data.level, index)
-                    weight_refine_replace!(vs_data.weight, index)
+                    level_refine_replace!(DIM,vs_data.level, index)
+                    weight_refine_replace!(DIM,vs_data.weight, index)
                     midpoint_refine_replace!(
+                        DIM,
                         lnmidpoint,
                         midpoint_new,
                         vs_data.vs_num,
                         index,
                     )
-                    df_refine_replace!(lndf, df_new, vs_data.vs_num, index)
-                    sdf_refine_replace!(lnsdf)
-                    flux_refine_replace!(lnflux)
+                    df_refine_replace!(DIM,NDF,lndf, df_new, vs_data.vs_num, index)
+                    sdf_refine_replace!(DIM,NDF,lnsdf)
+                    flux_refine_replace!(DIM,NDF,lnflux)
                     index += 2^DIM - 1
                 end
                 index += 1
@@ -58,7 +59,7 @@ function vs_refine!(trees::Trees, global_data::Global_Data)
         end
     end
 end
-function midpoint_refine_replace!(lnmidpoint::AV, midpoint_new::AM, vs_num::Int, index::Int)
+function midpoint_refine_replace!(DIM::Integer,lnmidpoint::AbstractVector, midpoint_new::AbstractMatrix, vs_num::Int, index::Int)
     for i = 1:DIM
         deleteat!(lnmidpoint, (i - 1) * (vs_num) + index)
         for j = 2^DIM:-1:1
@@ -66,19 +67,19 @@ function midpoint_refine_replace!(lnmidpoint::AV, midpoint_new::AM, vs_num::Int,
         end
     end
 end
-function weight_refine_replace!(weight::AV, index::Int)
+function weight_refine_replace!(DIM::Integer,weight::AbstractVector, index::Int)
     weight_new = popat!(weight, index) / 2^DIM
     for _ = 1:2^DIM
         insert!(weight, index, weight_new)
     end
 end
-function level_refine_replace!(level::AV, index::Int)
+function level_refine_replace!(DIM::Integer,level::AbstractVector, index::Int)
     level_new = popat!(level, index) + 1
     for _ = 1:2^DIM
         insert!(level, index, level_new)
     end
 end
-function df_refine_replace!(lndf::AV, df_new::AM, vs_num::Int, index::Int)
+function df_refine_replace!(DIM::Integer,NDF::Integer,lndf::AbstractVector, df_new::AbstractMatrix, vs_num::Int, index::Int)
     for i = 1:NDF
         deleteat!(lndf, (i - 1) * (vs_num) + index)
         for j = 2^DIM:-1:1
@@ -86,33 +87,33 @@ function df_refine_replace!(lndf::AV, df_new::AM, vs_num::Int, index::Int)
         end
     end
 end
-function sdf_refine_replace!(lnsdf::AV)
+function sdf_refine_replace!(DIM::Integer,NDF::Integer,lnsdf::AbstractVector)
     append!(lnsdf, zeros((2^DIM - 1) * NDF * DIM))
 end
-function flux_refine_replace!(lnflux::AV)
+function flux_refine_replace!(DIM::Integer,NDF::Integer,lnflux::AbstractVector)
     append!(lnflux, zeros((2^DIM - 1) * NDF))
 end
-function vs_refine_flag(w::AV, U::AV, midpoint::AV, df::AV, weight::Float64)
+function vs_refine_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64)
     0.5 * sum((U - midpoint) .^ 2) * df[1] * weight /
-    (w[4] / w[1] - 0.5 * w[1] * sum((U) .^ 2)) > 0.0001 ? true : false
+    (w[end] / w[1] - 0.5 * w[1] * sum((U) .^ 2)) > 0.0001 ? true : false
 end
-function midpoint_refine(midpoint::AV, level::Int, ds::AV)
+function midpoint_refine(DIM::Integer,midpoint::AbstractVector, level::Int, ds::AbstractVector)
     midpoint_new = Matrix{Float64}(undef, 2^DIM, DIM)
     ds_new = ds / 2^(level + 1)
     for i = 1:2^DIM
-        midpoint_new[i, :] .= @. midpoint + 0.5 * ds_new * rmt[i]
+        midpoint_new[i, :] .= @. midpoint + 0.5 * ds_new * RMT[DIM][i]
     end
     return midpoint_new
 end
-# df_refine(midpoint::AV,midpoint_new::AM,df::AV) = refine_moment_conserve(midpoint,midpoint_new)*df'
-df_refine(::AV, ::AM, df::AV) = ones(2^DIM) * df'
-function refine_moment_conserve(midpoint::AV, midpoint_new::AM)
-    α = pinv(make_A(midpoint_new), rtol = 1e-8) * make_b(midpoint, midpoint_new)
+# df_refine(DIM::Integer,midpoint::AbstractVector,midpoint_new::AbstractMatrix,df::AbstractVector) = refine_moment_conserve(midpoint,midpoint_new)*df'
+df_refine(DIM::Integer,::AbstractVector, ::AbstractMatrix, df::AbstractVector) = ones(2^DIM) * df'
+function refine_moment_conserve(DIM::Integer,midpoint::AbstractVector, midpoint_new::AbstractMatrix)
+    α = pinv(make_A(DIM,midpoint_new), rtol = 1e-8) * make_b(DIM,midpoint, midpoint_new)
     pushfirst!(α, 4 - sum(α))
     α
 end
 
-# function refine_moment_conserve(midpoint::AV,midpoint_new::AM)
+# function refine_moment_conserve(midpoint::AbstractVector,midpoint_new::AbstractMatrix)
 #     model = Model(optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 0))
 #     @variable(model, α[1:2^DIM-1])
 #     A = make_A(midpoint_new)
@@ -128,7 +129,7 @@ end
 #     α
 # end
 
-function make_A(midpoint_new::AM)
+function make_A(DIM::Integer,midpoint_new::AbstractMatrix)
     A = Matrix{Float64}(undef, 2^DIM - 1, 2^DIM - 1)
     A[1:DIM, :] .= transpose(@view(midpoint_new[2:end, :]))
     for i = 1:2^DIM-1
@@ -140,7 +141,7 @@ function make_A(midpoint_new::AM)
     A[end, :] .-= sum(@view(midpoint_new[1, :]) .^ 2)
     A
 end
-function make_b(midpoint::AV, midpoint_new::AM)
+function make_b(DIM::Integer,midpoint::AbstractVector, midpoint_new::AbstractMatrix)
     b = Vector{Float64}(undef, 2^DIM - 1)
     b[1:DIM] .= midpoint .- @view(midpoint_new[1, :])
     b[end] = sum(midpoint .^ 2) .- sum(@view(midpoint_new[1, :]) .^ 2)
@@ -148,14 +149,14 @@ function make_b(midpoint::AV, midpoint_new::AM)
     b
 end
 
-function vs_coarsen!(DVM_data::DVM_Data)
-    trees = DVM_data.trees
-    global_data = DVM_data.global_data
+function vs_coarsen!(amr::AMR{DIM,NDF})where{DIM,NDF}
+    trees = amr.field.trees
+    global_data = amr.global_data
     ds = zeros(DIM)
     for i = 1:DIM
         ds[i] =
-            (global_data.quadrature[2*i] - global_data.quadrature[2*i-1]) /
-            global_data.vs_trees_num[i]
+            (global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
+            global_data.config.vs_trees_num[i]
     end
     for i in eachindex(trees.data)
         for j in eachindex(trees.data[i])
@@ -167,25 +168,26 @@ function vs_coarsen!(DVM_data::DVM_Data)
             lnsdf = reshape(vs_data.sdf, :)
             lnflux = reshape(vs_data.flux, :)
             index = 1
-            flag = zeros(DVM_VS_MAXLEVEL)
+            flag = zeros(global_data.config.solver.AMR_VS_MAXLEVEL)
             midpoint_index = Matrix{Int}(undef, 2^DIM, DIM)
             df_index = Matrix{Int}(undef, 2^DIM, NDF)
             while index < vs_data.vs_num + 1
                 first_level = vs_data.level[index]
                 if first_level > 0
-                    @inbounds for i = 1:DIM
+                    for i = 1:DIM
                         midpoint_index[:, i] .=
                             (i-1)*(vs_data.vs_num)+index:(i-1)*(vs_data.vs_num)+index+2^DIM-1
                     end
-                    @inbounds for i = 1:NDF
+                    for i = 1:NDF
                         df_index[:, i] .=
                             (i-1)*(vs_data.vs_num)+index:(i-1)*(vs_data.vs_num)+index+2^DIM-1
                     end
                     midpoint = @view(lnmidpoint[midpoint_index])
                     df = @view(lndf[df_index])
                     if flag[first_level] % 1 == 0 &&
-                       !any(x -> x > first_level, @view(vs_data.level[index+1:index+2^DIM]))
+                       !any(x -> x > first_level, @view(vs_data.level[index+1:index+2^DIM-1]))
                         if vs_coarsen_flag(
+                            DIM,
                             ps_data.w,
                             U,
                             midpoint,
@@ -193,20 +195,21 @@ function vs_coarsen!(DVM_data::DVM_Data)
                             @view(vs_data.weight[index:index+2^DIM-1])
                         )
                             midpoint_new =
-                                midpoint_coarsen(@view(midpoint[1, :]), first_level, ds)
-                            df_new = df_coarsen(df)
+                                midpoint_coarsen(DIM,@view(midpoint[1, :]), first_level, ds)
+                            df_new = df_coarsen(DIM,NDF,df)
                             vs_data.vs_num -= 2^DIM - 1
-                            level_coarsen_replace!(vs_data.level, index)
-                            weight_coarsen_replace!(vs_data.weight, index)
+                            level_coarsen_replace!(DIM,vs_data.level, index)
+                            weight_coarsen_replace!(DIM,vs_data.weight, index)
                             midpoint_coarsen_replace!(
+                                DIM,
                                 lnmidpoint,
                                 midpoint_new,
                                 vs_data.vs_num,
                                 index,
                             )
-                            df_coarsen_replace!(lndf, df_new, vs_data.vs_num, index)
-                            sdf_coarsen_replace!(lnsdf)
-                            flux_coarsen_replace!(lnflux)
+                            df_coarsen_replace!(DIM,NDF,lndf, df_new, vs_data.vs_num, index)
+                            sdf_coarsen_replace!(DIM,NDF,lnsdf)
+                            flux_coarsen_replace!(DIM,NDF,lnflux)
                         else
                             index += 2^DIM - 1
                         end
@@ -230,22 +233,22 @@ function vs_coarsen!(DVM_data::DVM_Data)
         end
     end
 end
-function vs_coarsen_flag(w::AV, U::AV, midpoint::AM, df::AM, weight::AV)
+function vs_coarsen_flag(DIM::Integer,w::AbstractVector, U::AbstractVector, midpoint::AbstractMatrix, df::AbstractMatrix, weight::AbstractVector)
     for i = 1:2^DIM
-        !vs_coarsen_flag(w, U, @view(midpoint[i, :]), @view(df[i, :]), weight[i]) &&
+        !vs_coarsen_flag(DIM,w, U, @view(midpoint[i, :]), @view(df[i, :]), weight[i]) &&
             return false
     end
     return true
 end
-function vs_coarsen_flag(w::AV, U::AV, midpoint::AV, df::AV, weight::Float64)
+function vs_coarsen_flag(DIM::Integer,w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64)
     0.5 * sum((U - midpoint) .^ 2) * df[1] * weight /
-    (w[4] / w[1] - 0.5 * w[1] * sum((U) .^ 2)) < 0.0001 / 2^DIM ? true : false
+    (w[end] / w[1] - 0.5 * w[1] * sum((U) .^ 2)) < 0.0001 / 2^DIM
 end
-function midpoint_coarsen(midpoint::AV, level::Int, ds::AV)
+function midpoint_coarsen(DIM::Integer,midpoint::AbstractVector, level::Int, ds::AbstractVector)
     ds_new = ds / 2^level
-    @. midpoint - 0.5 * ds_new * rmt[1]
+    @. midpoint - 0.5 * ds_new * RMT[DIM][1]
 end
-function df_coarsen(df::AM)
+function df_coarsen(DIM::Integer,NDF::Integer,df::AbstractMatrix)
     df_new = zeros(NDF)
     for i = 1:2^DIM
         df_new += @view(df[i, :])
@@ -253,48 +256,49 @@ function df_coarsen(df::AM)
     df_new /= 2^DIM
     return df_new
 end
-function level_coarsen_replace!(level::AV, index::Int)
+function level_coarsen_replace!(DIM::Integer,level::AbstractVector, index::Int)
     for _ = 1:2^DIM-1
         deleteat!(level, index)
     end
     level[index] -= 1
 end
-function weight_coarsen_replace!(weight::AV, index::Int)
+function weight_coarsen_replace!(DIM::Integer,weight::AbstractVector, index::Int)
     for _ = 1:2^DIM-1
         deleteat!(weight, index)
     end
     weight[index] *= 2^DIM
 end
 function midpoint_coarsen_replace!(
-    lnmidpoint::AV,
-    midpoint_new::AV,
+    DIM::Integer,
+    lnmidpoint::AbstractVector,
+    midpoint_new::AbstractVector,
     vs_num::Int,
     index::Int,
 )
-    for i = 1:DIM
+for i = 1:DIM
         for _ = 1:2^DIM-1
             deleteat!(lnmidpoint, (i - 1) * (vs_num) + index)
         end
         lnmidpoint[(i-1)*(vs_num)+index] = midpoint_new[i]
     end
 end
-function df_coarsen_replace!(lndf::AV, df_new::AV, vs_num::Int, index::Int)
-    for i = 1:DIM
+function df_coarsen_replace!(DIM::Integer,NDF::Integer,lndf::AbstractVector, df_new::AbstractVector, vs_num::Int, index::Int)
+    for i = 1:NDF
         for _ = 1:2^DIM-1
             deleteat!(lndf, (i - 1) * (vs_num) + index)
         end
         lndf[(i-1)*(vs_num)+index] = df_new[i]
     end
 end
-function sdf_coarsen_replace!(lnsdf::AV)
+function sdf_coarsen_replace!(DIM::Integer,NDF::Integer,lnsdf::AbstractVector)
     deleteat!(lnsdf, 1:(2^DIM-1)*NDF*DIM)
 end
-function flux_coarsen_replace!(lnflux::AV)
+function flux_coarsen_replace!(DIM::Integer,NDF::Integer,lnflux::AbstractVector)
     deleteat!(lnflux, 1:(2^DIM-1)*NDF)
 end
 
-function pre_vs_refine!(trees::Trees, global_data::Global_Data)
-    for _ = 1:DVM_VS_MAXLEVEL
+function pre_vs_refine!(trees::PS_Trees{DIM,NDF}, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+    for _ = 1:global_data.config.solver.AMR_VS_MAXLEVEL
         vs_refine!(trees, global_data)
     end
 end

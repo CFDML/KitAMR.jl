@@ -1,3 +1,5 @@
+abstract type AbstractGlobalData end
+abstract type AbstractTransferData end
 abstract type AbstractPsData end
 abstract type AbstractVsData end
 abstract type AbstractFaceWrap end
@@ -7,58 +9,21 @@ struct Face{T<:Union{AbstractPsData,Nothing}}
     bound::Int # 0: inner 1: boundary 2: hanging mirror
     hanging_data::T # Todo: for 3D, hanging_data should be a vector
 end
-# mutable struct Ghost_Data{T}
-#     ds::SVector{DIM,Cdouble}
-#     midpoint::SVector{DIM,Cdouble}
-#     w::SVector{DIM + 2,Cdouble}
-#     local_vs_num::Int
-#     micro::T # ds, midpoint, df, sdf
-# end
-# mutable struct Ghost_Data_Temp
-#     ds::Vector{Float64}
-#     midpoint::Vector{Float64}
-#     w::Vector{Float64}
-#     local_vs_num::Int
-#     micro::Vector{Float64}
-# end
-# mutable struct Ghost_Slope{T}
-#     sdf::T
-# end
-# mutable struct Ghost_Slope_Temp
-#     sdf::Vector{Float64}
-# end
-# function Ghost_Slope_T(vs_num::Integer)
-#     return Ghost_Slope{SVector{vs_num * NDF * DIM,Cdouble}}
-# end
-# mutable struct Ghost_VS_Structure{T1,T2,T3}
-#     weight::T1
-#     level::T2
-#     midpoint::T3
-# end
-# mutable struct Ghost_VS_Structure_Temp
-#     weight::Vector{Float64}
-#     level::Vector{Int}
-#     midpoint::Vector{Float64}
-# end
-# function Ghost_VS_Structure_T(vs_num::Integer)
-#     return Ghost_VS_Structure{SVector{vs_num,Float64},SVector{vs_num,Int},SVector{vs_num*DIM,Float64}}
-# end
-# mutable struct Ghost_VS_Structure{T1,T2}
-#     neighbor_num::NTuple{2*DIM,Int}
-#     neighbor_states::T1 # [2*DIM*2^(DIM-1)]*[vs_num]
-#     level::T2
-#     index::T2
-# end
-# function Ghost_VS_Structure_T(vs_num::Integer)
-#     return Ghost_VS_Structure{NTuple{2 * DIM * vs_num*2^(DIM-1),Int},NTuple{vs_num,Int}}
-# end
-mutable struct Ghost_VS_Data <: AbstractVsData
+mutable struct Ghost_VS_Data_2D2F <: AbstractVsData
     vs_num::Int
     level::Vector{Int} # vs_num
     weight::Vector{Float64} # vs_num
     midpoint::Matrix{Float64} # vs_num x DIM
+    # u::Vector{Float64}
+    # v::Vector{Float64}
     df::Matrix{Float64} # vs_num x NDF
+    # h::Vector{Float64}
+    # b::Vector{Float64}
     sdf::Array{Float64,3} # vs_num x NDF x DIM
+    # shx::Vector{Float64}
+    # shy::Vector{Float64}
+    # sbx::Vector{Float64}
+    # sby::Vector{Float64}
 end
 # function Ghost_Data_T(vs_num::Integer)
 #     return Ghost_Data{SVector{NDF * vs_num,Cdouble}}
@@ -80,7 +45,7 @@ end
 #     index::Vector{Int} # 1..2^DIM
 #     # inherent::Int
 # end
-mutable struct Ghost_PS_Data{T<:AbstractVsData} <: AbstractPsData
+mutable struct Ghost_PS_Data_2D{T<:AbstractVsData} <: AbstractPsData
     ds::Vector{Cdouble}
     midpoint::Vector{Cdouble}
     w::Vector{Cdouble}
@@ -92,7 +57,7 @@ function Neighbor(::Type{T}) where {T}
     return Neighbor(Vector{Vector{T}}(undef, 2 * DIM), zeros(Int64, 2 * DIM))
 end
 
-mutable struct VS_Data <: AbstractVsData
+mutable struct VS_Data_2D2F <: AbstractVsData
     vs_num::Int
     level::Vector{Int} # vs_num
     weight::Vector{Float64} # vs_num
@@ -102,7 +67,7 @@ mutable struct VS_Data <: AbstractVsData
     flux::Matrix{Float64} # vs_num x NDF
 end
 
-mutable struct PS_Data <: AbstractPsData
+mutable struct PS_Data_2D <: AbstractPsData
     ds::Vector{Cdouble} # DIM
     midpoint::Vector{Float64}
     qf::Vector{Float64}
@@ -113,35 +78,35 @@ mutable struct PS_Data <: AbstractPsData
     vs_data::VS_Data
     # vs_structure::VS_Structure
     neighbor::Neighbor{Union{AbstractPsData,Nothing}}
-    PS_Data() = (n = new();
-    n.ds = zeros(DIM);
-    n.midpoint = zeros(DIM);
-    n.qf = zeros(DIM);
-    n.w = zeros(DIM + 2);
-    n.sw = zeros(DIM + 2, DIM);
-    n.prim = zeros(DIM + 2);
-    n.flux = zeros(DIM + 2);
+    PS_Data_2D() = (n = new();
+    n.ds = zeros(2);
+    n.midpoint = zeros(2);
+    n.qf = zeros(2);
+    n.w = zeros(4);
+    n.sw = zeros(4, 2);
+    n.prim = zeros(4);
+    n.flux = zeros(4);
     n.neighbor = Neighbor(Union{AbstractPsData,Nothing});
     n)
-    PS_Data(ds, midpoint, w, sw, vs_data) = (n = new();
+    PS_Data_2D(ds, midpoint, w, sw, vs_data) = (n = new();
     n.ds = ds;
     n.midpoint = midpoint;
     n.w = w;
     n.sw = sw;
-    n.flux = zeros(DIM + 2);
+    n.flux = zeros(4);
     n.vs_data = vs_data;
     n)
-    PS_Data(w, vs_data) = (n = new();
+    PS_Data_2D(w, vs_data) = (n = new();
     n.w = w;
     n.neighbor = Neighbor(Union{AbstractPsData,Nothing});
-    n.sw = zeros(DIM + 2, DIM);
-    n.qf = zeros(DIM);
-    n.prim = zeros(DIM + 2);
-    n.flux = zeros(DIM + 2);
+    n.sw = zeros(4, 2);
+    n.qf = zeros(2);
+    n.prim = zeros(4);
+    n.flux = zeros(4);
     n.vs_data = vs_data;
     n)
 end
-mutable struct Global_Data{T1,T2,T3,T4,T5,T6,T7}
+mutable struct Global_Data_2D{T1,T2,T3,T4,T5,T6,T7}<:AbstractGlobalData
     geometry::T1
     trees_num::T2
     gas::T3
@@ -173,7 +138,7 @@ end
     Δt::T1 = 0.01
     sim_time::T1 = 0.0
 end
-function Global_Data()
+function Global_Data_2D()
     geometry = [0.0, 1.0, 0.0, 1.0] # x_min,x_max,y_min,y_max
     trees_num = [20, 20]
     quadrature = [-5.0, 5.0, -5.0, 5.0]
@@ -186,7 +151,7 @@ function Global_Data()
         [1.0, 0.0, 0.0, 1.0],
         [1.0, 0.8, 0.0, 1.0],
     ) # prim_boundary
-    return Global_Data(
+    return Global_Data_2D(
         geometry,
         trees_num,
         gas,
@@ -206,7 +171,7 @@ function Global_Data()
     )
 end
 mutable struct Reconstruct
-    pdp::PointerWrapper{PS_Data}
+    pdp::PointerWrapper{PS_Data_2D}
     dir::Integer # 1:x, 2:y, 3:z
 end
 mutable struct Ghost_Exchange{T1,T2,T3,T4,T5,T6}
@@ -218,7 +183,7 @@ mutable struct Ghost_Exchange{T1,T2,T3,T4,T5,T6}
     mirror_structure_pointers::T6
 end
 mutable struct Trees
-    data::Vector{Vector{PS_Data}}
+    data::Vector{Vector{PS_Data_2D}}
     offset::Int
 end
 struct Data_Set
@@ -230,8 +195,8 @@ end
 function Data_Set()
     return Data_Set(0.1, 0.05, 0.02, 0.1)
 end
-mutable struct DVM_Data
-    global_data::Global_Data
+mutable struct AMR_2D
+    global_data::Global_Data_2D
     ghost_exchange::Ghost_Exchange
     ghost_wrap::Array{Ghost_PS_Data}
     trees::Trees
@@ -239,20 +204,20 @@ mutable struct DVM_Data
     p4est::Ptr{p4est_t}
     data_set::Data_Set
 end
-mutable struct Transfer_Data{T1,T2,T3,T4}
+mutable struct Transfer_Data_2D2F{T1,T2,T3,T4}<:AbstractTnrasferData
     w::T1
     vs_levels::T2
     vs_midpoints::T3
     vs_df::T4
     # vs_sdf::T5
 end
-function Transfer_Data(ps_num::Int, total_vs_num::Int)
-    w = Vector{Float64}(undef, (DIM + 2) * ps_num)
+function Transfer_Data_2D2F(ps_num::Int, total_vs_num::Int)
+    w = Vector{Float64}(undef, 4 * ps_num)
     vs_levels = Vector{Int8}(undef, total_vs_num)
-    vs_midpoints = Vector{Float64}(undef, DIM * total_vs_num)
-    vs_df = Vector{Float64}(undef, NDF * total_vs_num)
+    vs_midpoints = Vector{Float64}(undef, 2 * total_vs_num)
+    vs_df = Vector{Float64}(undef, 2 * total_vs_num)
     # vs_sdf = Vector{Float64}(undef,NDF*DIM*total_vs_num)
-    return Transfer_Data(w, vs_levels, vs_midpoints, vs_df)
+    return Transfer_Data_2D2F(w, vs_levels, vs_midpoints, vs_df)
 end
 # function Transfer_Data_T(ps_num::Int,total_vs_num::Int)
 #     return Transfer_Data{NTuple{(DIM+2)*ps_num,Cdouble},NTuple{total_vs_num,Int8},
@@ -272,14 +237,14 @@ mutable struct Transfer_Init
     up_index::Int
     up_insert_index::Int
     down_index::Int
-    DVM_data::DVM_Data
+    amr::AMR_2D
 end
 
 struct Solution
-    midpoint::SVector{DIM,Cdouble}
-    w::SVector{DIM + 2,Cdouble}
-    prim::SVector{DIM + 2,Cdouble}
-    qf::SVector{DIM,Cdouble}
+    midpoint::SVector
+    w::SVector
+    prim::SVector
+    qf::SVector
 end
 mutable struct Solution_Collect{T1,T2}
     solutions::T1
@@ -309,7 +274,7 @@ struct VS_Result
     df::Matrix{Float64}
 end
 struct Result_Set
-    global_data::Global_Data
+    global_data::Global_Data_2D
     PS_time_interval::Float64
     VS_time_interval::Float64
     end_time::Float64

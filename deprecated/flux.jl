@@ -1,16 +1,16 @@
-function calc_flux!(::Val{1}, ::Val{0}, face::Face, DVM_data::DVM_Data, faceid::Int)
+function calc_flux!(::Val{1}, ::Val{0}, face::Face, AMR_2D::AMR_2D, faceid::Int)
     ps_data = face.data
     dir = get_dir(faceid)
     rot = get_rot(faceid)
     vs_data = ps_data.vs_data
     midpoint = vs_data.midpoint
-    gas = DVM_data.global_data.gas
+    gas = AMR_2D.global_data.gas
     Θ = [heaviside(rot * midpoint[i, dir]) for i in axes(midpoint, 1)]
     h = @views vs_data.df[:, 1]
     u = @views midpoint[:, 1]
     v = @views midpoint[:, 2]
     vn = @views midpoint[:, dir]
-    prim0 = DVM_data.global_data.bc[:, faceid]
+    prim0 = AMR_2D.global_data.bc[:, faceid]
     df0 = @. vs_data.df - 0.5 * rot * ps_data.ds[dir] * @view(vs_data.sdf[:, :, dir])
     h0 = @views df0[:, 1]
     b0 = @views df0[:, 2]
@@ -27,7 +27,7 @@ function calc_flux!(::Val{1}, ::Val{0}, face::Face, DVM_data::DVM_Data, faceid::
     # end
     @. vs_data.flux[:, 2] += vn * rot * ps_data.ds[dir] * gas.Δt * B
 end
-function make_face_data(ps_data::PS_Data, nps_data::AbstractPsData, rot::Float64, dir::Int)
+function make_face_data(ps_data::PS_Data_2D, nps_data::AbstractPsData, rot::Float64, dir::Int)
     vs_data = ps_data.vs_data
     midpoint_L = vs_data.midpoint
     vs_data_n = nps_data.vs_data
@@ -253,17 +253,17 @@ function update_vs_flux!(
         end
     end
 end
-function update_nflux!(nps_data::PS_Data, fw::AV)
+function update_nflux!(nps_data::PS_Data_2D, fw::AV)
     nps_data.flux .-= fw
 end
 function update_nflux!(::Ghost_PS_Data, ::AV)
     return nothing
 end
-function calc_flux!(::Val{0}, ::Val{1}, face::Face, DVM_data::DVM_Data, faceid::Int)
+function calc_flux!(::Val{0}, ::Val{1}, face::Face, AMR_2D::AMR_2D, faceid::Int)
     ps_data = face.data
     dir = get_dir(faceid)
     rot = get_rot(faceid) # Left: -1, Right: 1
-    gas = DVM_data.global_data.gas
+    gas = AMR_2D.global_data.gas
     ds = ps_data.ds[dir]
     vs_data = ps_data.vs_data
     nps_data = ps_data.neighbor.data[faceid][1]
@@ -317,11 +317,11 @@ function calc_flux!(::Val{0}, ::Val{1}, face::Face, DVM_data::DVM_Data, faceid::
     #     # @show maximum(vs_data.sdf[:,1,1]) maximum(vs_data.sdf[:,1,2])
     # end
 end
-function calc_flux!(::Val{0}, ::Val{2}, face::Face, DVM_data::DVM_Data, faceid::Int)
+function calc_flux!(::Val{0}, ::Val{2}, face::Face, AMR_2D::AMR_2D, faceid::Int)
     ps_data = face.data
     dir = get_dir(faceid)
     rot = get_rot(faceid) # Left: -1, Right: 1
-    gas = DVM_data.global_data.gas
+    gas = AMR_2D.global_data.gas
     vs_data = ps_data.vs_data
     # if ps_data.midpoint == [0.90625, 0.90625]
     #     @show ps_data.neighbor.data[faceid][1].midpoint
@@ -366,11 +366,11 @@ function calc_flux!(::Val{0}, ::Val{2}, face::Face, DVM_data::DVM_Data, faceid::
     #     @show ps_data.flux faceid
     # end
 end
-function calc_flux!(::Val{2}, ::Val{-1}, face::Face, DVM_data::DVM_Data, faceid::Int)
+function calc_flux!(::Val{2}, ::Val{-1}, face::Face, AMR_2D::AMR_2D, faceid::Int)
     ps_data = face.data
     dir = get_dir(faceid)
     rot = get_rot(faceid) # Left: -1, Right: 1
-    gas = DVM_data.global_data.gas
+    gas = AMR_2D.global_data.gas
     ds = ps_data.ds[dir]
     vs_data = ps_data.vs_data
     nps_data = ps_data.neighbor.data[faceid][1]
@@ -434,13 +434,13 @@ function calc_flux!(
     ::Val{2},
     ::Val{-1},
     face::Face{T},
-    DVM_data::DVM_Data,
+    AMR_2D::AMR_2D,
     faceid::Int,
 ) where {T<:Ghost_PS_Data}
     ps_data = face.data
     dir = get_dir(faceid)
     rot = get_rot(faceid) # Left: -1, Right: 1
-    gas = DVM_data.global_data.gas
+    gas = AMR_2D.global_data.gas
     ds = ps_data.ds[dir]
     vs_data = ps_data.vs_data
     nps_data = ps_data.neighbor.data[faceid][1]
@@ -473,8 +473,8 @@ function calc_flux!(
     update_vs_flux!(fh, fb, bit_L, vs_data, vs_data_n, offset, rot)
 end
 
-function update_flux!(DVM_data::DVM_Data)
-    faces = DVM_data.faces
+function update_flux!(AMR_2D::AMR_2D)
+    faces = AMR_2D.faces
     @inbounds @simd for i in eachindex(faces)
         face = faces[i]
         faceid = face.faceid
@@ -482,7 +482,7 @@ function update_flux!(DVM_data::DVM_Data)
             Val(face.bound),
             Val(face.data.neighbor.state[faceid]),
             face,
-            DVM_data,
+            AMR_2D,
             faceid,
         )
     end
