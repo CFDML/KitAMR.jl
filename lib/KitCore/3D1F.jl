@@ -117,10 +117,10 @@ function moment_u_3D1F(U::T,V::Real,W::Real,λ::Real,n::Integer,m::Integer,δ::I
     Mu = Vector{T}(undef, n + 1)
     Mu_R = Vector{T}(undef, n + 1)
     @inbounds begin
-        Mu_L[1] = 0.5 * erfc(√(λ) * U)
+        Mu_L[1] = 0.5 * erfc(-√(λ) * U)
         Mu_L[2] =
             U * Mu_L[1] -  0.5 * exp(-λ * U^2) / (√(π * λ))
-        Mu_R[1] = 0.5 * erfc(-√(λ) * U)
+        Mu_R[1] = 0.5 * erfc(√(λ) * U)
         Mu_R[2] =
             U * Mu_R[1] + 0.5 * exp(-λ * U^2) / (√(π * λ))
         for i = 1:n-1
@@ -170,3 +170,4 @@ function moment_au_3D1F(a, Mu, Mv, Mw, α::Integer, β::Integer, δ::Integer)# c
               0.5 * a[5] * moment_uv_3D1F(Mu, Mv, Mw, α, β + 2, δ) +
               0.5 * a[5] * moment_uv_3D1F(Mu, Mv, Mw, α, β, δ + 2)
 end
+
