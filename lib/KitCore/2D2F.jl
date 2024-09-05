@@ -99,10 +99,10 @@ function moment_u_2D2F(U::T,V::Real,λ::Real,n::Integer,m::Integer,K::Real) wher
     Mu = Vector{T}(undef, n + 1)
     Mu_R = Vector{T}(undef, n + 1)
     @inbounds begin
-        Mu_L[1] = 0.5 * erfc(rot * √(λ) * U)
+        Mu_L[1] = 0.5 * erfc(-√(λ) * U)
         Mu_L[2] =
             U * Mu_L[1] -  0.5 * exp(-λ * U^2) / (√(π * λ))
-        Mu_R[1] = 0.5 * erfc(-√(λ) * U)
+        Mu_R[1] = 0.5 * erfc(√(λ) * U)
         Mu_R[2] =
             U * Mu_R[1] + 0.5 * exp(-λ * U^2) / (√(π * λ))
         for i = 1:n-1
@@ -147,4 +147,5 @@ function moment_au_2D2F(a, Mu, Mv, Mξ, α::Integer, β::Integer)# calc <au^αv^
               0.5 * a[4] * moment_uv_2D2F(Mu, Mv, Mξ, α, β + 2, 0) +
               0.5 * a[4] * moment_uv_2D2F(Mu, Mv, Mξ, α, β, 2)
 end
+
 

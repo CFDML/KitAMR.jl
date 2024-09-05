@@ -24,9 +24,9 @@
 DIM = 3
 NDF = 1
 AMR_PS_MAXLEVEL = 2
-AMR_VS_MAXLEVEL = 1
+AMR_VS_MAXLEVEL = 2
 geometry = [0.,1.,0.,1.,0.,1.]
-trees_num = [5,5,5]
+trees_num = [16,16,16]
 quadrature = [-5.,5.,-5.,5.,-5.,5.]
 vs_trees_num = [8,8,8]
 ic = [1.,0.,0.,0.,1.]

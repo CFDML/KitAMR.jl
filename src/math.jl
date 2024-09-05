@@ -254,19 +254,39 @@ function moment_u(
     V = prim0[FAT[1][DIR]+1]
     λ = prim0[4]
     Mu, Mv, Mξ, Mu_L, Mu_R = moment_u_2D2F(U, V, λ, 6, 4, global_data.config.gas.K)
-    ROT < 0 && return (Mu, Mv, Mξ, Mu_L, Mu_R)
-    return (Mu, Mv, Mξ, Mu_R, Mu_L)
+    if DIR == 1
+        MU = Mu
+        MV = Mv
+    else
+        MU = Mv
+        MV = Mu
+    end
+    ROT < 0 && return (MU, MV, Mξ, Mu_L, Mu_R)
+    return (MU, MV, Mξ, Mu_R, Mu_L)
 end
 function moment_u(prim0::AbstractVector, ::Global_Data{3,1}, ROT::Real, DIR::Integer)
-    @inbounds begin 
+    @inbounds begin
         U = prim0[DIR+1]
         V = prim0[FAT[2][DIR][1]+1]
         W = prim0[FAT[2][DIR][2]+1]
         λ = prim0[5]
     end
     Mu, Mv, Mw, Mu_L, Mu_R = moment_u_3D1F(U, V, W, λ, 6, 4, 4)
-    ROT < 0 && return (Mu, Mv, Mw, Mu_L, Mu_R)
-    return (Mu, Mv, Mw, Mu_R, Mu_L)
+    if DIR == 1
+        MU = Mu
+        MV = Mv
+        MW = Mw
+    elseif DIR == 2
+        MU = Mv
+        MV = Mu
+        MW = Mw
+    else
+        MU = Mv
+        MV = Mw
+        MW = Mu
+    end
+    ROT < 0 && return (MU, MV, MW, Mu_L, Mu_R)
+    return (MU, MV, MW, Mu_R, Mu_L)
 end
 
 function calc_A(
@@ -345,8 +365,8 @@ function calc_flux_g0_3D1F(prim, Mt, Mu, Mv, Mw, Mu_L, Mu_R, aL, aR, A, dir)
         Mau_T = moment_au_3D1F(A, Mu, Mv, Mw, 0, 1, 0)
     else
         Mau_0 = moment_uv_3D1F(Mu, Mv, Mw, 0, 0, 1)
-        Mau2_L = moment_au_3D1F(aL, Mu, Mu_L, Mw, 0, 0, 2)
-        Mau2_R = moment_au_3D1F(aR, Mu, Mu_R, Mw, 0, 0, 2)
+        Mau2_L = moment_au_3D1F(aL, Mu, Mv, Mu_L, 0, 0, 2)
+        Mau2_R = moment_au_3D1F(aR, Mu, Mv, Mu_R, 0, 0, 2)
         Mau_T = moment_au_3D1F(A, Mu, Mv, Mw, 0, 0, 1)
     end
     @inbounds prim[1] * (Mt[1] * Mau_0 + Mt[2] * (Mau2_L + Mau2_R) + Mt[3] * Mau_T)
@@ -636,7 +656,7 @@ function calc_micro_flux_3D1F(
                 aT[2] * u * F0 +
                 aT[3] * v * F0 +
                 aT[4] * w * F0 +
-                0.5 * aT[5] * (u^2 + v^2) * F0
+                0.5 * aT[5] * (u^2 + v^2 + w^2) * F0
             ) +
             Mt[4] * vn * f - Mt[5] * vn^2 * sf
     end
