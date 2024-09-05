@@ -1,40 +1,50 @@
 module KitAMR
 
+using CairoMakie
 using MPI
-using P4est
-using StaticArrays
+using JLD2
+using LinearAlgebra
 using Parameters
 using SpecialFunctions
-using CairoMakie
-using LinearAlgebra
-using HDF5
-using JLD2
+using StaticArrays
+using PythonCall
+
+using Reexport
+@reexport using P4est
 
 include("../lib/P4estTypes/src/P4estTypes.jl")
 using .P4estTypes
-
-using PythonCall
-scipy = pyimport("scipy")
-np = pyimport("numpy")
-
+include("../lib/KitCore/KitCore.jl")
+using .KitCore
 include("abstract.jl")
-include("types.jl")
-include("model.jl")
-include("p4est_wrap.jl")
-include("math.jl")
 include("dim.jl")
+include("./gas/types.jl")
+include("./velocity_space/types.jl")
+include("physical_space/types.jl")
+include("solver/types.jl")
+include("./p4est/p4est_wrap.jl")
+include("model.jl")
+include("math.jl")
+include("IO.jl")
 include("connectivity.jl")
-include("vs_space.jl")
 include("adaptive.jl")
+include("neighbor.jl")
+include("ghost.jl")
+include("vs_space.jl")
 include("vs_adaptive.jl")
 include("initialize.jl")
-include("ghost.jl")
-include("neighbor.jl")
-include("reconstruct.jl")
-include("flux_interp_t.jl")
-include("iterate.jl")
 include("partition.jl")
-include("postprocess.jl")
+include("reconstruct.jl")
+include("flux.jl")
+include("iterate.jl")
 include("finalize.jl")
+include("postprocess.jl")
+
+const np = Ref{Py}()
+const scipy = Ref{Py}()
+function __init__()
+    np[] = pyimport("numpy")
+    scipy[] = pyimport("scipy")
+end
 
 end # module

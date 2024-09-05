@@ -157,7 +157,7 @@ function get_neighbor_data_ptr(
                 sc_array_destroy(neighbor_quads)
                 sc_array_destroy(neighbor_encs)
                 sc_array_destroy(neighbor_qid)
-                return Ptr{PS_Data}(pq.p.user_data[])
+                return Ptr{PS_Data_2D}(pq.p.user_data[])
             end
         else
             return nothing
@@ -405,4 +405,69 @@ function DVM_refine_flag(
         dp = PointerWrapper(T, qp.p.user_data[])
         return Cint(kernel(forest, which_tree, qp, dp))
     end
+end
+function DVM_4est_new(
+    comm::MPI.Comm,
+    conn::Ptr{p8est_connectivity},
+    ::Type{T},
+    user_pointer::Ptr,
+) where {T}
+    GC.@preserve comm conn user_pointer p8est_new_ext(
+        comm,
+        conn,
+        1,
+        0,
+        1,
+        sizeof(T),
+        C_NULL,
+        user_pointer,
+    )
+end
+function DVM_4est_volume_iterate(
+    forest::Ptr{p8est_t},
+    user_data::Ptr{Nothing},
+    volume_iter_fn::Function,
+)
+    GC.@preserve forest user_data volume_iter_fn p8est_iterate(
+        forest,
+        C_NULL,
+        user_data,
+        @cfunction($volume_iter_fn, Cvoid, (Ptr{p8est_iter_volume_info}, Ptr{Nothing})),
+        C_NULL,
+        C_NULL,
+        C_NULL
+    )
+end
+function DVM_volume_iterate(
+    info::Ptr{p8est_iter_volume_info},
+    data::Ptr{Nothing},
+    ::Type{T},
+    kernel::Function,
+) where {T}
+    GC.@preserve info data begin
+        ip = PointerWrapper(info)
+        dp = PointerWrapper(T, ip.quad.p.user_data[])
+        GC.@preserve ip dp kernel(ip, data, dp)
+    end
+    return nothing
+end
+function get_midpoint(forest::Ptr{p8est_t}, treeid, quadrant::Ptr{p8est_quadrant_t})
+    fp = PointerWrapper(forest)
+    qp = PointerWrapper(quadrant)
+    get_midpoint(fp, treeid, qp)
+end
+function get_midpoint(
+    fp::PointerWrapper{p8est_t},
+    treeid,
+    qp::PointerWrapper{p8est_quadrant_t},
+)
+    midpoint = zeros(3)
+    GC.@preserve midpoint fp qp treeid begin
+        halflength = P8EST_QUADRANT_LEN(qp.level[]) / 2
+        x = qp.x[] + halflength
+        y = qp.y[] + halflength
+        z = qp.z[] + halflength
+        p8est_qcoord_to_vertex(pointer(fp.connectivity), treeid, x, y, z, midpoint)
+    end
+    midpoint
 end

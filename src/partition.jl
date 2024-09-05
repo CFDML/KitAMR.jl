@@ -12,6 +12,20 @@ function partition!(p4est::Ptr{p4est_t})
     # dest_gfq = Base.unsafe_wrap(Vector{Int},pointer(pp.global_first_quadrant),MPI.Comm_size(MPI.COMM_WORLD)+1)
     return src_gfq, gfq, src_flt, src_llt
 end
+function partition!(p4est::Ptr{p8est_t})
+    pp = PointerWrapper(p4est)
+    gfq = Base.unsafe_wrap(
+        Vector{Int},
+        pointer(pp.global_first_quadrant),
+        MPI.Comm_size(MPI.COMM_WORLD) + 1,
+    )
+    src_gfq = copy(gfq)
+    src_flt = pp.first_local_tree[]
+    src_llt = pp.last_local_tree[]
+    p8est_partition(p4est, 0, C_NULL)
+    # dest_gfq = Base.unsafe_wrap(Vector{Int},pointer(pp.global_first_quadrant),MPI.Comm_size(MPI.COMM_WORLD)+1)
+    return src_gfq, gfq, src_flt, src_llt
+end
 function get_receive_send(src_gfq::Vector, dest_gfq::Vector)
     is_receives = falses(MPI.Comm_size(MPI.COMM_WORLD))
     receive_nums = Vector{Int}(undef, MPI.Comm_size(MPI.COMM_WORLD))
@@ -65,8 +79,8 @@ function get_receive_send(src_gfq::Vector, dest_gfq::Vector)
     send_nums = send_nums[is_sends]
     return receives, sends, receive_nums, send_nums
 end
-function up_transfer_wrap(sends, send_nums, trees::Vector)
-    s_datas = Vector{Transfer_Data}(undef, 0)
+function up_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::Vector)
+    s_datas = Vector{Transfer_Data{DIM,NDF}}(undef, 0)
     s_vs_numss = Vector{Vector{Int}}(undef, 0)
     send_index = 1
     index = 1
@@ -87,8 +101,7 @@ function up_transfer_wrap(sends, send_nums, trees::Vector)
             s_vs_nums[index] = ps_data.vs_data.vs_num
             index += 1
             if index > send_nums[send_index]
-                # max_treeid = i+tree_offset
-                push!(s_datas, Transfer_Data(ws, vs_levels, vs_midpoints, vs_df))
+                push!(s_datas, Transfer_Data{DIM,NDF}(ws, vs_levels, vs_midpoints, vs_df))
                 push!(s_vs_numss, s_vs_nums)
                 index = 1
                 send_index += 1
@@ -105,8 +118,8 @@ function up_transfer_wrap(sends, send_nums, trees::Vector)
     end
     return s_vs_numss, s_datas
 end
-function down_transfer_wrap(sends, send_nums, trees::Vector)
-    s_datas = Vector{Transfer_Data}(undef, 0)
+function down_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::Vector)
+    s_datas = Vector{Transfer_Data{DIM,NDF}}(undef, 0)
     s_vs_numss = Vector{Vector{Int}}(undef, 0)
     send_index = length(sends)
     index = send_nums[send_index]
@@ -126,7 +139,7 @@ function down_transfer_wrap(sends, send_nums, trees::Vector)
             s_vs_nums[index] = ps_data.vs_data.vs_num
             index -= 1
             if index < 1
-                pushfirst!(s_datas, Transfer_Data(ws, vs_levels, vs_midpoints, vs_df))
+                pushfirst!(s_datas, Transfer_Data{DIM,NDF}(ws, vs_levels, vs_midpoints, vs_df))
                 pushfirst!(s_vs_numss, s_vs_nums)
                 send_index -= 1
                 send_index < 1 && break
@@ -143,32 +156,19 @@ function down_transfer_wrap(sends, send_nums, trees::Vector)
     end
     return s_vs_numss, s_datas
 end
-function transfer_wrap(sends::Vector, send_nums::Vector, DVM_data::DVM_Data)
-    isempty(sends) && return Vector{Vector{Int}}(undef, 0), Vector{Transfer_Data}(undef, 0)
-    trees = DVM_data.trees.data
-    up_vs_numss, up_datas = up_transfer_wrap(sends, send_nums, trees)
-    down_vs_numss, down_datas = down_transfer_wrap(sends, send_nums, trees)
+function transfer_wrap(sends::Vector, send_nums::Vector, amr::AMR{DIM,NDF}) where{DIM,NDF}
+    isempty(sends) && return Vector{Vector{Int}}(undef, 0), Vector{Transfer_Data{DIM,NDF}}(undef, 0)
+    trees = amr.field.trees.data
+    up_vs_numss, up_datas = up_transfer_wrap(DIM,NDF,sends, send_nums, trees)
+    down_vs_numss, down_datas = down_transfer_wrap(DIM,NDF,sends, send_nums, trees)
     append!(up_vs_numss, down_vs_numss)
     append!(up_datas, down_datas)
-    # for i = 1:MPI.Comm_size(MPI.COMM_WORLD)
-    #     if MPI.Comm_rank(MPI.COMM_WORLD)==i-1
-    #         if length(s_vs_numss)!=length(sends)
-    #             @show length(sends) length(up_vs_numss) length(down_vs_numss) length(up_datas) length(down_datas) MPI.Comm_rank(MPI.COMM_WORLD) sends
-    #         end
-    #     end
-    #     MPI.Barrier(MPI.COMM_WORLD)
-    # end
-    # return s_vs_numss,s_datas
-    # if MPI.Comm_rank(MPI.COMM_WORLD)==1
-    #     @show length(up_datas[1].w)/4 send_nums[1]
-    # end
-    # MPI.Barrier(MPI.COMM_WORLD)
     return up_vs_numss, up_datas
 end
-function up_transfer_pop!(sends, send_nums, DVM_data::DVM_Data)
+function up_transfer_pop!(sends, send_nums, amr::AMR)
     !any(x -> x < MPI.Comm_rank(MPI.COMM_WORLD) + 1, sends) && return nothing
     nums = 0
-    trees = DVM_data.trees.data
+    trees = amr.field.trees.data
     for i in eachindex(sends)
         if sends[i] < MPI.Comm_rank(MPI.COMM_WORLD) + 1
             nums += send_nums[i]
@@ -183,10 +183,10 @@ function up_transfer_pop!(sends, send_nums, DVM_data::DVM_Data)
         nums < 1 && break
     end
 end
-function down_transfer_pop!(sends, send_nums, DVM_data::DVM_Data)
+function down_transfer_pop!(sends, send_nums, amr::AMR)
     !any(x -> x > MPI.Comm_rank(MPI.COMM_WORLD) + 1, sends) && return nothing
     nums = 0
-    trees = DVM_data.trees.data
+    trees = amr.field.trees.data
     for i in eachindex(sends)
         if sends[i] > MPI.Comm_rank(MPI.COMM_WORLD) + 1
             nums += send_nums[i]
@@ -201,10 +201,10 @@ function down_transfer_pop!(sends, send_nums, DVM_data::DVM_Data)
         nums < 1 && break
     end
 end
-function transfer_pop!(sends::Vector, send_nums::Vector, DVM_data::DVM_Data)
-    up_transfer_pop!(sends, send_nums, DVM_data)
-    down_transfer_pop!(sends, send_nums, DVM_data)
-    trees = DVM_data.trees.data
+function transfer_pop!(sends::Vector, send_nums::Vector, amr::AMR)
+    up_transfer_pop!(sends, send_nums, amr)
+    down_transfer_pop!(sends, send_nums, amr)
+    trees = amr.field.trees.data
     deleteat!(trees, isempty.(trees))
 end
 function pre_transfer(
@@ -238,23 +238,11 @@ function pre_transfer(
 end
 function transfer(
     sends::Vector{Int},
-    s_datas::Vector{Transfer_Data},
+    s_datas::Vector{Transfer_Data{DIM,NDF}},
     receives::Vector{Int},
     receive_nums::Vector{Int},
     r_vs_numss::Vector,
-)
-    # for i = 1:MPI.Comm_size(MPI.COMM_WORLD)
-    #     if MPI.Comm_rank(MPI.COMM_WORLD)==i-1
-    #         @show sends 
-    #         !isempty(sends) && @show length(s_datas[1].w)
-    #     end
-    #     MPI.Barrier(MPI.COMM_WORLD)
-    # end
-    # if MPI.Comm_rank(MPI.COMM_WORLD)==1
-    #     @show s_datas[1].w
-    # end
-    # MPI.Barrier(MPI.COMM_WORLD)
-
+) where{DIM,NDF}
     reqs = Vector{MPI.Request}(undef, 0)
     for i in eachindex(sends)
         sreq = MPI.Isend(
@@ -263,7 +251,6 @@ function transfer(
             dest = sends[i] - 1,
             tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
         )
-        # MPI.Wait(sreq)
         push!(reqs, sreq)
         sreq = MPI.Isend(
             s_datas[i].vs_levels,
@@ -271,7 +258,6 @@ function transfer(
             dest = sends[i] - 1,
             tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
         )
-        # MPI.Wait(sreq)
         push!(reqs, sreq)
         sreq = MPI.Isend(
             s_datas[i].vs_midpoints,
@@ -279,7 +265,6 @@ function transfer(
             dest = sends[i] - 1,
             tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
         )
-        # MPI.Wait(sreq)
         push!(reqs, sreq)
         sreq = MPI.Isend(
             s_datas[i].vs_df,
@@ -287,20 +272,18 @@ function transfer(
             dest = sends[i] - 1,
             tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
         )
-        # MPI.Wait(sreq)
         push!(reqs, sreq)
     end
-    r_datas = Vector{Transfer_Data}(undef, 0)
+    r_datas = Vector{Transfer_Data{DIM,NDF}}(undef, 0)
     for i in eachindex(receives)
         total_vs_num = sum(r_vs_numss[i])
-        r_data = Transfer_Data(receive_nums[i], total_vs_num)
+        r_data = Transfer_Data(DIM,NDF,receive_nums[i], total_vs_num)
         rreq = MPI.Irecv!(
             r_data.w,
             MPI.COMM_WORLD;
             source = receives[i] - 1,
             tag = COMM_DATA_TAG + receives[i] - 1,
         )
-        # MPI.Wait(rreq)
         push!(reqs, rreq)
         rreq = MPI.Irecv!(
             r_data.vs_levels,
@@ -308,7 +291,6 @@ function transfer(
             source = receives[i] - 1,
             tag = COMM_DATA_TAG + receives[i] - 1,
         )
-        # MPI.Wait(rreq)
         push!(reqs, rreq)
         rreq = MPI.Irecv!(
             r_data.vs_midpoints,
@@ -316,7 +298,6 @@ function transfer(
             source = receives[i] - 1,
             tag = COMM_DATA_TAG + receives[i] - 1,
         )
-        # MPI.Wait(rreq)
         push!(reqs, rreq)
         rreq = MPI.Irecv!(
             r_data.vs_df,
@@ -324,12 +305,10 @@ function transfer(
             source = receives[i] - 1,
             tag = COMM_DATA_TAG + receives[i] - 1,
         )
-        # MPI.Wait(rreq)
         push!(reqs, rreq)
         push!(r_datas, r_data)
     end
     MPI.Waitall!(reqs)
-    # @show "Transfer_Done!" MPI.Comm_rank(MPI.COMM_WORLD)
     up_index = [x < MPI.Comm_rank(MPI.COMM_WORLD) + 1 for x in receives]
     down_index = [x > MPI.Comm_rank(MPI.COMM_WORLD) + 1 for x in receives]
     up_vs_numss = r_vs_numss[up_index]
@@ -341,26 +320,17 @@ end
 function partition_transfer(
     sends::Vector{Int},
     s_vs_numss::Vector,
-    s_datas::Vector{Transfer_Data},
+    s_datas::Vector{Transfer_Data{DIM,NDF}},
     receives::Vector{Int},
     receive_nums::Vector{Int},
-)
+)where{DIM,NDF}
     r_vs_numss = pre_transfer(sends, s_vs_numss, receives, receive_nums)
-    # for i = 1:MPI.Comm_size(MPI.COMM_WORLD)
-    #     if MPI.Comm_rank(MPI.COMM_WORLD)==i-1
-    #         @show length(r_vs_numss)
-    #     end
-    #     MPI.Barrier(MPI.COMM_WORLD)
-    # end
     transfer(sends, s_datas, receives, receive_nums, r_vs_numss)
 end
-# function unpack_data(::Nothing,::Nothing,DVM_data::DVM_Data)
-#     return nothing
-# end
-function unpack_data(vs_nums, data, DVM_data::DVM_Data)
-    transfer_ps_datas = Array{PS_Data}(undef, length(vs_nums))
-    quadrature = DVM_data.global_data.quadrature
-    vs_trees_num = reduce(*, DVM_data.global_data.vs_trees_num)
+function unpack_data(vs_nums, data, amr::AMR{DIM,NDF}) where{DIM,NDF}
+    transfer_ps_datas = Array{PS_Data{DIM,NDF}}(undef, length(vs_nums))
+    quadrature = amr.global_data.config.quadrature
+    vs_trees_num = reduce(*, amr.global_data.config.vs_trees_num)
     vs_space = 1.0
     for i = 1:DIM
         vs_space *= quadrature[2*i] - quadrature[2*i-1]
@@ -375,7 +345,7 @@ function unpack_data(vs_nums, data, DVM_data::DVM_Data)
             reshape(data.vs_midpoints[DIM*offset+1:DIM*(offset+vs_num)], vs_num, DIM)
         vs_df = reshape(data.vs_df[NDF*offset+1:NDF*(offset+vs_num)], vs_num, NDF)
         vs_weight = @. tree_weight / 2^(DIM * vs_levels)
-        vs_data = VS_Data(
+        vs_data = VS_Data{DIM,NDF}(
             vs_num,
             vs_levels,
             vs_weight,
@@ -384,30 +354,27 @@ function unpack_data(vs_nums, data, DVM_data::DVM_Data)
             zeros(vs_num, NDF, DIM),
             zeros(vs_num, NDF),
         )
-        transfer_ps_datas[i] = PS_Data(w, vs_data)
+        transfer_ps_datas[i] = PS_Data(DIM,NDF,w, vs_data)
         offset += vs_num
     end
     return transfer_ps_datas
 end
-function unpack_data(up_vs_numss, down_vs_numss, up_datas, down_datas, DVM_data::DVM_Data)
-    up_ps_datas = Vector{PS_Data}(undef, 0)
-    down_ps_datas = Vector{PS_Data}(undef, 0)
+function unpack_data(up_vs_numss, down_vs_numss, up_datas, down_datas, amr::AMR{DIM,NDF}) where{DIM,NDF}
+    up_ps_datas = Vector{PS_Data{DIM,NDF}}(undef, 0)
+    down_ps_datas = Vector{PS_Data{DIM,NDF}}(undef, 0)
     for i in eachindex(up_vs_numss)
-        append!(up_ps_datas, unpack_data(up_vs_numss[i], up_datas[i], DVM_data))
+        append!(up_ps_datas, unpack_data(up_vs_numss[i], up_datas[i], amr))
     end
     for i in eachindex(down_vs_numss)
-        append!(down_ps_datas, unpack_data(down_vs_numss[i], down_datas[i], DVM_data))
+        append!(down_ps_datas, unpack_data(down_vs_numss[i], down_datas[i], amr))
     end
     return up_ps_datas, down_ps_datas
 end
 function init_up_quadrants!(ip, dp, ti_data::Transfer_Init, treeid::Integer, tree_datas)
     ti_data.up_index > ti_data.up_num && return nothing
     ps_data = ti_data.up_data[ti_data.up_index]
-    ps_data.ds, ps_data.midpoint = get_midpoint_ds(ip.p4est, treeid, ip.quad)
+    ps_data.ds, ps_data.midpoint = quad_to_cell(ip.p4est, treeid, ip.quad)
     dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
-    # if MPI.Comm_rank(MPI.COMM_WORLD)==2
-    # @show treeid ti_data.old_flt
-    # end
     if treeid < ti_data.old_flt
         push!(tree_datas, ps_data)
     else
@@ -416,37 +383,28 @@ function init_up_quadrants!(ip, dp, ti_data::Transfer_Init, treeid::Integer, tre
     end
     ti_data.up_index += 1
 end
-# function init_up_quadrants!(::PointerWrapper,::PointerWrapper,::Transfer_Init{T1,T2},::Integer,::Vector) where{T1<:Nothing,T2}
-#     return nothing
-# end
 function init_down_quadrants!(ip, dp, ti_data::Transfer_Init, treeid::Integer, tree_datas)
     global_quadid(ip) < (ip.p4est.local_num_quadrants[] - ti_data.down_num) &&
         return nothing
     ps_data = ti_data.down_data[ti_data.down_index]
-    ps_data.ds, ps_data.midpoint = get_midpoint_ds(ip.p4est, treeid, ip.quad)
+    ps_data.ds, ps_data.midpoint = quad_to_cell(ip.p4est, treeid, ip.quad)
     dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
     push!(tree_datas, ps_data)
     ti_data.down_index += 1
 end
-# function init_down_quadrants!(::PointerWrapper,::PointerWrapper,::Transfer_Init{T1,T2},::Integer,::Vector) where{T1,T2<:Nothing}
-#     return nothing
-# end
 function init_transferred_quadrant!(ip, data, dp)
     ti_data = unsafe_pointer_to_objref(data)
-    trees = ti_data.DVM_data.trees
+    trees = ti_data.amr.field.trees
     treeid = ip.treeid[] - trees.offset
     tree_datas = trees.data[treeid]
-    # if MPI.Comm_rank(MPI.COMM_WORLD)==2
-    #     @show treeid trees.offset
-    # end
     init_up_quadrants!(ip, dp, ti_data, ip.treeid[], tree_datas)
     init_down_quadrants!(ip, dp, ti_data, ip.treeid[], tree_datas)
 end
 function init_transferred_quadrant!(info, data)
     DVM_volume_iterate(info, data, P4est_PS_Data, init_transferred_quadrant!)
 end
-function init_transferred_quadrant!(p4est::Ptr{p4est_t}, ti_data::Transfer_Init)
-    ghost = ti_data.DVM_data.global_data.ghost
+function init_transferred_quadrant!(p4est::P_pxest_t, ti_data::Transfer_Init)
+    ghost = ti_data.amr.global_data.forest.ghost
     p_data = pointer_from_objref(ti_data)
     GC.@preserve ti_data DVM_4est_volume_iterate(
         p4est,
@@ -455,53 +413,41 @@ function init_transferred_quadrant!(p4est::Ptr{p4est_t}, ti_data::Transfer_Init)
         init_transferred_quadrant!,
     )
 end
-function init_transferred_ps!(p4est::Ptr{p4est_t}, ti_data::Transfer_Init)
-    insert_trees!(p4est, ti_data.DVM_data, ti_data)
+function init_transferred_ps!(p4est::P_pxest_t, ti_data::Transfer_Init)
+    insert_trees!(p4est, ti_data.amr, ti_data)
     init_transferred_quadrant!(p4est, ti_data)
 end
-function insert_trees!(p4est::Ptr{p4est_t}, DVM_data::DVM_Data, ti_data::Transfer_Init)
-    trees = DVM_data.trees.data
+function insert_trees!(p4est::P_pxest_t, amr::AMR{DIM,NDF}, ti_data::Transfer_Init) where{DIM,NDF}
+    trees = amr.field.trees.data
     pp = PointerWrapper(p4est)
-    # tree_offset = DVM_data.trees.offset
     if !isempty(trees)
         if pp.first_local_tree[] < ti_data.old_flt
             for i = 1:ti_data.old_flt-pp.first_local_tree[]
-                pushfirst!(trees, Vector{PS_Data}(undef, 0))
+                pushfirst!(trees, Vector{PS_Data{DIM,NDF}}(undef, 0))
             end
         end
         if pp.last_local_tree[] > ti_data.old_llt
             for i = 1:pp.last_local_tree[]-ti_data.old_llt
-                push!(trees, Vector{PS_Data}(undef, 0))
+                push!(trees, Vector{PS_Data{DIM,NDF}}(undef, 0))
             end
         end
     else
         for _ = 1:pp.last_local_tree[]-pp.first_local_tree[]+1
-            push!(trees, Vector{PS_Data}(undef, 0))
+            push!(trees, Vector{PS_Data{DIM,NDF}}(undef, 0))
         end
     end
-    DVM_data.trees.offset = pp.first_local_tree[] - 1
+    amr.field.trees.offset = pp.first_local_tree[] - 1
 end
 
-function PS_partition!(p4est::Ptr{p4est_t}, DVM_data::DVM_Data)
-    # pp = PointerWrapper(p4est)
+function ps_partition!(p4est::P_pxest_t, amr::AMR)
     src_gfq, dest_gfq, src_flt, src_llt = partition!(p4est)
-    # if MPI.Comm_rank(MPI.COMM_WORLD)==0
-    #     @show src_gfq dest_gfq
-    # end
-    # MPI.Barrier(MPI.COMM_WORLD)
     receives, sends, receive_nums, send_nums = get_receive_send(src_gfq, dest_gfq)
-    s_vs_numss, s_datas = transfer_wrap(sends, send_nums, DVM_data)
-    # for i = 1:MPI.Comm_size(MPI.COMM_WORLD)
-    #         if MPI.Comm_rank(MPI.COMM_WORLD)==i-1
-    #             @show Base.summarysize(s_datas)
-    #         end
-    #         MPI.Barrier(MPI.COMM_WORLD)
-    #     end
-    transfer_pop!(sends, send_nums, DVM_data)
+    s_vs_numss, s_datas = transfer_wrap(sends, send_nums, amr)
+    transfer_pop!(sends, send_nums, amr)
     up_vs_numss, down_vs_numss, up_datas, down_datas =
         partition_transfer(sends, s_vs_numss, s_datas, receives, receive_nums)
     up_ps_datas, down_ps_datas =
-        unpack_data(up_vs_numss, down_vs_numss, up_datas, down_datas, DVM_data)
+        unpack_data(up_vs_numss, down_vs_numss, up_datas, down_datas, amr)
     ti_data = Transfer_Init(
         length(up_ps_datas),
         length(down_ps_datas),
@@ -512,16 +458,7 @@ function PS_partition!(p4est::Ptr{p4est_t}, DVM_data::DVM_Data)
         1,
         1,
         1,
-        DVM_data,
+        amr,
     )
     init_transferred_ps!(p4est, ti_data)
-    # check trees
-    # if MPI.Comm_rank(MPI.COMM_WORLD)==2
-    #     @show length(up_ps_datas) length(down_ps_datas) ti_data.up_num
-    #     trees = DVM_data.trees.data
-    #     for i = 1:pp.last_local_tree[]-pp.first_local_tree[]+1
-    #         tp = get_index_pw(pp.trees, p4est_tree_t, i+pp.first_local_tree[]-1)
-    #         @show length(trees[i]) tp.quadrants.elem_count[]
-    #     end
-    # end
 end

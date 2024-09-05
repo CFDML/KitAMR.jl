@@ -7,17 +7,18 @@ using P4est
 using RecipesBase
 using SparseArrays
 
-export QuadrantWrapper, Connectivity, Pxest, GhostLayer, LNodes
+# export QuadrantWrapper, Connectivity, Pxest, GhostLayer, LNodes
 
-export refine, brick, pxest
-export lengthoflocalquadrants, lengthofglobalquadrants # Find better names
-export level, unsafe_storeuserdata!, unsafe_loaduserdata
-export offset, coordinates
-export iterateforest
-export refine!, coarsen!, balance!, partition!, expand!
-export lnodes, ghostlayer, connectivity
-export ghosts, mirrors, sharers
-export globalid
+# export refine, brick, pxest
+# export lengthoflocalquadrants, lengthofglobalquadrants # Find better names
+# export level, unsafe_storeuserdata!, unsafe_loaduserdata
+# export offset, coordinates
+# export iterateforest
+# export refine!, coarsen!, balance!, partition!, expand!
+# export lnodes, ghostlayer, connectivity
+# export ghosts, mirrors, sharers
+# export globalid
+export Connectivity
 
 # Running
 #     grep -C 2 "closures are not supported" src/codegen.cpp in the julia
