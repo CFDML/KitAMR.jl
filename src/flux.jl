@@ -546,18 +546,18 @@ function calc_flux!(::DoubleSizeNeighbor, face::Face, amr::AMR{2,2})
     prim0 = get_prim(w0, global_data)
     qf0 = calc_qf(f_vs_data, prim0)
     aL, aR = calc_a(w0, prim0, ps_data.w, nps_data.w, ds, 2.0 * ds, global_data, ROT)
-    Mu, Mv, Mw, Mu_L, Mu_R = moment_u(prim0, global_data, ROT, DIR)
-    A = calc_A(prim0, aL, aR, Mu, Mv, Mw, Mu_L, Mu_R, global_data, DIR)
+    Mu, Mv, Mξ, Mu_L, Mu_R = moment_u(prim0, global_data, ROT, DIR)
+    A = calc_A(prim0, aL, aR, Mu, Mv, Mξ, Mu_L, Mu_R, global_data, DIR)
     τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
     Mt = time_int(τ0, global_data.status.Δt)
-    fw = calc_flux_g0_2D2F(prim0, Mt, Mu, Mv, Mw, Mu_L, Mu_R, aL, aR, A, DIR)
+    fw = calc_flux_g0_2D2F(prim0, Mt, Mu, Mv, Mξ, Mu_L, Mu_R, aL, aR, A, DIR)
     F = discrete_maxwell(f_vs_data.midpoint, prim0, global_data)
     F⁺ = shakhov_part(f_vs_data.midpoint, F, prim0, qf0, global_data)
     fw .+= calc_flux_f0(f_vs_data, F⁺, Mt)
     dsf = calc_face_area(ps_data, DIR)
     fw .*= dsf * ROT
     ps_data.flux .+= fw
-    micro_flux = calc_micro_flux(f_vs_data, F, F⁺, aL, aR, A, Mt, offset, dsf)
+    micro_flux = calc_micro_flux(f_vs_data, F, F⁺, aL, aR, A, Mξ, Mt, offset, dsf)
     update_vs_flux!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
     for i in eachindex(face.hanging_data)
         (isa(face.hanging_data[i], Ghost_PS_Data)||isa(face.hanging_data[i],MissingHangingQuad)) && continue
@@ -579,6 +579,7 @@ function calc_flux!(::DoubleSizeNeighbor, face::Face, amr::AMR{2,2})
         fw .*= dsf * ROT
         ps_data.flux .+= fw
         micro_flux = calc_micro_flux(f_vs_data, F, F⁺, aL, aR, A, Mξ, Mt, offset, dsf)
+        update_vs_flux!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
     end
 end
 function calc_flux!(::DoubleSizeNeighbor, face::Face, amr::AMR{3,1})
@@ -620,7 +621,7 @@ function calc_flux!(::DoubleSizeNeighbor, face::Face, amr::AMR{3,1})
         prim0 = get_prim(w0, global_data)
         qf0 = calc_qf(f_vs_data, prim0)
         aL, aR = calc_a(w0, prim0, ps_data.w, nps_data.w, ds, 2.0 * ds, global_data, ROT)
-        Mu, Mv, Mξ, Mu_L, Mu_R = moment_u(prim0, global_data, ROT, DIR)
+        Mu, Mv, Mw, Mu_L, Mu_R = moment_u(prim0, global_data, ROT, DIR)
         A = calc_A(prim0, aL, aR, Mu, Mv, Mw, Mu_L, Mu_R, global_data, DIR)
         τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
         Mt = time_int(τ0, global_data.status.Δt)
@@ -631,6 +632,7 @@ function calc_flux!(::DoubleSizeNeighbor, face::Face, amr::AMR{3,1})
         fw .*= dsf * ROT
         ps_data.flux .+= fw
         micro_flux = calc_micro_flux(f_vs_data, F, F⁺, aL, aR, A, Mt, offset, dsf)
+        update_vs_flux!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
     end
 end
 function update_flux!(amr::AMR)
