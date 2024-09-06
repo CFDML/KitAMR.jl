@@ -19,7 +19,7 @@ function get_conserved(ps_data::PS_Data{3,NDF}, global_data::Global_Data) where 
     get_conserved_3D(ps_data.prim, global_data.config.gas.γ)
 end
 
-function discrete_maxwell(ps_data::PS_Data{3,1}, global_data::Global_Data)
+function discrete_maxwell(ps_data::PS_Data, global_data::Global_Data)
     discrete_maxwell(ps_data.vs_data.midpoint, ps_data.prim, global_data)
 end
 function discrete_maxwell(
@@ -33,9 +33,6 @@ function discrete_maxwell(
         @view(midpoint[:, 3]),
         prim,
     )
-end
-function discrete_maxwell(ps_data::PS_Data{2,2}, global_data::Global_Data)
-    discrete_maxwell(ps_data.vs_data.midpoint, ps_data.prim, global_data)
 end
 function discrete_maxwell(
     midpoint::AbstractMatrix,
@@ -67,23 +64,23 @@ function shakhov_part(
         global_data.config.gas.K,
     )
 end
-function shakhov_part(
-    midpoint::AbstractMatrix,
-    F::AbstractMatrix,
-    prim::AbstractVector,
-    qf::AbstractVector,
-    global_data::Global_Data{3,1},
-)
-    shakhov_part_3D1F(
-        @view(midpoint[:, 1]),
-        @view(midpoint[:, 2]),
-        @view(midpoint[:, 3]),
-        vec(F),
-        prim,
-        qf,
-        global_data.config.gas.Pr,
-    )
-end
+# function shakhov_part(
+#     midpoint::AbstractMatrix,
+#     F::AbstractMatrix,
+#     prim::AbstractVector,
+#     qf::AbstractVector,
+#     global_data::Global_Data{3,1},
+# )
+#     shakhov_part_3D1F(
+#         @view(midpoint[:, 1]),
+#         @view(midpoint[:, 2]),
+#         @view(midpoint[:, 3]),
+#         vec(F),
+#         prim,
+#         qf,
+#         global_data.config.gas.Pr,
+#     )
+# end
 function shakhov_part(
     midpoint::AbstractMatrix,
     F::AbstractVector,

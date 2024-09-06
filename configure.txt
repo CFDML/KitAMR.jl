@@ -13,7 +13,7 @@
 # K: number of internal DOF
 # γ: adiabatic ratio
 # ω: exponent of temperature in VSS model to calculate the collisional frequency
-# αᵣ: the parameter in VSS model. When alpha_ref=1, VSS modedl degenerates into the VHS model.
+# αᵣ: the parameter in VSS model. When alpha_ref=1, VSS model degenerates into the VHS model.
 # ωᵣ: the parameter in VSS model to calculate non-dimension nu_ref
 # CFL: CFL number
 # adapt_interval: steps between the adaptation in physical space
@@ -30,6 +30,6 @@ trees_num = [16,16,16]
 quadrature = [-5.,5.,-5.,5.,-5.,5.]
 vs_trees_num = [8,8,8]
 ic = [1.,0.,0.,0.,1.]
-bc = hcat([1.,0.,0.,0.,1.],[1.,0.,0.,0.,1.],[1.,0.,0.,0.,1.],[1.,0.,0.,0.,1.],[1.,0.,0.,0.,1.],[1.,0.5,0.,0.,1.])
+bc = hcat([1.,0.,0.,0.,1.],[1.,0.,0.,0.,1.],[1.,0.,0.,0.,1.],[1.,0.,0.,0.,1.],[1.,0.,0.,0.,1.],[1.,0.15,0.,0.,1.])
 CFL = 0.2
 K = 0.
