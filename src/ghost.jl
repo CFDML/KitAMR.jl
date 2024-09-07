@@ -77,7 +77,7 @@ function get_mirror_slope(ps4est, global_data::Global_Data{DIM,NDF}) where{DIM,N
             pq = pw_mirror_quadrant(pp,gp,i)
             dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
-            p = Ptr{Cdouble}(sc_malloc(-1, (vs_num * DIM * NDF) * sizeof(Cdouble)))
+            p = Ptr{Cdouble}(sc_malloc(-1, (vs_num * DIM * NDF+DIM*(DIM+2)) * sizeof(Cdouble)))
             ap = Base.unsafe_wrap(Vector{Cdouble}, p, vs_num * DIM * NDF+DIM*(DIM+2))
             get_mirror_slope_inner!(ps_data, ap)
             mirror_slope_pointers[i] = p
@@ -312,7 +312,7 @@ function initialize_ghost_wrap(global_data::Global_Data{DIM,NDF}, ghost_exchange
             i - 1,
         )
         sdf = Base.unsafe_wrap(Array{Cdouble}, p, (vs_num, NDF, DIM))
-        sw = Base.unsafe_wrap(Matrix{Cdouble}, p + global_vs_num * NDF * DIM * sizeof(Cdouble), (DIM+2, DIM))
+        sw = Base.unsafe_wrap(Matrix{Cdouble}, p + vs_num * NDF * DIM * sizeof(Cdouble), (DIM+2, DIM))
         p = ghost_data_ptr(
             size_Ghost_VS_Structure(global_vs_num,DIM),
             ghost_exchange.ghost_structures,
