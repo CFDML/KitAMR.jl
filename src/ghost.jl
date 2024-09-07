@@ -65,7 +65,7 @@ function get_mirror_slope_inner!(ps_data::PS_Data{DIM,NDF}, vs_temp::AbstractVec
     vs_data = ps_data.vs_data
     vs_num = size(vs_data.weight, 1)
     vs_temp[1:(vs_num*NDF*DIM)] .= reshape(vs_data.sdf, vs_num * NDF * DIM)
-    vs_temp[vs_num*NDF*DIM+1:end] .= reshape(ps_data.sw, DIM*(DIM+2))
+    vs_temp[vs_num*NDF*DIM+1:vs_num*NDF*DIM+DIM*(DIM+2)] .= reshape(ps_data.sw, DIM*(DIM+2))
 end
 function get_mirror_slope(ps4est, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     GC.@preserve ps4est global_data begin
