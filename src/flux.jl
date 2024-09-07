@@ -262,25 +262,18 @@ function make_face_data(
     (Face_VS_Data{3,NDF}(weight_n, midpoint_n, vn, df_n, sdf_n), offset, bit_L, bit_R)
 end
 function update_face_data_R!(
-    ps_data::PS_Data,
+    ::PS_Data,
     nps_data::AbstractPsData,
     f_vs_data::Face_VS_Data{2},
     offset::Integer,
-    faceid::Integer,
+    ::Integer,
     ROT::Real,
     DIR::Integer,
 )
     vs_data_n = nps_data.vs_data
     midpoint_R = vs_data_n.midpoint
     bit_R = [x > 0.0 for x in ROT .* @view(midpoint_R[:, DIR])]
-    if ps_data.neighbor.state[faceid] < 1
-        df_R = @. @view(vs_data_n.df[bit_R, :]) +
-           (ps_data.midpoint[DIR_t] - nps_data.midpoint[DIR_t]) *
-           @view(vs_data_n.sdf[bit_R, :, DIR_t])
-    else
-        DIR_t = DIR % 2 + 1
-        df_R = @view(vs_data_n.df[bit_R, :])
-    end
+    df_R = @view(vs_data_n.df[bit_R, :])
     f_vs_data.midpoint =
         vcat(@view(f_vs_data.midpoint[1:offset, :]), @view(midpoint_R[bit_R, :]))
     f_vs_data.vn = @view(f_vs_data.midpoint[:, DIR])
@@ -291,26 +284,18 @@ function update_face_data_R!(
         vcat(@view(f_vs_data.weight[1:offset]), @view(vs_data_n.weight[bit_R]))
 end
 function update_face_data_R!(
-    ps_data::PS_Data,
+    ::PS_Data,
     nps_data::AbstractPsData,
     f_vs_data::Face_VS_Data{3},
     offset::Integer,
-    faceid::Integer,
+    ::Integer,
     ROT::Real,
     DIR::Integer,
 )
     vs_data_n = nps_data.vs_data
     midpoint_R = vs_data_n.midpoint
     bit_R = [x > 0.0 for x in ROT .* @view(midpoint_R[:, DIR])]
-    if ps_data.neighbor.state[faceid] < 1
-        df_R = @. @view(vs_data_n.df[bit_R, :]) +
-           (ps_data.midpoint[FAT[2][DIR][1]] - nps_data.midpoint[FAT[2][DIR][1]]) *
-           @view(vs_data_n.sdf[bit_R, :, FAT[2][DIR][1]]) +
-           (ps_data.midpoint[FAT[2][DIR][2]] - nps_data.midpoint[FAT[2][DIR][2]]) *
-           @view(vs_data_n.sdf[bit_R, :, FAT[2][DIR][2]])
-    else
-        df_R = @view(vs_data_n.df[bit_R, :])
-    end
+    df_R = @view(vs_data_n.df[bit_R, :])
     f_vs_data.midpoint =
         vcat(@view(f_vs_data.midpoint[1:offset, :]), @view(midpoint_R[bit_R, :]))
     f_vs_data.vn = @view(f_vs_data.midpoint[:, DIR])
@@ -322,24 +307,17 @@ function update_face_data_R!(
 end
 function update_face_data_L!(
     ps_data::PS_Data,
-    nps_data::AbstractPsData,
+    ::AbstractPsData,
     f_vs_data::Face_VS_Data{2},
     offset::Integer,
-    faceid::Integer,
+    ::Integer,
     ROT::Real,
     DIR::Integer,
 )
     vs_data = ps_data.vs_data
     midpoint_L = vs_data.midpoint
     bit_L = [x <= 0.0 for x in ROT .* @view(midpoint_L[:, DIR])]
-    if ps_data.neighbor.state[faceid] > 1
-        DIR_t = DIR % 2 + 1
-        df_L = @. @view(vs_data.df[bit_L, :]) +
-           (nps_data.midpoint[DIR_t] - ps_data.midpoint[DIR_t]) *
-           @view(vs_data.sdf[bit_L, :, DIR_t])
-    else
-        df_L = @view(vs_data.df[bit_L, :])
-    end
+    df_L = @view(vs_data.df[bit_L, :])
     f_vs_data.midpoint =
         vcat(@view(midpoint_L[bit_L, :]), @view(f_vs_data.midpoint[offset+1:end, :]))
     f_vs_data.vn = @view(f_vs_data.midpoint[:, DIR])
@@ -353,25 +331,17 @@ function update_face_data_L!(
 end
 function update_face_data_L!(
     ps_data::PS_Data,
-    nps_data::AbstractPsData,
+    ::AbstractPsData,
     f_vs_data::Face_VS_Data{3},
     offset::Integer,
-    faceid::Integer,
+    ::Integer,
     ROT::Real,
     DIR::Integer,
 )
     vs_data = ps_data.vs_data
     midpoint_L = vs_data.midpoint
     bit_L = [x <= 0.0 for x in ROT .* @view(midpoint_L[:, DIR])]
-    if ps_data.neighbor.state[faceid] > 1
-        df_L = @. @view(vs_data.df[bit_L, :]) +
-           (nps_data.midpoint[FAT[2][DIR][1]] - ps_data.midpoint[FAT[2][DIR][1]]) *
-           @view(vs_data.sdf[bit_L, :, FAT[2][DIR][1]]) +
-           (nps_data.midpoint[FAT[2][DIR][2]] - ps_data.midpoint[FAT[2][DIR][2]]) *
-           @view(vs_data.sdf[bit_L, :, FAT[2][DIR][2]])
-    else
-        df_L = @view(vs_data.df[bit_L, :])
-    end
+    df_L = @view(vs_data.df[bit_L, :])
     f_vs_data.midpoint =
         vcat(@view(midpoint_L[bit_L, :]), @view(f_vs_data.midpoint[offset+1:end, :]))
     f_vs_data.vn = @view(f_vs_data.midpoint[:, DIR])
@@ -471,7 +441,8 @@ function calc_flux!(::HalfSizeNeighbor, face::Face, amr::AMR{2,2})
         w0 = calc_w0(f_vs_data)
         prim0 = get_prim(w0, global_data)
         qf0 = calc_qf(f_vs_data, prim0)
-        aL, aR = calc_a(w0, prim0, ps_data.w, nps_data.w, ds, 0.5 * ds, global_data, ROT)
+        wL = @. ps_data.w+(nps_data.midpoint[FAT[1][DIR]]-ps_data.midpoint[FAT[1][DIR]])*ps_data.sw[:,FAT[1][DIR]]
+        aL, aR = calc_a(w0, prim0, wL, nps_data.w, ds, 0.5 * ds, global_data, ROT)
         Mu, Mv, Mξ, Mu_L, Mu_R = moment_u(prim0, global_data, ROT, DIR)
         A = calc_A(prim0, aL, aR, Mu, Mv, Mξ, Mu_L, Mu_R, global_data, DIR)
         τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
@@ -512,7 +483,10 @@ function calc_flux!(::HalfSizeNeighbor, face::Face, amr::AMR{3,1})
         w0 = calc_w0(f_vs_data)
         prim0 = get_prim(w0, global_data)
         qf0 = calc_qf(f_vs_data, prim0)
-        aL, aR = calc_a(w0, prim0, ps_data.w, nps_data.w, ds, 0.5 * ds, global_data, ROT)
+        wL = @. ps_data.w+(nps_data.midpoint[FAT[2][DIR][1]]-ps_data.midpoint[FAT[2][DIR][1]])*
+            ps_data.sw[:,FAT[2][DIR][1]]+(nps_data.midpoint[FAT[2][DIR][2]]-
+            ps_data.midpoint[FAT[2][DIR][2]])*ps_data.sw[:,FAT[2][DIR][2]]
+        aL, aR = calc_a(w0, prim0, wL, nps_data.w, ds, 0.5 * ds, global_data, ROT)
         Mu, Mv, Mw, Mu_L, Mu_R = moment_u(prim0, global_data, ROT, DIR)
         A = calc_A(prim0, aL, aR, Mu, Mv, Mw, Mu_L, Mu_R, global_data, DIR)
         τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
@@ -562,12 +536,14 @@ function calc_flux!(::DoubleSizeNeighbor, face::Face, amr::AMR{2,2})
     for i in eachindex(face.hanging_data)
         (isa(face.hanging_data[i], Ghost_PS_Data)||isa(face.hanging_data[i],MissingHangingQuad)) && continue
         ps_data = face.hanging_data[i]
+        vs_data = ps_data.vs_data
         bit_L, offset = update_face_data_L!(ps_data, nps_data, f_vs_data, offset, faceid, ROT, DIR)
         reconstruct_vs_L!(f_vs_data, ds, offset, ROT)
         w0 = calc_w0(f_vs_data)
         prim0 = get_prim(w0, global_data)
         qf0 = calc_qf(f_vs_data, prim0)
-        aL, aR = calc_a(w0, prim0, ps_data.w, nps_data.w, ds, 2.0 * ds, global_data, ROT)
+        wR = @. nps_data.w+(ps_data.midpoint[FAT[1][DIR]]-nps_data.midpoint[FAT[1][DIR]])*nps_data.sw[:,FAT[1][DIR]]
+        aL, aR = calc_a(w0, prim0, ps_data.w, wR, ds, 2.0 * ds, global_data, ROT)
         Mu, Mv, Mξ, Mu_L, Mu_R = moment_u(prim0, global_data, ROT, DIR)
         A = calc_A(prim0, aL, aR, Mu, Mv, Mξ, Mu_L, Mu_R, global_data, DIR)
         τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
@@ -598,7 +574,10 @@ function calc_flux!(::DoubleSizeNeighbor, face::Face, amr::AMR{3,1})
     w0 = calc_w0(f_vs_data)
     prim0 = get_prim(w0, global_data)
     qf0 = calc_qf(f_vs_data, prim0)
-    aL, aR = calc_a(w0, prim0, ps_data.w, nps_data.w, ds, 2.0 * ds, global_data, ROT)
+    wR = @. nps_data.w+(ps_data.midpoint[FAT[2][DIR][1]]-nps_data.midpoint[FAT[2][DIR][1]])*
+        nps_data.sw[:,FAT[2][DIR][1]]+(ps_data.midpoint[FAT[2][DIR][2]]-nps_data.midpoint[FAT[2][DIR][2]])*
+        nps_data.sw[:,FAT[2][DIR][2]]
+    aL, aR = calc_a(w0, prim0, ps_data.w, wR, ds, 2.0 * ds, global_data, ROT)
     Mu, Mv, Mw, Mu_L, Mu_R = moment_u(prim0, global_data, ROT, DIR)
     A = calc_A(prim0, aL, aR, Mu, Mv, Mw, Mu_L, Mu_R, global_data, DIR)
     τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
@@ -615,12 +594,16 @@ function calc_flux!(::DoubleSizeNeighbor, face::Face, amr::AMR{3,1})
     for i in eachindex(face.hanging_data)
         (isa(face.hanging_data[i], Ghost_PS_Data)||isa(face.hanging_data[i],MissingHangingQuad)) && continue
         ps_data = face.hanging_data[i]
+        vs_data = ps_data.vs_data
         bit_L, offset = update_face_data_L!(ps_data, nps_data, f_vs_data, offset, faceid, ROT, DIR)
         reconstruct_vs_L!(f_vs_data, ds, offset, ROT)
         w0 = calc_w0(f_vs_data)
         prim0 = get_prim(w0, global_data)
         qf0 = calc_qf(f_vs_data, prim0)
-        aL, aR = calc_a(w0, prim0, ps_data.w, nps_data.w, ds, 2.0 * ds, global_data, ROT)
+        wR = @. nps_data.w+(ps_data.midpoint[FAT[2][DIR][1]]-nps_data.midpoint[FAT[2][DIR][1]])*
+            nps_data.sw[:,FAT[2][DIR][1]]+(ps_data.midpoint[FAT[2][DIR][2]]-nps_data.midpoint[FAT[2][DIR][2]])*
+            nps_data.sw[:,FAT[2][DIR][2]]
+        aL, aR = calc_a(w0, prim0, ps_data.w, wR, ds, 2.0 * ds, global_data, ROT)
         Mu, Mv, Mw, Mu_L, Mu_R = moment_u(prim0, global_data, ROT, DIR)
         A = calc_A(prim0, aL, aR, Mu, Mv, Mw, Mu_L, Mu_R, global_data, DIR)
         τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
@@ -642,3 +625,4 @@ function update_flux!(amr::AMR)
         calc_flux!(Val(face.data.neighbor.state[face.faceid]), face, amr)
     end
 end
+

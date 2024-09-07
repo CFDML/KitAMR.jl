@@ -1,5 +1,5 @@
 size_Ghost_Data(vs_num,DIM,NDF) = 3 * DIM + 3 + NDF * vs_num
-size_Ghost_Slope(vs_num,DIM,NDF) = vs_num * DIM * NDF
+size_Ghost_Slope(vs_num,DIM,NDF) = vs_num * DIM * NDF+DIM*(DIM+2)
 size_Ghost_VS_Structure(vs_num,DIM) = vs_num * (DIM + 2)
 function get_vs_num(forest::P_pxest_t, ghost::P_pxest_ghost_t)
     get_vs_num(PointerWrapper(forest), PointerWrapper(ghost))
@@ -65,6 +65,7 @@ function get_mirror_slope_inner!(ps_data::PS_Data{DIM,NDF}, vs_temp::AbstractVec
     vs_data = ps_data.vs_data
     vs_num = size(vs_data.weight, 1)
     vs_temp[1:(vs_num*NDF*DIM)] .= reshape(vs_data.sdf, vs_num * NDF * DIM)
+    vs_temp[vs_num*NDF*DIM+1:vs_num*NDF*DIM+DIM*(DIM+2)] .= reshape(ps_data.sw, DIM*(DIM+2))
 end
 function get_mirror_slope(ps4est, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     GC.@preserve ps4est global_data begin
@@ -76,8 +77,8 @@ function get_mirror_slope(ps4est, global_data::Global_Data{DIM,NDF}) where{DIM,N
             pq = pw_mirror_quadrant(pp,gp,i)
             dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
-            p = Ptr{Cdouble}(sc_malloc(-1, (vs_num * DIM * NDF) * sizeof(Cdouble)))
-            ap = Base.unsafe_wrap(Vector{Cdouble}, p, vs_num * DIM * NDF)
+            p = Ptr{Cdouble}(sc_malloc(-1, (vs_num * DIM * NDF+DIM*(DIM+2)) * sizeof(Cdouble)))
+            ap = Base.unsafe_wrap(Vector{Cdouble}, p, vs_num * DIM * NDF+DIM*(DIM+2))
             get_mirror_slope_inner!(ps_data, ap)
             mirror_slope_pointers[i] = p
         end
@@ -145,7 +146,7 @@ function update_mirror_slope!(ps4est, amr::AMR{DIM,NDF}) where{DIM,NDF}
             ap = Base.unsafe_wrap(
                 Vector{Cdouble},
                 mirror_slope_pointers[i],
-                vs_num * DIM * NDF,
+                vs_num * DIM * NDF+DIM*(DIM+2),
             )
             get_mirror_slope_inner!(ps_data, ap)
         end
@@ -311,6 +312,7 @@ function initialize_ghost_wrap(global_data::Global_Data{DIM,NDF}, ghost_exchange
             i - 1,
         )
         sdf = Base.unsafe_wrap(Array{Cdouble}, p, (vs_num, NDF, DIM))
+        sw = Base.unsafe_wrap(Matrix{Cdouble}, p + vs_num * NDF * DIM * sizeof(Cdouble), (DIM+2, DIM))
         p = ghost_data_ptr(
             size_Ghost_VS_Structure(global_vs_num,DIM),
             ghost_exchange.ghost_structures,
@@ -324,7 +326,7 @@ function initialize_ghost_wrap(global_data::Global_Data{DIM,NDF}, ghost_exchange
         midpoint_vs =
             Base.unsafe_wrap(Matrix{Cdouble}, p + offset * sizeof(Cdouble), (vs_num, DIM))
         vs_data = Ghost_VS_Data{DIM,NDF}(vs_num, Int.(level), weight, midpoint_vs, df, sdf)
-        ghost_wrap[i] = Ghost_PS_Data{DIM,NDF}(ds, midpoint, w, vs_data)
+        ghost_wrap[i] = Ghost_PS_Data{DIM,NDF}(ds, midpoint, w, sw, vs_data)
     end
     return ghost_wrap
 end
@@ -347,3 +349,4 @@ function update_ghost!(p4est::Ptr{p8est_t}, amr::AMR)
     amr.ghost.ghost_exchange = initialize_ghost_exchange(p4est, global_data)
     amr.ghost.ghost_wrap = initialize_ghost_wrap(global_data, amr.ghost.ghost_exchange)
 end
+
