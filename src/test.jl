@@ -49,7 +49,7 @@ for i = 1:100
 end
 
 
-solutions = KitAMR.collect_results(ps4est,amr)
+solutions = KitAMR.collect_solution(ps4est,amr)
 dir_path = "./result/PS_result/"
 !isdir(dir_path) && mkpath(dir_path)
 KitAMR.JLD2.save_object(
