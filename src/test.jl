@@ -3,27 +3,27 @@ using KitAMR,MPI,CairoMakie
 MPI.Init()
 config = KitAMR.read_config("configure.txt")
 ps4est,amr = KitAMR.init(config);
-for i = 1:25
-    if amr.global_data.status.ps_adapt_step == 10
-        KitAMR.update_slope!(amr)
-        KitAMR.update_gradmax!(amr)
-        KitAMR.ps_refine!(ps4est,amr)
-        KitAMR.ps_coarsen!(ps4est)
-        KitAMR.ps_balance!(ps4est)
-        if amr.global_data.status.partition_step == 20
-            KitAMR.ps_partition!(ps4est, amr)
-            amr.global_data.status.partition_step = 0
-        end
-        if amr.global_data.status.vs_adapt_step == 20
-            KitAMR.vs_refine!(amr)
-            KitAMR.vs_coarsen!(amr)
-            amr.global_data.status.vs_adapt_step = 0
-        end
-        KitAMR.update_ghost!(ps4est, amr)
-        KitAMR.update_neighbor!(ps4est, amr)
-        KitAMR.update_faces!(ps4est, amr)
-        amr.global_data.status.ps_adapt_step = 0
-    end
+for i = 1:100
+#    if amr.global_data.status.ps_adapt_step == 10
+#        KitAMR.update_slope!(amr)
+#        KitAMR.update_gradmax!(amr)
+#        KitAMR.ps_refine!(ps4est,amr)
+#        KitAMR.ps_coarsen!(ps4est)
+#        KitAMR.ps_balance!(ps4est)
+#        if amr.global_data.status.partition_step == 20
+#            KitAMR.ps_partition!(ps4est, amr)
+#            amr.global_data.status.partition_step = 0
+#        end
+#        if amr.global_data.status.vs_adapt_step == 40
+#            KitAMR.vs_refine!(amr)
+#            KitAMR.vs_coarsen!(amr)
+#            amr.global_data.status.vs_adapt_step = 0
+#        end
+#        KitAMR.update_ghost!(ps4est, amr)
+#        KitAMR.update_neighbor!(ps4est, amr)
+#        KitAMR.update_faces!(ps4est, amr)
+#        amr.global_data.status.ps_adapt_step = 0
+#    end
     KitAMR.update_Δt!(amr) 
     KitAMR.update_slope!(amr) 
     KitAMR.slope_exchange!(ps4est, amr) 
@@ -36,6 +36,7 @@ for i = 1:25
     amr.global_data.status.vs_adapt_step += 1
     amr.global_data.status.partition_step += 1
     if MPI.Comm_rank(MPI.COMM_WORLD) == 0
+	@show i
         @show amr.global_data.status.sim_time
         pp = KitAMR.PointerWrapper(ps4est)
         @show pp.local_num_quadrants[]
@@ -58,21 +59,21 @@ KitAMR.JLD2.save_object(
 if MPI.Comm_rank(MPI.COMM_WORLD)==0
     dir_path = "./result/SolverSet/"
     !isdir(dir_path) && mkpath(dir_path)
-    KitAMR.JLD2.save_object(dir_path*"/SoverSet.jld",KitAMR.SolverSet(MPI.Comm_size(MPI.COMM_WORLD),amr.global_data))
+    KitAMR.JLD2.save_object(dir_path*"/SolverSet.jld",KitAMR.SolverSet(MPI.Comm_size(MPI.COMM_WORLD),amr.global_data))
 end
 
 # write_result!(ps4est,AMR_2D,"write_test")
 
-# if MPI.Comm_rank(MPI.COMM_WORLD) == 0
-#     x, y, z, variable = reshape_solutions(solutions, amr.global_data, :prim, 5)
-#     vxz = variable[:,10,:]
-#     temp = 1 ./vxz
-#     f = Figure()
-#     ax = Axis(f[1, 1])
-#     co = contourf!(x, z, temp)
-#     Colorbar(f[1, 2], co)
-#     save("test.png", f)
-# end
+ if MPI.Comm_rank(MPI.COMM_WORLD) == 0
+     x, y, z, variable = KitAMR.reshape_solutions(solutions, amr.global_data, :prim, 5)
+     vxz = variable[:,10,:]
+     temp = 1 ./vxz
+     f = Figure()
+     ax = Axis(f[1, 1])
+     co = contourf!(x, z, temp)
+     Colorbar(f[1, 2], co)
+     save("test.png", f)
+ end
 
 # a = rand(2000,2)
 # b = rand(2000,2)

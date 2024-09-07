@@ -131,11 +131,11 @@ function reshape_solutions(
     mx = pybuiltins.slice(xmin+EPS+dx/2,xmax-EPS-dx/2,dx)
     my = pybuiltins.slice(ymin+EPS+dy/2,ymax-EPS-dy/2,dy)
     mz = pybuiltins.slice(zmin+EPS+dz/2,zmax-EPS-dz/2,dz)
-    grid = np.mgrid[mx,my,mz]
+    grid = np[].mgrid[mx,my,mz]
     grid_x = grid[0]
     grid_y = grid[1]
     grid_z = grid[2]
-    Z = scipy.interpolate.griddata(midpoints, sol, (grid_x,grid_y,grid_z), method="nearest")
+    Z = scipy[].interpolate.griddata(midpoints, sol, (grid_x,grid_y,grid_z), method="nearest")
     Zj = pyconvert(Array{Float64},Z)  
     return Xs,Ys,Zs,Zj
 end
