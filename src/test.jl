@@ -3,6 +3,7 @@ using KitAMR,MPI,CairoMakie
 MPI.Init()
 config = KitAMR.read_config("configure.txt")
 ps4est,amr = KitAMR.init(config);
+
 for i = 1:100
     if amr.global_data.status.ps_adapt_step == 10
         KitAMR.update_slope!(amr)
@@ -74,6 +75,9 @@ end
      Colorbar(f[1, 2], co)
      save("test.png", f)
  end
+
+p4est_geo = p8est_geometry_new_connectivity(pointer(PointerWrapper(ps4est).connectivity))
+p8est_vtk_write_file(ps4est,p4est_geo,"test.vtk")
 
 # a = rand(2000,2)
 # b = rand(2000,2)

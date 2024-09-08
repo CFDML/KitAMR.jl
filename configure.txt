@@ -24,11 +24,11 @@
 DIM = 3
 NDF = 1
 AMR_PS_MAXLEVEL = 2
-AMR_VS_MAXLEVEL = 2
+AMR_VS_MAXLEVEL = 1
 geometry = [0.,1.,0.,1.,0.,1.]
-trees_num = [16,16,16]
+trees_num = [5,5,5]
 quadrature = [-5.,5.,-5.,5.,-5.,5.]
-vs_trees_num = [8,8,8]
+vs_trees_num = [4,4,4]
 ic = [1.,0.,0.,0.,1.]
 bc = hcat([1.,0.,0.,0.,1.],[1.,0.,0.,0.,1.],[1.,0.,0.,0.,1.],[1.,0.,0.,0.,1.],[1.,0.,0.,0.,1.],[1.,0.5,0.,0.,1.])
 CFL = 0.2
