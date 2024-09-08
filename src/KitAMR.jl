@@ -10,8 +10,9 @@ using StaticArrays
 using PythonCall
 
 using Reexport
-@reexport using P4est
 
+include("../lib/P4est/src/P4est.jl")
+@reexport using .P4est
 include("../lib/P4estTypes/src/P4estTypes.jl")
 using .P4estTypes
 include("../lib/KitCore/KitCore.jl")

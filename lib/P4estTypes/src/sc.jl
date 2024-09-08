@@ -1,14 +1,14 @@
 module SC
 
 using MPI
-using P4est
+using ...P4est
 
 sc_package_id() = unsafe_load(cglobal((:sc_package_id, P4est.LibP4est.libsc), Cint))
 initialized() = sc_package_id() >= 0
 finalize() = sc_finalize_noabort()
 
 module LP
-using P4est
+using ....P4est
 
 """
     P4estTypes.SC.LP.LogPriority
