@@ -19,7 +19,7 @@ Currently, the development is in its initial stages, with the following function
 
 ## Theory
 ### Kinetic Methods
-In kinetic theory, methods simulate the macroscopic motion of fluids by describing the evolution of distribution functions of fluid particles in velocity space over time. Such methods include direct simulation Monte Carlo (DSMC), discrete velocity method (DVM), lattice Boltzmann equation (LBE), gas-kinetic scheme, semi-Lagrangian method, implicit-explicit (IMEX) method, and others.
+In kinetic theory, methods simulate the macroscopic motion of fluids by describing the evolution of distribution functions of fluid particles in velocity space over time. Such methods include direct simulation Monte Carlo (DSMC), discrete velocity method (AMR), lattice Boltzmann equation (LBE), gas-kinetic scheme, semi-Lagrangian method, implicit-explicit (IMEX) method, and others.
 ### Distribution Function
 In kinetic methods, the state of the fluid is described by a distribution function $f(\mathbf{x},\mathbf{u},t)$. The distribution function represents the number of particles at a given moment in time at a specific physical space point in a particular velocity space element. Its normalization property is
 
@@ -79,10 +79,10 @@ It is an exact relation for the time evolution of the space averaged conservativ
 The numerical scheme that the solver currently supports is UGKS, with interface variables obtained from VanLeer reconstruction. For specific implementation details, please refer to the relevant literature.
 
 ### Discrete Velocity Method
-DVM is one of the popular approaches for solving rarefied flow problems. In this method, the particle velocity space is discretized into a finite set of points and the numerical quadrature rule is utilized to approximate the integration of moments. Since the particle velocity space is discretized into a finite set of points, the continuum Boltzmann equation is reduced to the corresponding discrete velocity Boltzmann equation (DVBE). A great variety of algorithms have been developed, including unified gas-kinetic scheme (UGKS), discrete unified gas-kinetic scheme (DUGKS), semi-Lagrangian method, etc. Overall, most of the above methods can be applied from free molecular regime to continuum regime. But in order to make the quadrature error to be small enough, a large number of discrete velocity points are usually required. In particular, for fluid flows near continuum regime, the computational cost of DVM is much larger than those traditional CFD methods based on the Navier-Stokes equation.
+AMR is one of the popular approaches for solving rarefied flow problems. In this method, the particle velocity space is discretized into a finite set of points and the numerical quadrature rule is utilized to approximate the integration of moments. Since the particle velocity space is discretized into a finite set of points, the continuum Boltzmann equation is reduced to the corresponding discrete velocity Boltzmann equation (DVBE). A great variety of algorithms have been developed, including unified gas-kinetic scheme (UGKS), discrete unified gas-kinetic scheme (DUGKS), semi-Lagrangian method, etc. Overall, most of the above methods can be applied from free molecular regime to continuum regime. But in order to make the quadrature error to be small enough, a large number of discrete velocity points are usually required. In particular, for fluid flows near continuum regime, the computational cost of AMR is much larger than those traditional CFD methods based on the Navier-Stokes equation.
 
 ### Adaptive Mesh Refinement (AMR)
-Considering the above limitations of DVM, we adopt Adaptive Mesh Refinement (AMR) to improve solving efficiency. AMR reallocates computational resources based on flow features, balancing efficiency and accuracy. 
+Considering the above limitations of AMR, we adopt Adaptive Mesh Refinement (AMR) to improve solving efficiency. AMR reallocates computational resources based on flow features, balancing efficiency and accuracy. 
 
 <div align="center">
     <img src="https://i.postimg.cc/FzQx9cSD/PV-AMR.png" alt="Image 1" title="Simultaneous AMR" width="700" style="margin-right: 1px;">
@@ -108,4 +108,4 @@ julia> ]
 ```
 Soon, we will provide a complete user interface with customizable boundaries, and we will register it in the [Julia package registry](https://github.com/JuliaRegistries/General). Stay tuned!
 ## Current Usage
-Currently, flow properties, initial contitions and boundary conditions are defined in `Global_Data_2D` in `/src/types.jl`. It should be noted specifically that the boundary follows the sequence of -x, +x, -y, +y. The maximum level of the refinement is defined in `/src/abstract.jl` by `DVM_PS_MAXLEVEL` and `DVM_VS_MAXLEVEL` respectively. Grid refinement and coarsening behaviors are defined in `adaptive.jl` and `vs_adaptive.jl`. Feel free to modify them according to your needs.
+Currently, flow properties, initial contitions and boundary conditions are defined in `Global_Data_2D` in `/src/types.jl`. It should be noted specifically that the boundary follows the sequence of -x, +x, -y, +y. The maximum level of the refinement is defined in `/src/abstract.jl` by `AMR_PS_MAXLEVEL` and `AMR_VS_MAXLEVEL` respectively. Grid refinement and coarsening behaviors are defined in `adaptive.jl` and `vs_adaptive.jl`. Feel free to modify them according to your needs.

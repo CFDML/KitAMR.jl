@@ -1,10 +1,10 @@
-include("DVM.jl")
+include("AMR.jl")
 MPI.Init()
 ps4est, AMR_2D = init();
 MPI.Barrier(MPI.COMM_WORLD)
 # save_result(AMR_2D)
 # while true
-DVM_test_time = @elapsed begin
+AMR_test_time = @elapsed begin
     for i = 1:200
         if AMR_2D.global_data.adapt_step == 20
             update_slope!(AMR_2D)
@@ -92,7 +92,7 @@ for i in eachindex(AMR_2D.trees.data)
 end
 phase_cells = MPI.Allreduce(phase_cells, +, MPI.COMM_WORLD)
 if MPI.Comm_rank(MPI.COMM_WORLD) == 0
-    @show DVM_test_time phase_cells
+    @show AMR_test_time phase_cells
 end
 MPI.Finalize()
 # end

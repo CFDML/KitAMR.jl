@@ -268,14 +268,14 @@ function initialize_faces!(ip::PW_pxest_iter_face_info_t, data)
     initialize_faces!(Val(Int(ip.sides.elem_count[])), ip, data)
 end
 function initialize_faces!(info::P_pxest_iter_face_info_t, data)
-    DVM_face_iterate(info, data, initialize_faces!)
+    AMR_face_iterate(info, data, initialize_faces!)
 end
 function initialize_faces!(ps4est::Ptr{p4est_t}, amr::AMR)
     global_data = amr.global_data
     p_data = pointer_from_objref(amr)
     c_initialize_faces =
         @cfunction(initialize_faces!, Cvoid, (Ptr{p4est_iter_face_info_t}, Ptr{Nothing}))
-    GC.@preserve p_data c_initialize_faces DVM_4est_face_iterate(
+    GC.@preserve p_data c_initialize_faces AMR_4est_face_iterate(
         ps4est,
         global_data.forest.ghost,
         p_data,
@@ -287,7 +287,7 @@ function initialize_faces!(ps4est::Ptr{p8est_t}, amr::AMR)
     p_data = pointer_from_objref(amr)
     c_initialize_faces =
         @cfunction(initialize_faces!, Cvoid, (Ptr{p8est_iter_face_info_t}, Ptr{Nothing}))
-    GC.@preserve p_data c_initialize_faces DVM_4est_face_iterate(
+    GC.@preserve p_data c_initialize_faces AMR_4est_face_iterate(
         ps4est,
         global_data.forest.ghost,
         p_data,
@@ -310,7 +310,7 @@ function init_p4est_kernal(ip, data, dp)
     ps_data.vs_data = init_VS(ps_data.prim, global_data)
 end
 function init_ps4est(info, data)
-    DVM_volume_iterate(info, data, P4est_PS_Data, init_p4est_kernal)
+    AMR_volume_iterate(info, data, P4est_PS_Data, init_p4est_kernal)
 end
 function init_PS(comm, global_data)
     init_PS(comm, global_data, global_data.config.trees_num...)
@@ -327,7 +327,7 @@ end
 function init_PS(comm::MPI.Comm, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     GC.@preserve global_data begin
         connectivity_ps = Cartesian_connectivity(global_data.config.trees_num..., global_data.config.geometry...)
-        ps4est = DVM_4est_new(
+        ps4est = AMR_4est_new(
             comm,
             connectivity_ps.pointer,
             P4est_PS_Data,
@@ -345,7 +345,7 @@ function init_PS(comm::MPI.Comm, global_data::Global_Data{DIM,NDF}) where{DIM,ND
         trees = PS_Trees{DIM,NDF}(trees_data, fp.first_local_tree[] - 1)
         data = [global_data, trees]
         p_data = pointer_from_objref(data)
-        GC.@preserve data DVM_4est_volume_iterate(ps4est, p_data, init_ps4est)
+        GC.@preserve data AMR_4est_volume_iterate(ps4est, p_data, init_ps4est)
         pre_vs_refine!(trees, global_data)
         re_init_vs4est!(trees, global_data)
         return trees, ps4est

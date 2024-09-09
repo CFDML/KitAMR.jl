@@ -83,7 +83,7 @@ function global_quadid(ip::PointerWrapper{p8est_iter_volume_info_t})
     return tp.quadrants_offset[] + ip.quadid[]
 end
 
-function DVM_4est_new(
+function AMR_4est_new(
     comm::MPI.Comm,
     conn::Ptr{p4est_connectivity},
     min_quads::Integer,
@@ -104,7 +104,7 @@ function DVM_4est_new(
         user_pointer,
     )
 end
-function DVM_4est_new(
+function AMR_4est_new(
     comm::MPI.Comm,
     conn::Ptr{p8est_connectivity},
     min_quads::Integer,
@@ -126,14 +126,14 @@ function DVM_4est_new(
     )
 end
 
-function DVM_4est_new(comm::MPI.Comm, conn::Ptr{p4est_connectivity}, ::Type{T}) where {T}
+function AMR_4est_new(comm::MPI.Comm, conn::Ptr{p4est_connectivity}, ::Type{T}) where {T}
     GC.@preserve comm conn p4est_new_ext(comm, conn, 1, 0, 1, sizeof(T), C_NULL, C_NULL)
 end
-function DVM_4est_new(comm::MPI.Comm, conn::Ptr{p8est_connectivity}, ::Type{T}) where {T}
+function AMR_4est_new(comm::MPI.Comm, conn::Ptr{p8est_connectivity}, ::Type{T}) where {T}
     GC.@preserve comm conn p8est_new_ext(comm, conn, 1, 0, 1, sizeof(T), C_NULL, C_NULL)
 end
 
-function DVM_4est_new(
+function AMR_4est_new(
     comm::MPI.Comm,
     conn::Ptr{p4est_connectivity},
     ::Type{T},
@@ -151,7 +151,7 @@ function DVM_4est_new(
         user_pointer,
     )
 end
-function DVM_4est_new(
+function AMR_4est_new(
     comm::MPI.Comm,
     conn::Ptr{p8est_connectivity},
     ::Type{T},
@@ -170,7 +170,7 @@ function DVM_4est_new(
     )
 end
 
-function DVM_4est_new(
+function AMR_4est_new(
     comm::MPI.Comm,
     conn::Ptr{p4est_connectivity},
     ::Type{T},
@@ -187,7 +187,7 @@ function DVM_4est_new(
         user_pointer,
     )
 end
-function DVM_4est_new(
+function AMR_4est_new(
     comm::MPI.Comm,
     conn::Ptr{p8est_connectivity},
     ::Type{T},
@@ -205,7 +205,7 @@ function DVM_4est_new(
     )
 end
 
-function DVM_4est_new(
+function AMR_4est_new(
     comm::MPI.Comm,
     conn::Ptr{p4est_connectivity},
     ::Type{T},
@@ -222,7 +222,7 @@ function DVM_4est_new(
         C_NULL,
     )
 end
-function DVM_4est_new(
+function AMR_4est_new(
     comm::MPI.Comm,
     conn::Ptr{p8est_connectivity},
     ::Type{T},
@@ -240,7 +240,7 @@ function DVM_4est_new(
     )
 end
 
-function DVM_quad_init(
+function AMR_quad_init(
     forest::P_pxest_t,
     which_tree::p4est_topidx_t,
     quadrant::P_pxest_quadrant_t,
@@ -256,7 +256,7 @@ function DVM_quad_init(
     return nothing
 end
 
-function DVM_4est_volume_iterate(
+function AMR_4est_volume_iterate(
     forest::Ptr{p4est_t},
     ghost::Ptr{p4est_ghost_t},
     user_data::Ptr{Nothing},
@@ -271,7 +271,7 @@ function DVM_4est_volume_iterate(
         C_NULL,
     )
 end
-function DVM_4est_volume_iterate(
+function AMR_4est_volume_iterate(
     forest::Ptr{p8est_t},
     ghost::Ptr{p8est_ghost_t},
     user_data::Ptr{Nothing},
@@ -288,7 +288,7 @@ function DVM_4est_volume_iterate(
     )
 end
 
-function DVM_4est_volume_iterate(
+function AMR_4est_volume_iterate(
     forest::Ptr{p4est_t},
     user_data::Ptr{Nothing},
     volume_iter_fn::Function,
@@ -302,7 +302,7 @@ function DVM_4est_volume_iterate(
         C_NULL,
     )
 end
-function DVM_4est_volume_iterate(
+function AMR_4est_volume_iterate(
     forest::Ptr{p8est_t},
     user_data::Ptr{Nothing},
     volume_iter_fn::Function,
@@ -318,7 +318,7 @@ function DVM_4est_volume_iterate(
     )
 end
 
-function DVM_volume_iterate(
+function AMR_volume_iterate(
     info::P_pxest_iter_volume_info_t,
     data::Ptr{Nothing},
     ::Type{T},
@@ -332,7 +332,7 @@ function DVM_volume_iterate(
     return nothing
 end
 
-function DVM_4est_face_iterate(
+function AMR_4est_face_iterate(
     forest::Ptr{p4est_t},
     ghost::Ptr{p4est_ghost_t},
     user_data::Ptr{Nothing},
@@ -347,7 +347,7 @@ function DVM_4est_face_iterate(
         C_NULL,
     )
 end
-function DVM_4est_face_iterate(
+function AMR_4est_face_iterate(
     forest::Ptr{p8est_t},
     ghost::Ptr{p8est_ghost_t},
     user_data::Ptr{Nothing},
@@ -364,7 +364,7 @@ function DVM_4est_face_iterate(
     )
 end
 
-function DVM_4est_face_iterate(
+function AMR_4est_face_iterate(
     forest::Ptr{p4est_t},
     user_data::Ptr{Nothing},
     face_iter_fn::Ptr{Nothing},
@@ -378,7 +378,7 @@ function DVM_4est_face_iterate(
         C_NULL,
     )
 end
-function DVM_4est_face_iterate(
+function AMR_4est_face_iterate(
     forest::Ptr{p8est_t},
     user_data::Ptr{Nothing},
     face_iter_fn::Ptr{Nothing},
@@ -394,7 +394,7 @@ function DVM_4est_face_iterate(
     )
 end
 
-function DVM_face_iterate(
+function AMR_face_iterate(
     info::P_pxest_iter_face_info_t,
     data::Ptr{Nothing},
     kernel::Function,

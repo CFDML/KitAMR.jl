@@ -161,11 +161,11 @@ function initialize_neighbor_data!(ip::PointerWrapper{p8est_iter_volume_info_t},
     end
 end
 function initialize_neighbor_data!(info, data)
-    DVM_volume_iterate(info, data, P4est_PS_Data, initialize_neighbor_data!)
+    AMR_volume_iterate(info, data, P4est_PS_Data, initialize_neighbor_data!)
 end
 function initialize_neighbor_data!(ps4est::P_pxest_t, amr::AMR)
     p_amr = pointer_from_objref(amr)
-    GC.@preserve amr DVM_4est_volume_iterate(
+    GC.@preserve amr AMR_4est_volume_iterate(
         ps4est,
         amr.global_data.forest.ghost,
         p_amr,
@@ -202,11 +202,11 @@ function update_neighbor_kernel!(ip::PointerWrapper{p8est_iter_volume_info_t}, d
     end
 end
 function update_neighbor_kernel!(info, data)
-    DVM_volume_iterate(info, data, P4est_PS_Data, update_neighbor_kernel!)
+    AMR_volume_iterate(info, data, P4est_PS_Data, update_neighbor_kernel!)
 end
 function update_neighbor_kernel!(ps4est::P_pxest_t, amr::AMR)
     p_amr = pointer_from_objref(amr)
-    GC.@preserve amr DVM_4est_volume_iterate(
+    GC.@preserve amr AMR_4est_volume_iterate(
         ps4est,
         amr.global_data.forest.ghost,
         p_amr,

@@ -547,8 +547,8 @@ function reshape_solutions_vs(midpoint::AbstractMatrix, df::AbstractMatrix, glob
     xmin, xmax, ymin, ymax = global_data.quadrature
     z = @view(df[:, 1])
     itp = scipy[].interpolate.CloughTocher2DInterpolator(midpoint, PyArray(z))
-    dx = (xmax - xmin) / Nx / 2^DVM_VS_MAXLEVEL
-    dy = (ymax - ymin) / Ny / 2^DVM_VS_MAXLEVEL
+    dx = (xmax - xmin) / Nx / 2^AMR_VS_MAXLEVEL
+    dy = (ymax - ymin) / Ny / 2^AMR_VS_MAXLEVEL
     X = collect(xmin+EPS+dx/2:dx:xmax-EPS-dx/2)
     Y = collect(ymin+EPS+dy/2:dy:ymax-EPS-dy/2)
     pyZ = np[].zeros((length(X), length(Y)))
@@ -654,8 +654,8 @@ function mat_3d()
     gridX = collect(xmin+dx/2:dx:xmax-dx/2)
     Nu, Nv = global_data.vs_trees_num
     umin, umax, vmin, vmax = global_data.quadrature
-    du = (umax - umin) / Nu / 2^DVM_VS_MAXLEVEL
-    dv = (vmax - vmin) / Nv / 2^DVM_VS_MAXLEVEL
+    du = (umax - umin) / Nu / 2^AMR_VS_MAXLEVEL
+    dv = (vmax - vmin) / Nv / 2^AMR_VS_MAXLEVEL
     gridU = collect(umin+du/2:du:umax-du/2)
     gridV = collect(vmin+dv/2:dv:vmax-dv/2)
     file = matopen("mat_3d.mat", "w")
