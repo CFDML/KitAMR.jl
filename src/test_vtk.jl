@@ -23,6 +23,16 @@ end
 function init_cell_data(info,data)
     KitAMR.AMR_volume_iterate(info, data, KitAMR.P4est_PS_Data, init_cell_data_kernel)
 end
-GC.@preserve pa KitAMR.AMR_4est_volume_iterate(ps4est,amr.global_data.forest.ghost,ppa,init_cell_data)
-cont = p8est_vtk_write_cell_dataf(cont,1,1,1,0,1,0,"testZ",psc,cont)
+
+
+
+cont = p8est_vtk_write_cell_dataf(cont,1,1,1,0,1,0,p,psc,cont)
 retval = p8est_vtk_write_footer(cont)
+
+
+
+function fieldvalues_fn(ps_data)
+    return [1/ps_data.prim[end]]
+end
+
+KitAMR.write_VTK(ps4est,"testT",["T"],fieldvalues_fn)
