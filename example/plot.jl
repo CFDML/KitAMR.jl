@@ -1,7 +1,7 @@
 using CairoMakie, JLD2
 
 cd(@__DIR__)
-include("DVM.jl")
+include("AMR.jl")
 
 result_set = JLD2.load_object("result/PS_result/8/1.jld")
 

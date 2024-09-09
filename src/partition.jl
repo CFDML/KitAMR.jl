@@ -401,12 +401,12 @@ function init_transferred_quadrant!(ip, data, dp)
     init_down_quadrants!(ip, dp, ti_data, ip.treeid[], tree_datas)
 end
 function init_transferred_quadrant!(info, data)
-    DVM_volume_iterate(info, data, P4est_PS_Data, init_transferred_quadrant!)
+    AMR_volume_iterate(info, data, P4est_PS_Data, init_transferred_quadrant!)
 end
 function init_transferred_quadrant!(p4est::P_pxest_t, ti_data::Transfer_Init)
     ghost = ti_data.amr.global_data.forest.ghost
     p_data = pointer_from_objref(ti_data)
-    GC.@preserve ti_data DVM_4est_volume_iterate(
+    GC.@preserve ti_data AMR_4est_volume_iterate(
         p4est,
         ghost,
         p_data,
