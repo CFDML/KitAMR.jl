@@ -79,7 +79,6 @@ function write_VTK(ps4est::Ptr{p4est_t},filename::String,fieldnames::Vector{Stri
         cfn,
         C_NULL,
         C_NULL,
-        C_NULL,
     )
     pairs = Vector{Union{Ptr{Cstring},Ptr{sc_array_t}}}(undef,2*length(fieldnames))
     p_names = Vector{Ptr{Cstring}}(undef,length(fieldnames))

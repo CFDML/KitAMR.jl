@@ -4,7 +4,7 @@ MPI.Init()
 config = KitAMR.read_config("configure_2D.txt")
 ps4est,amr = KitAMR.init(config);
 
-for i = 1:100
+for i = 1:50
     if amr.global_data.status.ps_adapt_step == 10
         KitAMR.update_slope!(amr)
         KitAMR.update_gradmax!(amr)
@@ -49,7 +49,11 @@ for i = 1:100
     end
 end
 
+function fieldvalues_fn(ps_data)
+    return [1/ps_data.prim[end]]
+end
 
+KitAMR.write_VTK(ps4est,"testT",["T"],fieldvalues_fn)
 # solutions = KitAMR.collect_solution(ps4est,amr)
 # dir_path = "./result/PS_result/"
 # !isdir(dir_path) && mkpath(dir_path)
