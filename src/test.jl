@@ -1,7 +1,7 @@
 using KitAMR,MPI,CairoMakie
 
 MPI.Init()
-config = KitAMR.read_config("configure.txt")
+config = KitAMR.read_config("configure_2D.txt")
 ps4est,amr = KitAMR.init(config);
 
 for i = 1:100
@@ -50,34 +50,44 @@ for i = 1:100
 end
 
 
-solutions = KitAMR.collect_solution(ps4est,amr)
-dir_path = "./result/PS_result/"
-!isdir(dir_path) && mkpath(dir_path)
-KitAMR.JLD2.save_object(
-        dir_path * "/" * string(MPI.Comm_rank(MPI.COMM_WORLD)) * ".jld",
-        solutions
-    )
-if MPI.Comm_rank(MPI.COMM_WORLD)==0
-    dir_path = "./result/SolverSet/"
-    !isdir(dir_path) && mkpath(dir_path)
-    KitAMR.JLD2.save_object(dir_path*"/SolverSet.jld",KitAMR.SolverSet(MPI.Comm_size(MPI.COMM_WORLD),amr.global_data))
-end
+# solutions = KitAMR.collect_solution(ps4est,amr)
+# dir_path = "./result/PS_result/"
+# !isdir(dir_path) && mkpath(dir_path)
+# KitAMR.JLD2.save_object(
+#         dir_path * "/" * string(MPI.Comm_rank(MPI.COMM_WORLD)) * ".jld",
+#         solutions
+#     )
+# if MPI.Comm_rank(MPI.COMM_WORLD)==0
+#     dir_path = "./result/SolverSet/"
+#     !isdir(dir_path) && mkpath(dir_path)
+#     KitAMR.JLD2.save_object(dir_path*"/SolverSet.jld",KitAMR.SolverSet(MPI.Comm_size(MPI.COMM_WORLD),amr.global_data))
+# end
 
 # write_result!(ps4est,AMR_2D,"write_test")
 
- if MPI.Comm_rank(MPI.COMM_WORLD) == 0
-     x, y, z, variable = KitAMR.reshape_solutions(solutions, amr.global_data, :prim, 5)
-     vxz = variable[:,10,:]
-     temp = 1 ./vxz
-     f = Figure()
-     ax = Axis(f[1, 1])
-     co = contourf!(x, z, temp)
-     Colorbar(f[1, 2], co)
-     save("test.png", f)
- end
+#  if MPI.Comm_rank(MPI.COMM_WORLD) == 0
+#      x, y, z, variable = KitAMR.reshape_solutions(solutions, amr.global_data, :prim, 5)
+#      vxz = variable[:,10,:]
+#      temp = 1 ./vxz
+#      f = Figure()
+#      ax = Axis(f[1, 1])
+#      co = contourf!(x, z, temp)
+#      Colorbar(f[1, 2], co)
+#      save("test.png", f)
+#  end
+# if MPI.Comm_rank(MPI.COMM_WORLD) == 0
+#     x, y, z, variable = KitAMR.reshape_solutions(solutions, amr.global_data, :prim, 5)
+#     vxz = variable[:,10,:]
+#     temp = 1 ./vxz
+#     f = Figure()
+#     ax = Axis(f[1, 1])
+#     co = contourf!(x, z, temp)
+#     Colorbar(f[1, 2], co)
+#     save("test.png", f)
+# end
 
-p4est_geo = p8est_geometry_new_connectivity(pointer(PointerWrapper(ps4est).connectivity))
-p8est_vtk_write_file(ps4est,p4est_geo,"test.vtk")
+# p4est_geo = p8est_geometry_new_connectivity(pointer(PointerWrapper(ps4est).connectivity))
+# p8est_vtk_write_file(ps4est,p4est_geo,"test.vtk")
 
 # a = rand(2000,2)
 # b = rand(2000,2)
