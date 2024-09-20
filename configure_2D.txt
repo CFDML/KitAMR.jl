@@ -1,0 +1,35 @@
+# allowed attribute: 
+# DIM: dimension of the solving
+# NDF: number of distribution functions
+# geometry: 2*DIM vector in [xmin,xmax,ymin,ymax,zmin,zmax] order defining the rectangular region to be solved
+# trees_num: DIM vector in [xnum,ynum,znum] order defining the number of trees in each dimension
+# quadrature: 2*DIM vector in [umin,umax,vmin,vmax,wmin,wmax] order defining the rectangular velocity space
+# vs_trees_num: DIM vector in [unum,vnum,wnum] order defining the number of velocity space trees in each dimension
+# ic: DIM+2 vector in [rho,u,v,w,1/T] order defining the initial condition of the problem (which is currently the same in the whole region)
+# bc: (DIM+2)*(2*DIM) matrix in which the column vector represents the boundary condition [rho,u,v,w,1/T], and the columns align in [-x,x,-y,y,-z,z] order
+# Kn: Knudsen number
+# Ma: Mach number
+# Pr: Prandtl number
+# K: number of internal DOF
+# γ: adiabatic ratio
+# ω: exponent of temperature in VSS model to calculate the collisional frequency
+# αᵣ: the parameter in VSS model. When alpha_ref=1, VSS model degenerates into the VHS model.
+# ωᵣ: the parameter in VSS model to calculate non-dimension nu_ref
+# CFL: CFL number
+# adapt_interval: steps between the adaptation in physical space
+# vs_adapt_interval: steps between the adaptation in velocity space
+# partition_interval: steps between the partition between processors
+# AMR_PS_MAXLEVEL: maximum level of physical space refinement
+# AMR_VS_MAXLEVEL: maximum level of velocity space refinement
+DIM = 2
+NDF = 2
+AMR_PS_MAXLEVEL = 2
+AMR_VS_MAXLEVEL = 1
+geometry = [0.,1.,0.,1.]
+trees_num = [20,20]
+quadrature = [-5.,5.,-5.,5.]
+vs_trees_num = [20,20]
+ic = [1.,0.,0.,1.]
+bc = hcat([1.,0.,0.,1.],[1.,0.,0.,1.],[1.,0.,0.,1.],[1.,0.5,0.,1.])
+CFL = 0.2
+K = 1.

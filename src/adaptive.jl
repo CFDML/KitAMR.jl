@@ -87,7 +87,7 @@ function replace_ps(::Val{1}, out_quad, in_quads, which_tree, amr::AMR{DIM}) whe
         dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
     end
 end
-function replace_ps(::ChildNum, out_quad, in_quads, which_tree, amr::AMR{DIM,NDF}) where{DIM,NDF} # coarsen replace
+function replace_ps(::ChildNum, out_quad, in_quads, which_tree, amr::AMR{DIM,NDF}) where{DIM,NDF} # coarsen replace, average or interpolate? Currently interpolation strategy is adopted. If my memory serves me right, problems came out with average most likely due to the iterative balance process.
     trees = amr.field.trees
     treeid = Int(which_tree) - trees.offset
     datas = trees.data[treeid]
