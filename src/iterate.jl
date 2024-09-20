@@ -56,8 +56,8 @@ function update_gradmax!(amr::AMR)
 end
 function update_df!(
     vs_data::VS_Data,
-    F::AbstractVector,
-    F_::AbstractVector,
+    F::AbstractArray,
+    F_::AbstractArray,
     τ::Real,
     τ_::Real,
     area::Real,

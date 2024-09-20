@@ -7,8 +7,8 @@ function discrete_maxwell_2D2F(
     F = Matrix{T}(undef, length(u), 2)
     @inbounds @. F[:, 1] =
         prim[1] *
-        (prim[5] / π) *
-        exp(-prim[5] * ((u - prim[2])^2 + (v - prim[3])^2 + (w - prim[4])^2))
+        (prim[4] / π) *
+        exp(-prim[4] * ((u - prim[2])^2 + (v - prim[3])^2))
     @inbounds @. F[:, 2] = @view(F[:, 1]) * K / (2.0 * prim[4])
     return F
 end
