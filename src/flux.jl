@@ -22,7 +22,7 @@ function calc_flux!(::BoundaryNeighbor, face::Face{BoundaryFace}, amr::AMR{2,2})
     fw = calc_fwb(vs_data, F, vn)
     dsf = calc_face_area(ps_data, DIR)
     Δt = global_data.status.Δt
-    @. ps_data.flux += ROT * fw * ds * Δt
+    @. ps_data.flux += ROT * fw * dsf * Δt
     @. vs_data.flux[:, 1] += vn * ROT * dsf * Δt * @view(F[:, 1])
     @. vs_data.flux[:, 2] += vn * ROT * dsf * Δt * @view(F[:, 2])
 end
@@ -184,19 +184,19 @@ function update_nflux!(::Ghost_PS_Data, ::AbstractVector)
 end
 
 function make_face_data(
-    ps_data::PS_Data{2},
+    ps_data::PS_Data{2,NDF},
     nps_data::AbstractPsData,
     faceid::Int,
     ROT::Float64,
     DIR::Int,
-)
+)where{NDF}
     vs_data = ps_data.vs_data
     midpoint_L = vs_data.midpoint
     vs_data_n = nps_data.vs_data
     midpoint_R = vs_data_n.midpoint
     bit_L = [x <= 0.0 for x in ROT .* @view(midpoint_L[:, DIR])]
     bit_R = [x > 0.0 for x in ROT .* @view(midpoint_R[:, DIR])]
-    midpoint_n = vcat(@view(midpoint_L[bit_L, :]), @view(midpoint_R[bit_R, :]))
+    midpoint_n = vcat(@view(midpoint_L[bit_L, :]), @view(midpoint_R[bit_R, :])); vn = @view(midpoint_n[:,DIR])
     if ps_data.neighbor.state[faceid] == 1
         df_L = @view(vs_data.df[bit_L, :])
         df_R = @view(vs_data_n.df[bit_R, :])
@@ -218,7 +218,7 @@ function make_face_data(
     weight_L = @view(vs_data.weight[bit_L])
     offset = length(weight_L)
     weight_n = vcat(weight_L, @view(vs_data_n.weight[bit_R]))
-    (Face_VS_Data{2,NDF}(weight_n, midpoint_n, df_n, sdf_n), offset, bit_L, bit_R)
+    (Face_VS_Data{2,NDF}(weight_n, midpoint_n, vn, df_n, sdf_n), offset, bit_L, bit_R)
 end
 
 function make_face_data(
@@ -427,6 +427,7 @@ function calc_flux!(::HalfSizeNeighbor, face::Face, amr::AMR{2,2})
     gas = global_data.config.gas
     ds = ps_data.ds[DIR]
     vs_data = ps_data.vs_data
+    f_vs_data = nothing; offset = 0; bit_L = nothing
     for i = 1:2
         nps_data = ps_data.neighbor.data[faceid][i]
         vs_data_n = nps_data.vs_data

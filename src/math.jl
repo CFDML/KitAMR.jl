@@ -15,6 +15,9 @@ function get_prim(w::AbstractVector, global_data::Global_Data{3,NDF}) where {NDF
     get_prim_3D(w, global_data.config.gas.γ)
 end
 
+function get_conserved(ps_data::PS_Data{2,NDF}, global_data::Global_Data) where {NDF}
+    get_conserved_2D(ps_data.prim, global_data.config.gas.γ)
+end
 function get_conserved(ps_data::PS_Data{3,NDF}, global_data::Global_Data) where {NDF}
     get_conserved_3D(ps_data.prim, global_data.config.gas.γ)
 end
@@ -37,7 +40,7 @@ end
 function discrete_maxwell(
     midpoint::AbstractMatrix,
     prim::AbstractVector,
-    ::Global_Data{2,2},
+    global_data::Global_Data{2,2},
 )
     discrete_maxwell_2D2F(
         @view(midpoint[:, 1]),
@@ -223,10 +226,10 @@ function calc_a(
     cRw,
     dxL::Real,
     dxR,
-    global_data::Global_Data,
+    global_data::Global_Data{DIM},
     rot::Real,
-) where {T}
-    sw = Vector{T}(undef, 5)
+) where {T,DIM}
+    sw = Vector{T}(undef, DIM+2)
     @. sw = rot * (cLw - w0) / (0.5 * dxL)
     aL = micro_slope(sw, prim0, global_data)
     @. sw = rot * (w0 - cRw) / (0.5 * dxR)
