@@ -123,7 +123,7 @@ function initialize_faces!(
         base_quad =
             pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data)
         faceid = side.face[] + 1
-        push!(faces, Face(unsafe_pointer_to_objref(base_quad), faceid, 0, nothing))
+        push!(faces, Face(InnerFace,unsafe_pointer_to_objref(base_quad), faceid, nothing))
     else
         is_ghost = Base.unsafe_wrap(
             Vector{Int8},

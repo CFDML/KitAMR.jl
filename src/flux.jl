@@ -305,34 +305,11 @@ function update_face_data_R!(
     f_vs_data.weight =
         vcat(@view(f_vs_data.weight[1:offset]), @view(vs_data_n.weight[bit_R]))
 end
+
 function update_face_data_L!(
     ps_data::PS_Data,
     ::AbstractPsData,
-    f_vs_data::Face_VS_Data{2},
-    offset::Integer,
-    ::Integer,
-    ROT::Real,
-    DIR::Integer,
-)
-    vs_data = ps_data.vs_data
-    midpoint_L = vs_data.midpoint
-    bit_L = [x <= 0.0 for x in ROT .* @view(midpoint_L[:, DIR])]
-    df_L = @view(vs_data.df[bit_L, :])
-    f_vs_data.midpoint =
-        vcat(@view(midpoint_L[bit_L, :]), @view(f_vs_data.midpoint[offset+1:end, :]))
-    f_vs_data.vn = @view(f_vs_data.midpoint[:, DIR])
-    f_vs_data.df = vcat(df_L, @view(f_vs_data.df[offset+1:end, :]))
-    f_vs_data.sdf =
-        vcat(@view(vs_data.sdf[bit_L, :, DIR]), @view(f_vs_data.sdf[offset+1:end, :]))
-    f_vs_data.weight =
-        vcat(@view(vs_data.weight[bit_L]), @view(f_vs_data.weight[offset+1:end]))
-    offset = length(df_L)
-    return (bit_L, offset)
-end
-function update_face_data_L!(
-    ps_data::PS_Data,
-    ::AbstractPsData,
-    f_vs_data::Face_VS_Data{3},
+    f_vs_data::Face_VS_Data,
     offset::Integer,
     ::Integer,
     ROT::Real,
@@ -520,7 +497,9 @@ function calc_flux!(::DoubleSizeNeighbor, face::Face, amr::AMR{2,2})
     w0 = calc_w0(f_vs_data)
     prim0 = get_prim(w0, global_data)
     qf0 = calc_qf(f_vs_data, prim0)
-    aL, aR = calc_a(w0, prim0, ps_data.w, nps_data.w, ds, 2.0 * ds, global_data, ROT)
+    wR = @. nps_data.w+(ps_data.midpoint[FAT[1][DIR]]-nps_data.midpoint[FAT[1][DIR]])*
+        nps_data.sw[:,FAT[1][DIR]]
+    aL, aR = calc_a(w0, prim0, ps_data.w, wR, ds, 2.0 * ds, global_data, ROT)
     Mu, Mv, Mξ, Mu_L, Mu_R = moment_u(prim0, global_data, ROT, DIR)
     A = calc_A(prim0, aL, aR, Mu, Mv, Mξ, Mu_L, Mu_R, global_data, DIR)
     τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
@@ -534,12 +513,14 @@ function calc_flux!(::DoubleSizeNeighbor, face::Face, amr::AMR{2,2})
     ps_data.flux .+= fw
     micro_flux = calc_micro_flux(f_vs_data, F, F⁺, aL, aR, A, Mξ, Mt, offset, dsf)
     update_vs_flux!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
-    for i in eachindex(face.hanging_data)
-        (isa(face.hanging_data[i], Ghost_PS_Data)||isa(face.hanging_data[i],MissingHangingQuad)) && continue
-        ps_data = face.hanging_data[i]
-        vs_data = ps_data.vs_data
-        bit_L, offset = update_face_data_L!(ps_data, nps_data, f_vs_data, offset, faceid, ROT, DIR)
-        reconstruct_vs_L!(f_vs_data, ds, offset, ROT)
+
+    ps_data = face.hanging_data[1]
+    vs_data = ps_data.vs_data
+    # bit_L, offset = update_face_data_L!(ps_data, nps_data, f_vs_data, offset, faceid, ROT, DIR)
+    # reconstruct_vs_L!(f_vs_data, ds, offset, ROT)
+    if !isa(ps_data,Ghost_PS_Data)
+        f_vs_data, offset, bit_L, _ = make_face_data(ps_data, nps_data, faceid, ROT, DIR)
+        reconstruct_vs!(f_vs_data, ds, 2.0 * ds, offset, ROT)
         w0 = calc_w0(f_vs_data)
         prim0 = get_prim(w0, global_data)
         qf0 = calc_qf(f_vs_data, prim0)
