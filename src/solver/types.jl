@@ -31,7 +31,7 @@ struct Configure{DIM,NDF}
     quadrature::Vector{Float64}
     vs_trees_num::Vector{Int64}
     ic::Vector{Float64}
-    bc::Matrix{Float64}
+    boundary::Vector{AbstractBoundary}
     gas::Gas
     solver::Solver
 end
@@ -42,7 +42,16 @@ function Configure(config::Dict)
             setfield!(gas,i,config[i])
         end
     end;
-    return Configure{config[:DIM],config[:NDF]}(config[:geometry],config[:trees_num],config[:quadrature],config[:vs_trees_num],config[:ic],config[:bc],gas,Solver(config))
+    bc = Vector{AbstractBoundary}(undef,0)
+    for i = 1:2*DIM
+        push!(bc,Domain{config[:domaintype][i]}(i,config[:domain][i]))
+    end
+    if !isempty(config[:boundarydefine])
+        for i in eachindex(config[:boundarydefine])
+            push!(bc,config[:boundarydefine][i])
+        end
+    end
+    return Configure{config[:DIM],config[:NDF]}(config[:geometry],config[:trees_num],config[:quadrature],config[:vs_trees_num],config[:ic],bc,gas,Solver(config))
 end
 
 mutable struct Forest{DIM}
@@ -108,6 +117,8 @@ end
 mutable struct Field{DIM,NDF}
     trees::PS_Trees{DIM,NDF}
     faces::Vector{Face}
+    solid_cells::Vector{Vector{PS_Data{DIM,NDF}}} # Outer vector corresbonds to boundaries
+    IB_nodes::Vector{Vector{Vector{AbstractIBNodes}}}
 end
 
 mutable struct AMR{DIM,NDF}

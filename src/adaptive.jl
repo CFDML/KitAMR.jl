@@ -6,6 +6,13 @@ function boundary_flag(amr::AMR{DIM,NDF}, ps_data::PS_Data{DIM,NDF}) where{DIM,N
     end
     return false
 end
+function boundary_flag(boundary::Domain{Maxwellian},midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data)
+    index = Int(floor((boundary.id-1)/2))+1
+    abs(midpoint[index] - global_data.geometry[boundary.id]) < ds[index] && return true
+end
+function boundary_flag(boundary::Circle,midpoint::AbstractVector,ds::AbstractVector::Global_Data)
+    abs(norm(midpoint-boundary.center)-boundary.radius)<maximum(ds)&&return true
+end
 function boundary_flag(
     fp::PW_pxest_t,
     treeid,
@@ -13,10 +20,14 @@ function boundary_flag(
     global_data::Global_Data{DIM},
 ) where{DIM}
     geometry = global_data.config.geometry
+    boundary = global_data.config.boundary
     ds, midpoint = quad_to_cell(fp, treeid, qp)
-    for i = 1:DIM
-        abs(midpoint[i] - geometry[2*i-1]) < ds[i] && return Cint(1)
-        abs(midpoint[i] - geometry[2*i]) < ds[i] && return Cint(1)
+    # for i = 1:DIM
+    #     abs(midpoint[i] - geometry[2*i-1]) < ds[i] && return Cint(1)
+    #     abs(midpoint[i] - geometry[2*i]) < ds[i] && return Cint(1)
+    # end
+    for i in eachindex(boundary)
+        boundary_flag(boundary[i],global_data)&&return Cint(1)
     end
     return Cint(0)
 end
