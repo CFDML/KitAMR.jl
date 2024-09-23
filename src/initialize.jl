@@ -336,6 +336,7 @@ function init_PS(comm::MPI.Comm, global_data::Global_Data{DIM,NDF}) where{DIM,ND
         pre_ps_refine!(ps4est,global_data)
         pre_ps_balance!(ps4est)
         AMR_partition(ps4est)
+        init_IB!(global_data)
         fp = PointerWrapper(ps4est)
         trees_data =
             Vector{Vector{PS_Data{DIM,NDF}}}(undef, fp.last_local_tree[] - fp.first_local_tree[] + 1)
