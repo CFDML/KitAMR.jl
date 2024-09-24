@@ -69,8 +69,10 @@ end
 abstract type AbstractFaceType end
 abstract type InnerFace <: AbstractFaceType end
 abstract type BoundaryFace <: AbstractFaceType end
+abstract type AbstractInsideSolidData{DIM,NDF} <: AbstractPsData{DIM,NDF} end
 HangingQuads = Union{Vector{AbstractPsData{DIM,NDF}}, Nothing} where{DIM,NDF}
 struct MissingHangingQuad{DIM,NDF} <: AbstractPsData{DIM,NDF} end
+struct InsideSolidQuad{DIM,NDF} <: AbstractInsideSolidData{DIM,NDF} end
 struct Face{FT<:AbstractFaceType,T<:HangingQuads}
     data::PS_Data
     faceid::Integer
