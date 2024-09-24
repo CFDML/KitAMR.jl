@@ -31,7 +31,8 @@ struct Configure{DIM,NDF}
     quadrature::Vector{Float64}
     vs_trees_num::Vector{Int64}
     ic::Vector{Float64}
-    boundary::Vector{AbstractBoundary}
+    domain::Vector{Domain}
+    IB::Vector{AbstractBoundary}
     gas::Gas
     solver::Solver
 end
@@ -42,16 +43,17 @@ function Configure(config::Dict)
             setfield!(gas,i,config[i])
         end
     end;
-    bc = Vector{AbstractBoundary}(undef,0)
-    for i = 1:2*DIM
-        push!(bc,Domain{config[:domaintype][i]}(i,config[:domain][i]))
+    domain = Domain[]
+    bc = AbstractBoundary[]
+    for i = 1:2*config[:DIM]
+        push!(domain,Domain{config[:domaintype][i]}(i,config[:domainbc][i]))
     end
     if !isempty(config[:boundarydefine])
         for i in eachindex(config[:boundarydefine])
             push!(bc,config[:boundarydefine][i])
         end
     end
-    return Configure{config[:DIM],config[:NDF]}(config[:geometry],config[:trees_num],config[:quadrature],config[:vs_trees_num],config[:ic],bc,gas,Solver(config))
+    return Configure{config[:DIM],config[:NDF]}(config[:geometry],config[:trees_num],config[:quadrature],config[:vs_trees_num],config[:ic],domain,bc,gas,Solver(config))
 end
 
 mutable struct Forest{DIM}
@@ -105,7 +107,7 @@ mutable struct Ghost_Exchange
 end
 
 mutable struct PS_Trees{DIM,NDF} 
-    data::Vector{Vector{PS_Data{DIM,NDF}}}
+    data::Vector{Vector{AbstractPsData{DIM,NDF}}}
     offset::Int
 end
 

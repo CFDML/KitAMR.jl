@@ -178,6 +178,7 @@ face_micro_nums: 1->4时记1，只需在state=-1时+0.25即可
 function update_neighbor_kernel!(ip::PointerWrapper{p4est_iter_volume_info_t}, data, dp)
     amr = unsafe_pointer_to_objref(data)
     ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+    isa(ps_data,InsideSolidData) && return nothing
     for i = 1:face_num_2d
         ps_data.neighbor.data[i], ps_data.neighbor.state[i] = access_neighbor(
             pointer(ip.p4est),
@@ -191,6 +192,7 @@ end
 function update_neighbor_kernel!(ip::PointerWrapper{p8est_iter_volume_info_t}, data, dp)
     amr = unsafe_pointer_to_objref(data)
     ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+    isa(ps_data,InsideSolidData) && return nothing
     for i = 1:face_num_3d
         ps_data.neighbor.data[i], ps_data.neighbor.state[i] = access_neighbor(
             pointer(ip.p4est),

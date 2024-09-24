@@ -8,10 +8,17 @@ function boundary_flag(amr::AMR{DIM,NDF}, ps_data::PS_Data{DIM,NDF}) where{DIM,N
 end
 function boundary_flag(boundary::Domain{Maxwellian},midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data)
     index = Int(floor((boundary.id-1)/2))+1
-    abs(midpoint[index] - global_data.geometry[boundary.id]) < ds[index] && return true
+    abs(midpoint[index] - global_data.config.geometry[boundary.id]) < ds[index] && return true
 end
-function boundary_flag(boundary::Circle,midpoint::AbstractVector,ds::AbstractVector::Global_Data)
-    abs(norm(midpoint-boundary.center)-boundary.radius)<maximum(ds)&&return true
+function boundary_flag(boundary::Circle,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data)
+    dsmin = [global_data.config.geometry[2i]-global_data.config.geometry[2i-1] for i in 1:2]/2^global_data.config.solver.AMR_PS_MAXLEVEL
+    flag = 0
+    for i = 1:4
+        flag += norm(midpoint.+0.5*(ds+dsmin).*RMT[2][i].-boundary.center)>boundary.radius ? 1 : -1 # any corner cross boundary?
+        flag += norm(midpoint.+0.5*(ds+dsmin).*NMT[2][i].-boundary.center)>boundary.radius ? 1 : -1 # any neighbor cross boundary?
+    end
+    abs(flag)==8 && return false
+    return true
 end
 function boundary_flag(
     fp::PW_pxest_t,
@@ -20,14 +27,18 @@ function boundary_flag(
     global_data::Global_Data{DIM},
 ) where{DIM}
     geometry = global_data.config.geometry
-    boundary = global_data.config.boundary
+    domain = global_data.config.domain
+    boundary = global_data.config.IB
     ds, midpoint = quad_to_cell(fp, treeid, qp)
     # for i = 1:DIM
     #     abs(midpoint[i] - geometry[2*i-1]) < ds[i] && return Cint(1)
     #     abs(midpoint[i] - geometry[2*i]) < ds[i] && return Cint(1)
     # end
+    for i in eachindex(domain)
+        boundary_flag(domain[i],midpoint,ds,global_data) && return Cint(1)
+    end
     for i in eachindex(boundary)
-        boundary_flag(boundary[i],global_data)&&return Cint(1)
+        boundary_flag(boundary[i],midpoint,ds,global_data) && return Cint(1)
     end
     return Cint(0)
 end
