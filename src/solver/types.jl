@@ -113,13 +113,15 @@ end
 
 mutable struct Ghost
     ghost_exchange::Ghost_Exchange
-    ghost_wrap::Vector{Ghost_PS_Data}
+    ghost_wrap::Vector{AbstractGhostPsData}
 end
 
 mutable struct Field{DIM,NDF}
     trees::PS_Trees{DIM,NDF}
     faces::Vector{Face}
-    solid_cells::Vector{Vector{PS_Data{DIM,NDF}}} # Outer vector corresbonds to boundaries
+    # solid_cells::Vector{Vector{PS_Data{DIM,NDF}}} # Outer vector corresbonds to boundaries
+    solid_cells::Vector{SolidCells{DIM,NDF}} # Element corresponds to one IB boundary
+    aux_points::Vector{AuxPoints}
     IB_nodes::Vector{Vector{Vector{AbstractIBNodes}}}
 end
 

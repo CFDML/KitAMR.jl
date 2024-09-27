@@ -1,5 +1,5 @@
 abstract type AbstractPsData{DIM,NDF} end
-
+abstract type AbstractGhostPsData{DIM,NDF} <: AbstractPsData{DIM,NDF} end
 Neighbor_Quad{DIM,NDF} = Union{AbstractPsData{DIM,NDF}, Nothing}
 
 ChildNum = Union{Val{4},Val{8}}
@@ -58,21 +58,23 @@ mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
     n)
 end
 
-mutable struct Ghost_PS_Data{DIM,NDF}<:AbstractPsData{DIM,NDF}
+mutable struct Ghost_PS_Data{DIM,NDF}<:AbstractGhostPsData{DIM,NDF}
     ds::Vector{Cdouble}
     midpoint::Vector{Cdouble}
     w::Vector{Cdouble}
     sw::Matrix{Cdouble}
     vs_data::Ghost_VS_Data{DIM,NDF}
 end
+mutable struct GhostInsideSolidData{DIM,NDF} <: AbstractGhostPsData{DIM,NDF} end
 
 abstract type AbstractFaceType end
 abstract type InnerFace <: AbstractFaceType end
 abstract type BoundaryFace <: AbstractFaceType end
-abstract type AbstractInsideSolidData{DIM,NDF} <: AbstractPsData{DIM,NDF} end
+# abstract type AbstractInsideSolidData{DIM,NDF} <: AbstractPsData{DIM,NDF} end
 HangingQuads = Union{Vector{AbstractPsData{DIM,NDF}}, Nothing} where{DIM,NDF}
 struct MissingHangingQuad{DIM,NDF} <: AbstractPsData{DIM,NDF} end
-struct InsideSolidQuad{DIM,NDF} <: AbstractInsideSolidData{DIM,NDF} end
+mutable struct InsideSolidData{DIM,NDF} <: AbstractPsData{DIM,NDF} end
+AbstractInsideSolidData = Union{InsideSolidData,GhostInsideSolidData}
 struct Face{FT<:AbstractFaceType,T<:HangingQuads}
     data::PS_Data
     faceid::Integer
