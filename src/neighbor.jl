@@ -4,7 +4,7 @@ function access_neighbor(
     p4est::Ptr{p4est_t},
     quadid::p4est_locidx_t,
     global_data::Global_Data{DIM,NDF},
-    ghost_wrap::Array{Ghost_PS_Data},
+    ghost_wrap::Array{AbstractGhostPsData},
     dir::Integer,
 ) where{DIM,NDF}
     neighbor_quads = sc_array_new(sizeof(Ptr{p4est_quadrant_t}))
@@ -71,7 +71,7 @@ function access_neighbor(
     p4est::Ptr{p8est_t},
     quadid::p4est_locidx_t,
     global_data::Global_Data{DIM,NDF},
-    ghost_wrap::Array{Ghost_PS_Data},
+    ghost_wrap::Array{AbstractGhostPsData},
     dir::Integer,
 ) where{DIM,NDF}
     neighbor_quads = sc_array_new(sizeof(Ptr{p8est_quadrant_t}))
@@ -137,6 +137,7 @@ end
 function initialize_neighbor_data!(ip::PointerWrapper{p4est_iter_volume_info_t}, data, dp)
     amr = unsafe_pointer_to_objref(data)
     ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+    isa(ps_data,InsideSolidData) && return nothing
     for i = 1:face_num_2d
         ps_data.neighbor.data[i], ps_data.neighbor.state[i] = access_neighbor(
             pointer(ip.p4est),
@@ -150,6 +151,7 @@ end
 function initialize_neighbor_data!(ip::PointerWrapper{p8est_iter_volume_info_t}, data, dp)
     amr = unsafe_pointer_to_objref(data)
     ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+    isa(ps_data,InsideSolidData) && return nothing
     for i = 1:face_num_3d
         ps_data.neighbor.data[i], ps_data.neighbor.state[i] = access_neighbor(
             pointer(ip.p4est),

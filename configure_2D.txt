@@ -23,7 +23,7 @@
 # AMR_VS_MAXLEVEL: maximum level of velocity space refinement
 DIM = 2
 NDF = 2
-AMR_PS_MAXLEVEL = 2
+AMR_PS_MAXLEVEL = 4
 AMR_VS_MAXLEVEL = 1
 geometry = [0.,10.,0.,10.]
 trees_num = [20,20]

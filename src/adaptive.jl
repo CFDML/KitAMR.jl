@@ -11,7 +11,7 @@ function boundary_flag(boundary::Domain{Maxwellian},midpoint::AbstractVector,ds:
     abs(midpoint[index] - global_data.config.geometry[boundary.id]) < ds[index] && return true
 end
 function boundary_flag(boundary::Circle,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data)
-    dsmin = [global_data.config.geometry[2i]-global_data.config.geometry[2i-1] for i in 1:2]/2^global_data.config.solver.AMR_PS_MAXLEVEL
+    dsmin = [global_data.config.geometry[2i]-global_data.config.geometry[2i-1] for i in 1:2]/2^global_data.config.solver.AMR_PS_MAXLEVEL./global_data.config.trees_num
     flag = 0
     for i = 1:4
         flag += norm(midpoint.+0.5*(ds+dsmin).*RMT[2][i].-boundary.center)>boundary.radius ? 1 : -1 # any corner cross boundary?
@@ -74,6 +74,13 @@ function refine_flag_ps(
     end
     flag
 end
+function refine_flag_ps(
+    ::InsideSolidData,
+    ::AMR,
+    ::PW_pxest_quadrant_t,
+)
+    Cint(0)
+end
 function p4est_refine_flag(forest::P_pxest_t, which_tree, quadrant)
     GC.@preserve forest which_tree quadrant begin
         fp = PointerWrapper(forest)
@@ -98,12 +105,14 @@ function replace_ps(::Val{1}, out_quad, in_quads, which_tree, amr::AMR{DIM}) whe
         pw_in_quad = PointerWrapper(in_quads[i])
         dp = PointerWrapper(P4est_PS_Data, pw_in_quad.p.user_data[])
         ps_data = ps_copy(Odata)
-        ps_data.ds .*= 0.5
-        vs_data = ps_data.vs_data
-        @. ps_data.midpoint += 0.5 * ps_data.ds * RMT[DIM][i]
-        for j = 1:DIM
-            @. vs_data.df += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(vs_data.sdf[:, :, j])
-            @. ps_data.w += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(ps_data.sw[:, j])
+        if !isa(ps_data,InsideSolidData)
+            ps_data.ds .*= 0.5
+            vs_data = ps_data.vs_data
+            @. ps_data.midpoint += 0.5 * ps_data.ds * RMT[DIM][i]
+            for j = 1:DIM
+                @. vs_data.df += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(vs_data.sdf[:, :, j])
+                @. ps_data.w += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(ps_data.sw[:, j])
+            end
         end
         insert!(datas, index - 1 + i, ps_data)
         dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
@@ -115,23 +124,27 @@ function replace_ps(::ChildNum, out_quad, in_quads, which_tree, amr::AMR{DIM,NDF
     datas = trees.data[treeid]
     pw_in_quad = PointerWrapper(in_quads[1])
     dp = PointerWrapper(P4est_PS_Data, pw_in_quad.p.user_data[])
-    Odatas = Vector{PS_Data{DIM,NDF}}(undef, 2^DIM)
-    for i = 1:2^DIM
-        pw_out_quad = PointerWrapper(out_quad[i])
-        Odatas[i] = unsafe_pointer_to_objref(
-            pointer(PointerWrapper(P4est_PS_Data, pw_out_quad.p.user_data[]).ps_data),
-        )
+    Odatas = Vector{AbstractPsData{DIM,NDF}}(undef, 2^DIM)
+    if !any(x->isa(PS_Data,x),Odatas)
+        ps_data = copy(Odatas[1])
+    else
+        for i = 1:2^DIM
+            pw_out_quad = PointerWrapper(out_quad[i])
+            Odatas[i] = unsafe_pointer_to_objref(
+                pointer(PointerWrapper(P4est_PS_Data, pw_out_quad.p.user_data[]).ps_data),
+            )
+        end
+        index = 1
+        Odata = Odatas[index]
+        ps_data = ps_copy(Odata)
+        @. ps_data.midpoint -= 0.5 * ps_data.ds * RMT[DIM][index]
+        vs_data = ps_data.vs_data
+        for i = 1:DIM
+            @. vs_data.df -= 0.5 * ps_data.ds[i] * RMT[DIM][index][i] * @view(vs_data.sdf[:, :, i])
+            @. ps_data.w -= 0.5 * ps_data.ds[i] * RMT[DIM][index][i] * @view(ps_data.sw[:, i])
+        end
+        ps_data.ds .*= 2.0
     end
-    index = 1
-    Odata = Odatas[index]
-    ps_data = ps_copy(Odata)
-    @. ps_data.midpoint -= 0.5 * ps_data.ds * RMT[DIM][index]
-    vs_data = ps_data.vs_data
-    for i = 1:DIM
-        @. vs_data.df -= 0.5 * ps_data.ds[i] * RMT[DIM][index][i] * @view(vs_data.sdf[:, :, i])
-        @. ps_data.w -= 0.5 * ps_data.ds[i] * RMT[DIM][index][i] * @view(ps_data.sw[:, i])
-    end
-    ps_data.ds .*= 2.0
     index = findfirst(x -> x === Odatas[1], datas)
     deleteat!(datas, index:index+2^DIM-1)
     insert!(datas, index, ps_data)
@@ -208,6 +221,7 @@ function coarsen_flag_ps(ps_datas::Vector{PS_Data}, levels::Vector{Int}, amr::AM
         if boundary_flag(amr, ps_datas[i])
             return Cint(0)
         end
+        isa(ps_datas[i],InsideSolidData) && continue
         agrad = maximum(abs.(@view(ps_datas[i].sw[end, :])))
         rgrad = agrad / global_data.status.gradmax
         if rgrad > 2.0^(DIM+levels[i] - global_data.config.solver.AMR_PS_MAXLEVEL) * 0.01

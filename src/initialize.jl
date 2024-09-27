@@ -7,10 +7,10 @@ function initialize_faces!(
 )
     faces = amr.field.faces
     base_quad =
-    unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
-    isa(base_quad,InsideSolidQuad) && return nothing
+        unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
+    isa(base_quad,InsideSolidData) && return nothing
     faceid = side.face[] + 1
-    any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor[faceid]) && return nothing
+    any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor.data[faceid]) && return nothing
     push!(faces, Face(InnerFace,base_quad, faceid, nothing))
 end
 function initialize_faces!(
@@ -23,10 +23,10 @@ function initialize_faces!(
     faces = amr.field.faces
     base_quad =
     unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
-    isa(base_quad,InsideSolidQuad) && return nothing
+    isa(base_quad,InsideSolidData) && return nothing
     faceid = side.face[] + 1
-    any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor[faceid]) && return nothing
-    push!(faces, Face(InnerFace,unsafe_pointer_to_objref(base_quad), faceid, nothing))
+    any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor.data[faceid]) && return nothing
+    push!(faces, Face(InnerFace,base_quad, faceid, nothing))
 end
 function initialize_faces!(
     ::Val{1},
@@ -51,9 +51,9 @@ function initialize_faces!(
     qp = PointerWrapper(iPointerWrapper(side.is.hanging.quad, Ptr{p4est_quadrant_t}, baseid)[])
     base_quad =
     unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
-    isa(base_quad,InsideSolidQuad) && return nothing
+    isa(base_quad,InsideSolidData) && return nothing
     faceid = side.face[] + 1
-    any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor[faceid]) && return nothing
+    any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor.data[faceid]) && return nothing
     index = 1
     hanging_quads = Vector{AbstractPsData{DIM,NDF}}(undef, 2^(DIM - 1)-1)
     for i in 0:2^(DIM-1)-1
@@ -72,7 +72,7 @@ function initialize_faces!(
         end
         index+=1
     end
-    push!(faces, Face(InnerFace,unsafe_pointer_to_objref(base_quad), faceid, hanging_quads))
+    push!(faces, Face(InnerFace,base_quad, faceid, hanging_quads))
 end
 function initialize_faces!(
     ::Val{1},
@@ -97,9 +97,9 @@ function initialize_faces!(
     qp = PointerWrapper(iPointerWrapper(side.is.hanging.quad, Ptr{p8est_quadrant_t}, baseid)[])
     base_quad =
     unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
-    isa(base_quad,InsideSolidQuad) && return nothing
+    isa(base_quad,InsideSolidData) && return nothing
     faceid = side.face[] + 1
-    any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor[faceid]) && return nothing
+    any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor.data[faceid]) && return nothing
     index = 1
     hanging_quads = Vector{AbstractPsData{DIM,NDF}}(undef, 2^(DIM - 1)-1)
     for i in 0:2^(DIM-1)-1
@@ -118,7 +118,7 @@ function initialize_faces!(
         end
         index+=1
     end
-    push!(faces, Face(InnerFace,unsafe_pointer_to_objref(base_quad), faceid, hanging_quads))
+    push!(faces, Face(InnerFace,base_quad, faceid, hanging_quads))
 end
 function initialize_faces!(
     ::Val{1},
@@ -132,10 +132,10 @@ function initialize_faces!(
     if side.is_hanging[] == 0
         base_quad =
             unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
-        isa(base_quad,InsideSolidQuad) && return nothing
+        isa(base_quad,InsideSolidData) && return nothing
         faceid = side.face[] + 1
-        any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor[faceid]) && return nothing
-        push!(faces, Face(InnerFace,unsafe_pointer_to_objref(base_quad), faceid, nothing))
+        any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor.data[faceid]) && return nothing
+        push!(faces, Face(InnerFace,base_quad, faceid, nothing))
     else
         is_ghost = Base.unsafe_wrap(
             Vector{Int8},
@@ -153,9 +153,9 @@ function initialize_faces!(
         )
         base_quad =
             unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
-        isa(base_quad,InsideSolidQuad) && return nothing
+        isa(base_quad,InsideSolidData) && return nothing
         faceid = side.face[] + 1
-        any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor[faceid]) && return nothing
+        any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor.data[faceid]) && return nothing
         index = 1
         hanging_quads = Vector{AbstractPsData{DIM,NDF}}(undef, 2^(DIM - 1)-1)
         for i in 0:2^(DIM-1)-1
@@ -174,7 +174,7 @@ function initialize_faces!(
             end
             index+=1
         end                
-        push!(faces, Face(InnerFace,unsafe_pointer_to_objref(base_quad), faceid, hanging_quads))
+        push!(faces, Face(InnerFace,base_quad, faceid, hanging_quads))
     end
 end
 function initialize_faces!(
@@ -189,10 +189,10 @@ function initialize_faces!(
     if side.is_hanging[] == 0
         base_quad =
             unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
-        isa(base_quad,InsideSolidQuad) && return nothing
+        isa(base_quad,InsideSolidData) && return nothing
         faceid = side.face[] + 1
-        any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor[faceid]) && return nothing
-        push!(faces, Face(InnerFace,unsafe_pointer_to_objref(base_quad), faceid, nothing))
+        any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor.data[faceid]) && return nothing
+        push!(faces, Face(InnerFace,base_quad, faceid, nothing))
     else
         is_ghost = Base.unsafe_wrap(
             Vector{Int8},
@@ -210,9 +210,9 @@ function initialize_faces!(
         )
         base_quad =
             unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
-        isa(base_quad,InsideSolidQuad) && return nothing
+        isa(base_quad,InsideSolidData) && return nothing
         faceid = side.face[] + 1
-        any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor[faceid]) && return nothing
+        any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor.data[faceid]) && return nothing
         index = 1
         hanging_quads = Vector{AbstractPsData{DIM,NDF}}(undef, 2^(DIM - 1)-1)
         for i in 0:2^(DIM-1)-1
@@ -231,7 +231,7 @@ function initialize_faces!(
             end
             index+=1
         end                
-        push!(faces, Face(InnerFace,unsafe_pointer_to_objref(base_quad), faceid, hanging_quads))
+        push!(faces, Face(InnerFace,base_quad, faceid, hanging_quads))
     end
 end
 function initialize_faces!(
@@ -338,10 +338,14 @@ function init_p4est_kernal(ip, data, dp)
         ps_data.w .= get_conserved(ps_data, global_data)
         ps_data.vs_data = init_VS(ps_data.prim, global_data)
         for i in eachindex(solid_cell_flags)
-            solid_cell_flags[i] && push!(solid_cells[i],ps_data)
+            if solid_cell_flags[i]
+                push!(solid_cells[i].ps_datas,ps_data)
+                push!(solid_cells[i].global_midpoints,ps_data.midpoint)
+            end
         end
     else
-        inside_quad = InsideSolidQuad()
+        treeid = ip.treeid[] - trees.offset
+        inside_quad = InsideSolidData{typeof(global_data).parameters...}()
         dp[] = P4est_PS_Data(pointer_from_objref(inside_quad))
         push!(trees.data[treeid],inside_quad)
     end
@@ -356,10 +360,19 @@ function re_init_vs4est!(trees, global_data)
     for i in eachindex(trees.data)
         for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
+            isa(ps_data,InsideSolidData)&&continue
             ps_data.vs_data.df .=
                 discrete_maxwell(ps_data, global_data)
         end
     end
+end
+function init_aux_points(global_data::Global_Data,solid_cells::Vector{T})where{T<:SolidCells}
+    aux_midpoints = calc_intersect_point(global_data.config.IB,solid_cells)
+    aux_points = Vector{AuxPoints}(undef,length(aux_midpoints))
+    for i in eachindex(aux_points)
+        aux_points[i] = AuxPoints(aux_midpoints[i],MPI.Comm_rank(MPI.COMM_WORLD)*ones(length(aux_midpoints[i])))
+    end
+    return aux_points
 end
 function init_PS(comm::MPI.Comm, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     GC.@preserve global_data begin
@@ -381,23 +394,25 @@ function init_PS(comm::MPI.Comm, global_data::Global_Data{DIM,NDF}) where{DIM,ND
             trees_data[i] = AbstractPsData{DIM,NDF}[]
         end
         trees = PS_Trees{DIM,NDF}(trees_data, fp.first_local_tree[] - 1)
-        solid_cells = Vector{Vector{PS_Data{DIM,NDF}}}(undef,length(global_data.config.IB))
+        # solid_cells = Vector{Vector{PS_Data{DIM,NDF}}}(undef,length(global_data.config.IB))
+        solid_cells = Vector{SolidCells{DIM,NDF}}(undef,length(global_data.config.IB))
         for i in eachindex(solid_cells)
-            solid_cells[i] = PS_Data{DIM,NDF}[]
+            solid_cells[i] = SolidCells(PS_Data{DIM,NDF}[])
         end
         data = [global_data, trees, solid_cells]
         p_data = pointer_from_objref(data)
         GC.@preserve data AMR_4est_volume_iterate(ps4est, p_data, init_ps4est)
+        aux_points = init_aux_points(global_data,solid_cells)
         IB_nodes = Vector{Vector{Vector{AbstractIBNodes}}}(undef,length(solid_cells))
         for i in eachindex(IB_nodes)
-            IB_nodes[i] = Vector{Vector{AbstractIBNodes}}(undef,length(solid_cells[i]))
+            IB_nodes[i] = Vector{Vector{AbstractIBNodes}}(undef,length(solid_cells))
             for j in eachindex(IB_nodes[i])
                 IB_nodes[i][j] = AbstractIBNodes[]
             end
         end
         pre_vs_refine!(trees, global_data)
         re_init_vs4est!(trees, global_data)
-        return trees, solid_cells, IB_nodes, ps4est
+        return trees, solid_cells, aux_points, IB_nodes, ps4est
     end
 end
 function initialize_ghost(p4est::P_pxest_t,global_data::Global_Data)
@@ -407,13 +422,13 @@ function initialize_ghost(p4est::P_pxest_t,global_data::Global_Data)
 end
 function init(config::Dict)
     global_data = Global_Data(config)
-    trees, solid_cells, IB_nodes, ps4est = init_PS(MPI.COMM_WORLD, global_data)
+    trees, solid_cells, aux_points, IB_nodes, ps4est = init_PS(MPI.COMM_WORLD, global_data)
     ghost_ps = AMR_ghost_new(ps4est)
     mesh_ps = AMR_mesh_new(ps4est, ghost_ps)
     global_data.forest.ghost = ghost_ps
     global_data.forest.mesh = mesh_ps
     ghost = initialize_ghost(ps4est, global_data)
-    field = Field{config[:DIM],config[:NDF]}(trees,Vector{Face}(undef,0),solid_cells,IB_nodes)
+    field = Field{config[:DIM],config[:NDF]}(trees,Vector{Face}(undef,0),solid_cells,aux_points,IB_nodes)
     amr = AMR(
         global_data,ghost,field
     )

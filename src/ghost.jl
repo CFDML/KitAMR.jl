@@ -37,6 +37,9 @@ function get_mirror_data_inner!(ps_data::PS_Data{DIM,NDF}, vs_temp::AbstractVect
     vs_num = vs_data.vs_num
     vs_temp[1:NDF*vs_num] .= reshape(vs_data.df, vs_num * NDF)
 end
+function get_mirror_data_inner!(::InsideSolidData,vs_temp::AbstractVector)
+    vs_temp[1] = EPS # Flag indicating InsideSolidData
+end
 function get_mirror_data(ps4est, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     GC.@preserve ps4est global_data begin
         gp = PointerWrapper(global_data.forest.ghost)
@@ -67,6 +70,9 @@ function get_mirror_slope_inner!(ps_data::PS_Data{DIM,NDF}, vs_temp::AbstractVec
     vs_temp[1:(vs_num*NDF*DIM)] .= reshape(vs_data.sdf, vs_num * NDF * DIM)
     vs_temp[vs_num*NDF*DIM+1:vs_num*NDF*DIM+DIM*(DIM+2)] .= reshape(ps_data.sw, DIM*(DIM+2))
 end
+function get_mirror_slope_inner!(::InsideSolidData, vs_temp::AbstractVector) 
+    vs_temp[1] = EPS
+end
 function get_mirror_slope(ps4est, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     GC.@preserve ps4est global_data begin
         gp = PointerWrapper(global_data.forest.ghost)
@@ -91,6 +97,11 @@ function get_mirror_structure_inner!(ps_data::PS_Data{DIM}, weight_temp, level_t
     weight_temp[1:vs_num] .= vs_data.weight
     level_temp[1:vs_num] .= vs_data.level
     midpoint_temp[1:(vs_num*DIM)] .= reshape(vs_data.midpoint, vs_num * DIM)
+end
+function get_mirror_structure_inner!(::InsideSolidData, weight_temp, level_temp, midpoint_temp) where{DIM}
+    weight_temp[1] = EPS
+    level_temp[1] = EPS
+    midpoint_temp[1] = EPS
 end
 function get_mirror_structure(ps4est, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     GC.@preserve ps4est global_data begin
@@ -287,7 +298,7 @@ function ghost_data_ptr(N::Int, ghost_data::Ptr{T}, qid::Integer) where {T}
 end
 function initialize_ghost_wrap(global_data::Global_Data{DIM,NDF}, ghost_exchange::Ghost_Exchange) where{DIM,NDF}
     ghost_wrap =
-        Array{Ghost_PS_Data}(undef, PointerWrapper(global_data.forest.ghost).ghosts.elem_count[])
+        Array{AbstractGhostPsData}(undef, PointerWrapper(global_data.forest.ghost).ghosts.elem_count[])
     global_vs_num = global_data.status.max_vs_num
     for i in eachindex(ghost_wrap)
         p = ghost_data_ptr(
@@ -297,6 +308,10 @@ function initialize_ghost_wrap(global_data::Global_Data{DIM,NDF}, ghost_exchange
         )
         offset = 0
         ds = Base.unsafe_wrap(Vector{Cdouble}, p + offset * sizeof(Cdouble), DIM)
+        if ds[1]==EPS
+            ghost_wrap[i] = GhostInsideSolidData{DIM,NDF}()
+            continue
+        end
         offset += DIM
         midpoint = Base.unsafe_wrap(Vector{Cdouble}, p + offset * sizeof(Cdouble), DIM)
         offset += DIM
