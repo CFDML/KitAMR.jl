@@ -214,6 +214,42 @@ function ps_refine!(p4est::Ptr{p8est_t},amr::AMR; recursive = 0)
 end
 
 
+function pre_IB_refine_flag(forest::P_pxest_t, which_tree, quadrant)
+    GC.@preserve forest which_tree quadrant begin
+        fp = PointerWrapper(forest)
+        qp = PointerWrapper(quadrant)
+        global_data,aux_points = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        ds,midpoint = quad_to_cell(fp,which_tree,qp)
+        IB_flag(global_data.config.IB,aux_points,midpoint,ds) && return Cint(1)
+    end
+    return Cint(0)
+end
+function IB_pre_ps_refine!(p4est::Ptr{p4est_t},global_data::Global_Data)
+    p4est_refine_ext(
+        p4est,
+        1,
+        global_data.config.solver.AMR_PS_MAXLEVEL,
+        @cfunction(
+            pre_IB_refine_flag,
+            Cint,
+            (Ptr{p4est_t}, p4est_topidx_t, Ptr{p4est_quadrant_t})
+        ),
+        C_NULL,
+        @cfunction(
+            p4est_replace,
+            Cvoid,
+            (
+                Ptr{p4est_t},
+                p4est_topidx_t,
+                Cint,
+                Ptr{Ptr{p4est_quadrant_t}},
+                Cint,
+                Ptr{Ptr{p4est_quadrant_t}},
+            )
+        )
+    )
+end
+
 function coarsen_flag_ps(ps_datas::Vector{PS_Data}, levels::Vector{Int}, amr::AMR{DIM,NDF}) where{DIM,NDF}
     global_data = amr.global_data
     flag = Cint(1)

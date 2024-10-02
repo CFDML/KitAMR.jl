@@ -28,6 +28,7 @@ function get_vs_num(pp::PW_pxest_t, gp::PW_pxest_ghost_t)
         pq = pw_mirror_quadrant(pp,gp,i)
         dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
         ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+        isa(ps_data,InsideSolidData)&&continue
         vs_num = max(vs_num, ps_data.vs_data.vs_num)
     end
     vs_num = MPI.Allreduce(vs_num, max, MPI.COMM_WORLD)
@@ -37,9 +38,9 @@ function get_mirror_data_inner!(ps_data::PS_Data{DIM,NDF}, vs_temp::AbstractVect
     vs_num = vs_data.vs_num
     vs_temp[1:NDF*vs_num] .= reshape(vs_data.df, vs_num * NDF)
 end
-function get_mirror_data_inner!(::InsideSolidData,vs_temp::AbstractVector)
-    vs_temp[1] = EPS # Flag indicating InsideSolidData
-end
+# function get_mirror_data_inner!(::InsideSolidData,vs_temp::AbstractVector)
+#     vs_temp[1] = EPS # Flag indicating InsideSolidData
+# end
 function get_mirror_data(ps4est, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     GC.@preserve ps4est global_data begin
         gp = PointerWrapper(global_data.forest.ghost)
@@ -53,12 +54,16 @@ function get_mirror_data(ps4est, global_data::Global_Data{DIM,NDF}) where{DIM,ND
             p = Ptr{Cdouble}(sc_malloc(-1, (3 * DIM + 3 + NDF * vs_num) * sizeof(Cdouble)))
             ap = Base.unsafe_wrap(Vector{Cdouble}, p, 3 * DIM + 3 + NDF * vs_num)
             offset = 0
-            ap[1:(offset+=DIM)] .= ps_data.ds
-            ap[offset+1:(offset+=DIM)] .= ps_data.midpoint
-            ap[offset+1:(offset+=DIM+2)] .= ps_data.w
-            ap[offset+=1] = ps_data.vs_data.vs_num
-            vs_temp = @view(ap[offset+1:(offset+=NDF*vs_num)])
-            get_mirror_data_inner!(ps_data, vs_temp)
+            if isa(ps_data,InsideSolidData)
+                ap[1] = EPS
+            else
+                ap[1:(offset+=DIM)] .= ps_data.ds
+                ap[offset+1:(offset+=DIM)] .= ps_data.midpoint
+                ap[offset+1:(offset+=DIM+2)] .= ps_data.w
+                ap[offset+=1] = ps_data.vs_data.vs_num
+                vs_temp = @view(ap[offset+1:(offset+=NDF*vs_num)])
+                get_mirror_data_inner!(ps_data, vs_temp)
+            end
             mirror_data_pointers[i] = p
         end
     end

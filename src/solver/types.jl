@@ -121,8 +121,9 @@ mutable struct Field{DIM,NDF}
     faces::Vector{Face}
     # solid_cells::Vector{Vector{PS_Data{DIM,NDF}}} # Outer vector corresbonds to boundaries
     solid_cells::Vector{SolidCells{DIM,NDF}} # Element corresponds to one IB boundary
-    aux_points::Vector{AuxPoints}
-    IB_nodes::Vector{Vector{Vector{AbstractIBNodes}}}
+    aux_points::Vector{Vector{Vector{Float64}}} # Midpoints of aux_points sorted by quadid
+    IB_cells::Vector{IBCells} # Element corresponds to one IB boundary
+    IB_buffer::Vector{Ptr{Nothing}} # Buffer for IB communication. Store pointers for memory free.
 end
 
 mutable struct AMR{DIM,NDF}
