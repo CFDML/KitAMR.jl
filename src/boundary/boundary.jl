@@ -28,13 +28,13 @@ function calc_intersect_point(boundaries::Vector{AbstractBoundary},solid_midpoin
     return aux_points
 end
 function calc_intersect_point(boundary::AbstractBoundary,solid_midpoints::Vector{Vector{T}})where{T<:Real}
-    aux_points = Vector{Vector{Float64}}(undef,length(solid_cells.ps_datas))
+    aux_points = Vector{Vector{Float64}}(undef,length(solid_midpoints))
     for i in eachindex(solid_midpoints)
         aux_points[i] = calc_intersect_point(boundary,solid_midpoints[i])
     end
     return aux_points
 end
-function calc_intersect_point(boundary::Circle,midpoint::AbstractVector)
+function calc_intersect_point(boundary::Circle,midpoint::AbstractVector{Float64})
     @. boundary.radius/norm(midpoint-boundary.center)*(midpoint-boundary.center)+boundary.center
 end
 
@@ -55,11 +55,13 @@ function pre_broadcast_boundary_points(boundary_points::Vector)
     for i in eachindex(Numbers)
         MPI.Bcast!(Numbers[i],i-1,MPI.COMM_WORLD)
     end
+    return Numbers
 end
 function broadcast_boundary_midpoints!(boundary_points::Vector{Vector{Vector{Float64}}})
-    Numbers = pre_broadcast_aux_points(boundary_points)
+    Numbers = pre_broadcast_boundary_points(boundary_points)
     rbuffer = Vector{Vector{Vector{Float64}}}(undef,length(boundary_points)) # boundaries{ranks{points}}
     sbuffer = Vector{Vector{Float64}}(undef,length(boundary_points)) # boundaries{points}
+    DIM = length(first(first(boundary_points)))
     for i in eachindex(boundary_points)
         buffer = Vector{Float64}(undef,DIM*length(boundary_points[i]))
         for j in eachindex(boundary_points[i])
@@ -85,6 +87,7 @@ function broadcast_boundary_midpoints!(boundary_points::Vector{Vector{Vector{Flo
     MPI.Barrier(MPI.COMM_WORLD)
     boundary_points_global = Vector{Vector{Vector{Float64}}}(undef,length(boundary_points))
     for i in eachindex(boundary_points)
+        boundary_points_global[i] = Vector{Float64}[]
         for j in eachindex(Numbers)
             if j-1 == MPI.Comm_rank(MPI.COMM_WORLD)
                 append!(boundary_points_global[i],boundary_points[i])
@@ -122,6 +125,7 @@ function broadcast_boundary_midpoints!(boundary_points::Vector{Vector{Vector{Flo
     #         end
     #     end
     # end
+    return boundary_points_global
 end
 
 function pre_broadcast_quadid(solid_cells::Vector{T}) where{T<:SolidCells}
@@ -141,6 +145,7 @@ function pre_broadcast_quadid(solid_cells::Vector{T}) where{T<:SolidCells}
     for i in eachindex(Numbers)
         MPI.Bcast!(Numbers[i],i-1,MPI.COMM_WORLD)
     end
+    return Numbers
 end
 
 function broadcast_quadid!(solid_cells::Vector{T})where{T<:SolidCells}
@@ -186,7 +191,7 @@ function IB_flag(aux_point::AbstractVector,midpoint::AbstractVector,ds::Abstract
     end
     return false
 end
-function IB_flag(boundaries::Vector{AbstractBoundary},aux_points::Vector{Vector{Float64}},midpoint::AbstractVector,ds::AbstractVector)
+function IB_flag(boundaries::Vector{AbstractBoundary},aux_points::Vector{Vector{Vector{Float64}}},midpoint::AbstractVector,ds::AbstractVector)
     for i in eachindex(boundaries)
         r = boundaries[i].search_radius
         for j in eachindex(aux_points[i])
@@ -201,8 +206,8 @@ function search_IB!(IB_nodes::Vector{Vector{Vector{PS_Data{DIM,NDF}}}},aux_point
     boundaries = global_data.config.IB
     for i in eachindex(ps_datas)
         for j in eachindex(ps_datas[i])
-            isa(ps_data,InsideSolidData) && continue
             ps_data = ps_datas[i][j]
+            isa(ps_data,InsideSolidData) && continue
             for k in eachindex(boundaries)
                 r = boundaries[k].search_radius
                 for l in eachindex(aux_points[k])

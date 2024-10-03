@@ -235,18 +235,7 @@ function IB_pre_ps_refine!(p4est::Ptr{p4est_t},global_data::Global_Data)
             (Ptr{p4est_t}, p4est_topidx_t, Ptr{p4est_quadrant_t})
         ),
         C_NULL,
-        @cfunction(
-            p4est_replace,
-            Cvoid,
-            (
-                Ptr{p4est_t},
-                p4est_topidx_t,
-                Cint,
-                Ptr{Ptr{p4est_quadrant_t}},
-                Cint,
-                Ptr{Ptr{p4est_quadrant_t}},
-            )
-        )
+        C_NULL,
     )
 end
 
