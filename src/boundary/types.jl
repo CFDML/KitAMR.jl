@@ -29,13 +29,18 @@ end
 #     # local_index::Vector{Integer} # The solidcell's index on its local processor
 # end
 
-mutable struct GhostIBNodes{DIM,NDF} # Maybe sdf?
+mutable struct GhostIBNode{DIM,NDF} # Maybe sdf?
     midpoint::Vector{Float64}
     level::AbstractVector{Int8}
-    df::AbstractMatrix
+    df::AbstractMatrix{Float64}
 end
-const AbstractIBNodes{DIM,NDF} = Union{PS_Data{DIM,NDF},GhostIBNodes{DIM,NDF}}
+const AbstractIBNodes{DIM,NDF} = Union{PS_Data{DIM,NDF},GhostIBNode{DIM,NDF}}
 mutable struct IBCells
     IB_nodes::Vector{Vector{AbstractIBNodes}} # boundaries{SolidCells{IBNodes{}}}
     quadids::Vector{Vector{Cint}} # Global quadids. Are only needed to be updated before partition.
+end
+mutable struct IBBuffer
+    sdata::Vector{Ptr{Nothing}} # Datas of IB nodes to be sent
+    rdata::Vector{Ptr{Nothing}} # Datas of IB nodes to be received
+    r_vs_nums::Vector{Vector{Int}}
 end

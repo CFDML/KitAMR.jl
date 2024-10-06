@@ -116,15 +116,19 @@ mutable struct Ghost
     ghost_wrap::Vector{AbstractGhostPsData}
 end
 
+mutable struct Boundary{DIM,NDF}
+    solid_cells::Vector{SolidCells{DIM,NDF}} # Element corresponds to one IB boundary
+    aux_points::Vector{Vector{Vector{Float64}}} # Midpoints of aux_points sorted by quadid
+    IB_cells::Vector{IBCells} # Element corresponds to one IB boundary
+    IB_ranks_table::Vector{Vector{PS_Data{DIM,NDF}}} # Local IB nodes belonging to solidcells in different processors
+    IB_buffer::IBBuffer # Buffer for IB communication. Store pointers for memory free.
+end
 mutable struct Field{DIM,NDF}
     trees::PS_Trees{DIM,NDF}
     faces::Vector{Face}
     # solid_cells::Vector{Vector{PS_Data{DIM,NDF}}} # Outer vector corresbonds to boundaries
-    solid_cells::Vector{SolidCells{DIM,NDF}} # Element corresponds to one IB boundary
-    aux_points::Vector{Vector{Vector{Float64}}} # Midpoints of aux_points sorted by quadid
-    IB_cells::Vector{IBCells} # Element corresponds to one IB boundary
-    IB_buffer::Vector{Ptr{Nothing}} # Buffer for IB communication. Store pointers for memory free.
 end
+
 
 mutable struct AMR{DIM,NDF}
     global_data::Global_Data
