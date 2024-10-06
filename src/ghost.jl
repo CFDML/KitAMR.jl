@@ -103,7 +103,7 @@ function get_mirror_structure_inner!(ps_data::PS_Data{DIM}, weight_temp, level_t
     level_temp[1:vs_num] .= vs_data.level
     midpoint_temp[1:(vs_num*DIM)] .= reshape(vs_data.midpoint, vs_num * DIM)
 end
-function get_mirror_structure_inner!(::InsideSolidData, weight_temp, level_temp, midpoint_temp) where{DIM}
+function get_mirror_structure_inner!(::InsideSolidData, weight_temp, level_temp, midpoint_temp)
     weight_temp[1] = EPS
     level_temp[1] = EPS
     midpoint_temp[1] = EPS
