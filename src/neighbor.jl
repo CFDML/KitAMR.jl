@@ -141,7 +141,7 @@ function initialize_neighbor_data!(ip::PointerWrapper{p4est_iter_volume_info_t},
     for i = 1:face_num_2d
         ps_data.neighbor.data[i], ps_data.neighbor.state[i] = access_neighbor(
             pointer(ip.p4est),
-            global_quadid(ip),
+            local_quadid(ip),
             amr.global_data,
             amr.ghost.ghost_wrap,
             i - 1,
@@ -155,7 +155,7 @@ function initialize_neighbor_data!(ip::PointerWrapper{p8est_iter_volume_info_t},
     for i = 1:face_num_3d
         ps_data.neighbor.data[i], ps_data.neighbor.state[i] = access_neighbor(
             pointer(ip.p4est),
-            global_quadid(ip),
+            local_quadid(ip),
             amr.global_data,
             amr.ghost.ghost_wrap,
             i - 1,
@@ -184,7 +184,7 @@ function update_neighbor_kernel!(ip::PointerWrapper{p4est_iter_volume_info_t}, d
     for i = 1:face_num_2d
         ps_data.neighbor.data[i], ps_data.neighbor.state[i] = access_neighbor(
             pointer(ip.p4est),
-            global_quadid(ip),
+            local_quadid(ip),
             amr.global_data,
             amr.ghost.ghost_wrap,
             i - 1,
@@ -198,7 +198,7 @@ function update_neighbor_kernel!(ip::PointerWrapper{p8est_iter_volume_info_t}, d
     for i = 1:face_num_3d
         ps_data.neighbor.data[i], ps_data.neighbor.state[i] = access_neighbor(
             pointer(ip.p4est),
-            global_quadid(ip),
+            local_quadid(ip),
             amr.global_data,
             amr.ghost.ghost_wrap,
             i - 1,

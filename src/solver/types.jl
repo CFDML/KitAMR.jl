@@ -33,6 +33,7 @@ struct Configure{DIM,NDF}
     ic::Vector{Float64}
     domain::Vector{Domain}
     IB::Vector{AbstractBoundary}
+    IB_sort::Symbol
     gas::Gas
     solver::Solver
 end
@@ -53,7 +54,7 @@ function Configure(config::Dict)
             push!(bc,config[:boundarydefine][i])
         end
     end
-    return Configure{config[:DIM],config[:NDF]}(config[:geometry],config[:trees_num],config[:quadrature],config[:vs_trees_num],config[:ic],domain,bc,gas,Solver(config))
+    return Configure{config[:DIM],config[:NDF]}(config[:geometry],config[:trees_num],config[:quadrature],config[:vs_trees_num],config[:ic],domain,bc,config[:ib_sort],gas,Solver(config))
 end
 
 mutable struct Forest{DIM}
@@ -118,6 +119,7 @@ end
 
 mutable struct Boundary{DIM,NDF}
     solid_cells::Vector{SolidCells{DIM,NDF}} # Element corresponds to one IB boundary
+    Numbers::Vector{Vector{Int}}
     aux_points::Vector{Vector{Vector{Float64}}} # Midpoints of aux_points sorted by quadid
     IB_cells::Vector{IBCells} # Element corresponds to one IB boundary
     IB_ranks_table::Vector{Vector{PS_Data{DIM,NDF}}} # Local IB nodes belonging to solidcells in different processors
@@ -142,6 +144,7 @@ end
 # partition
 
 mutable struct Transfer_Data{DIM,NDF}
+    encs::Vector{Int8}
     w::Vector{Float64}
     vs_levels::Vector{Int8}
     vs_midpoints::Vector{Float64}
@@ -149,6 +152,7 @@ mutable struct Transfer_Data{DIM,NDF}
 end
 function Transfer_Data(DIM::Integer,NDF::Integer,ps_num::Integer,total_vs_num::Integer)
     return Transfer_Data{DIM,NDF}(
+        Vector{Int8}(undef, 2*ps_num),
         Vector{Float64}(undef, (DIM+2) * ps_num),
         Vector{Int8}(undef, total_vs_num),
         Vector{Float64}(undef, DIM * total_vs_num),

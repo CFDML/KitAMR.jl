@@ -37,7 +37,7 @@ end
 const AbstractIBNodes{DIM,NDF} = Union{PS_Data{DIM,NDF},GhostIBNode{DIM,NDF}}
 mutable struct IBCells
     IB_nodes::Vector{Vector{AbstractIBNodes}} # boundaries{SolidCells{IBNodes{}}}
-    quadids::Vector{Vector{Cint}} # Global quadids. Are only needed to be updated before partition.
+    # quadids::Vector{Vector{Cint}} # Global quadids. Are only needed to be updated before partition.
 end
 mutable struct IBBuffer
     sdata::Vector{Ptr{Nothing}} # Datas of IB nodes to be sent
