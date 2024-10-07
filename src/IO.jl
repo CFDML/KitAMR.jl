@@ -60,7 +60,7 @@ function write_VTK(ps4est::Ptr{p4est_t},filename::String,fieldnames::Vector{Stri
     end
     function init_cell_data_kernel(ip,data,dp)
         pas = unsafe_pointer_to_objref(data)
-        qid = global_quadid(ip)+1
+        qid = local_quadid(ip)+1
         ps_data = Base.unsafe_pointer_to_objref(pointer(dp.ps_data))
         fieldvalues = fieldvalues_fn(ps_data)
         for i in eachindex(fieldvalues)
@@ -111,7 +111,7 @@ function write_VTK(ps4est::Ptr{p8est_t},filename::String,fieldnames::Vector{Stri
     end
     function init_cell_data_kernel(ip,data,dp)
         pas = unsafe_pointer_to_objref(data)
-        qid = global_quadid(ip)+1
+        qid = local_quadid(ip)+1
         ps_data = Base.unsafe_pointer_to_objref(pointer(dp.ps_data))
         fieldvalues = fieldvalues_fn(ps_data)
         for i in eachindex(fieldvalues)

@@ -7,6 +7,7 @@
 # vs_trees_num: DIM vector in [unum,vnum,wnum] order defining the number of velocity space trees in each dimension
 # ic: DIM+2 vector in [rho,u,v,w,1/T] order defining the initial condition of the problem (which is currently the same in the whole region)
 # bc: (DIM+2)*(2*DIM) matrix in which the column vector represents the boundary condition [rho,u,v,w,1/T], and the columns align in [-x,x,-y,y,-z,z] order
+# ib_sort: basis of IB_cells sorting, which can be ":distance, :energy"
 # Kn: Knudsen number
 # Ma: Mach number
 # Pr: Prandtl number
@@ -32,6 +33,7 @@ vs_trees_num = [20,20]
 ic = [1.,0.,0.,1.]
 boundarydefine = [Circle{Maxwellian}([5.,5.],1.,true,10/20/2^4*2.5,[1.,0.,0.,1.])]
 domaintype = [Maxwellian,Maxwellian,Maxwellian,Maxwellian]
+ib_sort = :distance
 domainbc = [[1.,0.,0.,1.],[1.,0.,0.,1.],[1.,0.,0.,1.],[1.,0.5,0.,1.]]
 CFL = 0.2
 K = 1.

@@ -74,14 +74,23 @@ function iPointerWrapper(pw::PointerWrapper{NTuple{N,Ptr{T}}},::Type{Ptr{T}},i::
     return PointerWrapper(Ptr{Ptr{T}}(pointer(pw)+i*sizeof(Ptr{T})))
 end
 
-function global_quadid(ip::PointerWrapper{p4est_iter_volume_info_t})
+function local_quadid(ip::PointerWrapper{p4est_iter_volume_info_t})
     tp = iPointerWrapper(ip.p4est.trees, p4est_tree_t, ip.treeid[])
     return tp.quadrants_offset[] + ip.quadid[]
 end
-function global_quadid(ip::PointerWrapper{p8est_iter_volume_info_t})
+function local_quadid(ip::PointerWrapper{p8est_iter_volume_info_t})
     tp = iPointerWrapper(ip.p4est.trees, p8est_tree_t, ip.treeid[])
     return tp.quadrants_offset[] + ip.quadid[]
 end
+function global_quadid(ip::PW_pxest_iter_volume_info_t)
+    gfq = unsafe_wrap(
+            Vector{Int},
+            pointer(ip.p4est.global_first_quadrant),
+            MPI.Comm_size(MPI.COMM_WORLD) + 1,
+        )
+    return local_quadid(ip) + gfq[MPI.Comm_rank(MPI.COMM_WORLD)+1]
+end
+
 
 function AMR_4est_new(
     comm::MPI.Comm,
