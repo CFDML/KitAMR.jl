@@ -467,9 +467,11 @@ end
 function update_slope!(amr::AMR{DIM,NDF}) where{DIM,NDF}
     trees = amr.field.trees
     global_data = amr.global_data
-    @inbounds @simd for i in eachindex(trees.data)
-        @inbounds @simd for j in eachindex(trees.data[i])
+    @inbounds for i in eachindex(trees.data)
+        @inbounds for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
+            isa(ps_data,InsideSolidData) && continue
+            ps_data.bound_enc<0 && continue # solid_cells
             neighbor = ps_data.neighbor
             for dir = 1:DIM
                 iL = 2 * dir - 1

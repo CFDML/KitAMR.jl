@@ -12,6 +12,13 @@ function discrete_maxwell_2D2F(
     @inbounds @. F[:, 2] = @view(F[:, 1]) * K / (2.0 * prim[4])
     return F
 end
+function discrete_maxwell_2D2F(u::Real,v::Real,prim::AbstractVector,K::Real)
+    h = prim[1] *
+        (prim[4] / π) *
+        exp(-prim[4] * ((u - prim[2])^2 + (v - prim[3])^2))
+    b = h * K / (2.0 * prim[4])
+    return h,b
+end
 function shakhov_part_2D2F(
     u::AbstractVector{T},
     v::AbstractVector,

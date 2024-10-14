@@ -120,6 +120,7 @@ end
 mutable struct Boundary{DIM,NDF}
     solid_cells::Vector{SolidCells{DIM,NDF}} # Element corresponds to one IB boundary
     Numbers::Vector{Vector{Int}}
+    image_points::Vector{Vector{Vector{Float64}}} # Image points of solid_cells sorted by quadid
     aux_points::Vector{Vector{Vector{Float64}}} # Midpoints of aux_points sorted by quadid
     IB_cells::Vector{IBCells} # Element corresponds to one IB boundary
     IB_ranks_table::Vector{Vector{PS_Data{DIM,NDF}}} # Local IB nodes belonging to solidcells in different processors
@@ -128,6 +129,7 @@ end
 mutable struct Field{DIM,NDF}
     trees::PS_Trees{DIM,NDF}
     faces::Vector{Face}
+    boundary::Boundary{DIM,NDF}
     # solid_cells::Vector{Vector{PS_Data{DIM,NDF}}} # Outer vector corresbonds to boundaries
 end
 

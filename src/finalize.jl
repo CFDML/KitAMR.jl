@@ -18,7 +18,7 @@ function finalize_p4est!(ps4est::Ptr{p4est_t}, amr::AMR)
 end
 function finalize!(ps4est::Ptr{p4est_t}, amr::AMR)
     finalize_ghost!(amr.ghost.ghost_exchange)
-    finalize_IB!(amr.field.IB_buffer)
+    finalize_IB!(amr.field.boundary.IB_buffer)
     finalize_p4est!(ps4est, amr)
 end
 
@@ -40,6 +40,6 @@ function finalize_IB!(IB_buffer::IBBuffer)
 end
 function finalize!(ps4est::Ptr{p8est_t}, amr::AMR)
     finalize_ghost!(amr.ghost.ghost_exchange)
-    finalize_IB!(amr.field.IB_buffer)
+    finalize_IB!(amr.field.boundary.IB_buffer)
     finalize_p4est!(ps4est, amr)
 end

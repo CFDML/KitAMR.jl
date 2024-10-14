@@ -21,7 +21,7 @@ end
 
 mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
     quadid::Int # The unique identification of the ps_data, is currently used for SolidCells and IB nodes' partition. Only need to be updated before partition. Can be negative for SolidCells/IB nodes for the convenience of boundary_flag
-    bound_enc::Int
+    bound_enc::Int # 0:fluid_cell;>0:bound_enc th boundary's IB_cell;<0: bound_enc th boundary's solid_cell;
     solid_cell_index::Int
     ds::Vector{Float64} # DIM
     midpoint::Vector{Float64}
@@ -83,6 +83,7 @@ mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
 end
 
 mutable struct Ghost_PS_Data{DIM,NDF}<:AbstractGhostPsData{DIM,NDF}
+    bound_enc::Int
     ds::Vector{Cdouble}
     midpoint::Vector{Cdouble}
     w::Vector{Cdouble}

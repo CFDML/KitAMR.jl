@@ -7,7 +7,7 @@ using LinearAlgebra
 using Parameters
 using SpecialFunctions
 using StaticArrays
-using PythonCall
+# using PythonCall
 using WriteVTK
 
 using Reexport
@@ -39,16 +39,17 @@ include("vs_adaptive.jl")
 include("initialize.jl")
 include("partition.jl")
 include("reconstruct.jl")
+include("boundary/maxwellian.jl")
 include("flux.jl")
 include("iterate.jl")
 include("finalize.jl")
-include("postprocess.jl")
+# include("postprocess.jl")
 
-const np = Ref{Py}()
-const scipy = Ref{Py}()
-function __init__()
-    np[] = pyimport("numpy")
-    scipy[] = pyimport("scipy")
-end
+# const np = Ref{Py}()
+# const scipy = Ref{Py}()
+# function __init__()
+#     np[] = pyimport("numpy")
+#     scipy[] = pyimport("scipy")
+# end
 
 end # module

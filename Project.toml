@@ -18,7 +18,6 @@ Parameters = "d96e819e-fc66-5662-9728-84c9c7592b0a"
 PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 PreferenceTools = "ba661fbb-e901-4445-b070-854aec6bfbc5"
 Preferences = "21216c6a-2e73-6563-6e65-726566657250"
-PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
 RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
 Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
@@ -40,7 +39,6 @@ P4est_jll = "=2.8.1"
 Parameters = "0.12"
 PrecompileTools = "^1"
 Preferences = "1.2"
-PythonCall = "0.9"
 RecipesBase = "^1"
 Reexport = "^1"
 SparseArrays = "1.10"
@@ -51,6 +49,9 @@ julia = "^1"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[preferences.PythonCall.CondaPkg]
+offline = true
 
 [targets]
 test = ["Test"]

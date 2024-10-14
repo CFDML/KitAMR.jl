@@ -1,21 +1,25 @@
+# function initialize_faces!(
+#     ::Val{0},
+#     ::Val{1},
+#     ip::PW_pxest_iter_face_info_t,
+#     side,
+#     amr,
+# )
+#     faces = amr.field.faces
+#     base_quad =
+#         unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
+#     isa(base_quad,InsideSolidData) && return nothing
+#     faceid = side.face[] + 1
+#     any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor.data[faceid]) && return nothing
+#     if base_quad.bound_enc<0
+#         !any(x->isa(x,PS_Data),base_quad.neighbor.data[faceid]) && return nothing
+#         any(x->x.bound_enc>=0,base_quad.neighbor.data[faceid]) && return nothing
+#     end
+#     push!(faces, Face(InnerFace,base_quad, faceid, nothing))
+# end
 function initialize_faces!(
     ::Val{0},
-    ::Val{1},
-    ip::PW_pxest_iter_face_info_t,
-    side,
-    amr,
-)
-    faces = amr.field.faces
-    base_quad =
-        unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
-    isa(base_quad,InsideSolidData) && return nothing
-    faceid = side.face[] + 1
-    any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor.data[faceid]) && return nothing
-    push!(faces, Face(InnerFace,base_quad, faceid, nothing))
-end
-function initialize_faces!(
-    ::Val{0},
-    ::Val{0},
+    ::Any,
     ip::PW_pxest_iter_face_info_t,
     side,
     amr,
@@ -25,7 +29,10 @@ function initialize_faces!(
     unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
     isa(base_quad,InsideSolidData) && return nothing
     faceid = side.face[] + 1
-    any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor.data[faceid]) && return nothing
+    if base_quad.bound_enc<0
+        !any(x->isa(x,PS_Data),base_quad.neighbor.data[faceid]) && return nothing
+        !any(x->x.bound_enc>=0,base_quad.neighbor.data[faceid]) && return nothing
+    end
     push!(faces, Face(InnerFace,base_quad, faceid, nothing))
 end
 function initialize_faces!(
@@ -47,13 +54,19 @@ function initialize_faces!(
         Ptr{Int32}(pointer(side.is.hanging.quadid)),
         2^(DIM - 1),
     )
-    baseid = findfirst(x -> x == 0, is_ghost) - 1
-    qp = PointerWrapper(iPointerWrapper(side.is.hanging.quad, Ptr{p4est_quadrant_t}, baseid)[])
-    base_quad =
-    unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
-    isa(base_quad,InsideSolidData) && return nothing
+    baseid = findall(x -> x == 0, is_ghost) - 1
+    flag = true
+    for i in eachindex(baseid)
+        qp = PointerWrapper(iPointerWrapper(side.is.hanging.quad, Ptr{p4est_quadrant_t}, baseid[i])[])
+        base_quad =
+            unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
+        if !(isa(base_quad,InsideSolidData) || base_quad.bound_enc<0)
+            flag = false
+            break
+        end
+    end
+    flag && return nothing
     faceid = side.face[] + 1
-    any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor.data[faceid]) && return nothing
     index = 1
     hanging_quads = Vector{AbstractPsData{DIM,NDF}}(undef, 2^(DIM - 1)-1)
     for i in 0:2^(DIM-1)-1
@@ -93,13 +106,19 @@ function initialize_faces!(
         Ptr{Int32}(pointer(side.is.hanging.quadid)),
         2^(DIM - 1),
     )
-    baseid = findfirst(x -> x == 0, is_ghost) - 1
-    qp = PointerWrapper(iPointerWrapper(side.is.hanging.quad, Ptr{p8est_quadrant_t}, baseid)[])
-    base_quad =
-    unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
-    isa(base_quad,InsideSolidData) && return nothing
+    baseid = findall(x -> x == 0, is_ghost) - 1
+    flag = true
+    for i in eachindex(baseid)
+        qp = PointerWrapper(iPointerWrapper(side.is.hanging.quad, Ptr{p8est_quadrant_t}, baseid[i])[])
+        base_quad =
+            unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
+        if !(isa(base_quad,InsideSolidData) || base_quad.bound_enc<0)
+            flag = false
+            break
+        end
+    end
+    flag && return nothing
     faceid = side.face[] + 1
-    any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor.data[faceid]) && return nothing
     index = 1
     hanging_quads = Vector{AbstractPsData{DIM,NDF}}(undef, 2^(DIM - 1)-1)
     for i in 0:2^(DIM-1)-1
@@ -134,7 +153,7 @@ function initialize_faces!(
             unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
         isa(base_quad,InsideSolidData) && return nothing
         faceid = side.face[] + 1
-        any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor.data[faceid]) && return nothing
+        base_quad.bound_enc<0 && return nothing
         push!(faces, Face(InnerFace,base_quad, faceid, nothing))
     else
         is_ghost = Base.unsafe_wrap(
@@ -147,15 +166,19 @@ function initialize_faces!(
             Ptr{Int32}(pointer(side.is.hanging.quadid)),
             2^(DIM - 1),
         )
-        baseid = findfirst(x -> x == 0, is_ghost) - 1
-        qp = PointerWrapper(
-            iPointerWrapper(side.is.hanging.quad, Ptr{p4est_quadrant_t}, baseid)[],
-        )
-        base_quad =
-            unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
-        isa(base_quad,InsideSolidData) && return nothing
+        baseid = findall(x -> x == 0, is_ghost) - 1
+        flag = true
+        for i in eachindex(baseid)
+            qp = PointerWrapper(iPointerWrapper(side.is.hanging.quad, Ptr{p4est_quadrant_t}, baseid[i])[])
+            base_quad =
+                unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
+            if !(isa(base_quad,InsideSolidData) || base_quad.bound_enc<0)
+                flag = false
+                break
+            end
+        end
+        flag && return nothing
         faceid = side.face[] + 1
-        any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor.data[faceid]) && return nothing
         index = 1
         hanging_quads = Vector{AbstractPsData{DIM,NDF}}(undef, 2^(DIM - 1)-1)
         for i in 0:2^(DIM-1)-1
@@ -173,7 +196,7 @@ function initialize_faces!(
                 hanging_quads[index] = MissingHangingQuad{DIM,NDF}()
             end
             index+=1
-        end                
+        end     
         push!(faces, Face(InnerFace,base_quad, faceid, hanging_quads))
     end
 end
@@ -191,7 +214,7 @@ function initialize_faces!(
             unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
         isa(base_quad,InsideSolidData) && return nothing
         faceid = side.face[] + 1
-        any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor.data[faceid]) && return nothing
+        base_quad.bound_enc<0 && return nothing
         push!(faces, Face(InnerFace,base_quad, faceid, nothing))
     else
         is_ghost = Base.unsafe_wrap(
@@ -204,15 +227,19 @@ function initialize_faces!(
             Ptr{Int32}(pointer(side.is.hanging.quadid)),
             2^(DIM - 1),
         )
-        baseid = findfirst(x -> x == 0, is_ghost) - 1
-        qp = PointerWrapper(
-            iPointerWrapper(side.is.hanging.quad, Ptr{p8est_quadrant_t}, baseid)[],
-        )
-        base_quad =
-            unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
-        isa(base_quad,InsideSolidData) && return nothing
+        baseid = findall(x -> x == 0, is_ghost) - 1
+        flag = true
+        for i in eachindex(baseid)
+            qp = PointerWrapper(iPointerWrapper(side.is.hanging.quad, Ptr{p8est_quadrant_t}, baseid[i])[])
+            base_quad =
+                unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
+            if !(isa(base_quad,InsideSolidData) || base_quad.bound_enc<0)
+                flag = false
+                break
+            end
+        end
+        flag && return nothing
         faceid = side.face[] + 1
-        any(x->isa(x,AbstractInsideSolidData),base_quad.neighbor.data[faceid]) && return nothing
         index = 1
         hanging_quads = Vector{AbstractPsData{DIM,NDF}}(undef, 2^(DIM - 1)-1)
         for i in 0:2^(DIM-1)-1
@@ -230,7 +257,7 @@ function initialize_faces!(
                 hanging_quads[index] = MissingHangingQuad{DIM,NDF}()
             end
             index+=1
-        end                
+        end         
         push!(faces, Face(InnerFace,base_quad, faceid, hanging_quads))
     end
 end
@@ -267,9 +294,10 @@ function initialize_faces!(
     faces = amr.field.faces
     side = iPointerWrapper(ip.sides, p4est_iter_face_side_t, 0)
     base_quad =
-        pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data)
+        unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
+    isa(base_quad,InsideSolidData) && return nothing
     faceid = side.face[] + 1
-    push!(faces, Face(BoundaryFace,unsafe_pointer_to_objref(base_quad), faceid, nothing))
+    push!(faces, Face(BoundaryFace,base_quad, faceid, nothing))
 end
 function initialize_faces!(
     ::Val{1},
@@ -280,9 +308,10 @@ function initialize_faces!(
     faces = amr.field.faces
     side = iPointerWrapper(ip.sides, p8est_iter_face_side_t, 0)
     base_quad =
-        pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data)
+        unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
+    isa(base_quad,InsideSolidData) && return nothing
     faceid = side.face[] + 1
-    push!(faces, Face(BoundaryFace,unsafe_pointer_to_objref(base_quad), faceid, nothing))
+    push!(faces, Face(BoundaryFace,base_quad, faceid, nothing))
 end
 function initialize_faces!(ip::PW_pxest_iter_face_info_t, data)
     initialize_faces!(Val(Int(ip.sides.elem_count[])), ip, data)
@@ -359,7 +388,7 @@ function init_ps_p4est_kernel(ip, data, dp)
             pointer(ip.p4est.global_first_quadrant),
             MPI.Comm_size(MPI.COMM_WORLD) + 1,
         )
-        ps_data.quadid = local_quadid(ip)+gfq[MPI.Comm_rank(MPI.COMM_WORLD)+1]
+        ps_data.quadid = global_quadid(ip)
         ps_data.ds .= ds
         ps_data.midpoint .= midpoint
         ps_data.prim .= ic
@@ -367,6 +396,7 @@ function init_ps_p4est_kernel(ip, data, dp)
         ps_data.vs_data = init_VS(ps_data.prim, global_data)
         for i in eachindex(solid_cell_flags)
             if solid_cell_flags[i]
+                ps_data.bound_enc = -i
                 push!(solid_cells[i].ps_datas,ps_data)
                 push!(solid_cells[i].quadids,ps_data.quadid)
             end
@@ -390,6 +420,7 @@ function re_init_vs4est!(trees, global_data)
         for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
             isa(ps_data,InsideSolidData)&&continue
+            ps_data.bound_enc<0 && continue
             ps_data.vs_data.df .=
                 discrete_maxwell(ps_data, global_data)
         end
@@ -409,13 +440,14 @@ function pre_refine!(ps4est::P_pxest_t,global_data::Global_Data)
     p_data = pointer_from_objref(data)
     GC.@preserve data AMR_4est_volume_iterate(ps4est, p_data, init_solid_midpoints)
     aux_points = init_aux_points(global_data,solid_midpoints)
-    broadcast_boundary_midpoints!(aux_points,global_data)
+    image_points = calc_image_point(solid_midpoints,aux_points)
+    aux_points,image_points = broadcast_boundary_midpoints!(aux_points,image_points,global_data)
     data = [global_data,aux_points]
     PointerWrapper(ps4est).user_pointer = pointer_from_objref(data)
     GC.@preserve data IB_pre_ps_refine!(ps4est,global_data)
     pre_ps_balance!(ps4est)
     AMR_partition(ps4est)
-    return aux_points
+    return aux_points,image_points
 end
 function IB_Numbers_ranks(ps4est::P_pxest_t,IB_nodes::Vector,solid_cells::Vector{SolidCells{DIM,NDF}}) where{DIM,NDF}
     pp = PointerWrapper(ps4est)
@@ -608,7 +640,7 @@ function IB_nodes_data_communicate(IB_ranks_table::Vector{Vector{PS_Data{DIM,NDF
     MPI.Waitall!(reqs)
     return IB_buffer
 end
-function IB_nodes_data_wrap!(rNumbers::Vector{Vector{Vector{Int}}},r_quadids::Vector{Vector{Int}},r_vs_nums::Vector{Vector{Int}},rdata::Vector{Ptr{Nothing}},solid_cells::Vector{SolidCells{DIM,NDF}},IB_cells::Vector{IBCells}) where{DIM,NDF}
+function IB_nodes_data_wrap!(rNumbers::Vector{Vector{Vector{Int}}},r_vs_nums::Vector{Vector{Int}},rdata::Vector{Ptr{Nothing}},solid_cells::Vector{SolidCells{DIM,NDF}},IB_cells::Vector{IBCells}) where{DIM,NDF}
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
     for i in eachindex(rdata)
         i-1==rank&&continue
@@ -623,7 +655,6 @@ function IB_nodes_data_wrap!(rNumbers::Vector{Vector{Vector{Int}}},r_quadids::Ve
                 for _ in 1:rNumbers[i][j][k]
                     vs_num = r_vs_nums[i][ps_offset]
                     push!(IB_cells[j].IB_nodes[k],GhostIBNode{DIM,NDF}(@view(midpoints[ps_offset,:]),@view(level_buffer[vs_offset+1:vs_offset+vs_num]),@view(df_buffer[vs_offset+1:vs_offset+vs_num,:])))
-                    push!(IB_cells[j].quadids[k],r_quadids[i][ps_offset])
                     ps_offset+=1;vs_offset+=vs_num
                 end
             end
@@ -637,7 +668,7 @@ function IB_nodes_communicate(Numbers::Vector{Vector{Vector{Int}}},solid_cells::
 end
 function init_IBCells(Numbers::Vector{Vector{Vector{Int}}},solid_cells::Vector{T},IB_ranks_table::Vector,IB_cells::Vector{IBCells}) where{T<:SolidCells}
      r_vs_nums,IB_buffer = IB_nodes_communicate(Numbers,solid_cells,IB_ranks_table) # rNumbers: Vector{Vector{Int}}
-     IB_nodes_data_wrap!(Numbers,r_quadids,r_vs_nums,IB_buffer.rdata,solid_cells,IB_cells)
+     IB_nodes_data_wrap!(Numbers,r_vs_nums,IB_buffer.rdata,solid_cells,IB_cells)
      IB_buffer.r_vs_nums = r_vs_nums
      return IB_buffer
 end
@@ -653,6 +684,17 @@ function init_IB!(ps4est::P_pxest_t,trees::PS_Trees{DIM,NDF},global_data::Global
     search_IB!(IB_nodes,aux_points,trees,global_data)
     Numbers,IB_ranks_table,IB_cells = IB_Numbers_ranks(ps4est,IB_nodes,solid_cells)
     IB_buffer = init_IBCells(Numbers,solid_cells,IB_ranks_table,IB_cells)
+    # for i in eachindex(solid_cells)
+    #     for j in eachindex(solid_cells[i].ps_datas)
+    #         solid_cells[i].ps_datas[j].bound_enc = -i
+    #         for k in eachindex(IB_cells[i].IB_nodes[j])
+    #             IB_node = IB_cells[i].IB_nodes[j][k]
+    #             IB_node.bound_enc = i
+    #             IB_node.solid_cell_index = j
+    #         end
+    #     end
+        
+    # end
     return solid_Numbers,IB_cells,IB_buffer,IB_ranks_table
 end
 function init_ps!(ps4est::P_pxest_t,global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
@@ -683,10 +725,10 @@ function init_field!(global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
             P4est_PS_Data,
             pointer_from_objref(global_data),
         )
-        aux_points = pre_refine!(ps4est,global_data)
+        aux_points,image_points = pre_refine!(ps4est,global_data)
         trees,solid_cells = init_ps!(ps4est,global_data)
-        Numbers,IB_cells,IB_Numbers,IB_buffer,IB_ranks_table = init_IB!(ps4est,trees,global_data,solid_cells,aux_points)
-        boundary = Boundary{DIM,NDF}(solid_cells,Numbers,aux_points,IB_cells,IB_Numbers,IB_ranks_table,IB_buffer)
+        Numbers,IB_cells,IB_buffer,IB_ranks_table = init_IB!(ps4est,trees,global_data,solid_cells,aux_points)
+        boundary = Boundary{DIM,NDF}(solid_cells,Numbers,image_points,aux_points,IB_cells,IB_ranks_table,IB_buffer)
         sort_IB_cells!(global_data,boundary)
         return trees, boundary, ps4est
     end
