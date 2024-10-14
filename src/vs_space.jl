@@ -16,7 +16,7 @@ function init_VS(prim::AbstractVector,global_data::Global_Data{DIM,NDF}) where{D
     @inbounds @simd for i in eachindex(midpoints)
         midpoint[i, :] .= midpoints[i]
     end
-    df = reshape(discrete_maxwell(midpoint, prim, global_data),:,1)
+    df = discrete_maxwell(midpoint, prim, global_data)
     sdf = zeros(vs_num, NDF, DIM)
     flux = zeros(vs_num, NDF)
     vs_data = VS_Data{DIM,NDF}(vs_num, zeros(Int, vs_num), weight, midpoint, df, sdf, flux)

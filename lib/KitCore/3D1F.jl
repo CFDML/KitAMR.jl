@@ -11,6 +11,16 @@ function discrete_maxwell_3D1F(
         exp(-prim[5] * ((u - prim[2])^2 + (v - prim[3])^2 + (w - prim[4])^2))
     return M
 end
+function discrete_maxwell_3D1F(
+    u::Real,
+    v::Real,
+    w::Real,
+    prim::AbstractVector,
+)
+        prim[1] *
+            (prim[5] / π)^(3 / 2) *
+            exp(-prim[5] * ((u - prim[2])^2 + (v - prim[3])^2 + (w - prim[4])^2))
+end
 function shakhov_part_3D1F(
     u::AbstractVector{T},
     v::AbstractVector,

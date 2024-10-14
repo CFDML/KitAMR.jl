@@ -37,6 +37,7 @@ function discrete_maxwell(
         prim,
     )
 end
+
 function discrete_maxwell(
     midpoint::AbstractMatrix,
     prim::AbstractVector,
@@ -45,6 +46,26 @@ function discrete_maxwell(
     discrete_maxwell_2D2F(
         @view(midpoint[:, 1]),
         @view(midpoint[:, 2]),
+        prim,
+        global_data.config.gas.K,
+    )
+end
+function discrete_maxwell(
+    midpoint::AbstractVector,
+    prim::AbstractVector,
+    ::Global_Data{3,1},
+)
+    discrete_maxwell_3D1F(
+        midpoint[1],
+        midpoint[2],
+        midpoint[3],
+        prim,
+    )
+end
+function discrete_maxwell(midpoint::AbstractVector,prim::AbstractVector,global_data::Global_Data{2,2})
+    discrete_maxwell_2D2F(
+        midpoint[1],
+        midpoint[2],
         prim,
         global_data.config.gas.K,
     )

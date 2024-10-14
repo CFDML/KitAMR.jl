@@ -46,14 +46,15 @@ function pre_broadcast_boundary_points(boundary_points::Vector)
     end
     return Numbers
 end
-function broadcast_boundary_midpoints!(boundary_points::Vector{Vector{Vector{Float64}}},::Global_Data{DIM})where{DIM}
+function broadcast_boundary_midpoints!(boundary_points::Vector{Vector{Vector{Float64}}},image_points::Vector{Vector{Vector{Float64}}},::Global_Data{DIM})where{DIM}
     Numbers = pre_broadcast_boundary_points(boundary_points)
     rbuffer = Vector{Vector{Vector{Float64}}}(undef,length(boundary_points)) # boundaries{ranks{points}}
     sbuffer = Vector{Vector{Float64}}(undef,length(boundary_points)) # boundaries{points}
     for i in eachindex(boundary_points)
-        buffer = Vector{Float64}(undef,DIM*length(boundary_points[i]))
+        buffer = Vector{Float64}(undef,2*DIM*length(boundary_points[i]))
         for j in eachindex(boundary_points[i])
-            buffer[DIM*(i-1)+1:DIM*i] .= boundary_points[i][j]
+            buffer[2*DIM*(i-1)+1:2*DIM*i-DIM] .= boundary_points[i][j]
+            buffer[2*DIM*(i-1)+DIM+1:2*DIM*i] .= image_points[i][j]
         end
         sbuffer[i] = buffer
     end
@@ -63,7 +64,7 @@ function broadcast_boundary_midpoints!(boundary_points::Vector{Vector{Vector{Flo
             if j-1==MPI.Comm_rank(MPI.COMM_WORLD) 
                 rbuffer[i][j] = sbuffer[i]
             else
-                rbuffer[i][j] = Vector{Float64}(undef,DIM*Numbers[j][i])
+                rbuffer[i][j] = Vector{Float64}(undef,2*DIM*Numbers[j][i])
             end
         end
     end
@@ -73,47 +74,24 @@ function broadcast_boundary_midpoints!(boundary_points::Vector{Vector{Vector{Flo
         end
     end
     MPI.Barrier(MPI.COMM_WORLD)
-    boundary_points_global = Vector{Vector{Vector{Float64}}}(undef,length(boundary_points))
+    aux_points_global = Vector{Vector{Vector{Float64}}}(undef,length(boundary_points))
+    image_points_global = Vector{Vector{Vector{Float64}}}(undef,length(boundary_points))
     for i in eachindex(boundary_points)
-        boundary_points_global[i] = Vector{Float64}[]
+        aux_points_global[i] = Vector{Float64}[]
+        image_points_global[i] = Vector{Float64}[]
         for j in eachindex(Numbers)
             if j-1 == MPI.Comm_rank(MPI.COMM_WORLD)
-                append!(boundary_points_global[i],boundary_points[i])
+                append!(aux_points_global[i],boundary_points[i])
+                append!(image_points_global[i],image_points[i])
             else
-                for k in 1:Int(length(rbuffer[i][j])/DIM)
-                    push!(boundary_points_global[i],rbuffer[i][j][(DIM*(k-1)+1):DIM*k]) 
+                for k in 1:Int(length(rbuffer[i][j])/DIM/2)
+                    push!(aux_points_global[i],rbuffer[i][j][2*DIM*(k-1)+1:2*DIM*(k-1)+DIM]) 
+                    push!(image_points_global[i],rbuffer[i][j][2*DIM*(k-1)+DIM+1:2*DIM*k])
                 end
             end
         end
     end
-    # for i in eachindex(solid_cells)
-    #     buffer = Vector{Float64}(undef,DIM*length(solid_cells[i].ps_datas))
-    #     for j in eachindex(solid_cells[i].ps_datas)
-    #         buffer[DIM*(i-1)+1:DIM*i] .= aux_points[i].midpoints[j]
-    #     end
-    #     sbuffer[i] = buffer
-    # end
-    # for i in eachindex(solid_cells)
-    #     for j in eachindex(Numbers)
-    #         j-1==MPI.Comm_rank(MPI.COMM_WORLD) && (rbuffer[i][j] = sbuffer[i])
-    #     end
-    # end
-    # for i in eachindex(solid_cells)
-    #     for j in eachindex(Numbers)
-    #         MPI.Bcast!(rbuffer[i][j],j-1,MPI.COMM_WORLD)
-    #     end
-    # end
-    # MPI.Barrier(MPI.COMM_WORLD)
-    # for i in eachindex(solid_cells)
-    #     for j in eachindex(Numbers)
-    #         j-1 == MPI.Comm_rank(MPI.COMM_WORLD)&&continue
-    #         for k in 1:length(rbuffer[i][j])/DIM
-    #            push!(aux_points.midpoints,rbuffer[i][j][DIM*(k-1)+1:DIM*k])
-    #            push!(aux_points.mpi_rank,j-1)
-    #         end
-    #     end
-    # end
-    return boundary_points_global
+    return aux_points_global,image_points_global
 end
 
 function pre_broadcast_quadid(solid_cells::Vector{T}) where{T<:SolidCells}
@@ -190,24 +168,41 @@ function IB_flag(boundaries::Vector{AbstractBoundary},aux_points::Vector{Vector{
     end
     return false
 end
-
+function calc_image_point(solid_midpoint::AbstractVector{Float64},aux_point::AbstractVector{Float64})
+    return 2*aux_point-solid_midpoint
+end
+function calc_image_point(solid_midpoints::AbstractVector,aux_points::AbstractVector)
+    image_points = Vector{Vector{Vector{Float64}}}(undef,length(solid_midpoints))
+    for i in eachindex(image_points)
+        image_points[i] = Vector{Vector{Float64}}(undef,length(solid_midpoints[i]))
+        for j in eachindex(image_points[i])
+            image_points[i][j] = calc_image_point(solid_midpoints[i][j],aux_points[i][j])
+        end
+    end
+    return image_points
+end
 function search_IB!(IB_nodes::Vector{Vector{Vector{PS_Data{DIM,NDF}}}},aux_points::Vector,trees::PS_Trees{DIM,NDF},global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     ps_datas = trees.data
     boundaries = global_data.config.IB
     for i in eachindex(ps_datas)
         for j in eachindex(ps_datas[i])
             ps_data = ps_datas[i][j]
-            isa(ps_data,InsideSolidData) && continue
+            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0) && continue
             for k in eachindex(boundaries)
                 for l in eachindex(aux_points[k])
-                    IB_flag(boundaries[k],aux_points[k][l],ps_data.midpoint,ps_data.ds)&&push!(IB_nodes[k][l],ps_data)
+                    if IB_flag(boundaries[k],aux_points[k][l],ps_data.midpoint,ps_data.ds)
+                        ps_data.bound_enc = k
+                        ps_data.solid_cell_index = l
+                        push!(IB_nodes[k][l],ps_data)
+                    end
                 end
             end
         end
     end
 end
 
-function IB_data_exchange!(boundary::Boundary)
+function IB_data_exchange!(amr::AMR)
+    boundary = amr.field.boundary
     IB_ranks_table = boundary.IB_ranks_table
     sdata = boundary.IB_buffer.sdata
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
@@ -375,7 +370,8 @@ function IB_wrap_update!(boundary::Boundary)
     end
 end
 
-function IB_structure_update!(boundary::Boundary)
+function IB_structure_update!(amr::AMR)
+    boundary = amr.field.boundary
     IB_vs_nums_exchange!(boundary)
     IB_structure_exchange!(boundary)
     IB_wrap_update!(boundary)
@@ -425,7 +421,8 @@ function IB_quadid_exchange!(boundary::Boundary)
         sort!(solid_cells[i].quadids)
     end
 end
-function IB_quadid_update!(boundary::Boundary) # Before partition, global quadids of solid_cells and IB_nodes need to be updated
+function IB_quadid_update!(ps4est::P_pxest_t,amr::AMR) # Before partition, global quadids of solid_cells and IB_nodes need to be updated
+    boundary = amr.field.boundary
     AMR_4est_volume_iterate(ps4est, p_data, update_quadid!)
     IB_quadid_exchange!(boundary::Boundary)
 end

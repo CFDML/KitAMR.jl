@@ -8,9 +8,10 @@ function update_Δt!(amr::AMR{2,NDF}) where {NDF}
     V =
         quadrature[4] -
         (quadrature[4] - quadrature[3]) / global_data.config.vs_trees_num[2]/2^global_data.config.solver.AMR_VS_MAXLEVEL / 2
-    @inbounds @simd for i in eachindex(trees.data)
-        @inbounds @simd for j in eachindex(trees.data[i])
+    @inbounds for i in eachindex(trees.data)
+        @inbounds for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
+            isa(ps_data,InsideSolidData) && continue
             Δt = 1.0
             Δt = min(Δt, global_data.config.solver.CFL * min(ps_data.ds[1] / U, ps_data.ds[2] / V))
             global_data.status.Δt = Δt
@@ -72,9 +73,11 @@ function update_volume!(amr::AMR)
     global_data = amr.global_data
     gas = global_data.config.gas
     trees = amr.field.trees
-    @inbounds @simd for i in eachindex(trees.data)
-        @inbounds @simd for j in eachindex(trees.data[i])
+    @inbounds for i in eachindex(trees.data)
+        @inbounds for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
+            isa(ps_data,InsideSolidData) && continue
+            ps_data.bound_enc<0 && continue
             vs_data = ps_data.vs_data
             prim_ = get_prim(ps_data, global_data)
             τ_ = get_τ(prim_, gas.μᵣ, gas.ω)

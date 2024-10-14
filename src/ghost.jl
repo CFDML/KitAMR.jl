@@ -51,8 +51,8 @@ function get_mirror_data(ps4est, global_data::Global_Data{DIM,NDF}) where{DIM,ND
             pq = pw_mirror_quadrant(pp,gp,i)
             dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
-            p = Ptr{Cdouble}(sc_malloc(-1, (3 * DIM + 3 + NDF * vs_num) * sizeof(Cdouble)))
-            ap = Base.unsafe_wrap(Vector{Cdouble}, p, 3 * DIM + 3 + NDF * vs_num)
+            p = Ptr{Cdouble}(sc_malloc(-1, (3 * DIM + 4 + NDF * vs_num) * sizeof(Cdouble)))
+            ap = Base.unsafe_wrap(Vector{Cdouble}, p, 3 * DIM + 4 + NDF * vs_num)
             offset = 0
             if isa(ps_data,InsideSolidData)
                 ap[1] = EPS
@@ -61,6 +61,7 @@ function get_mirror_data(ps4est, global_data::Global_Data{DIM,NDF}) where{DIM,ND
                 ap[offset+1:(offset+=DIM)] .= ps_data.midpoint
                 ap[offset+1:(offset+=DIM+2)] .= ps_data.w
                 ap[offset+=1] = ps_data.vs_data.vs_num
+                ap[offset+=1] = ps_data.bound_enc
                 vs_temp = @view(ap[offset+1:(offset+=NDF*vs_num)])
                 get_mirror_data_inner!(ps_data, vs_temp)
             end
@@ -142,9 +143,9 @@ function update_mirror_data!(ps4est, amr::AMR{DIM,NDF}) where{DIM,NDF}
             ap = Base.unsafe_wrap(
                 Vector{Cdouble},
                 mirror_data_pointers[i],
-                3 * DIM + 3 + NDF * vs_num,
+                3 * DIM + 4 + NDF * vs_num,
             )
-            vs_temp = @view(ap[3*DIM+3+1:end])
+            vs_temp = @view(ap[3*DIM+4+1:end])
             get_mirror_data_inner!(ps_data, vs_temp)
         end
     end
@@ -324,6 +325,8 @@ function initialize_ghost_wrap(global_data::Global_Data{DIM,NDF}, ghost_exchange
         offset += DIM + 2
         vs_num = Int(Base.unsafe_load(p + offset * sizeof(Cdouble)))
         offset += 1
+        bound_enc = Int(Base.unsafe_load(p + offset * sizeof(Cdouble)))
+        offset += 1
         # midpoint_vs = Base.unsafe_wrap(Matrix{Cdouble},Ptr{Cdouble}(pointer(ghost_data.micro)),(vs_num,DIM))
         df = Base.unsafe_wrap(Matrix{Cdouble}, p + offset * sizeof(Cdouble), (vs_num, NDF))
         p = ghost_data_ptr(
@@ -346,7 +349,7 @@ function initialize_ghost_wrap(global_data::Global_Data{DIM,NDF}, ghost_exchange
         midpoint_vs =
             Base.unsafe_wrap(Matrix{Cdouble}, p + offset * sizeof(Cdouble), (vs_num, DIM))
         vs_data = Ghost_VS_Data{DIM,NDF}(vs_num, Int.(level), weight, midpoint_vs, df, sdf)
-        ghost_wrap[i] = Ghost_PS_Data{DIM,NDF}(ds, midpoint, w, sw, vs_data)
+        ghost_wrap[i] = Ghost_PS_Data{DIM,NDF}(bound_enc,ds, midpoint, w, sw, vs_data)
     end
     return ghost_wrap
 end

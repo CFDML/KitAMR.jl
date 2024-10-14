@@ -14,7 +14,7 @@ function calc_flux!(::BoundaryNeighbor, face::Face{BoundaryFace}, amr::AMR{2,2})
     midpoint = vs_data.midpoint
     Θ = [heaviside(ROT * midpoint[i, DIR]) for i in axes(midpoint, 1)]
     vn = @views midpoint[:, DIR]
-    prim0 = global_data.config.bc[:, faceid]
+    prim0 = global_data.config.domain[faceid].bc
     df0 = @. vs_data.df - 0.5 * ROT * ps_data.ds[DIR] * @view(vs_data.sdf[:, :, DIR])
     prim0[1] = calc_ρw(vs_data, df0, prim0, Θ, vn)
     F0 = discrete_maxwell(vs_data.midpoint, prim0, global_data)
@@ -36,7 +36,7 @@ function calc_flux!(::BoundaryNeighbor, face::Face{BoundaryFace}, amr::AMR{3,1})
     midpoint = vs_data.midpoint
     Θ = [heaviside(ROT * midpoint[i, DIR]) for i in axes(midpoint, 1)]
     vn = @views midpoint[:, DIR]
-    prim0 = global_data.config.bc[:, faceid]
+    prim0 = global_data.config.domain[faceid].bc
     df0 = @. vs_data.df - 0.5 * ROT * ps_data.ds[DIR] * @view(vs_data.sdf[:, :, DIR])
     prim0[1] = calc_ρw(vs_data, df0, prim0, Θ, vn)
     F0 = discrete_maxwell(vs_data.midpoint, prim0, global_data)
@@ -175,8 +175,68 @@ function update_vs_flux!(
         end
     end
 end
-
+function update_vs_flux_bound!(
+    micro_flux::AbstractMatrix,
+    bit_L::AbstractVector,
+    vs_data::AbstractVsData{DIM},
+    vs_data_n::AbstractVsData{DIM},
+    offset::Int,
+    ROT::Float64,
+) where {DIM}
+    index = j = 1
+    index_n = offset + 1
+    flag = 0.0
+    level = vs_data.level
+    level_n = vs_data_n.level
+    flux = vs_data.flux
+    for i = 1:vs_data.vs_num
+        if bit_L[i]
+            @. flux[i, :] += @views ROT * micro_flux[index, :]
+            if level[i] == level_n[j]
+                j += 1
+            elseif level[i] < level_n[j]
+                while flag != 1.0
+                    flag += 1 / 2^(DIM * (level_n[j] - level[i]))
+                    j += 1
+                end
+                flag = 0.0
+            else
+                flag += 1 / 2^(DIM * (level[i] - level_n[j]))
+                if flag == 1.0
+                    j += 1
+                    flag = 0.0
+                end
+            end
+            index += 1
+        else
+            if level[i] == level_n[j]
+                @. flux[i, :] += @views ROT * micro_flux[index_n, :]
+                j += 1
+                index_n += 1
+            elseif level[i] < level_n[j]
+                while flag != 1.0
+                    @. flux[i, :] +=
+                        ROT * @view(micro_flux[index_n, :]) /
+                        2^(DIM * (level_n[j] - level[i]))
+                    flag += 1 / 2^(DIM * (level_n[j] - level[i]))
+                    j += 1
+                    index_n += 1
+                end
+                flag = 0.0
+            else
+                @. flux[i, :] += ROT * @view(micro_flux[index_n, :])
+                flag += 1 / 2^(DIM * (level[i] - level_n[j]))
+                if flag == 1.0
+                    j += 1
+                    index_n += 1
+                    flag = 0.0
+                end
+            end
+        end
+    end
+end
 function update_nflux!(nps_data::PS_Data, fw::AbstractVector)
+    nps_data.bound_enc<0 && return nothing
     nps_data.flux .-= fw
 end
 function update_nflux!(::Ghost_PS_Data, ::AbstractVector)
@@ -343,6 +403,7 @@ function calc_flux!(::SameSizeNeighbor, face::Face{InnerFace}, amr::AMR{2,2})
     nps_data = ps_data.neighbor.data[faceid][1]
     vs_data_n = nps_data.vs_data
     f_vs_data, offset, bit_L, _ = make_face_data(ps_data, nps_data, faceid, ROT, DIR)
+    nps_data.bound_enc < 0 && project_solid_cell_slope!(vs_data_n, vs_data, DIR)
     reconstruct_vs!(f_vs_data, ds, ds, offset, ROT)
     w0 = calc_w0(f_vs_data)
     prim0 = get_prim(w0, global_data)
@@ -361,7 +422,11 @@ function calc_flux!(::SameSizeNeighbor, face::Face{InnerFace}, amr::AMR{2,2})
     ps_data.flux .+= fw
     update_nflux!(nps_data, fw)
     micro_flux = calc_micro_flux(f_vs_data, F, F⁺, aL, aR, A, Mξ, Mt, offset, dsf)
-    update_vs_flux!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
+    if nps_data.bound_enc < 0
+        update_vs_flux_bound!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
+    else
+        update_vs_flux!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
+    end
 end
 function calc_flux!(::SameSizeNeighbor, face::Face{InnerFace}, amr::AMR{3,1})
     ps_data = face.data
@@ -393,7 +458,11 @@ function calc_flux!(::SameSizeNeighbor, face::Face{InnerFace}, amr::AMR{3,1})
     ps_data.flux .+= fw
     update_nflux!(nps_data, fw)
     micro_flux = calc_micro_flux(f_vs_data, F, F⁺, aL, aR, A, Mt, offset, dsf)
-    update_vs_flux!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
+    if nps_data.bound_enc < 0
+        update_vs_flux_bound!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
+    else
+        update_vs_flux!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
+    end
 end
 function calc_flux!(::HalfSizeNeighbor, face::Face, amr::AMR{2,2})
     ps_data = face.data
@@ -434,7 +503,11 @@ function calc_flux!(::HalfSizeNeighbor, face::Face, amr::AMR{2,2})
         ps_data.flux .+= fw
         update_nflux!(nps_data, fw)
         micro_flux = calc_micro_flux(f_vs_data, F, F⁺, aL, aR, A, Mξ, Mt, offset, dsf)
-        update_vs_flux!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
+        if nps_data.bound_enc < 0
+            update_vs_flux_bound!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
+        else
+            update_vs_flux!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
+        end
     end
 end
 function calc_flux!(::HalfSizeNeighbor, face::Face, amr::AMR{3,1})
@@ -478,7 +551,11 @@ function calc_flux!(::HalfSizeNeighbor, face::Face, amr::AMR{3,1})
         ps_data.flux .+= fw
         update_nflux!(nps_data, fw)
         micro_flux = calc_micro_flux(f_vs_data, F, F⁺, aL, aR, A, Mt, offset, dsf)
-        update_vs_flux!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
+        if nps_data.bound_enc < 0
+            update_vs_flux_bound!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
+        else
+            update_vs_flux!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
+        end
     end
 end
 function calc_flux!(::DoubleSizeNeighbor, face::Face, amr::AMR{2,2})
