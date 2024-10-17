@@ -113,33 +113,39 @@ mutable struct PS_Data <: AbstractPsData
     vs_data::VS_Data
     # vs_structure::VS_Structure
     neighbor::Neighbor{Union{AbstractPsData,Nothing}}
-    PS_Data() = (n = new();
-    n.ds = zeros(DIM);
-    n.midpoint = zeros(DIM);
-    n.qf = zeros(DIM);
-    n.w = zeros(DIM + 2);
-    n.sw = zeros(DIM + 2, DIM);
-    n.prim = zeros(DIM + 2);
-    n.flux = zeros(DIM + 2);
-    n.neighbor = Neighbor(Union{AbstractPsData,Nothing});
-    n)
-    PS_Data(ds, midpoint, w, sw, vs_data) = (n = new();
-    n.ds = ds;
-    n.midpoint = midpoint;
-    n.w = w;
-    n.sw = sw;
-    n.flux = zeros(DIM + 2);
-    n.vs_data = vs_data;
-    n)
-    PS_Data(w, vs_data) = (n = new();
-    n.w = w;
-    n.neighbor = Neighbor(Union{AbstractPsData,Nothing});
-    n.sw = zeros(DIM + 2, DIM);
-    n.qf = zeros(DIM);
-    n.prim = zeros(DIM + 2);
-    n.flux = zeros(DIM + 2);
-    n.vs_data = vs_data;
-    n)
+    PS_Data() = (
+        n = new();
+        n.ds = zeros(DIM);
+        n.midpoint = zeros(DIM);
+        n.qf = zeros(DIM);
+        n.w = zeros(DIM + 2);
+        n.sw = zeros(DIM + 2, DIM);
+        n.prim = zeros(DIM + 2);
+        n.flux = zeros(DIM + 2);
+        n.neighbor = Neighbor(Union{AbstractPsData,Nothing});
+        n
+    )
+    PS_Data(ds, midpoint, w, sw, vs_data) = (
+        n = new();
+        n.ds = ds;
+        n.midpoint = midpoint;
+        n.w = w;
+        n.sw = sw;
+        n.flux = zeros(DIM + 2);
+        n.vs_data = vs_data;
+        n
+    )
+    PS_Data(w, vs_data) = (
+        n = new();
+        n.w = w;
+        n.neighbor = Neighbor(Union{AbstractPsData,Nothing});
+        n.sw = zeros(DIM + 2, DIM);
+        n.qf = zeros(DIM);
+        n.prim = zeros(DIM + 2);
+        n.flux = zeros(DIM + 2);
+        n.vs_data = vs_data;
+        n
+    )
 end
 mutable struct Global_Data{T1,T2,T3,T4,T5,T6,T7}
     geometry::T1

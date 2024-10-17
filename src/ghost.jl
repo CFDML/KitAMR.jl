@@ -23,7 +23,7 @@ end
 function get_mirror_data_inner!(ps_data::PS_Data, vs_temp::AV)
     vs_data = ps_data.vs_data
     vs_num = vs_data.vs_num
-    vs_temp[1:NDF*vs_num] .= reshape(vs_data.df, vs_num * NDF)
+    vs_temp[1:(NDF*vs_num)] .= reshape(vs_data.df, vs_num * NDF)
 end
 function get_mirror_data(ps4est, global_data)
     GC.@preserve ps4est global_data begin
@@ -46,10 +46,10 @@ function get_mirror_data(ps4est, global_data)
             ap = Base.unsafe_wrap(Vector{Cdouble}, p, 3 * DIM + 3 + NDF * vs_num)
             offset = 0
             ap[1:(offset+=DIM)] .= ps_data.ds
-            ap[offset+1:(offset+=DIM)] .= ps_data.midpoint
-            ap[offset+1:(offset+=DIM+2)] .= ps_data.w
+            ap[(offset+1):(offset+=DIM)] .= ps_data.midpoint
+            ap[(offset+1):(offset+=DIM+2)] .= ps_data.w
             ap[offset+=1] = ps_data.vs_data.vs_num
-            vs_temp = @view(ap[offset+1:(offset+=NDF*vs_num)])
+            vs_temp = @view(ap[(offset+1):(offset+=NDF*vs_num)])
             get_mirror_data_inner!(ps_data, vs_temp)
             mirror_data_pointers[i] = p
         end
@@ -112,8 +112,8 @@ function get_mirror_structure(ps4est, global_data::Global_Data)
             p = Ptr{Cdouble}(sc_malloc(-1, vs_num * (DIM + 2) * sizeof(Cdouble)))
             ap = Base.unsafe_wrap(Vector{Cdouble}, p, vs_num * (DIM + 2))
             weight_temp = @view(ap[1:vs_num])
-            level_temp = @view(ap[vs_num+1:vs_num*2])
-            midpoint_temp = @view(ap[vs_num*2+1:vs_num*(DIM+2)])
+            level_temp = @view(ap[(vs_num+1):(vs_num*2)])
+            midpoint_temp = @view(ap[(vs_num*2+1):(vs_num*(DIM+2))])
             get_mirror_structure_inner!(ps_data, weight_temp, level_temp, midpoint_temp)
             mirror_structure_pointers[i] = p
         end
@@ -141,7 +141,7 @@ function update_mirror_data!(ps4est, DVM_data::DVM_Data)
                 mirror_data_pointers[i],
                 3 * DIM + 3 + NDF * vs_num,
             )
-            vs_temp = @view(ap[3*DIM+3+1:end])
+            vs_temp = @view(ap[(3*DIM+3+1):end])
             get_mirror_data_inner!(ps_data, vs_temp)
         end
     end

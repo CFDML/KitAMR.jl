@@ -328,7 +328,7 @@ function calc_flux!(::Val{0}, ::Val{2}, face::Face, DVM_data::DVM_Data, faceid::
     #     @show ps_data.neighbor.data[faceid][2].midpoint
     # end
     fw_test = zeros(DIM + 2)
-    for i = 1:2^(DIM-1)
+    for i = 1:(2^(DIM-1))
         nps_data = ps_data.neighbor.data[faceid][i]
         vs_data_n = nps_data.vs_data
         ds = nps_data.ds[dir]
