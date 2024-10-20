@@ -246,7 +246,7 @@ function coarsen_flag_ps(ps_datas::Vector{PS_Data}, levels::Vector{Int}, amr::AM
         if boundary_flag(amr, ps_datas[i])
             return Cint(0)
         end
-        isa(ps_datas[i],InsideSolidData) && continue
+        (isa(ps_datas[i],InsideSolidData)||ps_datas[i].bound_enc!=0) && continue
         agrad = maximum(abs.(@view(ps_datas[i].sw[end, :])))
         rgrad = agrad / global_data.status.gradmax
         if rgrad > 2.0^(DIM+levels[i] - global_data.config.solver.AMR_PS_MAXLEVEL) * 0.01

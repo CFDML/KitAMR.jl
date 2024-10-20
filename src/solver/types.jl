@@ -34,6 +34,7 @@ struct Configure{DIM,NDF}
     domain::Vector{Domain}
     IB::Vector{AbstractBoundary}
     IB_sort::Symbol
+    IB_interp::Symbol
     gas::Gas
     solver::Solver
 end
@@ -54,7 +55,9 @@ function Configure(config::Dict)
             push!(bc,config[:boundarydefine][i])
         end
     end
-    return Configure{config[:DIM],config[:NDF]}(config[:geometry],config[:trees_num],config[:quadrature],config[:vs_trees_num],config[:ic],domain,bc,config[:ib_sort],gas,Solver(config))
+    return Configure{config[:DIM],config[:NDF]}(config[:geometry],config[:trees_num],
+        config[:quadrature],config[:vs_trees_num],config[:ic],domain,bc,config[:ib_sort],
+        config[:ib_interp],gas,Solver(config))
 end
 
 mutable struct Forest{DIM}

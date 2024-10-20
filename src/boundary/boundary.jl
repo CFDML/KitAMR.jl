@@ -53,8 +53,8 @@ function broadcast_boundary_midpoints!(boundary_points::Vector{Vector{Vector{Flo
     for i in eachindex(boundary_points)
         buffer = Vector{Float64}(undef,2*DIM*length(boundary_points[i]))
         for j in eachindex(boundary_points[i])
-            buffer[2*DIM*(i-1)+1:2*DIM*i-DIM] .= boundary_points[i][j]
-            buffer[2*DIM*(i-1)+DIM+1:2*DIM*i] .= image_points[i][j]
+            buffer[2*DIM*(j-1)+1:2*DIM*j-DIM] .= boundary_points[i][j]
+            buffer[2*DIM*(j-1)+DIM+1:2*DIM*j] .= image_points[i][j]
         end
         sbuffer[i] = buffer
     end
@@ -205,41 +205,79 @@ function IB_data_exchange!(amr::AMR)
     boundary = amr.field.boundary
     IB_ranks_table = boundary.IB_ranks_table
     sdata = boundary.IB_buffer.sdata
+    rdata = boundary.IB_buffer.rdata
+    r_vs_nums = boundary.IB_buffer.r_vs_nums
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
-    s_data_buffer = Vector{Matrix{Cdouble}}(undef,length(sdata))
+    # s_data_buffer = Vector{Matrix{Cdouble}}(undef,length(sdata))
+    # reqs = Vector{MPI.Request}(undef, 0)
+    # vnums = zeros(Int,length(IB_ranks_table))
     reqs = Vector{MPI.Request}(undef, 0)
-    for i in eachindex(IB_ranks_table)
-        i-1==rank&&continue
+    for i in eachindex(sdata)
+        i-1 == rank&&continue
         isempty(IB_ranks_table[i])&&continue
-        for j in eachindex(IB_ranks_table[i])
-            vnums[i]+=IB_ranks_table[i][j].vs_data.vs_num
-        end
-        ps_num = length(IB_ranks_table[i])
-        s_data_buffer[i] = unsafe_wrap(Matrix{Cdouble},Ptr{Cdouble}(sdata[i]+ps_num*DIM*sizeof(Cdouble)),(vnums[i],NDF))
-        offset = 0
-        for j in eachindex(IB_ranks_table[i])
-            vs_num = IB_ranks_table[i][j].vs_data.vs_num
-            s_data_buffer[i][offset+1:offset+vs_num,:] .= IB_ranks_table[i][j].vs_data.df
-            offset+=vs_num
-        end
+        # sreq = MPI.Isend(
+        #     sdata[i].midpoints,
+        #     MPI.COMM_WORLD;
+        #     dest = i - 1,
+        #     tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
+        # )
+        # push!(reqs, sreq)
         sreq = MPI.Isend(
-            s_data_buffer[i],
+            sdata[i].prims,
             MPI.COMM_WORLD;
             dest = i - 1,
-            tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
+            tag = COMM_DATA_TAG + rank,
+        )
+        push!(reqs, sreq)
+        # sreq = MPI.Isend(
+        #     sdata[i].level,
+        #     MPI.COMM_WORLD;
+        #     dest = i - 1,
+        #     tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
+        # )
+        # push!(reqs, sreq)
+        sreq = MPI.Isend(
+            sdata[i].df,
+            MPI.COMM_WORLD;
+            dest = i - 1,
+            tag = COMM_DATA_TAG + rank,
         )
         push!(reqs, sreq)
     end
-    rdata = boundary.IB_buffer.rdata
-    r_data_buffer = Vector{Matrix{Cdouble}}(undef,length(sdata))
-    r_vs_nums = boundary.IB_buffer.r_vs_nums
-    for i in eachindex(r_data_buffer)
-        i-1==rank&&continue
-        !isdefined(r_vs_nums,i)&&continue
-        vnums = sum(r_vs_nums[i])
-        r_data_buffer[i] = unsafe_wrap(Matrix{Cdouble},Ptr{Cdouble}(rdata[i]+ps_num*DIM*sizeof(Cdouble)),(vnums,NDF))
+    for i in eachindex(rdata)
+        i-1 == MPI.Comm_rank(MPI.COMM_WORLD)&&continue
+        !isassigned(r_vs_nums,i) && continue
+        # ps_num = length(r_vs_nums[i])
+        # vs_nums = sum(r_vs_nums[i])
+        # midpoints = Matrix{Cdouble}(undef,ps_num,DIM)
+        # prims = Matrix{Cdouble}(undef,ps_num,DIM+2)
+        # df = Matrix{Cdouble}(undef,vs_nums,NDF)
+        # level = Vector{Int8}(undef,vs_nums)
+        # rdata[i] = IBTransferData(midpoints,prims,level,df)
+        # rdata[i] = sc_malloc(-1,sum(r_vs_nums[i])*(sizeof(Cdouble)*NDF+sizeof(Int8))+(2*DIM+2)*ps_nums*sizeof(Cdouble))
+        # rreq = MPI.Irecv!(
+        #         midpoints,
+        #         MPI.COMM_WORLD;
+        #         source = i - 1,
+        #         tag = COMM_DATA_TAG + i - 1,
+        #     )
+        # push!(reqs, rreq)
         rreq = MPI.Irecv!(
-                r_data_buffer[i],
+                rdata[i].prims,
+                MPI.COMM_WORLD;
+                source = i - 1,
+                tag = COMM_DATA_TAG + i - 1,
+            )
+        push!(reqs, rreq)
+        # rreq = MPI.Irecv!(
+        #         level,
+        #         MPI.COMM_WORLD;
+        #         source = i - 1,
+        #         tag = COMM_DATA_TAG + i - 1,
+        #     )
+        # push!(reqs, rreq)
+        rreq = MPI.Irecv!(
+                rdata[i].df,
                 MPI.COMM_WORLD;
                 source = i - 1,
                 tag = COMM_DATA_TAG + i - 1,
@@ -274,7 +312,7 @@ function IB_vs_nums_exchange!(boundary::Boundary)
     r_vs_nums = boundary.IB_buffer.r_vs_nums
     for i in eachindex(r_vs_nums)
         i-1 == rank&&continue
-        !isdefined(r_vs_nums,i) && continue
+        !isassigned(r_vs_nums,i) && continue
         rreq = MPI.Irecv!(
                 r_vs_nums[i],
                 MPI.COMM_WORLD;
@@ -288,9 +326,6 @@ end
 function IB_structure_exchange!(boundary::Boundary)
     IB_ranks_table = boundary.IB_ranks_table
     sdata = boundary.IB_buffer.sdata
-    for i in eachindex(sdata)
-        sc_free(-1,sdata[i])
-    end
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
     reqs = Vector{MPI.Request}(undef, 0)
     for i in eachindex(IB_ranks_table)
@@ -300,40 +335,94 @@ function IB_structure_exchange!(boundary::Boundary)
             vnums[i]+=IB_ranks_table[i][j].vs_data.vs_num
         end
         ps_num = length(IB_ranks_table[i])
-        sdata[i] = sc_malloc(-1,vnums[i]*(sizeof(Cdouble)*NDF+sizeof(Int8))+ps_num*DIM*sizeof(Cdouble))
-        midpoint_buffer = unsafe_wrap(Matrix{Cdouble},Ptr{Cdouble}(sdata[i]),(ps_num,DIM))
-        df_buffer = unsafe_wrap(Matrix{Cdouble},Ptr{Cdouble}(sdata[i]+ps_num*DIM*sizeof(Cdouble)),(vnums[i],NDF))
-        level_buffer = unsafe_wrap(Vector{Int8},Ptr{Int8}(sdata[i]+ps_num*DIM*sizeof(Cdouble)+vnums[i]*sizeof(Cdouble)*NDF),vnums[i])
+        vs_nums = vnums[i]
+        midpoints = Matrix{Cdouble}(undef,ps_num,DIM)
+        prims = Matrix{Cdouble}(undef,ps_num,DIM+2)
+        df = Matrix{Cdouble}(undef,vs_nums,NDF)
+        level = Vector{Int8}(undef,vs_nums)
+        sdata[i] = IBTransferData(midpoints,prims,level,df)
+        # sdata[i] = sc_malloc(-1,vnums[i]*(sizeof(Cdouble)*NDF+sizeof(Int8))+ps_num*DIM*sizeof(Cdouble))
+        # midpoint_buffer = unsafe_wrap(Matrix{Cdouble},Ptr{Cdouble}(sdata[i]),(ps_num,DIM))
+        # df_buffer = unsafe_wrap(Matrix{Cdouble},Ptr{Cdouble}(sdata[i]+ps_num*DIM*sizeof(Cdouble)),(vnums[i],NDF))
+        # level_buffer = unsafe_wrap(Vector{Int8},Ptr{Int8}(sdata[i]+ps_num*DIM*sizeof(Cdouble)+vnums[i]*sizeof(Cdouble)*NDF),vnums[i])
+        # prims_buffer = unsafe_wrap(Matrix{Cdouble},Ptr{Cdouble}(sdata[i]+ps_num*DIM*sizeof(Cdouble)+vnums[i]*(sizeof(Cdouble)*NDF+sizeof(Int8))),(ps_num,DIM+2))
         offset = 0
         for j in eachindex(IB_ranks_table[i])
-            midpoint_buffer[j,:] .= IB_ranks_table[i][j].midpoint
+            midpoints[j,:] .= IB_ranks_table[i][j].midpoint
+            prims[j,:] .= IB_ranks_table[i][j].prim
         end
         for j in eachindex(IB_ranks_table[i])
             vs_num = IB_ranks_table[i][j].vs_data.vs_num
-            df_buffer[offset+1:offset+vs_num,:] .= IB_ranks_table[i][j].vs_data.df
-            level_buffer[offset+1:offset+vs_num] .= IB_ranks_table[i][j].vs_data.level
+            df[offset+1:offset+vs_num,:] .= IB_ranks_table[i][j].vs_data.df
+            level[offset+1:offset+vs_num] .= IB_ranks_table[i][j].vs_data.level
             offset+=vs_num
         end
         sreq = MPI.Isend(
-            sdata[i],
+            sdata[i].midpoints,
             MPI.COMM_WORLD;
             dest = i - 1,
-            tag = COMM_DATA_TAG + rank,
+            tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
+        )
+        push!(reqs, sreq)
+        sreq = MPI.Isend(
+            sdata[i].prims,
+            MPI.COMM_WORLD;
+            dest = i - 1,
+            tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
+        )
+        push!(reqs, sreq)
+        sreq = MPI.Isend(
+            sdata[i].level,
+            MPI.COMM_WORLD;
+            dest = i - 1,
+            tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
+        )
+        push!(reqs, sreq)
+        sreq = MPI.Isend(
+            sdata[i].df,
+            MPI.COMM_WORLD;
+            dest = i - 1,
+            tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
         )
         push!(reqs, sreq)
     end
     rdata = boundary.IB_buffer.rdata
-    for i in eachindex(rdata)
-        sc_free(-1,rdata[i])
-    end
     r_vs_nums = boundary.IB_buffer.r_vs_nums
     for i in eachindex(rdata)
         i-1 == rank&&continue
-        !isdefined(r_vs_nums,i) && continue
-        ps_nums = length(r_vs_nums[i])
-        rdata[i] = sc_malloc(-1,sum(r_vs_nums[i])*(sizeof(Cdouble)*NDF+sizeof(Int8))+DIM*ps_nums*sizeof(Cdouble))
+        !isassigned(r_vs_nums,i) && continue
+        ps_num = length(r_vs_nums[i])
+        vs_nums = sum(r_vs_nums[i])
+        # rdata[i] = sc_malloc(-1,sum(r_vs_nums[i])*(sizeof(Cdouble)*NDF+sizeof(Int8))+(2*DIM+2)*ps_nums*sizeof(Cdouble))
+        midpoints = Matrix{Cdouble}(undef,ps_num,DIM)
+        prims = Matrix{Cdouble}(undef,ps_num,DIM+2)
+        df = Matrix{Cdouble}(undef,vs_nums,NDF)
+        level = Vector{Int8}(undef,vs_nums)
+        rdata[i] = IBTransferData(midpoints,prims,level,df)
+        # rdata[i] = sc_malloc(-1,sum(r_vs_nums[i])*(sizeof(Cdouble)*NDF+sizeof(Int8))+(2*DIM+2)*ps_nums*sizeof(Cdouble))
         rreq = MPI.Irecv!(
-                rdata[i],
+                midpoints,
+                MPI.COMM_WORLD;
+                source = i - 1,
+                tag = COMM_DATA_TAG + i - 1,
+            )
+        push!(reqs, rreq)
+        rreq = MPI.Irecv!(
+                prims,
+                MPI.COMM_WORLD;
+                source = i - 1,
+                tag = COMM_DATA_TAG + i - 1,
+            )
+        push!(reqs, rreq)
+        rreq = MPI.Irecv!(
+                level,
+                MPI.COMM_WORLD;
+                source = i - 1,
+                tag = COMM_DATA_TAG + i - 1,
+            )
+        push!(reqs, rreq)
+        rreq = MPI.Irecv!(
+                df,
                 MPI.COMM_WORLD;
                 source = i - 1,
                 tag = COMM_DATA_TAG + i - 1,
@@ -348,12 +437,14 @@ function IB_wrap_update!(boundary::Boundary)
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
     for i in eachindex(rdata)
         i-1==rank&&continue
-        !isdefined(r_vs_nums,i)&&continue
+        !isassigned(r_vs_nums,i)&&continue
         ps_offset = 1;vs_offset = 0
-        vnums = sum(r_vs_nums[i])
-        midpoints = unsafe_wrap(Matrix{Cdouble},Ptr{Cdouble}(rdata[i]),(length(r_vs_nums[i]),DIM))
-        df_buffer = unsafe_wrap(Matrix{Cdouble},Ptr{Cdouble}(rdata[i]+ps_num*DIM*sizeof(Cdouble)),(vnums,NDF))
-        level_buffer = unsafe_wrap(Vector{Int8},Ptr{Int8}(rdata[i]+ps_num*DIM*sizeof(Cdouble)+vnums*sizeof(Cdouble)*NDF),vnums)
+        # vnums = sum(r_vs_nums[i])
+        # ps_num = length(r_vs_nums[i])
+        midpoints = rdata[i].midpoints
+        df_buffer = rdata[i].df
+        level_buffer = rdata[i].level
+        prims = rdata[i].prims
         for j in eachindex(IB_cells)
             for k in eachindex(IB_cells[j].IB_nodes)
                 for l in eachindex(IB_cells[j].IB_nodes[k])
@@ -361,8 +452,9 @@ function IB_wrap_update!(boundary::Boundary)
                     vs_num = r_vs_nums[i][ps_offset]
                     node = IB_cells[j].IB_nodes[k][l]
                     node.midpoint = @view(midpoints[ps_offset,:])
-                    node.level = @view(level_buffer[vs_offset+1:vs_offset+vs_num])
-                    node.df = @view(df_buffer[vs_offset+1:vs_offset+vs_num,:])
+                    node.prim = @view(prims[ps_offset,:])
+                    node.vs_data.level = @view(level_buffer[vs_offset+1:vs_offset+vs_num])
+                    node.vs_data.df = @view(df_buffer[vs_offset+1:vs_offset+vs_num,:])
                     ps_offset+=1;vs_offset+=vs_num
                 end
             end
@@ -456,16 +548,48 @@ function IB_update!(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF} # After 
     boundary.IB_buffer = init_IBCells(Numbers,solid_cells,IB_ranks_table,IB_cells)
     boundary.IB_ranks_table = IB_ranks_table;boundary.IB_cells = IB_cells
 end
-
-function sort_IB_cells!(circle::Circle,IB_sort::Symbol,solid_cells::SolidCells,::Vector,IB_cells::IBCells)
+function colinear_test(p1,p2,p3)
+    p1[1] * (p2[2] - p3[2]) + p2[1] * (p3[2] - p1[2]) + p3[1] * (p1[2] - p2[2])≈0
+end
+function colinear_reject!(IB_nodes::Vector{AbstractIBNodes})
+    DIM = length(first(IB_nodes).midpoint)
+    if DIM==2
+        index = zeros(Int,4)
+        index[1],index[2] = 1,2
+        for i in 3:length(IB_nodes)
+            if !colinear_test(IB_nodes[1].midpoint,IB_nodes[2].midpoint,IB_nodes[i].midpoint)
+                index[3] = i
+                for j in i+1:length(IB_nodes)
+                    for k in 1:3,l in (k+1):3
+                        if colinear_test(IB_nodes[index[k]].midpoint,IB_nodes[index[l]].midpoint,IB_nodes[j].midpoint)
+                            index[4] = 0
+                            break
+                        end
+                        index[4] = j
+                    end
+                    index[4]!=0&&break
+                end
+            end
+            index[4]!=0 && break
+        end
+        index[4]==0&& (@error `All nodes combinations are colinear!`)
+        IB_nodes[3],IB_nodes[index[3]] = IB_nodes[index[3]],IB_nodes[3]
+        IB_nodes[4],IB_nodes[index[4]] = IB_nodes[index[4]],IB_nodes[4]
+    elseif DIM==3
+    end
+end
+function sort_IB_cells!(circle::Circle,config::Configure,solid_cells::SolidCells,::Vector,IB_cells::IBCells)
     for i in eachindex(solid_cells.ps_datas)
         ps_data = solid_cells.ps_datas[i]
         aux_point = calc_intersect_point(circle,ps_data.midpoint)
-        if IB_sort==:distance
+        if config.IB_sort==:distance
             basis = [norm(x.midpoint .-aux_point) for x in IB_cells.IB_nodes[i]]
         end
         index = sortperm(basis)
         IB_cells.IB_nodes[i] = IB_cells.IB_nodes[i][index]
+        if config.IB_interp==:bilinear
+            colinear_reject!(IB_cells.IB_nodes[i])
+        end
     end
 end
 function sort_IB_cells!(global_data::Global_Data,boundary::Boundary)
@@ -474,6 +598,6 @@ function sort_IB_cells!(global_data::Global_Data,boundary::Boundary)
     aux_points = boundary.aux_points
     IB_cells = boundary.IB_cells
     for i in eachindex(IBs)
-        sort_IB_cells!(IBs[i],global_data.config.IB_sort,solid_cells[i],aux_points[i],IB_cells[i])
+        sort_IB_cells!(IBs[i],global_data.config,solid_cells[i],aux_points[i],IB_cells[i])
     end
 end
