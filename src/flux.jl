@@ -402,10 +402,12 @@ function calc_flux!(::SameSizeNeighbor, face::Face{InnerFace}, amr::AMR{2,2})
     vs_data = ps_data.vs_data
     nps_data = ps_data.neighbor.data[faceid][1]
     vs_data_n = nps_data.vs_data
-    f_vs_data, offset, bit_L, _ = make_face_data(ps_data, nps_data, faceid, ROT, DIR)
     nps_data.bound_enc < 0 && project_solid_cell_slope!(vs_data_n, vs_data, DIR)
+    f_vs_data, offset, bit_L, _ = make_face_data(ps_data, nps_data, faceid, ROT, DIR)
     reconstruct_vs!(f_vs_data, ds, ds, offset, ROT)
     w0 = calc_w0(f_vs_data)
+    any(x->isnan(x),w0)&&(@show nps_data.bound_enc nps_data.ds f_vs_data.sdf)
+    # nps_data.bound_enc < 0 && (@show vs_data.sdf[:,2,DIR] vs_data_n.sdf[:,2,DIR] vs_data_n.weight) 
     prim0 = get_prim(w0, global_data)
     qf0 = calc_qf(f_vs_data, prim0)
     aL, aR = calc_a(w0, prim0, ps_data.w, nps_data.w, ds, ds, global_data, ROT)
@@ -422,9 +424,11 @@ function calc_flux!(::SameSizeNeighbor, face::Face{InnerFace}, amr::AMR{2,2})
     ps_data.flux .+= fw
     update_nflux!(nps_data, fw)
     micro_flux = calc_micro_flux(f_vs_data, F, F⁺, aL, aR, A, Mξ, Mt, offset, dsf)
+    # @show nps_data.bound_enc nps_data.midpoint nps_data.vs_data.vs_num size(nps_data.vs_data.df,1)
     if nps_data.bound_enc < 0
         update_vs_flux_bound!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
     else
+        # @show ps_data.bound_enc nps_data.bound_enc size(micro_flux,1) size(vs_data.flux,1)
         update_vs_flux!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
     end
 end

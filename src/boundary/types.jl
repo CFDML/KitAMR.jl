@@ -28,19 +28,30 @@ end
 #     mpi_rank::Vector{Integer} # The solidcell corresponding to AuxPoint belongs to which mpi_rank
 #     # local_index::Vector{Integer} # The solidcell's index on its local processor
 # end
-
-mutable struct GhostIBNode{DIM,NDF} # Maybe sdf?
-    midpoint::Vector{Float64}
+mutable struct GhostIBVSData{DIM,NDF} <: AbstractVsData{DIM,NDF}
+    vs_num::Int
     level::AbstractVector{Int8}
     df::AbstractMatrix{Float64}
+end
+mutable struct GhostIBNode{DIM,NDF} # Maybe sdf?
+    midpoint::Vector{Float64}
+    prim::Vector{Float64}
+    vs_data::GhostIBVSData{DIM,NDF}
 end
 const AbstractIBNodes{DIM,NDF} = Union{PS_Data{DIM,NDF},GhostIBNode{DIM,NDF}}
 mutable struct IBCells
     IB_nodes::Vector{Vector{AbstractIBNodes}} # boundaries{SolidCells{IBNodes{}}}
     # quadids::Vector{Vector{Cint}} # Global quadids. Are only needed to be updated before partition.
 end
+mutable struct IBTransferData
+    midpoints::Matrix{Float64}
+    prims::Matrix{Float64}
+    level::Vector{Int}
+    df::Matrix{Float64}
+end
 mutable struct IBBuffer
-    sdata::Vector{Ptr{Nothing}} # Datas of IB nodes to be sent
-    rdata::Vector{Ptr{Nothing}} # Datas of IB nodes to be received
+    sdata::Vector{IBTransferData} # Datas of IB nodes to be sent
+    rdata::Vector{IBTransferData} # Datas of IB nodes to be received
     r_vs_nums::Vector{Vector{Int}}
+    IBBuffer() = new()
 end
