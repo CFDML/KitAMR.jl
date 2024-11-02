@@ -90,7 +90,7 @@ function update_solid_cell!(amr::AMR)
     end
 end
 
-function vs_projection!(vs_data::VS_Data,vs_data_n::VS_Data,temp::AbstractMatrix)
+function vs_projection!(vs_data::AbstractVsData,vs_data_n::AbstractVsData,temp::AbstractMatrix)
     j = 1
     flag = 0.0
     level = vs_data.level
@@ -141,7 +141,7 @@ function IB_prim(bc::AbstractVector,::AbstractVector,ρw::Real)
     prim[1] = ρw
     return prim
 end
-# function normalize_point(ref_point::AbstractVector,scale::Real,points::AbstractVector{T}...) where{T}
+# function normalize_point(ref_point::AbstractVector,scale::Real,points::Vector{Vector{T}}) where{T}
 #     norm_points = Vector{Vector{T}}(undef,length(points))
 #     for i in eachindex(norm_points)
 #         norm_points[i] = (points[i]-ref_point)/scale
@@ -253,6 +253,23 @@ function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vec
         aux_point = calc_intersect_point(circle,ps_data.midpoint)
         image_point = 2*aux_point-ps_data.midpoint
         vs_data = first(IB_cells.IB_nodes[i]).vs_data
+		#=
+		if MPI.Comm_rank(MPI.COMM_WORLD)==4
+			for j = 1:4
+				if isa(IB_cells.IB_nodes[i][j],GhostIBNode)
+					p = IB_cells.IB_nodes[i][j]
+					@show p.prim maximum(p.vs_data.df[:,1])
+				end
+			end
+		end
+		=#
+		#=
+		for j = 1:4
+            if !IB_flag(circle,aux_point,IB_cells.IB_nodes[i][j].midpoint,[1.,2.])
+                @show IB_nodes[i][j].midpoint
+            end
+        end
+		=#
         n = (aux_point-circle.center)/circle.radius # outer normal direction
         # M = length(IB_cells.IB_nodes[i])
         aux_vs_temp = Vector{Matrix{Float64}}(undef,6)
@@ -271,9 +288,15 @@ function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vec
         vn = [dot(@view(vs_data.midpoint[j,:]),n) for j in axes(vs_data.midpoint,1)]
         Θ = heaviside.(vn)
         # points = normalize_point(aux_point,dxL,IB_cells.IB_nodes[i][1].midpoint,IB_cells.IB_nodes[i][2].midpoint,IB_cells.IB_nodes[i][3].midpoint,IB_cells.IB_nodes[i][4].midpoint)
+        # points = normalize_point(aux_point,dxL,[IB_cells.IB_nodes[i][j].midpoint for j in 1:4])
         points = [IB_cells.IB_nodes[i][j].midpoint for j in 1:4]
         # A,sigma = RBF_coeffi(points)
         # image_point interpolate by WLS
+        # try
+        #     Ainv = inv(bilinear_coeffi_2D(points...))
+        # catch e
+        #     @show points
+        # end
         Ainv = inv(bilinear_coeffi_2D(points...))
         # ip_coeffi = Vector{Float64}(undef,4);aux_coeffi = Vector{Float64}(undef,4)
         # make_coeffi!(ip_coeffi,sigma,image_point,points);make_coeffi!(aux_coeffi,sigma,aux_point,points)
@@ -289,29 +312,23 @@ function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vec
                 ip_df[j,l] = dot(Ainv*b,ip_coeffi)
             end
         end   
-        ip_prim = Vector{Float64}(undef,4)
-        for j in 1:4
-            for k in 1:4
-                b[k] = IB_cells.IB_nodes[i][k].prim[j]
-            end
-            ip_prim[j] = dot(Ainv*b,ip_coeffi)
-        end
-        # aux_point interpolate by WLS
+        # aux_point interpolate by bilinear
         ap_coeffi = make_bilinear_coeffi_2D(aux_point)
         for j in axes(aux_df,1)
-            if Θ[j]==0.
+	    if Θ[j]==0.
                 for l in 1:NDF
                     for k = 1:4
                         b[k] = aux_vs_temp[k][j,l]
                     end
+                    # aux_df[j,l] = dot(@view(Ainv[end,:]),b)
                     aux_df[j,l] = dot(Ainv*b,ap_coeffi)
                 end
-            end
+	    end
         end   
         ρw = calc_IB_ρw(aux_point,circle,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
-        # if ρw>1.5||ρw<0||isnan(ρw)
-        #     @show ρw points aux_point image_point vs_data.midpoint circle.bc vs_data.weight aux_df vn Θ
-        # end
+	#if ρw<0||isnan(ρw)||ρw>1.5
+             #@show ρw points aux_point image_point 
+        #end
         # ρ1 = sum(vs_data.weight.*@view(vs_data.df[:,1]))
         
         # ρw_test = calc_IB_ρw(aux_point,circle,vs_data.midpoint,vs_data.weight,vs_data.df,vn,Θ)
@@ -332,15 +349,16 @@ function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vec
         
         # @show ρw aux_prim A_ip[end,end]
         # @show aux_prim sumap sumM sum1 
-        ps_data.prim .= @. aux_prim + (aux_prim-ip_prim)*dxR/dxL
-        ps_data.w = get_conserved(ps_data,global_data)
+        # ps_data.prim .= @. aux_prim + (aux_prim-ip_prim)*dxR/dxL
         s_vs_data = ps_data.vs_data
         s_vs_data.vs_num = vs_data.vs_num
         s_vs_data.midpoint = vs_data.midpoint
         s_vs_data.level = vs_data.level
         s_vs_data.weight = vs_data.weight
-        s_vs_data.df = @. aux_df[end]+(aux_df-ip_df)*dxR/dxL
-        !(size(s_vs_data.sdf)==size(vs_data.sdf)) && (s_vs_data.sdf = Array{Float64}(undef,size(vs_data.sdf)))
+        s_vs_data.df = @. aux_df+(aux_df-ip_df)*dxR/dxL
+		ps_data.w = calc_w0(ps_data)
+		ps_data.prim = get_prim(ps_data,global_data)
+        size(s_vs_data.sdf,1)!=vs_data.vs_num && (s_vs_data.sdf = Array{Float64}(undef,vs_data.vs_num,NDF,DIM))
     end
 end
 function project_solid_cell_slope!(vs_data::AbstractVsData{DIM,NDF},vs_data_n::VS_Data{DIM,NDF},DIR::Integer) where{DIM,NDF}
@@ -350,13 +368,19 @@ function project_solid_cell_slope!(vs_data::AbstractVsData{DIM,NDF},vs_data_n::V
     sdf = @view(vs_data.sdf[:,:,DIR])
     level_n = vs_data_n.level
     sdf_n = @view(vs_data_n.sdf[:,:,DIR])
+	#=
+	if any(i->level[i]!=level_n[i],1:vs_data.vs_num)
+		@show typeof(vs_data)
+	end
+	=#
     for i = 1:vs_data.vs_num
         if level[i] == level_n[j]
             @. sdf[i, :] = @views sdf_n[j, :]
             j += 1
         elseif level[i] < level_n[j]
+            sdf[i, :] .= 0.
             while flag != 1.0
-                @. sdf[i, :] = @views sdf_n[j, :]/ 2^(DIM * (level_n[j] - level[i]))
+                @. sdf[i, :] += @views sdf_n[j, :]/ 2^(DIM * (level_n[j] - level[i]))
                 flag += 1 / 2^(DIM * (level_n[j] - level[i]))
                 j += 1
             end

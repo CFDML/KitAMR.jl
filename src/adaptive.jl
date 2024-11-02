@@ -6,19 +6,27 @@ function boundary_flag(amr::AMR{DIM,NDF}, ps_data::PS_Data{DIM,NDF}) where{DIM,N
     end
     return false
 end
-function boundary_flag(boundary::Domain{Maxwellian},midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data)
+function boundary_flag(boundary::Domain,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data)
     index = Int(floor((boundary.id-1)/2))+1
     abs(midpoint[index] - global_data.config.geometry[boundary.id]) < ds[index] && return true
 end
 function boundary_flag(boundary::Circle,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data)
-    dsmin = [global_data.config.geometry[2i]-global_data.config.geometry[2i-1] for i in 1:2]/2^global_data.config.solver.AMR_PS_MAXLEVEL./global_data.config.trees_num
+    #dsmin = [global_data.config.geometry[2i]-global_data.config.geometry[2i-1] for i in 1:2]/2^global_data.config.solver.AMR_PS_MAXLEVEL./global_data.config.trees_num
     flag = 0
     for i = 1:4
-        flag += norm(midpoint.+0.5*(ds+dsmin).*RMT[2][i].-boundary.center)>boundary.radius ? 1 : -1 # any corner cross boundary?
-        flag += norm(midpoint.+0.5*(ds+dsmin).*NMT[2][i].-boundary.center)>boundary.radius ? 1 : -1 # any neighbor cross boundary?
+        #flag += norm(midpoint.+0.5*(ds+dsmin).*RMT[2][i].-boundary.center)>boundary.radius ? 1 : -1 # any corner cross boundary?
+        flag += norm(midpoint.+ds.*NMT[2][i].-boundary.center)>boundary.radius ? 1 : -1 # any neighbor cross boundary?
     end
-    abs(flag)==8 && return false
+    abs(flag)==4 && return false
     return true
+end
+function boundary_flag(global_data::Global_Data,midpoint::AbstractVector,ds::AbstractVector)
+    domain = global_data.config.domain
+    boundary = global_data.config.IB
+    for i in eachindex(domain)
+        boundary_flag(domain[i],midpoint,ds,global_data) && return true
+    end
+    return solid_cell_flag(boundary,midpoint,ds,global_data)
 end
 function boundary_flag(
     fp::PW_pxest_t,
@@ -233,6 +241,34 @@ function IB_pre_ps_refine!(p4est::Ptr{p4est_t},global_data::Global_Data)
             pre_IB_refine_flag,
             Cint,
             (Ptr{p4est_t}, p4est_topidx_t, Ptr{p4est_quadrant_t})
+        ),
+        C_NULL,
+        C_NULL,
+    )
+end
+function pre_coarsen_flag(forest,which_tree,quadrants)
+    GC.@preserve forest which_tree quadrants begin
+        DIM = 2
+        fp = PointerWrapper(forest)
+        quadrants_wrap = unsafe_wrap(Vector{Ptr{p4est_quadrant_t}}, quadrants, 2^DIM)
+        global_data,aux_points = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        for i = 1:2^DIM
+            qp = PointerWrapper(quadrants_wrap[i])
+            ds,midpoint = quad_to_cell(fp,which_tree,qp)
+            (IB_flag(global_data.config.IB,aux_points,midpoint,ds)||boundary_flag(global_data,midpoint,ds))&&return Cint(0)
+        end
+        return Cint(1)
+    end
+end
+function pre_ps_coarsen!(p4est::Ptr{p4est_t}; recursive = 0)
+    p4est_coarsen_ext(
+        p4est,
+        recursive,
+        0,
+        @cfunction(
+            pre_coarsen_flag,
+            Cint,
+            (Ptr{p4est_t}, p4est_topidx_t, Ptr{Ptr{p4est_quadrant_t}})
         ),
         C_NULL,
         C_NULL,

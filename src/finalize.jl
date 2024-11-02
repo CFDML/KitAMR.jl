@@ -18,7 +18,6 @@ function finalize_p4est!(ps4est::Ptr{p4est_t}, amr::AMR)
 end
 function finalize!(ps4est::Ptr{p4est_t}, amr::AMR)
     finalize_ghost!(amr.ghost.ghost_exchange)
-    finalize_IB!(amr.field.boundary.IB_buffer)
     finalize_p4est!(ps4est, amr)
 end
 
@@ -30,16 +29,7 @@ function finalize_p4est!(ps4est::Ptr{p8est_t}, amr::AMR)
     p8est_connectivity_destroy(pointer(pp.connectivity))
     p8est_destroy(ps4est)
 end
-function finalize_IB!(IB_buffer::IBBuffer)
-    for i in eachindex(IB_buffer.sdata)
-        sc_free(-1, IB_buffer.sdata[i])
-    end
-    for i in eachindex(IB_buffer.rdata)
-        sc_free(-1, IB_buffer.rdata[i])
-    end
-end
 function finalize!(ps4est::Ptr{p8est_t}, amr::AMR)
     finalize_ghost!(amr.ghost.ghost_exchange)
-    finalize_IB!(amr.field.boundary.IB_buffer)
     finalize_p4est!(ps4est, amr)
 end

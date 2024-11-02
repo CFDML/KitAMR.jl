@@ -86,7 +86,7 @@ function write_VTK(ps4est::Ptr{p4est_t},filename::String,fieldnames::Vector{Stri
         pairs[2*i-1] = p_names[i] = string_to_Cstring(fieldnames[i])
         pairs[2*i] = pscs[i]
     end
-    cont = p4est_vtk_write_cell_dataf(cont,1,1,1,0,1,0,pairs...,cont)
+    cont = p4est_vtk_write_cell_dataf(cont,1,1,1,0,length(fieldnames),0,pairs...,cont)
     p4est_vtk_write_footer(cont)
     for i in eachindex(fieldnames)
         sc_free(-1,Ptr{Nothing}(p_names[i]))
@@ -138,7 +138,7 @@ function write_VTK(ps4est::Ptr{p8est_t},filename::String,fieldnames::Vector{Stri
         pairs[2*i-1] = p_names[i] = string_to_Cstring(fieldnames[i])
         pairs[2*i] = pscs[i]
     end
-    cont = p8est_vtk_write_cell_dataf(cont,1,1,1,0,1,0,pairs...,cont)
+    cont = p8est_vtk_write_cell_dataf(cont,1,1,1,0,length(fieldnames),0,pairs...,cont)
     p8est_vtk_write_footer(cont)
     for i in eachindex(fieldnames)
         sc_free(-1,Ptr{Nothing}(p_names[i]))

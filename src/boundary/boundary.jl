@@ -8,6 +8,12 @@ function solid_cell_flag(boundary::Circle,midpoint::AbstractVector,ds::AbstractV
     (boundary_flag(boundary,midpoint,ds,global_data) && xor(boundary.solid,!inside)) && return true
     return false
 end
+function solid_cell_flag(boundary::Vector{AbstractBoundary},midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data)
+    for i in eachindex(boundary)
+        solid_cell_flag(boundary[i],midpoint,ds,global_data,solid_flag(boundary[i],midpoint))&& return true
+    end
+    return false
+end
 
 function calc_intersect_point(boundaries::Vector{AbstractBoundary},solid_midpoints::Vector)
     aux_points = Vector{Vector{Vector{Float64}}}(undef,length(boundaries))
@@ -154,10 +160,14 @@ end
 function IB_flag(boundary::Circle,aux_point::AbstractVector,midpoint::AbstractVector,ds::AbstractVector)
     DIM = length(aux_point)
     r = boundary.search_radius
+    #=
     for i in eachindex(2^DIM)
-        norm(midpoint.+0.5*ds.*RMT[DIM][i].-aux_point)<r && return true # any corner cross boundary?
+	    corner = midpoint.+0.5*ds.*RMT[DIM][i]
+	    (norm(corner.-aux_point)<r||norm(corner-boundary.center)<boundary.radius) && return true # any corner cross boundary?
     end
     return false
+    =#
+    norm(midpoint-aux_point)<r
 end
 function IB_flag(boundaries::Vector{AbstractBoundary},aux_points::Vector{Vector{Vector{Float64}}},midpoint::AbstractVector,ds::AbstractVector)
     for i in eachindex(boundaries)
@@ -201,8 +211,26 @@ function search_IB!(IB_nodes::Vector{Vector{Vector{PS_Data{DIM,NDF}}}},aux_point
     end
 end
 
+function update_IB_sdata!(boundary::Boundary)
+    sdata = boundary.IB_buffer.sdata
+    IB_ranks_table = boundary.IB_ranks_table
+    for i in eachindex(IB_ranks_table)
+        i-1==MPI.Comm_rank(MPI.COMM_WORLD)&&continue
+        isempty(IB_ranks_table[i])&&continue
+        offset = 0
+        for j in eachindex(IB_ranks_table[i])
+            sdata[i].prims[j,:] .= IB_ranks_table[i][j].prim
+        end
+        for j in eachindex(IB_ranks_table[i])
+            vs_num = IB_ranks_table[i][j].vs_data.vs_num
+            sdata[i].df[offset+1:offset+vs_num,:] .= IB_ranks_table[i][j].vs_data.df
+            offset+=vs_num
+        end
+    end
+end
 function IB_data_exchange!(amr::AMR)
     boundary = amr.field.boundary
+	update_IB_sdata!(boundary)
     IB_ranks_table = boundary.IB_ranks_table
     sdata = boundary.IB_buffer.sdata
     rdata = boundary.IB_buffer.rdata
@@ -286,6 +314,38 @@ function IB_data_exchange!(amr::AMR)
     end
     MPI.Waitall!(reqs)
 end
+# function IB_slope_exchange!(amr::AMR)
+#     boundary = amr.field.boundary
+#     IB_ranks_table = boundary.IB_ranks_table
+#     sdata = boundary.IB_buffer.sdata
+#     rdata = boundary.IB_buffer.rdata
+#     r_vs_nums = boundary.IB_buffer.r_vs_nums
+#     rank = MPI.Comm_rank(MPI.COMM_WORLD)
+#     reqs = Vector{MPI.Request}(undef, 0)
+#     for i in eachindex(sdata)
+#         i-1 == rank&&continue
+#         isempty(IB_ranks_table[i])&&continue
+#         sreq = MPI.Isend(
+#             sdata[i].sdf,
+#             MPI.COMM_WORLD;
+#             dest = i - 1,
+#             tag = COMM_DATA_TAG + rank,
+#         )
+#         push!(reqs, sreq)
+#     end
+#     for i in eachindex(rdata)
+#         i-1 == MPI.Comm_rank(MPI.COMM_WORLD)&&continue
+#         !isassigned(r_vs_nums,i) && continue
+#         rreq = MPI.Irecv!(
+#                 rdata[i].sdf,
+#                 MPI.COMM_WORLD;
+#                 source = i - 1,
+#                 tag = COMM_DATA_TAG + i - 1,
+#             )
+#         push!(reqs, rreq)
+#     end
+#     MPI.Waitall!(reqs)
+# end
 function IB_vs_nums_exchange!(boundary::Boundary)
     IB_ranks_table = boundary.IB_ranks_table
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
@@ -549,7 +609,7 @@ function IB_update!(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF} # After 
     boundary.IB_ranks_table = IB_ranks_table;boundary.IB_cells = IB_cells
 end
 function colinear_test(p1,p2,p3)
-    p1[1] * (p2[2] - p3[2]) + p2[1] * (p3[2] - p1[2]) + p3[1] * (p1[2] - p2[2])≈0
+    isapprox(p1[1] * (p2[2] - p3[2]) + p2[1] * (p3[2] - p1[2]) + p3[1] * (p1[2] - p2[2]),0.;atol=1e-10)
 end
 function colinear_reject!(IB_nodes::Vector{AbstractIBNodes})
     DIM = length(first(IB_nodes).midpoint)
@@ -599,5 +659,24 @@ function sort_IB_cells!(global_data::Global_Data,boundary::Boundary)
     IB_cells = boundary.IB_cells
     for i in eachindex(IBs)
         sort_IB_cells!(IBs[i],global_data.config,solid_cells[i],aux_points[i],IB_cells[i])
+    end
+end
+
+function init_solid_cells!(boundary::Boundary{DIM,NDF})where{DIM,NDF}
+    solid_cells = boundary.solid_cells
+    IB_cells = boundary.IB_cells
+    for i in eachindex(solid_cells)
+        for j in eachindex(solid_cells[i].ps_datas)
+            ps_data = solid_cells[i].ps_datas[j]
+            vs_data = ps_data.vs_data
+            IB_node = first(IB_cells[i].IB_nodes[j])
+            IB_vs = IB_node.vs_data
+            vs_data.vs_num = IB_vs.vs_num
+            vs_data.level = IB_vs.level
+            vs_data.weight = IB_vs.weight
+			vs_data.midpoint = IB_vs.midpoint
+            vs_data.df = IB_vs.df
+			vs_data.sdf = Array{Float64}(undef,IB_vs.vs_num,NDF,DIM) 
+        end
     end
 end
