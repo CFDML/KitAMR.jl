@@ -24,17 +24,18 @@
 # AMR_VS_MAXLEVEL: maximum level of velocity space refinement
 DIM = 2
 NDF = 2
-AMR_PS_MAXLEVEL = 3
-AMR_VS_MAXLEVEL = 1
-geometry = [0.,1.,0.,1.]
-trees_num = [40,40]
-quadrature = [-5.,5.,-5.,5.]
+AMR_PS_MAXLEVEL = 4
+AMR_VS_MAXLEVEL = 2
+geometry = [-4.,8.,-5.,5.]
+trees_num = [80,80]
+quadrature = [-15.,15.,-15.,15.]
 vs_trees_num = [20,20]
 ic = [1.,0.,0.,1.]
-boundarydefine = [Circle{Maxwellian}([0.5,0.5],0.1,true,1.0/20/2^4*3.5,[1.,0.,0.,1.])]
-domaintype = [Maxwellian,Maxwellian,Maxwellian,Maxwellian]
+boundarydefine = [Circle{Maxwellian}([0.,0.],0.5,true,12.0/80/2^4*3.5,[1.,0.,0.,1.])]
+domaintype = [Inflow,Outflow,Outflow,Outflow]
 ib_sort = :distance
 ib_interp = :bilinear 
-domainbc = [[1.,0.,0.,1.],[1.,0.,0.,1.],[1.,0.,0.,1.],[1.,0.5,0.,1.]]
+domainbc = [[1.,5.,0.,1.],[1.,0.,0.,1.],[1.,0.,0.,1.],[1.,0.,0.,1.]]
 CFL = 0.4
 K = 1.
+Kn = 0.1

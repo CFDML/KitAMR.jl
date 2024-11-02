@@ -22,6 +22,13 @@ function get_conserved(ps_data::PS_Data{3,NDF}, global_data::Global_Data) where 
     get_conserved_3D(ps_data.prim, global_data.config.gas.γ)
 end
 
+function get_conserved(prim::AbstractVector, global_data::Global_Data{2,NDF}) where {NDF}
+    get_conserved_2D(prim, global_data.config.gas.γ)
+end
+function get_conserved(prim::AbstractVector, global_data::Global_Data{3,NDF}) where {NDF}
+    get_conserved_3D(prim, global_data.config.gas.γ)
+end
+
 function discrete_maxwell(ps_data::PS_Data, global_data::Global_Data)
     discrete_maxwell(ps_data.vs_data.midpoint, ps_data.prim, global_data)
 end
@@ -230,6 +237,16 @@ function calc_w0(f_vs_data::Face_VS_Data{2,2})
         @view(f_vs_data.df[:, 2]),
         f_vs_data.weight,
     )
+end
+function calc_w0(ps_data::AbstractPsData{2,2})
+	vs_data = ps_data.vs_data
+	@inbounds micro_to_macro_2D2F(
+				      @view(vs_data.midpoint[:,1]),
+					    @view(vs_data.midpoint[:,2]),
+					      @view(vs_data.df[:,1]),
+					      @view(vs_data.df[:,2]),
+					      vs_data.weight
+				      )
 end
 function calc_w0(f_vs_data::Face_VS_Data{3,1})
     @inbounds micro_to_macro_3D1F(

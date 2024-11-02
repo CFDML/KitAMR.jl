@@ -8,8 +8,8 @@ function update_Δt!(amr::AMR{2,NDF}) where {NDF}
     V =
         quadrature[4] -
         (quadrature[4] - quadrature[3]) / global_data.config.vs_trees_num[2]/2^global_data.config.solver.AMR_VS_MAXLEVEL / 2
-    @inbounds for i in eachindex(trees.data)
-        @inbounds for j in eachindex(trees.data[i])
+    for i in eachindex(trees.data)
+        for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
             isa(ps_data,InsideSolidData) && continue
             Δt = 1.0

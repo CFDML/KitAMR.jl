@@ -4,17 +4,15 @@ end
 function calc_face_area(ps_data::AbstractPsData{3}, DIR::Integer)
     return reduce(*, @view(ps_data.ds[FAT[2][DIR]]))
 end
-function calc_flux!(::BoundaryNeighbor, face::Face{BoundaryFace}, amr::AMR{2,2})
-    ps_data = face.data
+function calc_flux!(domain::Domain{Maxwellian},ps_data::PS_Data{2,2},faceid::Integer,amr::AMR{2,2})
     global_data = amr.global_data
-    faceid = face.faceid
     DIR = get_dir(faceid)
     ROT = get_rot(faceid)
     vs_data = ps_data.vs_data
     midpoint = vs_data.midpoint
     Θ = [heaviside(ROT * midpoint[i, DIR]) for i in axes(midpoint, 1)]
     vn = @views midpoint[:, DIR]
-    prim0 = global_data.config.domain[faceid].bc
+    prim0 = domain.bc
     df0 = @. vs_data.df - 0.5 * ROT * ps_data.ds[DIR] * @view(vs_data.sdf[:, :, DIR])
     prim0[1] = calc_ρw(vs_data, df0, prim0, Θ, vn)
     F0 = discrete_maxwell(vs_data.midpoint, prim0, global_data)
@@ -25,6 +23,93 @@ function calc_flux!(::BoundaryNeighbor, face::Face{BoundaryFace}, amr::AMR{2,2})
     @. ps_data.flux += ROT * fw * dsf * Δt
     @. vs_data.flux[:, 1] += vn * ROT * dsf * Δt * @view(F[:, 1])
     @. vs_data.flux[:, 2] += vn * ROT * dsf * Δt * @view(F[:, 2])
+end
+function make_face_data(ps_data::PS_Data{DIM,NDF},domain::Domain{Inflow},global_data::Global_Data,ROT,DIR)where{DIM,NDF}
+    vs_data = ps_data.vs_data
+    vn = @view(vs_data.midpoint[:,DIR])
+    df_n = Matrix{Float64}(undef,vs_data.vs_num,NDF)
+    sdf_n = Matrix{Float64}(undef,vs_data.vs_num,NDF)
+    bc = domain.bc
+    bit_L = [x<=0. for x in ROT.*vn]
+    offset = 0
+    for i in axes(df_n,1)
+        @inbounds if bit_L[i]
+            @inbounds df_n[i,:] .= @view(vs_data.df[i,:])
+            @inbounds sdf_n[i,:] .= @view(vs_data.sdf[i,:,DIR])
+            offset+=1
+        else
+            @inbounds df_n[i,:].= discrete_maxwell(@view(vs_data.midpoint[i,:]),bc,global_data)
+            @inbounds sdf_n[i,:] .= 0.
+        end
+    end
+    return Face_VS_Data{DIM,NDF}(vs_data.weight,vs_data.midpoint,vn,df_n,sdf_n),offset
+end
+function make_face_data(ps_data::PS_Data{DIM,NDF},::Domain{Outflow},::Global_Data,ROT,DIR)where{DIM,NDF}
+    vs_data = ps_data.vs_data
+    vn = @view(vs_data.midpoint[:,DIR])
+    sdf_n = zeros(vs_data.vs_num,NDF)
+    return Face_VS_Data{DIM,NDF}(vs_data.weight,vs_data.midpoint,vn,vs_data.df,sdf_n),vs_data.vs_num
+end
+function calc_flux!(domain::Domain{Inflow},ps_data::PS_Data{2,2},faceid,amr::AMR{2,2})
+    DIR = get_dir(faceid)
+    ROT = get_rot(faceid) # Left: -1, Right: 1
+    global_data = amr.global_data
+    gas = global_data.config.gas
+    ds = ps_data.ds[DIR]
+    vs_data = ps_data.vs_data
+    f_vs_data,offset = make_face_data(ps_data,domain,global_data,ROT,DIR)
+    w0 = calc_w0(f_vs_data)
+    # nps_data.bound_enc < 0 && (@show vs_data.sdf[:,2,DIR] vs_data_n.sdf[:,2,DIR] vs_data_n.weight) 
+    prim0 = get_prim(w0, global_data)
+    qf0 = calc_qf(f_vs_data, prim0)
+    domain_w = get_conserved(domain.bc,global_data)
+    aL, aR = calc_a(w0, prim0, ps_data.w, domain_w, ds, ds, global_data, ROT)
+    Mu, Mv, Mξ, Mu_L, Mu_R = moment_u(prim0, global_data, ROT, DIR)
+    A = calc_A(prim0, aL, aR, Mu, Mv, Mξ, Mu_L, Mu_R, global_data, DIR)
+    τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
+    Mt = time_int(τ0, global_data.status.Δt)
+    fw = calc_flux_g0_2D2F(prim0, Mt, Mu, Mv, Mξ, Mu_L, Mu_R, aL, aR, A, DIR)
+    F = discrete_maxwell(f_vs_data.midpoint, prim0, global_data)
+    F⁺ = shakhov_part(f_vs_data.midpoint, F, prim0, qf0, global_data)
+    fw .+= calc_flux_f0(f_vs_data, F⁺, Mt)
+    dsf = calc_face_area(ps_data, DIR)
+    fw .*= dsf * ROT
+    ps_data.flux .+= fw
+    micro_flux = calc_micro_flux(f_vs_data, F, F⁺, aL, aR, A, Mξ, Mt, offset, dsf)
+    vs_data.flux += ROT.*micro_flux
+end
+function calc_flux!(domain::Domain{Outflow},ps_data::PS_Data{2,2},faceid,amr::AMR{2,2})
+    DIR = get_dir(faceid)
+    ROT = get_rot(faceid) # Left: -1, Right: 1
+    global_data = amr.global_data
+    gas = global_data.config.gas
+    ds = ps_data.ds[DIR]
+    vs_data = ps_data.vs_data
+    f_vs_data,offset = make_face_data(ps_data,domain,global_data,ROT,DIR)
+    w0 = calc_w0(f_vs_data)
+    # nps_data.bound_enc < 0 && (@show vs_data.sdf[:,2,DIR] vs_data_n.sdf[:,2,DIR] vs_data_n.weight) 
+    prim0 = get_prim(w0, global_data)
+    qf0 = calc_qf(f_vs_data, prim0)
+    aL, aR = calc_a(w0, prim0, ps_data.w, ps_data.w, ds, ds, global_data, ROT)
+    Mu, Mv, Mξ, Mu_L, Mu_R = moment_u(prim0, global_data, ROT, DIR)
+    A = calc_A(prim0, aL, aR, Mu, Mv, Mξ, Mu_L, Mu_R, global_data, DIR)
+    τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
+    Mt = time_int(τ0, global_data.status.Δt)
+    fw = calc_flux_g0_2D2F(prim0, Mt, Mu, Mv, Mξ, Mu_L, Mu_R, aL, aR, A, DIR)
+    F = discrete_maxwell(f_vs_data.midpoint, prim0, global_data)
+    F⁺ = shakhov_part(f_vs_data.midpoint, F, prim0, qf0, global_data)
+    fw .+= calc_flux_f0(f_vs_data, F⁺, Mt)
+    dsf = calc_face_area(ps_data, DIR)
+    fw .*= dsf * ROT
+    ps_data.flux .+= fw
+    micro_flux = calc_micro_flux(f_vs_data, F, F⁺, aL, aR, A, Mξ, Mt, offset, dsf)
+    vs_data.flux += ROT.*micro_flux
+end
+function calc_flux!(::BoundaryNeighbor,face::Face{BoundaryFace},amr::AMR{2,2})
+    ps_data = face.data
+    faceid = face.faceid
+    domain = amr.global_data.config.domain[faceid]
+    calc_flux!(domain,ps_data,faceid,amr)
 end
 function calc_flux!(::BoundaryNeighbor, face::Face{BoundaryFace}, amr::AMR{3,1})
     ps_data = face.data
@@ -403,6 +488,14 @@ function calc_flux!(::SameSizeNeighbor, face::Face{InnerFace}, amr::AMR{2,2})
     nps_data = ps_data.neighbor.data[faceid][1]
     vs_data_n = nps_data.vs_data
     nps_data.bound_enc < 0 && project_solid_cell_slope!(vs_data_n, vs_data, DIR)
+	#=
+	if MPI.Comm_rank(MPI.COMM_WORLD)==5&&nps_data.bound_enc<0&&isa(nps_data,Ghost_PS_Data)
+		@show vs_data.vs_num vs_data_n.vs_num
+	end
+	=#
+	if vs_data.vs_num!=vs_data_n.vs_num
+		@show typeof(vs_data_n) vs_data_n.vs_num vs_data.vs_num
+	end
     f_vs_data, offset, bit_L, _ = make_face_data(ps_data, nps_data, faceid, ROT, DIR)
     reconstruct_vs!(f_vs_data, ds, ds, offset, ROT)
     w0 = calc_w0(f_vs_data)
@@ -580,6 +673,9 @@ function calc_flux!(::DoubleSizeNeighbor, face::Face, amr::AMR{2,2})
     qf0 = calc_qf(f_vs_data, prim0)
     wR = @. nps_data.w+(ps_data.midpoint[FAT[1][DIR]]-nps_data.midpoint[FAT[1][DIR]])*
         nps_data.sw[:,FAT[1][DIR]]
+	#if MPI.Comm_rank(MPI.COMM_WORLD)==4&&faceid==4
+		#@show nps_data.sw nps_data.w w0 nps_data.prim
+	#end
     aL, aR = calc_a(w0, prim0, ps_data.w, wR, ds, 2.0 * ds, global_data, ROT)
     Mu, Mv, Mξ, Mu_L, Mu_R = moment_u(prim0, global_data, ROT, DIR)
     A = calc_A(prim0, aL, aR, Mu, Mv, Mξ, Mu_L, Mu_R, global_data, DIR)

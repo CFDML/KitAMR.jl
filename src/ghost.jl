@@ -1,4 +1,4 @@
-size_Ghost_Data(vs_num,DIM,NDF) = 3 * DIM + 3 + NDF * vs_num
+size_Ghost_Data(vs_num,DIM,NDF) = 3 * DIM + 4 + NDF * vs_num
 size_Ghost_Slope(vs_num,DIM,NDF) = vs_num * DIM * NDF+DIM*(DIM+2)
 size_Ghost_VS_Structure(vs_num,DIM) = vs_num * (DIM + 2)
 function get_vs_num(forest::P_pxest_t, ghost::P_pxest_ghost_t)
@@ -140,11 +140,13 @@ function update_mirror_data!(ps4est, amr::AMR{DIM,NDF}) where{DIM,NDF}
             pq = pw_mirror_quadrant(pp,gp,i)
             dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+            isa(ps_data,InsideSolidData)&&continue
             ap = Base.unsafe_wrap(
                 Vector{Cdouble},
                 mirror_data_pointers[i],
                 3 * DIM + 4 + NDF * vs_num,
             )
+			ap[DIM*2+1:DIM*3+2] = ps_data.w
             vs_temp = @view(ap[3*DIM+4+1:end])
             get_mirror_data_inner!(ps_data, vs_temp)
         end
@@ -160,6 +162,7 @@ function update_mirror_slope!(ps4est, amr::AMR{DIM,NDF}) where{DIM,NDF}
             pq = pw_mirror_quadrant(pp,gp,i)
             dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+            isa(ps_data,InsideSolidData)&&continue
             ap = Base.unsafe_wrap(
                 Vector{Cdouble},
                 mirror_slope_pointers[i],
@@ -348,7 +351,7 @@ function initialize_ghost_wrap(global_data::Global_Data{DIM,NDF}, ghost_exchange
         offset += global_vs_num
         midpoint_vs =
             Base.unsafe_wrap(Matrix{Cdouble}, p + offset * sizeof(Cdouble), (vs_num, DIM))
-        vs_data = Ghost_VS_Data{DIM,NDF}(vs_num, Int.(level), weight, midpoint_vs, df, sdf)
+        vs_data = Ghost_VS_Data{DIM,NDF}(vs_num, Int.(round.(level)), weight, midpoint_vs, df, sdf)
         ghost_wrap[i] = Ghost_PS_Data{DIM,NDF}(bound_enc,ds, midpoint, w, sw, vs_data)
     end
     return ghost_wrap

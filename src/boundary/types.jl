@@ -1,6 +1,8 @@
 abstract type AbstractBoundary end
 abstract type AbstractBCType end
 abstract type Maxwellian<:AbstractBCType end
+abstract type Inflow <: AbstractBCType end
+abstract type Outflow <: AbstractBCType end
 const AbstractBC = Union{Vector,Function}
 struct Domain{T<:AbstractBCType} <: AbstractBoundary
     id::Integer
@@ -31,7 +33,10 @@ end
 mutable struct GhostIBVSData{DIM,NDF} <: AbstractVsData{DIM,NDF}
     vs_num::Int
     level::AbstractVector{Int8}
+    weight::AbstractVector{Float64}
+    midpoint::AbstractMatrix{Float64}
     df::AbstractMatrix{Float64}
+    # sdf::AbstractArray{Float64}
 end
 mutable struct GhostIBNode{DIM,NDF} # Maybe sdf?
     midpoint::Vector{Float64}
@@ -46,8 +51,11 @@ end
 mutable struct IBTransferData
     midpoints::Matrix{Float64}
     prims::Matrix{Float64}
-    level::Vector{Int}
+    level::Vector{Int8}
+    weight::Vector{Float64}
+    vs_midpoint::Matrix{Float64}
     df::Matrix{Float64}
+    # sdf::Array{Float64}
 end
 mutable struct IBBuffer
     sdata::Vector{IBTransferData} # Datas of IB nodes to be sent
