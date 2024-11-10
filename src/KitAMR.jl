@@ -3,6 +3,7 @@ module KitAMR
 using CairoMakie
 using MPI
 using JLD2
+using Dates
 using LinearAlgebra
 using Parameters
 using SpecialFunctions
@@ -28,7 +29,7 @@ include("solver/types.jl")
 include("./p4est/p4est_wrap.jl")
 include("model.jl")
 include("math.jl")
-include("IO.jl")
+include("IO/IO.jl")
 include("connectivity.jl")
 include("boundary/boundary.jl")
 include("adaptive.jl")
@@ -42,6 +43,7 @@ include("reconstruct.jl")
 include("boundary/maxwellian.jl")
 include("flux.jl")
 include("iterate.jl")
+include("IO/types.jl")
 include("finalize.jl")
 # include("postprocess.jl")
 
