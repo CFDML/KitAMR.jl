@@ -254,7 +254,7 @@ function save_result(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF}
     result = Result(solution,MeshInfo(neighbor_nums))
     dir_path = "./result"*Dates.format(now(), "yyyy-mm-dd_HH-MM-SS")*"/"
     !isdir(dir_path) && mkpath(dir_path)
-    p4est_save("p",ps4est,Cint(0))
+    p4est_save_ext("p",ps4est,Cint(0),Cint(0))
     if rank==0
         size = MPI.Comm_size(MPI.COMM_WORLD)
         solverset = SolverSet(config,size)
@@ -269,16 +269,16 @@ function result2vtk(dirname::String,vtkname::String)
     if typeof(solverset.config).parameters[1]==2
         DIM=2
         cnn = Ptr{Ptr{p4est_connectivity_t}}(Libc.malloc(sizeof(Ptr{Ptr{p4est_connectivity_t}})))
-        ps4est = p4est_load("p",MPI.COMM_WORLD,Cint(0),Cint(0),C_NULL,cnn)
+        ps4est = p4est_load_ext("p",MPI.COMM_WORLD,Cint(0),Cint(0),Cint(1),Cint(0),C_NULL,cnn)
         result = nothing
         for i = 1:solverset.mpi_size
             if i==1
                 result = load_object(path*"/result_"*string(i-1)*".jld2")
             else
                 r = load_object(path*"/result_"*string(i-1)*".jld2")
-                for j in (solution.ps_data,solution.vs_data,mesh_info.neighbor_nums)
-                    @eval append!($result.$j,$r.$j) # cause overhead but simple
-                end
+				append!(result.solution.ps_solutions,r.solution.ps_solutions)
+				append!(result.solution.vs_solutions,r.solution.vs_solutions)
+				append!(result.mesh_info.neighbor_nums,r.mesh_info.neighbor_nums)
             end
         end
         vtk_cnn = Vector{Vector{Int}}(undef,length(result.solution.ps_solutions))
@@ -374,6 +374,7 @@ function result2vtk(dirname::String,vtkname::String)
             vtk["qfx"] = [ps_solution.qf[1] for ps_solution in result.solution.ps_solutions]
             vtk["qfy"] = [ps_solution.qf[2] for ps_solution in result.solution.ps_solutions]
         end
+		fp = PointerWrapper(ps4est)
         p4est_connectivity_destroy(pointer(fp.connectivity))
         p4est_destroy(ps4est)
     else
