@@ -74,13 +74,25 @@ function iPointerWrapper(pw::PointerWrapper{NTuple{N,Ptr{T}}},::Type{Ptr{T}},i::
     return PointerWrapper(Ptr{Ptr{T}}(pointer(pw)+i*sizeof(Ptr{T})))
 end
 
+function local_quadid(p4est::PointerWrapper{p4est_t},treeid::Integer,quadid::Integer)
+    tp = iPointerWrapper(p4est.trees, p4est_tree_t, treeid)
+    return tp.quadrants_offset[] + quadid
+end
 function local_quadid(ip::PointerWrapper{p4est_iter_volume_info_t})
     tp = iPointerWrapper(ip.p4est.trees, p4est_tree_t, ip.treeid[])
     return tp.quadrants_offset[] + ip.quadid[]
 end
+function local_quadid(ip::PointerWrapper{p4est_iter_corner_info_t},side::PointerWrapper{p4est_iter_corner_side_t})
+    tp = iPointerWrapper(ip.p4est.trees, p4est_tree_t, side.treeid[])
+    return tp.quadrants_offset[] + side.quadid[]
+end
 function local_quadid(ip::PointerWrapper{p8est_iter_volume_info_t})
     tp = iPointerWrapper(ip.p4est.trees, p8est_tree_t, ip.treeid[])
     return tp.quadrants_offset[] + ip.quadid[]
+end
+function local_quadid(ip::PointerWrapper{p8est_iter_corner_info_t},side::PointerWrapper{p8est_iter_corner_side_t})
+    tp = iPointerWrapper(ip.p4est.trees, p4est_tree_t, side.treeid[])
+    return tp.quadrants_offset[] + side.quadid[]
 end
 function global_quadid(ip::PW_pxest_iter_volume_info_t)
     gfq = unsafe_wrap(
@@ -451,4 +463,54 @@ function unsafe_wrap_sc(::Type{T}, sc_array_pw::PointerWrapper{sc_array}) where 
     elem_count = sc_array_pw.elem_count[]
     array = sc_array_pw.array
     return unsafe_wrap(Vector{T}, Ptr{T}(pointer(array)), elem_count)
+end
+
+function AMR_volume_iterate(f::Function,forest::Ptr{p4est_t};ghost=C_NULL,user_data=C_NULL,data_type = P4est_PS_Data)
+    function iter_fn(info,data)
+        GC.@preserve info data begin
+            ip = PointerWrapper(info)
+            dp = PointerWrapper(data_type, ip.quad.p.user_data[])
+            GC.@preserve ip f(ip, data, dp)
+        end
+    end
+    GC.@preserve forest ghost user_data iter_fn p4est_iterate(
+        forest,
+        ghost,
+        user_data,
+        C_NULL,
+        @cfunction($iter_fn,Cvoid, (Ptr{p4est_iter_volume_info}, Ptr{Nothing})),
+        C_NULL,
+    )
+end
+function AMR_corner_iterate(f::Function,forest::Ptr{p4est_t};ghost=C_NULL,user_data=C_NULL)
+    function iter_fn(info,data)
+        GC.@preserve info data begin
+            ip = PointerWrapper(info)
+            GC.@preserve ip f(ip, data)
+        end
+    end
+    GC.@preserve forest ghost user_data iter_fn p4est_iterate(
+        forest,
+        ghost,
+        user_data,
+        C_NULL,
+        C_NULL,
+        @cfunction($iter_fn,Cvoid, (Ptr{p4est_iter_corner_info}, Ptr{Nothing})),
+    )
+end
+function AMR_face_iterate(f::Function,forest::Ptr{p4est_t};ghost=C_NULL,user_data=C_NULL)
+    function iter_fn(info,data)
+        GC.@preserve info data begin
+            ip = PointerWrapper(info)
+            GC.@preserve ip f(ip, data)
+        end
+    end
+    GC.@preserve forest ghost user_data iter_fn p4est_iterate(
+        forest,
+        ghost,
+        user_data,
+        C_NULL,
+        @cfunction($iter_fn,Cvoid, (Ptr{p4est_iter_face_info}, Ptr{Nothing})),
+        C_NULL,
+    )
 end

@@ -177,21 +177,3 @@ mutable struct Transfer_Init
     down_index::Int
     amr::AMR
 end
-
-struct Solution_2D
-    midpoint::SVector{2,Float64}
-    w::SVector{4,Float64}
-    prim::SVector{4,Float64}
-    qf::SVector{2,Float64}
-end
-struct Solution_3D
-    midpoint::SVector{3,Float64}
-    w::SVector{5,Float64}
-    prim::SVector{5,Float64}
-    qf::SVector{3,Float64}
-end
-
-struct SolverSet
-    MPI_size::Int
-    global_data::Global_Data
-end
