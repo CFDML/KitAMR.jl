@@ -1,7 +1,7 @@
-function calc_face_area(ps_data::AbstractPsData{2}, DIR::Integer)
+function face_area(ps_data::AbstractPsData{2}, DIR::Integer)
     return ps_data.ds[FAT[1][DIR]]
 end
-function calc_face_area(ps_data::AbstractPsData{3}, DIR::Integer)
+function face_area(ps_data::AbstractPsData{3}, DIR::Integer)
     return reduce(*, @view(ps_data.ds[FAT[2][DIR]]))
 end
 function calc_flux!(domain::Domain{Maxwellian},ps_data::PS_Data{2,2},faceid::Integer,amr::AMR{2,2})

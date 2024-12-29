@@ -99,7 +99,7 @@ function vs_refine_flag(w::AbstractVector, U::AbstractVector, midpoint::Abstract
     0.5 * sum((U - midpoint) .^ 2) * df[1] * weight /
     (w[end] / w[1] - 0.5 * w[1] * sum((U) .^ 2)) > 0.0001 ? true : false
 end
-function midpoint_refine(DIM::Integer,midpoint::AbstractVector, level::Int, ds::AbstractVector)
+function midpoint_refine(DIM::Integer,midpoint::AbstractVector, level::Int8, ds::AbstractVector)
     midpoint_new = Matrix{Float64}(undef, 2^DIM, DIM)
     ds_new = ds / 2^(level + 1)
     for i = 1:2^DIM
@@ -248,7 +248,7 @@ function vs_coarsen_flag(DIM::Integer,w::AbstractVector, U::AbstractVector, midp
     0.5 * sum((U - midpoint) .^ 2) * df[1] * weight /
     (w[end] / w[1] - 0.5 * w[1] * sum((U) .^ 2)) < 0.0001 / 2^DIM
 end
-function midpoint_coarsen(DIM::Integer,midpoint::AbstractVector, level::Int, ds::AbstractVector)
+function midpoint_coarsen(DIM::Integer,midpoint::AbstractVector, level::Int8, ds::AbstractVector)
     ds_new = ds / 2^level
     @. midpoint - 0.5 * ds_new * RMT[DIM][1]
 end

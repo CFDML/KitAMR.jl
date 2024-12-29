@@ -208,36 +208,36 @@ function calc_fwb(vs_data::VS_Data{3,1}, F::AbstractMatrix, vn::AbstractVector)
     )
 end
 
-function reconstruct_vs!(
-    f_vs_data::Face_VS_Data,
-    dsL::T,
-    dsR::Real,
-    offset::Integer,
-    rot::Real,
-) where {T}
-    df_n = f_vs_data.df
-    sdf_n = f_vs_data.sdf
-    @inbounds @. df_n[1:offset, :] -= @views 0.5 * rot * dsL * sdf_n[1:offset, :]
-    @inbounds @. df_n[offset+1:end, :] += @views 0.5 * rot * dsR * sdf_n[offset+1:end, :]
-end
-function reconstruct_vs_L!(f_vs_data::Face_VS_Data, dsL::Real, offset::Integer, rot::Real)
-    @inbounds @. f_vs_data.df[1:offset, :] -=
-        @views 0.5 * rot * dsL * f_vs_data.sdf[1:offset, :]
-end
-function reconstruct_vs_R!(f_vs_data::Face_VS_Data, dsR::Real, offset::Integer, rot::Real)
-    @inbounds @. f_vs_data.df[offset+1:end, :] +=
-        @views 0.5 * rot * dsR * f_vs_data.sdf[offset+1:end, :]
-end
+# function reconstruct_vs!(
+#     f_vs_data::Face_VS_Data,
+#     dsL::T,
+#     dsR::Real,
+#     offset::Integer,
+#     rot::Real,
+# ) where {T}
+#     df_n = f_vs_data.df
+#     sdf_n = f_vs_data.sdf
+#     @inbounds @. df_n[1:offset, :] -= @views 0.5 * rot * dsL * sdf_n[1:offset, :]
+#     @inbounds @. df_n[offset+1:end, :] += @views 0.5 * rot * dsR * sdf_n[offset+1:end, :]
+# end
+# function reconstruct_vs_L!(f_vs_data::Face_VS_Data, dsL::Real, offset::Integer, rot::Real)
+#     @inbounds @. f_vs_data.df[1:offset, :] -=
+#         @views 0.5 * rot * dsL * f_vs_data.sdf[1:offset, :]
+# end
+# function reconstruct_vs_R!(f_vs_data::Face_VS_Data, dsR::Real, offset::Integer, rot::Real)
+#     @inbounds @. f_vs_data.df[offset+1:end, :] +=
+#         @views 0.5 * rot * dsR * f_vs_data.sdf[offset+1:end, :]
+# end
 
-function calc_w0(f_vs_data::Face_VS_Data{2,2})
-    @inbounds micro_to_macro_2D2F(
-        @view(f_vs_data.midpoint[:, 1]),
-        @view(f_vs_data.midpoint[:, 2]),
-        @view(f_vs_data.df[:, 1]),
-        @view(f_vs_data.df[:, 2]),
-        f_vs_data.weight,
-    )
-end
+# function calc_w0(f_vs_data::Face_VS_Data{2,2})
+#     @inbounds micro_to_macro_2D2F(
+#         @view(f_vs_data.midpoint[:, 1]),
+#         @view(f_vs_data.midpoint[:, 2]),
+#         @view(f_vs_data.df[:, 1]),
+#         @view(f_vs_data.df[:, 2]),
+#         f_vs_data.weight,
+#     )
+# end
 function calc_w0(ps_data::AbstractPsData{2,2})
 	vs_data = ps_data.vs_data
 	@inbounds micro_to_macro_2D2F(
@@ -248,15 +248,15 @@ function calc_w0(ps_data::AbstractPsData{2,2})
 					      vs_data.weight
 				      )
 end
-function calc_w0(f_vs_data::Face_VS_Data{3,1})
-    @inbounds micro_to_macro_3D1F(
-        @view(f_vs_data.midpoint[:, 1]),
-        @view(f_vs_data.midpoint[:, 2]),
-        @view(f_vs_data.midpoint[:, 3]),
-        vec(f_vs_data.df[:, 1]),
-        f_vs_data.weight,
-    )
-end
+# function calc_w0(f_vs_data::Face_VS_Data{3,1})
+#     @inbounds micro_to_macro_3D1F(
+#         @view(f_vs_data.midpoint[:, 1]),
+#         @view(f_vs_data.midpoint[:, 2]),
+#         @view(f_vs_data.midpoint[:, 3]),
+#         vec(f_vs_data.df[:, 1]),
+#         f_vs_data.weight,
+#     )
+# end
 function calc_a(
     w0::AbstractVector{T},
     prim0::AbstractVector,
@@ -410,34 +410,34 @@ function calc_flux_g0_3D1F(prim, Mt, Mu, Mv, Mw, Mu_L, Mu_R, aL, aR, A, dir)
     @inbounds prim[1] * (Mt[1] * Mau_0 + Mt[2] * (Mau2_L + Mau2_R) + Mt[3] * Mau_T)
 end
 
-function calc_flux_f0(f_vs_data::Face_VS_Data{2,2}, F⁺::AbstractMatrix, Mt::AbstractVector)
-    @inbounds calc_flux_f0_2D2F(
-        @view(f_vs_data.midpoint[:, 1]),
-        @view(f_vs_data.midpoint[:, 2]),
-        @view(f_vs_data.df[:, 1]),
-        @view(f_vs_data.df[:, 2]),
-        @view(f_vs_data.sdf[:, 1]),
-        @view(f_vs_data.sdf[:, 2]),
-        f_vs_data.weight,
-        @view(F⁺[:, 1]),
-        @view(F⁺[:, 2]),
-        f_vs_data.vn,
-        Mt,
-    )
-end
-function calc_flux_f0(f_vs_data::Face_VS_Data{3,1}, F⁺::AbstractVector, Mt::AbstractVector)
-    @inbounds calc_flux_f0_3D1F(
-        @view(f_vs_data.midpoint[:, 1]),
-        @view(f_vs_data.midpoint[:, 2]),
-        @view(f_vs_data.midpoint[:, 3]),
-        vec(f_vs_data.df),
-        f_vs_data.sdf,
-        f_vs_data.weight,
-        F⁺,
-        f_vs_data.vn,
-        Mt,
-    )
-end
+# function calc_flux_f0(f_vs_data::Face_VS_Data{2,2}, F⁺::AbstractMatrix, Mt::AbstractVector)
+#     @inbounds calc_flux_f0_2D2F(
+#         @view(f_vs_data.midpoint[:, 1]),
+#         @view(f_vs_data.midpoint[:, 2]),
+#         @view(f_vs_data.df[:, 1]),
+#         @view(f_vs_data.df[:, 2]),
+#         @view(f_vs_data.sdf[:, 1]),
+#         @view(f_vs_data.sdf[:, 2]),
+#         f_vs_data.weight,
+#         @view(F⁺[:, 1]),
+#         @view(F⁺[:, 2]),
+#         f_vs_data.vn,
+#         Mt,
+#     )
+# end
+# function calc_flux_f0(f_vs_data::Face_VS_Data{3,1}, F⁺::AbstractVector, Mt::AbstractVector)
+#     @inbounds calc_flux_f0_3D1F(
+#         @view(f_vs_data.midpoint[:, 1]),
+#         @view(f_vs_data.midpoint[:, 2]),
+#         @view(f_vs_data.midpoint[:, 3]),
+#         vec(f_vs_data.df),
+#         f_vs_data.sdf,
+#         f_vs_data.weight,
+#         F⁺,
+#         f_vs_data.vn,
+#         Mt,
+#     )
+# end
 
 function calc_flux_f0_2D2F(u::AbstractVector{T}, v, h, b, sh, sb, weight, H⁺, B⁺, vn, Mt) where {T}
     F = Vector{T}(undef, 4)
@@ -491,77 +491,77 @@ function calc_flux_f0_3D1F(u::AbstractVector{T}, v, w, f, sf, weight, F⁺, vn, 
     return F
 end
 
-function calc_micro_flux(
-    f_vs_data::Face_VS_Data{2,2},
-    F0::AbstractMatrix{T},
-    F⁺,
-    aL,
-    aR,
-    aT,
-    Mξ,
-    Mt,
-    offset,
-    dsf,
-) where {T}
-    Θ = Array{T}(undef, size(F0, 1))
-    @inbounds begin
-        Θ[1:offset] .= 1.0
-        Θ[offset+1:end] .= 0.0
-        calc_micro_flux_2D2F(
-            @view(f_vs_data.midpoint[:, 1]),
-            @view(f_vs_data.midpoint[:, 2]),
-            @view(f_vs_data.df[:, 1]),
-            @view(f_vs_data.df[:, 2]),
-            @view(f_vs_data.sdf[:, 1]),
-            @view(f_vs_data.sdf[:, 2]),
-            @view(F0[:, 1]),
-            @view(F0[:, 2]),
-            @view(F⁺[:, 1]),
-            @view(F⁺[:, 2]),
-            aL,
-            aR,
-            aT,
-            Mξ,
-            Mt,
-            f_vs_data.vn,
-            Θ,
-            dsf,
-        )
-    end
-end
-function calc_micro_flux(
-    f_vs_data::Face_VS_Data{3,1},
-    F0::AbstractVector{T},
-    F⁺,
-    aL,
-    aR,
-    aT,
-    Mt,
-    offset,
-    dsf,
-) where {T}
-    Θ = Array{T}(undef, size(F0, 1))
-    @inbounds begin
-        Θ[1:offset] .= 1.0
-        Θ[offset+1:end] .= 0.0
-        calc_micro_flux_3D1F(
-            @view(f_vs_data.midpoint[:, 1]),
-            @view(f_vs_data.midpoint[:, 2]),
-            @view(f_vs_data.midpoint[:, 3]),
-            vec(f_vs_data.df),
-            vec(f_vs_data.sdf),
-            F0,
-            F⁺,
-            aL,
-            aR,
-            aT,
-            Mt,
-            f_vs_data.vn,
-            Θ,
-            dsf,
-        )
-    end
-end
+# function calc_micro_flux(
+#     f_vs_data::Face_VS_Data{2,2},
+#     F0::AbstractMatrix{T},
+#     F⁺,
+#     aL,
+#     aR,
+#     aT,
+#     Mξ,
+#     Mt,
+#     offset,
+#     dsf,
+# ) where {T}
+#     Θ = Array{T}(undef, size(F0, 1))
+#     @inbounds begin
+#         Θ[1:offset] .= 1.0
+#         Θ[offset+1:end] .= 0.0
+#         calc_micro_flux_2D2F(
+#             @view(f_vs_data.midpoint[:, 1]),
+#             @view(f_vs_data.midpoint[:, 2]),
+#             @view(f_vs_data.df[:, 1]),
+#             @view(f_vs_data.df[:, 2]),
+#             @view(f_vs_data.sdf[:, 1]),
+#             @view(f_vs_data.sdf[:, 2]),
+#             @view(F0[:, 1]),
+#             @view(F0[:, 2]),
+#             @view(F⁺[:, 1]),
+#             @view(F⁺[:, 2]),
+#             aL,
+#             aR,
+#             aT,
+#             Mξ,
+#             Mt,
+#             f_vs_data.vn,
+#             Θ,
+#             dsf,
+#         )
+#     end
+# end
+# function calc_micro_flux(
+#     f_vs_data::Face_VS_Data{3,1},
+#     F0::AbstractVector{T},
+#     F⁺,
+#     aL,
+#     aR,
+#     aT,
+#     Mt,
+#     offset,
+#     dsf,
+# ) where {T}
+#     Θ = Array{T}(undef, size(F0, 1))
+#     @inbounds begin
+#         Θ[1:offset] .= 1.0
+#         Θ[offset+1:end] .= 0.0
+#         calc_micro_flux_3D1F(
+#             @view(f_vs_data.midpoint[:, 1]),
+#             @view(f_vs_data.midpoint[:, 2]),
+#             @view(f_vs_data.midpoint[:, 3]),
+#             vec(f_vs_data.df),
+#             vec(f_vs_data.sdf),
+#             F0,
+#             F⁺,
+#             aL,
+#             aR,
+#             aT,
+#             Mt,
+#             f_vs_data.vn,
+#             Θ,
+#             dsf,
+#         )
+#     end
+# end
 
 function calc_micro_flux_2D2F(
     u::AbstractVector{T},

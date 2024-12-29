@@ -1,19 +1,45 @@
 abstract type AbstractBoundary end
-abstract type AbstractBCType end
-abstract type Maxwellian<:AbstractBCType end
-abstract type Inflow <: AbstractBCType end
-abstract type Outflow <: AbstractBCType end
-const AbstractBC = Union{Vector,Function}
-struct Domain{T<:AbstractBCType} <: AbstractBoundary
-    id::Integer
-    bc::AbstractBC
+abstract type AbstractBoundaryType end
+abstract type Maxwellian<:AbstractBoundaryType end
+abstract type SuperSonicInflow <: AbstractBoundaryType end
+abstract type SuperSonicOutflow <: AbstractBoundaryType end
+abstract type UniformOutflow <: AbstractBoundaryType end
+abstract type AxisSymmetric <: AbstractBoundaryType end
+abstract type Period <: AbstractBoundaryType end
+const AbstractBCType = Union{Vector,Function}
+abstract type AbstractIBSortType end
+abstract type AbstractIBInterpolateType end
+
+struct DistanceIBSort<:AbstractIBSortType end
+struct BilinearIBInterpolate<:AbstractIBInterpolateType end
+struct Domain{T<:AbstractBoundaryType} <: AbstractBoundary
+    id::Int
+    bc::AbstractBCType
+    Domain(T,id) = new{T}(id)
+    Domain(T,id,bc) = new{T}(id,bc)
 end
-struct Circle{T<:AbstractBCType} <: AbstractBoundary
+struct DomainFace{DIM,NDF,T}<:BoundaryFace
+    rot::Float64
+    direction::Int
+    midpoint::Vector{Float64}
+    domain::Domain{T}
+    ps_data::PS_Data{DIM,NDF}
+end
+struct Circle{T<:AbstractBoundaryType} <: AbstractBoundary
     center::Vector
     radius::Real
     solid::Bool # If is solid inside the circle, it should be true. Otherwise, it should be false.
-    search_radius::Real # Search radius determines the max distance between IB nodes and aux_points. Default is 
-    bc::AbstractBC
+    search_coeffi::Real # The ratio of the search radius and the minimal mesh scale, which determines the maximal distance between IB nodes and aux_points.
+    bc::AbstractBCType
+    search_radius::Real
+    Circle(::Type{T},center::Vector,radius,solid,search_coeffi,bc) where{T<:AbstractBoundaryType} = new{T}(center,radius,solid,search_coeffi,bc)
+    Circle(c::Circle{T},ds::Float64) where{T<:AbstractBoundaryType} = new{T}(c.center,
+        c.radius,
+        c.solid,
+        c.search_coeffi,
+        c.bc,
+        c.search_coeffi*ds
+    )
 end
 
 mutable struct SolidCells{DIM,NDF}

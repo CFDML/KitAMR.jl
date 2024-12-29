@@ -252,7 +252,8 @@ function save_result(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF}
     solution = Solution(ps_solution)
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
     result = Result(solution,MeshInfo(neighbor_nums))
-    dir_path = "./result"*Dates.format(now(), "yyyy-mm-dd_HH-MM-SS")*"/"
+    MPI.Barrier(MPI.COMM_WORLD)
+    dir_path = "./result"*Dates.format(now(), "yyyy-mm-dd_HH-MM")*"/"
     !isdir(dir_path) && mkpath(dir_path)
     p4est_save_ext("p",ps4est,Cint(0),Cint(0))
     if rank==0

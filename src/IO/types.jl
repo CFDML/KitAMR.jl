@@ -6,7 +6,7 @@ struct PS_Solution
     prim::Vector{Float64}
     qf::Vector{Float64}
 end
-function PS_Solution(ps_data::PS_Data)
+function PS_Solution(ps_data::PS_Data{DIM}) where{DIM}
     if ps_data.bound_enc<0
         prim = Vector{Float64}(undef,DIM+2);prim.=NaN
         qf = Vector{Float64}(undef,DIM);qf.=NaN

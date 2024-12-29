@@ -2,3 +2,5 @@ Manifest.toml
 result/
 tuto/
 .CondaPkg/
+p
+test_vtk.vtp

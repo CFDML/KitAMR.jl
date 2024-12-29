@@ -5,6 +5,7 @@ version = "0.1.0"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CEnum = "fa961155-64e5-5f13-b03f-caf6b980ea82"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
@@ -31,6 +32,7 @@ WriteVTK = "64499a7a-5c06-52f2-abe2-ccb03c286192"
 
 [compat]
 AbstractTrees = "0.4"
+BenchmarkTools = "1.5.0"
 CEnum = "0.4, 0.5"
 CairoMakie = "0.12"
 Dates = "1.11.0"
