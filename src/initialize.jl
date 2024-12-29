@@ -17,342 +17,474 @@
 #     end
 #     push!(faces, Face(InnerFace,base_quad, faceid, nothing))
 # end
-function initialize_faces!(
-    ::Val{0},
-    ::Any,
-    ip::PW_pxest_iter_face_info_t,
-    side,
-    amr,
-)
+# function initialize_faces!(
+#     ::Val{0},
+#     ::Any,
+#     ip::PW_pxest_iter_face_info_t,
+#     side,
+#     amr,
+# )
+#     faces = amr.field.faces
+#     base_quad =
+#     unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
+#     isa(base_quad,InsideSolidData) && return nothing
+#     faceid = side.face[] + 1
+#     if base_quad.bound_enc<0
+#         !any(x->isa(x,PS_Data),base_quad.neighbor.data[faceid]) && return nothing
+# 	    !any(x->(!isa(x,InsideSolidData)&&x.bound_enc>=0),base_quad.neighbor.data[faceid]) && return nothing
+#         # base_quad = base_quad.neighbor.data[faceid][findfirst(x->x.bound_enc>=0&&isa(x,PS_Data),base_quad.neighbor.data[faceid])]
+#         base_quad = base_quad.neighbor.data[faceid][1]
+# 		faceid += faceid%2==0 ? -1 : 1
+#     end
+#     push!(faces, Face(InnerFace,base_quad, faceid, nothing))
+# end
+# function initialize_faces!(
+#     ::Val{1},
+#     ::Val{1},
+#     ip::PointerWrapper{p4est_iter_face_info_t},
+#     side::PointerWrapper{T},
+#     amr::AMR{DIM,NDF},
+# )   where{T,DIM,NDF}
+#     faces = amr.field.faces
+#     side = iPointerWrapper(ip.sides, T, 0)
+#     is_ghost = Base.unsafe_wrap(
+#         Vector{Int8},
+#         Ptr{Int8}(pointer(side.is.hanging.is_ghost)),
+#         2^(DIM - 1),
+#     )
+#     quadid = Base.unsafe_wrap(
+#         Vector{Int32},
+#         Ptr{Int32}(pointer(side.is.hanging.quadid)),
+#         2^(DIM - 1),
+#     )
+#     baseid = findall(x -> x == 0, is_ghost) .- 1
+#     flag = true # all local quads are InsideSolidData/SolidCell?
+#     base_quad = nothing
+#     for i in eachindex(baseid)
+#         qp = PointerWrapper(iPointerWrapper(side.is.hanging.quad, Ptr{p4est_quadrant_t}, baseid[i])[])
+#         base_quad =
+#             unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
+#         if !(isa(base_quad,InsideSolidData) || base_quad.bound_enc<0)
+#             flag = false
+# 			baseid = baseid[i]
+#             break
+#         end
+#     end
+#     flag && return nothing
+#     faceid = side.face[] + 1
+#     index = 1
+#     hanging_quads = Vector{AbstractPsData{DIM,NDF}}(undef, 2^(DIM - 1)-1)
+#     for i in 0:2^(DIM-1)-1
+#         i==baseid && continue
+#         qp = PointerWrapper(
+#             iPointerWrapper(side.is.hanging.quad, Ptr{p4est_quadrant_t}, i)[],
+#         )
+#         if is_ghost[i+1] == 0
+#             hanging_quads[index] = unsafe_pointer_to_objref(
+#                 pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data),
+#             )
+#         elseif quadid[i+1]>-1
+#             hanging_quads[index] = amr.ghost.ghost_wrap[quadid[i+1]+1]
+#         else
+#             hanging_quads[index] = MissingHangingQuad{DIM,NDF}()
+#         end
+#         index+=1
+#     end
+#     push!(faces, Face(InnerFace,base_quad, faceid, hanging_quads))
+# end
+# function initialize_faces!(
+#     ::Val{1},
+#     ::Val{1},
+#     ip::PointerWrapper{p8est_iter_face_info_t},
+#     side::PointerWrapper{T},
+#     amr::AMR{DIM,NDF},
+# )   where{T,DIM,NDF}
+#     faces = amr.field.faces
+#     side = iPointerWrapper(ip.sides, T, 0)
+#     is_ghost = Base.unsafe_wrap(
+#         Vector{Int8},
+#         Ptr{Int8}(pointer(side.is.hanging.is_ghost)),
+#         2^(DIM - 1),
+#     )
+#     quadid = Base.unsafe_wrap(
+#         Vector{Int32},
+#         Ptr{Int32}(pointer(side.is.hanging.quadid)),
+#         2^(DIM - 1),
+#     )
+#     baseid = findall(x -> x == 0, is_ghost) .- 1
+#     flag = true
+#     base_quad = nothing
+#     for i in eachindex(baseid)
+#         qp = PointerWrapper(iPointerWrapper(side.is.hanging.quad, Ptr{p8est_quadrant_t}, baseid[i])[])
+#         base_quad =
+#             unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
+#         if !(isa(base_quad,InsideSolidData) || base_quad.bound_enc<0)
+#             flag = false
+# 			baseid = baseid[i]
+#             break
+#         end
+#     end
+#     flag && return nothing
+#     faceid = side.face[] + 1
+#     index = 1
+#     hanging_quads = Vector{AbstractPsData{DIM,NDF}}(undef, 2^(DIM - 1)-1)
+#     for i in 0:2^(DIM-1)-1
+#         i==baseid && continue
+#         qp = PointerWrapper(
+#             iPointerWrapper(side.is.hanging.quad, Ptr{p8est_quadrant_t}, i)[],
+#         )
+#         if is_ghost[i+1] == 0
+#             hanging_quads[index] = unsafe_pointer_to_objref(
+#                 pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data),
+#             )
+#         elseif quadid[i+1]>-1
+#             hanging_quads[index] = amr.ghost.ghost_wrap[quadid[i+1]+1]
+#         else
+#             hanging_quads[index] = MissingHangingQuad{DIM,NDF}()
+#         end
+#         index+=1
+#     end
+#     push!(faces, Face(InnerFace,base_quad, faceid, hanging_quads))
+# end
+# function initialize_faces!(
+#     ::Val{1},
+#     ::Val{0},
+#     ip::PointerWrapper{p4est_iter_face_info_t},
+#     side::PointerWrapper{T},
+#     amr::AMR{DIM,NDF},
+# ) where{T,DIM,NDF}
+#     side = iPointerWrapper(ip.sides, T, 1)
+#     faces = amr.field.faces
+#     base_quad = nothing
+#     if side.is_hanging[] == 0
+#         base_quad =
+#             unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
+#         isa(base_quad,InsideSolidData) && return nothing
+#         faceid = side.face[] + 1
+#         base_quad.bound_enc<0 && return nothing
+#         push!(faces, Face(InnerFace,base_quad, faceid, nothing))
+#     else
+#         is_ghost = Base.unsafe_wrap(
+#             Vector{Int8},
+#             Ptr{Int8}(pointer(side.is.hanging.is_ghost)),
+#             2^(DIM - 1),
+#         )
+#         quadid = Base.unsafe_wrap(
+#             Vector{Int32},
+#             Ptr{Int32}(pointer(side.is.hanging.quadid)),
+#             2^(DIM - 1),
+#         )
+#         baseid = findall(x -> x == 0, is_ghost) .- 1
+#         flag = true
+#         for i in eachindex(baseid)
+#             qp = PointerWrapper(iPointerWrapper(side.is.hanging.quad, Ptr{p4est_quadrant_t}, baseid[i])[])
+#             base_quad =
+#                 unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
+#             if !(isa(base_quad,InsideSolidData) || base_quad.bound_enc<0)
+#                 flag = false
+# 				baseid = baseid[i]
+#                 break
+#             end
+#         end
+#         flag && return nothing
+#         faceid = side.face[] + 1
+#         index = 1
+#         hanging_quads = Vector{AbstractPsData{DIM,NDF}}(undef, 2^(DIM - 1)-1)
+#         for i in 0:2^(DIM-1)-1
+#             i==baseid && continue
+#             qp = PointerWrapper(
+#                 iPointerWrapper(side.is.hanging.quad, Ptr{p4est_quadrant_t}, i)[],
+#             )
+#             if is_ghost[i+1] == 0
+#                 hanging_quads[index] = unsafe_pointer_to_objref(
+#                     pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data),
+#                 )
+#             elseif quadid[i+1]>-1
+#                 hanging_quads[index] = amr.ghost.ghost_wrap[quadid[i+1]+1]
+#             else
+#                 hanging_quads[index] = MissingHangingQuad{DIM,NDF}()
+#             end
+#             index+=1
+#         end
+#         push!(faces, Face(InnerFace,base_quad, faceid, hanging_quads))
+#     end
+# end
+# function initialize_faces!(
+#     ::Val{1},
+#     ::Val{0},
+#     ip::PointerWrapper{p8est_iter_face_info_t},
+#     side::PointerWrapper{T},
+#     amr::AMR{DIM,NDF},
+# ) where{T,DIM,NDF}
+#     side = iPointerWrapper(ip.sides, T, 1)
+#     faces = amr.field.faces
+#     base_quad = nothing
+#     if side.is_hanging[] == 0
+#         base_quad =
+#             unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
+#         isa(base_quad,InsideSolidData) && return nothing
+#         faceid = side.face[] + 1
+#         base_quad.bound_enc<0 && return nothing
+#         push!(faces, Face(InnerFace,base_quad, faceid, nothing))
+#     else
+#         is_ghost = Base.unsafe_wrap(
+#             Vector{Int8},
+#             Ptr{Int8}(pointer(side.is.hanging.is_ghost)),
+#             2^(DIM - 1),
+#         )
+#         quadid = Base.unsafe_wrap(
+#             Vector{Int32},
+#             Ptr{Int32}(pointer(side.is.hanging.quadid)),
+#             2^(DIM - 1),
+#         )
+#         baseid = findall(x -> x == 0, is_ghost) .- 1
+#         flag = true
+#         for i in eachindex(baseid)
+#             qp = PointerWrapper(iPointerWrapper(side.is.hanging.quad, Ptr{p8est_quadrant_t}, baseid[i])[])
+#             base_quad =
+#                 unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
+#             if !(isa(base_quad,InsideSolidData) || base_quad.bound_enc<0)
+#                 flag = false
+# 				baseid = baseid[i]
+#                 break
+#             end
+#         end
+#         flag && return nothing
+#         faceid = side.face[] + 1
+#         index = 1
+#         hanging_quads = Vector{AbstractPsData{DIM,NDF}}(undef, 2^(DIM - 1)-1)
+#         for i in 0:2^(DIM-1)-2
+#             i==baseid && continue
+#             qp = PointerWrapper(
+#                 iPointerWrapper(side.is.hanging.quad, Ptr{p8est_quadrant_t}, i)[],
+#             )
+#             if is_ghost[i+1] == 0
+#                 hanging_quads[index] = unsafe_pointer_to_objref(
+#                     pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data),
+#                 )
+#             elseif quadid[i+1]>-1
+#                 hanging_quads[index] = amr.ghost.ghost_wrap[quadid[i+1]+1]
+#             else
+#                 hanging_quads[index] = MissingHangingQuad{DIM,NDF}()
+#             end
+#             index+=1
+#         end
+#         push!(faces, Face(InnerFace,base_quad, faceid, hanging_quads))
+#     end
+# end
+# function initialize_faces!(
+#     ::Val{2},
+#     ip::PointerWrapper{p4est_iter_face_info_t},
+#     data::Ptr{Nothing},
+# )
+#     amr = unsafe_pointer_to_objref(data)
+#     sideid = 0
+#     side = iPointerWrapper(ip.sides, p4est_iter_face_side_t, sideid)
+#     side.is_hanging[] == 1 &&
+#         (side = iPointerWrapper(ip.sides, p4est_iter_face_side_t, (sideid += 1)))
+#     initialize_faces!(Val(Int(side.is.full.is_ghost[])), Val(sideid), ip, side, amr)
+# end
+# function initialize_faces!(
+#     ::Val{2},
+#     ip::PointerWrapper{p8est_iter_face_info_t},
+#     data::Ptr{Nothing},
+# )
+#     amr = unsafe_pointer_to_objref(data)
+#     sideid = 0
+#     side = iPointerWrapper(ip.sides, p8est_iter_face_side_t, sideid)
+#     side.is_hanging[] == 1 &&
+#         (side = iPointerWrapper(ip.sides, p8est_iter_face_side_t, (sideid += 1)))
+#     initialize_faces!(Val(Int(side.is.full.is_ghost[])), Val(sideid), ip, side, amr)
+# end
+# function initialize_faces!(
+#     ::Val{1},
+#     ip::PointerWrapper{p4est_iter_face_info_t},
+#     data::Ptr{Nothing},
+# )
+#     amr = unsafe_pointer_to_objref(data)
+#     faces = amr.field.faces
+#     side = iPointerWrapper(ip.sides, p4est_iter_face_side_t, 0)
+#     base_quad =
+#         unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
+#     isa(base_quad,InsideSolidData) && return nothing
+#     faceid = side.face[] + 1
+#     push!(faces, Face(BoundaryFace,base_quad, faceid, nothing))
+# end
+# function initialize_faces!(
+#     ::Val{1},
+#     ip::PointerWrapper{p8est_iter_face_info_t},
+#     data::Ptr{Nothing},
+# )
+#     amr = unsafe_pointer_to_objref(data)
+#     faces = amr.field.faces
+#     side = iPointerWrapper(ip.sides, p8est_iter_face_side_t, 0)
+#     base_quad =
+#         unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
+#     isa(base_quad,InsideSolidData) && return nothing
+#     faceid = side.face[] + 1
+#     push!(faces, Face(BoundaryFace,base_quad, faceid, nothing))
+# end
+# function initialize_faces!(ip::PW_pxest_iter_face_info_t, data)
+#     initialize_faces!(Val(Int(ip.sides.elem_count[])), ip, data)
+# end
+# function initialize_faces!(info::P_pxest_iter_face_info_t, data)
+#     AMR_face_iterate(info, data, initialize_faces!)
+# end
+# function initialize_faces!(ps4est::Ptr{p4est_t}, amr::AMR)
+#     global_data = amr.global_data
+#     p_data = pointer_from_objref(amr)
+#     c_initialize_faces =
+#         @cfunction(initialize_faces!, Cvoid, (Ptr{p4est_iter_face_info_t}, Ptr{Nothing}))
+#     GC.@preserve p_data c_initialize_faces AMR_4est_face_iterate(
+#         ps4est,
+#         global_data.forest.ghost,
+#         p_data,
+#         c_initialize_faces,
+#     )
+# end
+# function initialize_faces!(ps4est::Ptr{p8est_t}, amr::AMR)
+#     global_data = amr.global_data
+#     p_data = pointer_from_objref(amr)
+#     c_initialize_faces =
+#         @cfunction(initialize_faces!, Cvoid, (Ptr{p8est_iter_face_info_t}, Ptr{Nothing}))
+#     GC.@preserve p_data c_initialize_faces AMR_4est_face_iterate(
+#         ps4est,
+#         global_data.forest.ghost,
+#         p_data,
+#         c_initialize_faces,
+#     )
+# end
+
+function initialize_faces!(ps4est::Ptr{p4est_t},amr::AMR)
+    global_data = amr.global_data
+    p_data = pointer_from_objref(amr)
+    GC.@preserve amr AMR_face_iterate(ps4est;user_data = p_data,ghost = global_data.forest.ghost) do ip,data
+        amr = unsafe_pointer_to_objref(data)
+        if ip.sides.elem_count[]==1
+            initialize_domain_face!(iPointerWrapper(ip.sides,p4est_iter_face_side_t,0),amr)
+        else
+            Aside = iPointerWrapper(ip.sides,p4est_iter_face_side_t,0)
+            Bside = iPointerWrapper(ip.sides,p4est_iter_face_side_t,1)
+            if Aside.is_hanging[]==0
+                if Aside.is.full.is_ghost[]==0
+                    if Bside.is_hanging[]==0
+                        initialize_full_face!(Aside,amr)
+                    else
+                        initialize_hanging_face!(Aside,amr)
+                    end
+                elseif Bside.is_hanging[]==0
+                    initialize_full_face!(Bside,amr)
+                else
+                    initialize_back_hanging_face!(Bside,amr)
+                end
+            elseif Bside.is.full.is_ghost[]==0
+                initialize_hanging_face!(Bside,amr)
+            else
+                initialize_back_hanging_face!(Aside,amr)
+            end
+        end
+    end
+end
+function initialize_domain_face!(side::PointerWrapper{p4est_iter_face_side_t},amr::AMR{DIM,NDF}) where{DIM,NDF}
+    faces = amr.field.faces
+    base_quad = 
+        unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data,
+            side.is.full.quad.p.user_data[]).ps_data))
+    isa(base_quad,InsideSolidData) && return nothing
+    faceid = side.face[]+1
+    direction = get_dir(faceid)
+    rot = get_rot(faceid)
+    midpoint = copy(base_quad.midpoint)
+    midpoint[direction] -= 0.5*rot*base_quad.ds[direction]
+    domain = amr.global_data.config.domain[faceid]
+    push!(faces,DomainFace{DIM,NDF,typeof(domain).parameters[1]}(rot,direction,midpoint,domain,base_quad))
+    return nothing
+end
+function solid_full_face_check(base_quad,faceid)
+    neighbor = base_quad.neighbor.data[faceid][1]
+    (!isa(neighbor,PS_Data)||neighbor.bound_enc<0) && return true
+    return false
+end
+function solid_hanging_face_check(base_quad,faceid)
+    ids = findall(x->(isa(x,PS_Data)&&x.bound_enc>=0),base_quad.neighbor.data[faceid])
+    return ids
+end
+function initialize_full_face!(side::PointerWrapper{p4est_iter_face_side_t},amr::AMR{DIM,NDF}) where{DIM,NDF}
     faces = amr.field.faces
     base_quad =
-    unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
+        unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data,
+            side.is.full.quad.p.user_data[]).ps_data))
     isa(base_quad,InsideSolidData) && return nothing
     faceid = side.face[] + 1
     if base_quad.bound_enc<0
-        !any(x->isa(x,PS_Data),base_quad.neighbor.data[faceid]) && return nothing
-	!any(x->(!isa(x,InsideSolidData)&&x.bound_enc>=0),base_quad.neighbor.data[faceid]) && return nothing
-        # base_quad = base_quad.neighbor.data[faceid][findfirst(x->x.bound_enc>=0&&isa(x,PS_Data),base_quad.neighbor.data[faceid])]
+        solid_full_face_check(base_quad,faceid) && return nothing
         base_quad = base_quad.neighbor.data[faceid][1]
 		faceid += faceid%2==0 ? -1 : 1
     end
-    push!(faces, Face(InnerFace,base_quad, faceid, nothing))
+    direction = get_dir(faceid)
+    rot = get_rot(faceid)
+    midpoint = copy(base_quad.midpoint)
+    midpoint[direction] -= 0.5*rot*base_quad.ds[direction]
+    push!(faces,FullFace{DIM,NDF}(rot,direction,midpoint,base_quad,base_quad.neighbor.data[faceid][1]))
+    return nothing
 end
-function initialize_faces!(
-    ::Val{1},
-    ::Val{1},
-    ip::PointerWrapper{p4est_iter_face_info_t},
-    side::PointerWrapper{T},
-    amr::AMR{DIM,NDF},
-)   where{T,DIM,NDF}
+function initialize_hanging_face!(side::PointerWrapper{p4est_iter_face_side_t},amr::AMR{DIM,NDF}) where{DIM,NDF}
     faces = amr.field.faces
-    side = iPointerWrapper(ip.sides, T, 0)
+    base_quad =
+        unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data,
+            side.is.full.quad.p.user_data[]).ps_data))
+    isa(base_quad,InsideSolidData) && return nothing
+    faceid = side.face[] + 1
+    if base_quad.bound_enc<0
+        ids = solid_hanging_face_check(base_quad,faceid) 
+        isempty(ids) && return nothing     
+        here_data = base_quad.neighbor.data[faceid][ids]
+        faceid += faceid%2==0 ? -1 : 1
+        direction = get_dir(faceid)
+        rot = get_rot(faceid)
+        midpoint = [copy(x.midpoint) for x in here_data]
+        for i in eachindex(midpoint)
+            midpoint[i][direction] -= 0.5*rot*here_data[i].ds[direction]
+        end
+        push!(faces,BackHangingFace{DIM,NDF}(rot,direction,midpoint,here_data,base_quad))
+        return nothing
+    end
+    direction = get_dir(faceid)
+    rot = get_rot(faceid)
+    neighbor = base_quad.neighbor.data[faceid]
+    midpoint = [copy(x.midpoint) for x in neighbor]
+    for i in eachindex(neighbor)
+        midpoint[i][direction] += 0.5*rot*neighbor[i].ds[direction]
+    end
+    push!(faces,HangingFace{DIM,NDF}(rot,direction,midpoint,base_quad,neighbor))
+    return nothing
+end
+function initialize_back_hanging_face!(side::PointerWrapper{p4est_iter_face_side_t},amr::AMR{DIM,NDF}) where{DIM,NDF}
+    faces = amr.field.faces
     is_ghost = Base.unsafe_wrap(
         Vector{Int8},
         Ptr{Int8}(pointer(side.is.hanging.is_ghost)),
         2^(DIM - 1),
     )
-    quadid = Base.unsafe_wrap(
-        Vector{Int32},
-        Ptr{Int32}(pointer(side.is.hanging.quadid)),
-        2^(DIM - 1),
-    )
-    baseid = findall(x -> x == 0, is_ghost) .- 1
-    flag = true # all local quads are InsideSolidData/SolidCell?
-    base_quad = nothing
-    for i in eachindex(baseid)
-        qp = PointerWrapper(iPointerWrapper(side.is.hanging.quad, Ptr{p4est_quadrant_t}, baseid[i])[])
+    ids = findall(x->x==0,is_ghost).-1
+    faceid = side.face[]+1
+    here_data = Vector{PS_Data{DIM,NDF}}()
+    for i in ids
+        qp = PointerWrapper(iPointerWrapper(side.is.hanging.quad, Ptr{p4est_quadrant_t}, i)[])
         base_quad =
             unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
-        if !(isa(base_quad,InsideSolidData) || base_quad.bound_enc<0)
-            flag = false
-			baseid = baseid[i]
-            break
-        end
+        (!isa(base_quad,PS_Data)||base_quad.bound_enc<0) && continue
+        push!(here_data,base_quad)
     end
-    flag && return nothing
-    faceid = side.face[] + 1
-    index = 1
-    hanging_quads = Vector{AbstractPsData{DIM,NDF}}(undef, 2^(DIM - 1)-1)
-    for i in 0:2^(DIM-1)-1
-        i==baseid && continue
-        qp = PointerWrapper(
-            iPointerWrapper(side.is.hanging.quad, Ptr{p4est_quadrant_t}, i)[],
-        )
-        if is_ghost[i+1] == 0
-            hanging_quads[index] = unsafe_pointer_to_objref(
-                pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data),
-            )
-        elseif quadid[i+1]>-1
-            hanging_quads[index] = amr.ghost.ghost_wrap[quadid[i+1]+1]
-        else
-            hanging_quads[index] = MissingHangingQuad{DIM,NDF}()
+    isempty(here_data)&&return nothing
+    direction = get_dir(faceid)
+    rot = get_rot(faceid)
+    midpoint = [copy(x.midpoint) for x in here_data]
+        for i in eachindex(midpoint)
+            midpoint[i][direction] -= 0.5*rot*here_data[i].ds[direction]
         end
-        index+=1
-    end
-    push!(faces, Face(InnerFace,base_quad, faceid, hanging_quads))
-end
-function initialize_faces!(
-    ::Val{1},
-    ::Val{1},
-    ip::PointerWrapper{p8est_iter_face_info_t},
-    side::PointerWrapper{T},
-    amr::AMR{DIM,NDF},
-)   where{T,DIM,NDF}
-    faces = amr.field.faces
-    side = iPointerWrapper(ip.sides, T, 0)
-    is_ghost = Base.unsafe_wrap(
-        Vector{Int8},
-        Ptr{Int8}(pointer(side.is.hanging.is_ghost)),
-        2^(DIM - 1),
-    )
-    quadid = Base.unsafe_wrap(
-        Vector{Int32},
-        Ptr{Int32}(pointer(side.is.hanging.quadid)),
-        2^(DIM - 1),
-    )
-    baseid = findall(x -> x == 0, is_ghost) .- 1
-    flag = true
-    base_quad = nothing
-    for i in eachindex(baseid)
-        qp = PointerWrapper(iPointerWrapper(side.is.hanging.quad, Ptr{p8est_quadrant_t}, baseid[i])[])
-        base_quad =
-            unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
-        if !(isa(base_quad,InsideSolidData) || base_quad.bound_enc<0)
-            flag = false
-			baseid = baseid[i]
-            break
-        end
-    end
-    flag && return nothing
-    faceid = side.face[] + 1
-    index = 1
-    hanging_quads = Vector{AbstractPsData{DIM,NDF}}(undef, 2^(DIM - 1)-1)
-    for i in 0:2^(DIM-1)-1
-        i==baseid && continue
-        qp = PointerWrapper(
-            iPointerWrapper(side.is.hanging.quad, Ptr{p8est_quadrant_t}, i)[],
-        )
-        if is_ghost[i+1] == 0
-            hanging_quads[index] = unsafe_pointer_to_objref(
-                pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data),
-            )
-        elseif quadid[i+1]>-1
-            hanging_quads[index] = amr.ghost.ghost_wrap[quadid[i+1]+1]
-        else
-            hanging_quads[index] = MissingHangingQuad{DIM,NDF}()
-        end
-        index+=1
-    end
-    push!(faces, Face(InnerFace,base_quad, faceid, hanging_quads))
-end
-function initialize_faces!(
-    ::Val{1},
-    ::Val{0},
-    ip::PointerWrapper{p4est_iter_face_info_t},
-    side::PointerWrapper{T},
-    amr::AMR{DIM,NDF},
-) where{T,DIM,NDF}
-    side = iPointerWrapper(ip.sides, T, 1)
-    faces = amr.field.faces
-    base_quad = nothing
-    if side.is_hanging[] == 0
-        base_quad =
-            unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
-        isa(base_quad,InsideSolidData) && return nothing
-        faceid = side.face[] + 1
-        base_quad.bound_enc<0 && return nothing
-        push!(faces, Face(InnerFace,base_quad, faceid, nothing))
-    else
-        is_ghost = Base.unsafe_wrap(
-            Vector{Int8},
-            Ptr{Int8}(pointer(side.is.hanging.is_ghost)),
-            2^(DIM - 1),
-        )
-        quadid = Base.unsafe_wrap(
-            Vector{Int32},
-            Ptr{Int32}(pointer(side.is.hanging.quadid)),
-            2^(DIM - 1),
-        )
-        baseid = findall(x -> x == 0, is_ghost) .- 1
-        flag = true
-        for i in eachindex(baseid)
-            qp = PointerWrapper(iPointerWrapper(side.is.hanging.quad, Ptr{p4est_quadrant_t}, baseid[i])[])
-            base_quad =
-                unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
-            if !(isa(base_quad,InsideSolidData) || base_quad.bound_enc<0)
-                flag = false
-				baseid = baseid[i]
-                break
-            end
-        end
-        flag && return nothing
-        faceid = side.face[] + 1
-        index = 1
-        hanging_quads = Vector{AbstractPsData{DIM,NDF}}(undef, 2^(DIM - 1)-1)
-        for i in 0:2^(DIM-1)-1
-            i==baseid && continue
-            qp = PointerWrapper(
-                iPointerWrapper(side.is.hanging.quad, Ptr{p4est_quadrant_t}, i)[],
-            )
-            if is_ghost[i+1] == 0
-                hanging_quads[index] = unsafe_pointer_to_objref(
-                    pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data),
-                )
-            elseif quadid[i+1]>-1
-                hanging_quads[index] = amr.ghost.ghost_wrap[quadid[i+1]+1]
-            else
-                hanging_quads[index] = MissingHangingQuad{DIM,NDF}()
-            end
-            index+=1
-        end
-        push!(faces, Face(InnerFace,base_quad, faceid, hanging_quads))
-    end
-end
-function initialize_faces!(
-    ::Val{1},
-    ::Val{0},
-    ip::PointerWrapper{p8est_iter_face_info_t},
-    side::PointerWrapper{T},
-    amr::AMR{DIM,NDF},
-) where{T,DIM,NDF}
-    side = iPointerWrapper(ip.sides, T, 1)
-    faces = amr.field.faces
-    base_quad = nothing
-    if side.is_hanging[] == 0
-        base_quad =
-            unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
-        isa(base_quad,InsideSolidData) && return nothing
-        faceid = side.face[] + 1
-        base_quad.bound_enc<0 && return nothing
-        push!(faces, Face(InnerFace,base_quad, faceid, nothing))
-    else
-        is_ghost = Base.unsafe_wrap(
-            Vector{Int8},
-            Ptr{Int8}(pointer(side.is.hanging.is_ghost)),
-            2^(DIM - 1),
-        )
-        quadid = Base.unsafe_wrap(
-            Vector{Int32},
-            Ptr{Int32}(pointer(side.is.hanging.quadid)),
-            2^(DIM - 1),
-        )
-        baseid = findall(x -> x == 0, is_ghost) .- 1
-        flag = true
-        for i in eachindex(baseid)
-            qp = PointerWrapper(iPointerWrapper(side.is.hanging.quad, Ptr{p8est_quadrant_t}, baseid[i])[])
-            base_quad =
-                unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
-            if !(isa(base_quad,InsideSolidData) || base_quad.bound_enc<0)
-                flag = false
-				baseid = baseid[i]
-                break
-            end
-        end
-        flag && return nothing
-        faceid = side.face[] + 1
-        index = 1
-        hanging_quads = Vector{AbstractPsData{DIM,NDF}}(undef, 2^(DIM - 1)-1)
-        for i in 0:2^(DIM-1)-2
-            i==baseid && continue
-            qp = PointerWrapper(
-                iPointerWrapper(side.is.hanging.quad, Ptr{p8est_quadrant_t}, i)[],
-            )
-            if is_ghost[i+1] == 0
-                hanging_quads[index] = unsafe_pointer_to_objref(
-                    pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data),
-                )
-            elseif quadid[i+1]>-1
-                hanging_quads[index] = amr.ghost.ghost_wrap[quadid[i+1]+1]
-            else
-                hanging_quads[index] = MissingHangingQuad{DIM,NDF}()
-            end
-            index+=1
-        end
-        push!(faces, Face(InnerFace,base_quad, faceid, hanging_quads))
-    end
-end
-function initialize_faces!(
-    ::Val{2},
-    ip::PointerWrapper{p4est_iter_face_info_t},
-    data::Ptr{Nothing},
-)
-    amr = unsafe_pointer_to_objref(data)
-    sideid = 0
-    side = iPointerWrapper(ip.sides, p4est_iter_face_side_t, sideid)
-    side.is_hanging[] == 1 &&
-        (side = iPointerWrapper(ip.sides, p4est_iter_face_side_t, (sideid += 1)))
-    initialize_faces!(Val(Int(side.is.full.is_ghost[])), Val(sideid), ip, side, amr)
-end
-function initialize_faces!(
-    ::Val{2},
-    ip::PointerWrapper{p8est_iter_face_info_t},
-    data::Ptr{Nothing},
-)
-    amr = unsafe_pointer_to_objref(data)
-    sideid = 0
-    side = iPointerWrapper(ip.sides, p8est_iter_face_side_t, sideid)
-    side.is_hanging[] == 1 &&
-        (side = iPointerWrapper(ip.sides, p8est_iter_face_side_t, (sideid += 1)))
-    initialize_faces!(Val(Int(side.is.full.is_ghost[])), Val(sideid), ip, side, amr)
-end
-function initialize_faces!(
-    ::Val{1},
-    ip::PointerWrapper{p4est_iter_face_info_t},
-    data::Ptr{Nothing},
-)
-    amr = unsafe_pointer_to_objref(data)
-    faces = amr.field.faces
-    side = iPointerWrapper(ip.sides, p4est_iter_face_side_t, 0)
-    base_quad =
-        unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
-    isa(base_quad,InsideSolidData) && return nothing
-    faceid = side.face[] + 1
-    push!(faces, Face(BoundaryFace,base_quad, faceid, nothing))
-end
-function initialize_faces!(
-    ::Val{1},
-    ip::PointerWrapper{p8est_iter_face_info_t},
-    data::Ptr{Nothing},
-)
-    amr = unsafe_pointer_to_objref(data)
-    faces = amr.field.faces
-    side = iPointerWrapper(ip.sides, p8est_iter_face_side_t, 0)
-    base_quad =
-        unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, side.is.full.quad.p.user_data[]).ps_data))
-    isa(base_quad,InsideSolidData) && return nothing
-    faceid = side.face[] + 1
-    push!(faces, Face(BoundaryFace,base_quad, faceid, nothing))
-end
-function initialize_faces!(ip::PW_pxest_iter_face_info_t, data)
-    initialize_faces!(Val(Int(ip.sides.elem_count[])), ip, data)
-end
-function initialize_faces!(info::P_pxest_iter_face_info_t, data)
-    AMR_face_iterate(info, data, initialize_faces!)
-end
-function initialize_faces!(ps4est::Ptr{p4est_t}, amr::AMR)
-    global_data = amr.global_data
-    p_data = pointer_from_objref(amr)
-    c_initialize_faces =
-        @cfunction(initialize_faces!, Cvoid, (Ptr{p4est_iter_face_info_t}, Ptr{Nothing}))
-    GC.@preserve p_data c_initialize_faces AMR_4est_face_iterate(
-        ps4est,
-        global_data.forest.ghost,
-        p_data,
-        c_initialize_faces,
-    )
-end
-function initialize_faces!(ps4est::Ptr{p8est_t}, amr::AMR)
-    global_data = amr.global_data
-    p_data = pointer_from_objref(amr)
-    c_initialize_faces =
-        @cfunction(initialize_faces!, Cvoid, (Ptr{p8est_iter_face_info_t}, Ptr{Nothing}))
-    GC.@preserve p_data c_initialize_faces AMR_4est_face_iterate(
-        ps4est,
-        global_data.forest.ghost,
-        p_data,
-        c_initialize_faces,
-    )
+    push!(faces,BackHangingFace(rot,direction,midpoint,here_data,first(here_data).neighbor.data[faceid][1]))
+    return nothing
 end
 
 function init_solid_midpoints_kernel(ip, data, dp)
@@ -393,7 +525,7 @@ function init_ps_p4est_kernel(ip, data, dp)
         ps_data = PS_Data(typeof(global_data).parameters...)
         push!(trees.data[treeid], ps_data)
         dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
-        ic = global_data.config.ic
+        ic = global_data.config.IC
         gfq = unsafe_wrap(
             Vector{Int},
             pointer(ip.p4est.global_first_quadrant),
@@ -872,7 +1004,7 @@ function init(config::Dict)
     global_data.forest.ghost = ghost_ps
     global_data.forest.mesh = mesh_ps
     ghost = initialize_ghost(ps4est, global_data)
-    field = Field{config[:DIM],config[:NDF]}(trees,Vector{Face}(undef,0),boundary)
+    field = Field{config[:DIM],config[:NDF]}(trees,Vector{AbstractFace}(undef,0),boundary)
     amr = AMR(
         global_data,ghost,field
     )

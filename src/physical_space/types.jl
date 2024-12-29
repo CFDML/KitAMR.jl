@@ -92,19 +92,50 @@ mutable struct Ghost_PS_Data{DIM,NDF}<:AbstractGhostPsData{DIM,NDF}
 end
 mutable struct GhostInsideSolidData{DIM,NDF} <: AbstractGhostPsData{DIM,NDF} end
 
-abstract type AbstractFaceType end
-abstract type InnerFace <: AbstractFaceType end
-abstract type BoundaryFace <: AbstractFaceType end
+abstract type AbstractFace end
+abstract type InnerFace <: AbstractFace end
+abstract type BoundaryFace <: AbstractFace end
 # abstract type AbstractInsideSolidData{DIM,NDF} <: AbstractPsData{DIM,NDF} end
-HangingQuads = Union{Vector{AbstractPsData{DIM,NDF}}, Nothing} where{DIM,NDF}
-struct MissingHangingQuad{DIM,NDF} <: AbstractPsData{DIM,NDF} end
+# HangingQuads = Union{Vector{AbstractPsData{DIM,NDF}}, Nothing} where{DIM,NDF}
+# struct MissingHangingQuad{DIM,NDF} <: AbstractPsData{DIM,NDF} end
 mutable struct InsideSolidData{DIM,NDF} <: AbstractPsData{DIM,NDF} end
 AbstractInsideSolidData = Union{InsideSolidData,GhostInsideSolidData}
-struct Face{FT<:AbstractFaceType,T<:HangingQuads}
-    data::PS_Data
-    faceid::Integer
-    hanging_data::T # Is a vector when full is ghost, whose length for 2D = 1 and for 3D = 3.
+# struct Face{FT<:AbstractFaceType,T<:HangingQuads}
+#     data::PS_Data
+#     faceid::Integer
+#     hanging_data::T # Is a vector when full is ghost, whose length for 2D = 1 and for 3D = 3.
+# end
+# function Face(::Type{FT},data::PS_Data,faceid::Integer,hanging_data::T) where{FT<:AbstractFaceType,T<:HangingQuads}
+#     return Face{FT,T}(data,faceid,hanging_data)
+# end
+struct FullFace{DIM,NDF}<:InnerFace
+    rot::Float64
+    direction::Int
+    midpoint::Vector{Float64}
+    here_data::PS_Data{DIM,NDF}
+    there_data::AbstractPsData{DIM,NDF}
 end
-function Face(::Type{FT},data::PS_Data,faceid::Integer,hanging_data::T) where{FT<:AbstractFaceType,T<:HangingQuads}
-    return Face{FT,T}(data,faceid,hanging_data)
+
+struct HangingFace{DIM,NDF}<:InnerFace
+    rot::Float64
+    direction::Int
+    midpoint::Vector{Vector{Float64}}
+    here_data::PS_Data{DIM,NDF}
+    there_data::Vector{AbstractPsData{DIM,NDF}}
+end
+
+struct BackHangingFace{DIM,NDF}<:InnerFace
+    rot::Float64
+    direction::Int
+    midpoint::Vector{Vector{Float64}}
+    here_data::Vector{PS_Data{DIM,NDF}}
+    there_data::AbstractPsData{DIM,NDF}
+end
+
+struct Flux_Data{T<:InnerFace}
+    rot::Float64
+    direction::Int # face normal direction
+    midpoint::Vector{Float64} # midpoint of the face
+    here_data::AbstractPsData
+    there_data::AbstractPsData
 end

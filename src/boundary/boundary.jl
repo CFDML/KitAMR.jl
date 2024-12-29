@@ -1,3 +1,4 @@
+get_bc(bc::AbstractVector) = bc
 function solid_flag(boundary::Circle,midpoint::AbstractVector) # Does midpoint locate at solid?
     return xor(norm(midpoint.-boundary.center)>boundary.radius,boundary.solid)
 end
@@ -642,12 +643,12 @@ function sort_IB_cells!(circle::Circle,config::Configure,solid_cells::SolidCells
     for i in eachindex(solid_cells.ps_datas)
         ps_data = solid_cells.ps_datas[i]
         aux_point = calc_intersect_point(circle,ps_data.midpoint)
-        if config.IB_sort==:distance
+        if isa(config.IB_sort,DistanceIBSort)
             basis = [norm(x.midpoint .-aux_point) for x in IB_cells.IB_nodes[i]]
         end
         index = sortperm(basis)
         IB_cells.IB_nodes[i] = IB_cells.IB_nodes[i][index]
-        if config.IB_interp==:bilinear
+        if isa(config.IB_interp,BilinearIBInterpolate)
             colinear_reject!(IB_cells.IB_nodes[i])
         end
     end
@@ -665,7 +666,7 @@ end
 function init_solid_cells!(boundary::Boundary{DIM,NDF})where{DIM,NDF}
     solid_cells = boundary.solid_cells
     IB_cells = boundary.IB_cells
-    for i in eachindex(solid_cells)
+    @inbounds for i in eachindex(solid_cells)
         for j in eachindex(solid_cells[i].ps_datas)
             ps_data = solid_cells[i].ps_datas[j]
             vs_data = ps_data.vs_data
@@ -676,7 +677,8 @@ function init_solid_cells!(boundary::Boundary{DIM,NDF})where{DIM,NDF}
             vs_data.weight = IB_vs.weight
 			vs_data.midpoint = IB_vs.midpoint
             vs_data.df = IB_vs.df
-			vs_data.sdf = Array{Float64}(undef,IB_vs.vs_num,NDF,DIM) 
+			vs_data.sdf = zeros(IB_vs.vs_num,NDF,DIM) 
+            vs_data.flux = zeros(IB_vs.vs_num,NDF)
         end
     end
 end

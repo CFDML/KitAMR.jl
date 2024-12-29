@@ -16,13 +16,27 @@ PW_pxest_quadrant_t = Union{PointerWrapper{p4est_quadrant_t}, PointerWrapper{p8e
 PW_pxest_iter_volume_info_t = Union{PointerWrapper{p4est_iter_volume_info_t}, PointerWrapper{p8est_iter_volume_info_t}}
 PW_pxest_iter_face_info_t = Union{PointerWrapper{p4est_iter_face_info_t},PointerWrapper{p8est_iter_face_info_t}}
 
+abstract type AbstractFluxType end
+abstract type AbstractDVMFluxType <: AbstractFluxType end
+struct UGKS<:AbstractDVMFluxType end
+struct DVM<:AbstractDVMFluxType end
+
+abstract type AbstractTimeMarchingType end
+struct Rungekuta{O} <: AbstractTimeMarchingType end
+struct Euler <:AbstractTimeMarchingType end
+
+const AbstractICType=Union{Vector{Float64},Function}
+
 struct Solver
     CFL::Float64
     AMR_PS_MAXLEVEL::Int
     AMR_VS_MAXLEVEL::Int
+    flux::AbstractFluxType
+    time_marching::AbstractTimeMarchingType
 end
 function Solver(config::Dict)
-    return Solver(config[:CFL],config[:AMR_PS_MAXLEVEL],config[:AMR_VS_MAXLEVEL])
+    return Solver(config[:CFL],config[:AMR_PS_MAXLEVEL],
+        config[:AMR_VS_MAXLEVEL],config[:flux],config[:time_marching])
 end
 
 struct Configure{DIM,NDF}
@@ -30,11 +44,11 @@ struct Configure{DIM,NDF}
     trees_num::Vector{Int64}
     quadrature::Vector{Float64}
     vs_trees_num::Vector{Int64}
-    ic::Vector{Float64}
+    IC::AbstractICType
     domain::Vector{Domain}
     IB::Vector{AbstractBoundary}
-    IB_sort::Symbol
-    IB_interp::Symbol
+    IB_sort::AbstractIBSortType
+    IB_interp::AbstractIBInterpolateType
     gas::Gas
     solver::Solver
 end
@@ -44,20 +58,17 @@ function Configure(config::Dict)
         if haskey(config,i)
             setfield!(gas,i,config[i])
         end
-    end;
-    domain = Domain[]
-    bc = AbstractBoundary[]
-    for i = 1:2*config[:DIM]
-        push!(domain,Domain{config[:domaintype][i]}(i,config[:domainbc][i]))
     end
-    if !isempty(config[:boundarydefine])
-        for i in eachindex(config[:boundarydefine])
-            push!(bc,config[:boundarydefine][i])
+    IB = config[:IB]
+    for i in eachindex(IB)
+        if isa(IB[i],Circle)&&!isdefined(IB[i],:search_radius)
+            ds = minimum([(config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i]/2^config[:AMR_PS_MAXLEVEL] for i in 1:config[:DIM]])
+            IB[i] = Circle(IB[i],ds)
         end
     end
     return Configure{config[:DIM],config[:NDF]}(config[:geometry],config[:trees_num],
-        config[:quadrature],config[:vs_trees_num],config[:ic],domain,bc,config[:ib_sort],
-        config[:ib_interp],gas,Solver(config))
+        config[:quadrature],config[:vs_trees_num],config[:IC],config[:domain],config[:IB],
+        config[:IB_sort],config[:IB_interp],gas,Solver(config))
 end
 
 mutable struct Forest{DIM}
@@ -131,7 +142,7 @@ mutable struct Boundary{DIM,NDF}
 end
 mutable struct Field{DIM,NDF}
     trees::PS_Trees{DIM,NDF}
-    faces::Vector{Face}
+    faces::Vector{AbstractFace}
     boundary::Boundary{DIM,NDF}
     # solid_cells::Vector{Vector{PS_Data{DIM,NDF}}} # Outer vector corresbonds to boundaries
 end

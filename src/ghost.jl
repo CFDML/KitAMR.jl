@@ -351,7 +351,7 @@ function initialize_ghost_wrap(global_data::Global_Data{DIM,NDF}, ghost_exchange
         offset += global_vs_num
         midpoint_vs =
             Base.unsafe_wrap(Matrix{Cdouble}, p + offset * sizeof(Cdouble), (vs_num, DIM))
-        vs_data = Ghost_VS_Data{DIM,NDF}(vs_num, Int.(round.(level)), weight, midpoint_vs, df, sdf)
+        vs_data = Ghost_VS_Data{DIM,NDF}(vs_num, Int8.(round.(level)), weight, midpoint_vs, df, sdf)
         ghost_wrap[i] = Ghost_PS_Data{DIM,NDF}(bound_enc,ds, midpoint, w, sw, vs_data)
     end
     return ghost_wrap
