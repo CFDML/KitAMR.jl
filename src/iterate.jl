@@ -82,8 +82,12 @@ function update_volume!(amr::AMR)
             prim_ = get_prim(ps_data, global_data)
             τ_ = get_τ(prim_, gas.μᵣ, gas.ω)
             area = reduce(*, ps_data.ds)
-            ps_data.w .+= ps_data.flux ./ area
-            ps_data.flux .= 0.0
+            if isa(amr.global_data.config.solver.flux,MicroFlux)
+                ps_data.w = calc_w0(ps_data)
+            else
+                ps_data.w .+= ps_data.flux ./ area
+                ps_data.flux .= 0.0
+            end
             ps_data.prim .= prim = get_prim(ps_data, global_data)
             τ = get_τ(prim, gas.μᵣ, gas.ω)
             ps_data.qf .= qf = calc_qf(vs_data, prim_)

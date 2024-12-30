@@ -2,7 +2,7 @@ using KitAMR,MPI
 MPI.Init()
 config = KitAMR.read_config("configure.txt")
 ps4est,amr = KitAMR.init(config);
-for i in 1:1000
+for i in 1:500
     KitAMR.update_Δt!(amr);
     KitAMR.update_slope!(amr);
     KitAMR.slope_exchange!(ps4est, amr) 
