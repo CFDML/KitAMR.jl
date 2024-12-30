@@ -43,6 +43,13 @@ function update_domain_flux!(flux::AbstractVector,micro_flux::Vector{Matrix{Floa
     ps_data.vs_data.flux[heavi,:] .+= area*here_micro
     ps_data.vs_data.flux[.!heavi,:] .+= area*there_micro
 end
+function update_domain_flux!(::Nothing,micro_flux::Vector{Matrix{Float64}},face::DomainFace,heavi::Vector{Bool})
+    rot,direction,_,_,ps_data = unpack(face)
+    area = rot*face_area(ps_data,direction)
+    here_micro,there_micro = micro_flux
+    ps_data.vs_data.flux[heavi,:] .+= area*here_micro
+    ps_data.vs_data.flux[.!heavi,:] .+= area*there_micro
+end
 function face_area(::Flux_Data{HangingFace},here_data::AbstractPsData{DIM},direction,rot) where{DIM}
     face_area(here_data,direction)/2^(DIM-1)*rot
 end
@@ -52,6 +59,13 @@ function update_flux!(flux::AbstractVector,micro_flux::Vector{Matrix{Float64}},f
     area = face_area(face,here_data,direction,rot)
     here_micro,there_micro = micro_flux
     update_macro_flux!(flux*area,here_data,there_data)
+    update_micro_flux!(here_micro*area,there_micro*area,here_data,there_data,heavi)
+end
+function update_flux!(flux::Nothing,micro_flux::Vector{Matrix{Float64}},face::Union{FullFace,Flux_Data},heavi::Vector{Bool})
+    rot,direction,_,here_data,there_data = unpack(face)
+    area = face_area(face,here_data,direction,rot)
+    here_micro,there_micro = micro_flux
+    # update_macro_flux!(flux*area,here_data,there_data)
     update_micro_flux!(here_micro*area,there_micro*area,here_data,there_data,heavi)
 end
 function update_macro_flux!(flux::Vector,here_data::PS_Data,there_data::PS_Data)

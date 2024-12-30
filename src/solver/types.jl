@@ -20,6 +20,9 @@ abstract type AbstractFluxType end
 abstract type AbstractDVMFluxType <: AbstractFluxType end
 struct UGKS<:AbstractDVMFluxType end
 struct DVM<:AbstractDVMFluxType end
+const MicroFlux = Union{DVM}
+const HybridFlux = Union{UGKS} # to add more...
+
 
 abstract type AbstractTimeMarchingType end
 struct Rungekuta{O} <: AbstractTimeMarchingType end
