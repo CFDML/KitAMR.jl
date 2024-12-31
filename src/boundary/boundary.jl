@@ -1,17 +1,46 @@
 get_bc(bc::AbstractVector) = bc
+function solid_cell_index_encoder!(solid_cell_index::Vector{Int},now_index::Int)
+    # if solid_cell_index>2^120
+    #     @error `Too many solid cells are sharing the same IB node!`
+    # end
+    # if now_index>2^20
+    #     @error `Too many solid cells that a larger index type is needed!`
+    # end
+    # if solid_cell_index!=0
+    #     solid_cell_index = solid_cell_index<<20 + now_index
+    # else
+    #     solid_cell_index = now_index
+    # end
+    id = findfirst(x->x==0,solid_cell_index)
+    isnothing(id) && (@error `A larger SOLID_CELL_ID_NUM is needed!`)
+    solid_cell_index[id]=now_index
+end
+function solid_cell_index_decoder(solid_cell_index::Vector{Int})
+    # ids = Int[]
+    # for _ in 1:6
+    #     a = solid_cell_index%2^20
+    #     a==0&&break
+    #     push!(ids,a)
+    #     solid_cell_index = solid_cell_index>>20
+    # end
+    # return ids
+    ids = findall(x->x!=0,solid_cell_index)
+    @show solid_cell_index[ids]
+    return solid_cell_index[ids]
+end
 function solid_flag(boundary::Circle,midpoint::AbstractVector) # Does midpoint locate at solid?
     return xor(norm(midpoint.-boundary.center)>boundary.radius,boundary.solid)
 end
 function solid_flag(::Domain{Maxwellian},::AbstractVector) # Does midpoint locate at solid?
     return false
 end
-function solid_cell_flag(boundary::Circle,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data,inside::Bool) # Screen ghost cells, that is those inside solid domain and immediately adjacent the boundary.
+function solid_cell_flag(boundary::Circle,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data,inside::Bool) # Ghost nodes, those are inside solid domain and immediately adjacent the boundary.
     (boundary_flag(boundary,midpoint,ds,global_data) && xor(boundary.solid,!inside)) && return true
     return false
 end
-function solid_cell_flag(boundary::Vector{AbstractBoundary},midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data)
-    for i in eachindex(boundary)
-        solid_cell_flag(boundary[i],midpoint,ds,global_data,solid_flag(boundary[i],midpoint))&& return true
+function solid_cell_flag(boundaries::Vector{AbstractBoundary},midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data)
+    for boundary in boundaries
+        solid_cell_flag(boundary,midpoint,ds,global_data,solid_flag(boundary,midpoint))&& return true
     end
     return false
 end
@@ -158,8 +187,8 @@ function broadcast_quadid!(solid_cells::Vector{T})where{T<:SolidCells}
     return Numbers
 end
 
-function IB_flag(boundary::Circle,aux_point::AbstractVector,midpoint::AbstractVector,ds::AbstractVector)
-    DIM = length(aux_point)
+function IB_flag(boundary::Circle,aux_point::AbstractVector,midpoint::AbstractVector,::AbstractVector)
+    # DIM = length(aux_point)
     r = boundary.search_radius
     #=
     for i in eachindex(2^DIM)
@@ -203,7 +232,7 @@ function search_IB!(IB_nodes::Vector{Vector{Vector{PS_Data{DIM,NDF}}}},aux_point
                 for l in eachindex(aux_points[k])
                     if IB_flag(boundaries[k],aux_points[k][l],ps_data.midpoint,ps_data.ds)
                         ps_data.bound_enc = k
-                        ps_data.solid_cell_index = l
+                        solid_cell_index_encoder!(ps_data.solid_cell_index,l)
                         push!(IB_nodes[k][l],ps_data)
                     end
                 end
@@ -532,6 +561,7 @@ end
 function update_quadid!_kernel(ip,data,dp)
     quadid = global_quadid(ip)
     ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+    isa(ps_data,InsideSolidData)&&return nothing
     ps_data.quadid = quadid
 end
 function update_quadid!(info,data)
@@ -576,20 +606,27 @@ function IB_quadid_exchange!(boundary::Boundary)
 end
 function IB_quadid_update!(ps4est::P_pxest_t,amr::AMR) # Before partition, global quadids of solid_cells and IB_nodes need to be updated
     boundary = amr.field.boundary
-    AMR_4est_volume_iterate(ps4est, p_data, update_quadid!)
-    IB_quadid_exchange!(boundary::Boundary)
+    AMR_4est_volume_iterate(ps4est, C_NULL, update_quadid!)
+    IB_quadid_exchange!(boundary)
 end
 function IB_solid_cells_assign(amr::AMR{DIM,NDF}) where{DIM,NDF}
-    IB_nodes = Vector{Vector{PS_Data{DIM,NDF}}}(undef,length(amr.field.boundary.solid_cells))
+    IB_nodes = Vector{Vector{Vector{PS_Data{DIM,NDF}}}}(undef,length(amr.field.boundary.solid_cells))
     for i in eachindex(IB_nodes)
-        IB_nodes[i] = Vector{PS_Data{DIM,NDF}}(undef,length(amr.field.boundary.solid_cells[i].quadids))
+        IB_nodes[i] = Vector{Vector{PS_Data{DIM,NDF}}}(undef,length(amr.field.boundary.solid_cells[i].quadids))
+        for j in eachindex(IB_nodes[i])
+            IB_nodes[i][j] = PS_Data{DIM,NDF}[]
+        end
     end
     trees = amr.field.trees.data
     for i in eachindex(trees)
         for j in eachindex(trees[i])
-            if trees[i][j].bound_enc>0
-                ps_data = trees[i][j]
-                push!(IB_nodes[ps_data.bound_enc][ps_data.solid_cell_index],ps_data)
+            ps_data = trees[i][j]
+            isa(ps_data,InsideSolidData)&&continue
+            if ps_data.bound_enc>0
+                solid_cell_indices = solid_cell_index_decoder(ps_data.solid_cell_index)
+                for solid_cell_index in solid_cell_indices
+                    push!(IB_nodes[ps_data.bound_enc][solid_cell_index],ps_data)
+                end
             end
         end
     end
@@ -597,16 +634,19 @@ function IB_solid_cells_assign(amr::AMR{DIM,NDF}) where{DIM,NDF}
 end
 function IB_update!(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF} # After partition, IB need to be reinitialized
     IB_nodes = IB_solid_cells_assign(amr)
-    for i in eachindex(IB_nodes)
-        IB_nodes[i] = Vector{Vector{PS_Data{DIM,NDF}}}(undef,length(solid_cells[i].quadids))
-        for j in eachindex(IB_nodes[i])
-            IB_nodes[i][j] = PS_Data{DIM,NDF}[]
-        end
-    end
+    # for i in eachindex(IB_nodes)
+    #     IB_nodes[i] = Vector{Vector{PS_Data{DIM,NDF}}}(undef,length(solid_cells[i].quadids))
+    #     for j in eachindex(IB_nodes[i])
+    #         IB_nodes[i][j] = PS_Data{DIM,NDF}[]
+    #     end
+    # end
     boundary = amr.field.boundary
+    solid_cells = boundary.solid_cells
     Numbers,IB_ranks_table,IB_cells = IB_Numbers_ranks(ps4est,IB_nodes,solid_cells)
-    finalize_IB!(boundary.IB_buffer)
+    # finalize_IB!(boundary.IB_buffer)
     boundary.IB_buffer = init_IBCells(Numbers,solid_cells,IB_ranks_table,IB_cells)
+    sort_IB_cells!(amr.global_data,boundary)
+    init_solid_cells!(boundary)
     boundary.IB_ranks_table = IB_ranks_table;boundary.IB_cells = IB_cells
 end
 function colinear_test(p1,p2,p3)

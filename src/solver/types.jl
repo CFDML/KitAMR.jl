@@ -162,8 +162,8 @@ end
 
 # partition
 
-mutable struct Transfer_Data{DIM,NDF}
-    encs::Vector{Int8}
+struct Transfer_Data{DIM,NDF}
+    encs::Vector{Int}
     w::Vector{Float64}
     vs_levels::Vector{Int8}
     vs_midpoints::Vector{Float64}
@@ -171,7 +171,7 @@ mutable struct Transfer_Data{DIM,NDF}
 end
 function Transfer_Data(DIM::Integer,NDF::Integer,ps_num::Integer,total_vs_num::Integer)
     return Transfer_Data{DIM,NDF}(
-        Vector{Int8}(undef, 2*ps_num),
+        Vector{Int}(undef, (SOLID_CELL_ID_NUM+1)*ps_num),
         Vector{Float64}(undef, (DIM+2) * ps_num),
         Vector{Int8}(undef, total_vs_num),
         Vector{Float64}(undef, DIM * total_vs_num),
