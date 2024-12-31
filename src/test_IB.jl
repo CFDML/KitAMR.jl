@@ -4,29 +4,29 @@ MPI.Init()
 config = KitAMR.read_config("configure_Cylinder.txt")
 ps4est,amr = KitAMR.init(config);
 for i = 1:10000
-    # if amr.global_data.status.ps_adapt_step == 10
-    #     KitAMR.update_slope!(amr)
-    #     KitAMR.update_gradmax!(amr)
-    #     KitAMR.ps_refine!(ps4est,amr)
-    #     KitAMR.ps_coarsen!(ps4est)
-    #     KitAMR.ps_balance!(ps4est)
-    #     if amr.global_data.status.partition_step == 20
-    #         KitAMR.IB_quadid_update!(amr)
-    #         KitAMR.ps_partition!(ps4est, amr)
-    #         KitAMR.IB_update!(ps4est,amr)
-    #         amr.global_data.status.partition_step = 0
-    #     end
-    #     if amr.global_data.status.vs_adapt_step == 40
-    #         KitAMR.vs_refine!(amr)
-    #         KitAMR.vs_coarsen!(amr)
-    #         amr.global_data.status.partition_step!=0&&KitAMR.IB_structure_update!(amr)
-    #         amr.global_data.status.vs_adapt_step = 0
-    #     end
-    #     KitAMR.update_ghost!(ps4est, amr)
-    #     KitAMR.update_neighbor!(ps4est, amr)
-    #     KitAMR.update_faces!(ps4est, amr)
-    #     amr.global_data.status.ps_adapt_step = 0
-    # end
+    if amr.global_data.status.ps_adapt_step == 10
+        KitAMR.update_slope!(amr)
+        KitAMR.update_gradmax!(amr)
+        KitAMR.ps_refine!(ps4est,amr)
+        KitAMR.ps_coarsen!(ps4est)
+        KitAMR.ps_balance!(ps4est)
+        if amr.global_data.status.partition_step == 20
+            KitAMR.IB_quadid_update!(amr)
+            KitAMR.ps_partition!(ps4est, amr)
+            KitAMR.IB_update!(ps4est,amr)
+            amr.global_data.status.partition_step = 0
+        end
+        # if amr.global_data.status.vs_adapt_step == 40
+        #     KitAMR.vs_refine!(amr)
+        #     KitAMR.vs_coarsen!(amr)
+        #     amr.global_data.status.partition_step!=0&&KitAMR.IB_structure_update!(amr)
+        #     amr.global_data.status.vs_adapt_step = 0
+        # end
+        KitAMR.update_ghost!(ps4est, amr)
+        KitAMR.update_neighbor!(ps4est, amr)
+        KitAMR.update_faces!(ps4est, amr)
+        amr.global_data.status.ps_adapt_step = 0
+    end
     KitAMR.update_Δt!(amr) 
     KitAMR.update_slope!(amr) 
     KitAMR.slope_exchange!(ps4est, amr) 

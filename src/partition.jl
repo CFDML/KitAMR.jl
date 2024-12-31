@@ -85,7 +85,7 @@ function up_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::Vec
     send_index = 1
     index = 1
     up_num = length(sends)
-    encs = Vector{Int8}(undef, 0)
+    encs = Vector{Int}(undef, 0)
     ws = Vector{Cdouble}(undef, 0)
     vs_levels = Vector{Int8}(undef, 0)
     vs_midpoints = Vector{Cdouble}(undef, 0)
@@ -95,20 +95,28 @@ function up_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::Vec
         for j in eachindex(trees[i])
             sends[send_index] > MPI.Comm_rank(MPI.COMM_WORLD) + 1 && break
             ps_data = trees[i][j]
-            push!(encs,ps_data.bound_enc,ps_data.solid_cell_index)
-            append!(ws, ps_data.w)
-            append!(vs_levels, ps_data.vs_data.level)
-            append!(vs_midpoints, reshape(ps_data.vs_data.midpoint, :))
-            append!(vs_df, reshape(ps_data.vs_data.df, :))
-            s_vs_nums[index] = ps_data.vs_data.vs_num
+            if isa(ps_data,InsideSolidData)
+                push!(encs,0)
+                append!(encs,zeros(SOLID_CELL_ID_NUM))
+                append!(ws,zeros(DIM+2))
+                s_vs_nums[index] = 0
+            else
+                push!(encs,ps_data.bound_enc)
+                append!(encs,ps_data.solid_cell_index)
+                append!(ws, ps_data.w)
+                append!(vs_levels, ps_data.vs_data.level)
+                append!(vs_midpoints, reshape(ps_data.vs_data.midpoint, :))
+                append!(vs_df, reshape(ps_data.vs_data.df, :))
+                s_vs_nums[index] = ps_data.vs_data.vs_num
+            end
             index += 1
             if index > send_nums[send_index]
-                push!(s_datas, Transfer_Data{DIM,NDF}(endcs, ws, vs_levels, vs_midpoints, vs_df))
+                push!(s_datas, Transfer_Data{DIM,NDF}(encs, ws, vs_levels, vs_midpoints, vs_df))
                 push!(s_vs_numss, s_vs_nums)
                 index = 1
                 send_index += 1
                 send_index > up_num && break
-                encs = Vector{Int8}(undef, 0)
+                encs = Vector{Int}(undef, 0)
                 ws = Vector{Cdouble}(undef, 0)
                 vs_levels = Vector{Int8}(undef, 0)
                 vs_midpoints = Vector{Cdouble}(undef, 0)
@@ -126,7 +134,7 @@ function down_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::V
     s_vs_numss = Vector{Vector{Int}}(undef, 0)
     send_index = length(sends)
     index = send_nums[send_index]
-    encs = Vector{Int8}(undef, 0)
+    encs = Vector{Int}(undef, 0)
     ws = Vector{Cdouble}(undef, 0)
     vs_levels = Vector{Int8}(undef, 0)
     vs_midpoints = Vector{Cdouble}(undef, 0)
@@ -136,12 +144,20 @@ function down_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::V
         for j in reverse(eachindex(trees[i]))
             sends[send_index] < MPI.Comm_rank(MPI.COMM_WORLD) + 1 && break
             ps_data = trees[i][j]
-            pushfirst!(encs, ps_data.bound_enc, ps_data.solid_cells_index)
-            prepend!(ws, ps_data.w)
-            prepend!(vs_levels, ps_data.vs_data.level)
-            prepend!(vs_midpoints, reshape(ps_data.vs_data.midpoint, :))
-            prepend!(vs_df, reshape(ps_data.vs_data.df, :))
-            s_vs_nums[index] = ps_data.vs_data.vs_num
+            if isa(ps_data,InsideSolidData)
+                pushfirst!(encs,0)
+                prepend!(encs,zeros(SOLID_CELL_ID_NUM))
+                prepend!(ws,zeros(DIM+2))
+                s_vs_nums[index] = 0
+            else
+                prepend!(encs,ps_data.solid_cell_index)
+                pushfirst!(encs, ps_data.bound_enc)
+                prepend!(ws, ps_data.w)
+                prepend!(vs_levels, ps_data.vs_data.level)
+                prepend!(vs_midpoints, reshape(ps_data.vs_data.midpoint, :))
+                prepend!(vs_df, reshape(ps_data.vs_data.df, :))
+                s_vs_nums[index] = ps_data.vs_data.vs_num
+            end
             index -= 1
             if index < 1
                 pushfirst!(s_datas, Transfer_Data{DIM,NDF}(encs, ws, vs_levels, vs_midpoints, vs_df))
@@ -149,7 +165,7 @@ function down_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::V
                 send_index -= 1
                 send_index < 1 && break
                 index = send_nums[send_index]
-                encs = Vector{Int8}(undef, 0)
+                encs = Vector{Int}(undef, 0)
                 ws = Vector{Cdouble}(undef, 0)
                 vs_levels = Vector{Int8}(undef, 0)
                 vs_midpoints = Vector{Cdouble}(undef, 0)
@@ -252,6 +268,13 @@ function transfer(
     reqs = Vector{MPI.Request}(undef, 0)
     for i in eachindex(sends)
         sreq = MPI.Isend(
+            s_datas[i].encs,
+            MPI.COMM_WORLD;
+            dest = sends[i] - 1,
+            tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
+        )
+        push!(reqs, sreq)
+        sreq = MPI.Isend(
             s_datas[i].w,
             MPI.COMM_WORLD;
             dest = sends[i] - 1,
@@ -290,6 +313,7 @@ function transfer(
             source = receives[i] - 1,
             tag = COMM_DATA_TAG + receives[i] - 1,
         )
+        push!(reqs, rreq)
         rreq = MPI.Irecv!(
             r_data.w,
             MPI.COMM_WORLD;
@@ -340,7 +364,7 @@ function partition_transfer(
     transfer(sends, s_datas, receives, receive_nums, r_vs_numss)
 end
 function unpack_data(vs_nums, data, amr::AMR{DIM,NDF}) where{DIM,NDF}
-    transfer_ps_datas = Array{PS_Data{DIM,NDF}}(undef, length(vs_nums))
+    transfer_ps_datas = Array{AbstractPsData{DIM,NDF}}(undef, length(vs_nums))
     quadrature = amr.global_data.config.quadrature
     vs_trees_num = reduce(*, amr.global_data.config.vs_trees_num)
     vs_space = 1.0
@@ -351,30 +375,34 @@ function unpack_data(vs_nums, data, amr::AMR{DIM,NDF}) where{DIM,NDF}
     offset = 0
     for i in eachindex(vs_nums)
         vs_num = vs_nums[i]
-        encs = data.encs[2*(i-1)+1:2*i]
-        w = data.w[(DIM+2)*(i-1)+1:(DIM+2)*i]
-        vs_levels = data.vs_levels[offset+1:offset+vs_num]
-        vs_midpoints =
-            reshape(data.vs_midpoints[DIM*offset+1:DIM*(offset+vs_num)], vs_num, DIM)
-        vs_df = reshape(data.vs_df[NDF*offset+1:NDF*(offset+vs_num)], vs_num, NDF)
-        vs_weight = @. tree_weight / 2^(DIM * vs_levels)
-        vs_data = VS_Data{DIM,NDF}(
-            vs_num,
-            vs_levels,
-            vs_weight,
-            vs_midpoints,
-            vs_df,
-            zeros(vs_num, NDF, DIM),
-            zeros(vs_num, NDF),
-        )
-        transfer_ps_datas[i] = PS_Data(DIM,NDF,encs,w, vs_data)
+        if vs_num==0
+            transfer_ps_datas[i] = InsideSolidData{DIM,NDF}()
+        else
+            encs = data.encs[(SOLID_CELL_ID_NUM+1)*(i-1)+1:(SOLID_CELL_ID_NUM+1)*i]
+            w = data.w[(DIM+2)*(i-1)+1:(DIM+2)*i]
+            vs_levels = data.vs_levels[offset+1:offset+vs_num]
+            vs_midpoints =
+                reshape(data.vs_midpoints[DIM*offset+1:DIM*(offset+vs_num)], vs_num, DIM)
+            vs_df = reshape(data.vs_df[NDF*offset+1:NDF*(offset+vs_num)], vs_num, NDF)
+            vs_weight = @. tree_weight / 2^(DIM * vs_levels)
+            vs_data = VS_Data{DIM,NDF}(
+                vs_num,
+                vs_levels,
+                vs_weight,
+                vs_midpoints,
+                vs_df,
+                zeros(vs_num, NDF, DIM),
+                zeros(vs_num, NDF),
+            )
+            transfer_ps_datas[i] = PS_Data(DIM,NDF,encs,w, vs_data)
+        end
         offset += vs_num
     end
     return transfer_ps_datas
 end
 function unpack_data(up_vs_numss, down_vs_numss, up_datas, down_datas, amr::AMR{DIM,NDF}) where{DIM,NDF}
-    up_ps_datas = Vector{PS_Data{DIM,NDF}}(undef, 0)
-    down_ps_datas = Vector{PS_Data{DIM,NDF}}(undef, 0)
+    up_ps_datas = Vector{AbstractPsData{DIM,NDF}}(undef, 0)
+    down_ps_datas = Vector{AbstractPsData{DIM,NDF}}(undef, 0)
     for i in eachindex(up_vs_numss)
         append!(up_ps_datas, unpack_data(up_vs_numss[i], up_datas[i], amr))
     end
@@ -386,7 +414,9 @@ end
 function init_up_quadrants!(ip, dp, ti_data::Transfer_Init, treeid::Integer, tree_datas)
     ti_data.up_index > ti_data.up_num && return nothing
     ps_data = ti_data.up_data[ti_data.up_index]
-    ps_data.ds, ps_data.midpoint = quad_to_cell(ip.p4est, treeid, ip.quad)
+    if !isa(ps_data,InsideSolidData)
+        ps_data.ds, ps_data.midpoint = quad_to_cell(ip.p4est, treeid, ip.quad)
+    end
     dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
     if treeid < ti_data.old_flt
         push!(tree_datas, ps_data)
@@ -400,7 +430,9 @@ function init_down_quadrants!(ip, dp, ti_data::Transfer_Init, treeid::Integer, t
     local_quadid(ip) < (ip.p4est.local_num_quadrants[] - ti_data.down_num) &&
         return nothing
     ps_data = ti_data.down_data[ti_data.down_index]
-    ps_data.ds, ps_data.midpoint = quad_to_cell(ip.p4est, treeid, ip.quad)
+    if !isa(ps_data,InsideSolidData)
+        ps_data.ds, ps_data.midpoint = quad_to_cell(ip.p4est, treeid, ip.quad)
+    end
     dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
     push!(tree_datas, ps_data)
     ti_data.down_index += 1

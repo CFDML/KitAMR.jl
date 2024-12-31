@@ -22,7 +22,7 @@ end
 mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
     quadid::Int # The unique identification of the ps_data, is currently used for SolidCells and IB nodes' partition. Only need to be updated before partition. Can be negative for SolidCells/IB nodes for the convenience of boundary_flag
     bound_enc::Int # 0:fluid_cell;>0:bound_enc th boundary's IB_cell;<0: bound_enc th boundary's solid_cell;
-    solid_cell_index::Int
+    solid_cell_index::Vector{Int}
     ds::Vector{Float64} # DIM
     midpoint::Vector{Float64}
     qf::Vector{Float64}
@@ -35,7 +35,7 @@ mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
     PS_Data(DIM,NDF) = (n = new{DIM,NDF}();
     n.quadid = 0;
     n.bound_enc = 0;
-    n.solid_cell_index = 0;
+    n.solid_cell_index = zeros(SOLID_CELL_ID_NUM);
     n.ds = zeros(DIM);
     n.midpoint = zeros(DIM);
     n.qf = zeros(DIM);
@@ -48,7 +48,7 @@ mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
     PS_Data(DIM,NDF,ds, midpoint, w, sw, vs_data) = (n = new{DIM,NDF}();
     n.quadid = 0;
     n.bound_enc = 0;
-    n.solid_cell_index = 0;
+    n.solid_cell_index = zeros(SOLID_CELL_ID_NUM);
     n.ds = ds;
     n.midpoint = midpoint;
     n.w = w;
@@ -59,7 +59,7 @@ mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
     PS_Data(DIM,NDF,w, vs_data) = (n = new{DIM,NDF}();
     n.quadid = 0;
     n.bound_enc = 0;
-    n.solid_cell_index = 0;
+    n.solid_cell_index = zeros(SOLID_CELL_ID_NUM);
     n.w = w;
     n.neighbor = Neighbor(DIM,NDF);
     n.sw = zeros(DIM+2, DIM);
@@ -68,10 +68,10 @@ mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
     n.flux = zeros(DIM+2);
     n.vs_data = vs_data;
     n)
-    PS_Data(DIM,NDF,encs::Vector{Int8},w, vs_data) = (n = new{DIM,NDF}();
+    PS_Data(DIM,NDF,encs::Vector{Int},w, vs_data) = (n = new{DIM,NDF}();
     n.quadid = 0;
     n.bound_enc = encs[1];
-    n.solid_cell_index = encs[2];
+    n.solid_cell_index = encs[2:SOLID_CELL_ID_NUM+1];
     n.w = w;
     n.neighbor = Neighbor(DIM,NDF);
     n.sw = zeros(DIM+2, DIM);
