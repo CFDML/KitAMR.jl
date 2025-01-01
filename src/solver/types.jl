@@ -136,7 +136,7 @@ end
 
 mutable struct Boundary{DIM,NDF}
     solid_cells::Vector{SolidCells{DIM,NDF}} # Element corresponds to one IB boundary
-    Numbers::Vector{Vector{Int}}
+    Numbers::Vector{Vector{Int}} # MPI_size{IB_Boundary_Number{}}, represents how many solid_cells for each IB_boundary on each rank
     image_points::Vector{Vector{Vector{Float64}}} # Image points of solid_cells sorted by quadid
     aux_points::Vector{Vector{Vector{Float64}}} # Midpoints of aux_points sorted by quadid
     IB_cells::Vector{IBCells} # Element corresponds to one IB boundary
