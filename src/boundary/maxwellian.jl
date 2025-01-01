@@ -269,10 +269,10 @@ function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vec
         vn = [dot(@view(vs_data.midpoint[j,:]),n) for j in axes(vs_data.midpoint,1)]
         Θ = heaviside.(vn)
         points = [IB_cells.IB_nodes[i][j].midpoint for j in 1:4]
-        try Ainv = inv(bilinear_coeffi_2D(points...))
-        catch
-            @show length(points) points
-        end
+        # try Ainv = inv(bilinear_coeffi_2D(points...))
+        # catch
+        #     @show length(points) points
+        # end
         Ainv = inv(bilinear_coeffi_2D(points...))
         b = Vector{Float64}(undef,4);ip_coeffi = make_bilinear_coeffi_2D(image_point)
         for j in axes(ip_df,1)

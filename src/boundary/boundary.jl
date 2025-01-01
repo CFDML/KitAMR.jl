@@ -25,7 +25,6 @@ function solid_cell_index_decoder(solid_cell_index::Vector{Int})
     # end
     # return ids
     ids = findall(x->x!=0,solid_cell_index)
-    @show solid_cell_index[ids]
     return solid_cell_index[ids]
 end
 function solid_flag(boundary::Circle,midpoint::AbstractVector) # Does midpoint locate at solid?
@@ -609,8 +608,33 @@ function IB_quadid_update!(ps4est::P_pxest_t,amr::AMR) # Before partition, globa
     AMR_4est_volume_iterate(ps4est, C_NULL, update_quadid!)
     IB_quadid_exchange!(boundary)
 end
-function IB_solid_cells_assign(amr::AMR{DIM,NDF}) where{DIM,NDF}
-    IB_nodes = Vector{Vector{Vector{PS_Data{DIM,NDF}}}}(undef,length(amr.field.boundary.solid_cells))
+function IB_solid_reassign!(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF} # collect IB_nodes for each solid cells, and update local solid cells
+    pp = PointerWrapper(ps4est)
+    gfq = Base.unsafe_wrap(
+        Vector{Int},
+        pointer(pp.global_first_quadrant),
+        MPI.Comm_size(MPI.COMM_WORLD) + 1,
+    )
+    solid_cells = amr.field.boundary.solid_cells
+    Numbers = amr.field.boundary.Numbers
+    for i in eachindex(solid_cells)
+        solid_cell = solid_cells[i]
+        solid_cell.ps_datas = PS_Data{DIM,NDF}[]
+        for j in 2:MPI.Comm_size(MPI.COMM_WORLD)
+            lid = findfirst(x->x>=gfq[j-1]&&x<gfq[j],solid_cell.quadids)
+            rid = findfirst(x->x>=gfq[j],solid_cell.quadids)
+            if isnothing(lid)
+                Numbers[j-1][i]=0
+            elseif isnothing(rid)
+                Numbers[j-1][i] = length(solid_cell.quadids)-lid+1
+                Numbers[j:end][i] .= 0
+                break
+            else
+                Numbers[j-1][i] = rid-lid
+            end
+        end
+    end
+    IB_nodes = Vector{Vector{Vector{PS_Data{DIM,NDF}}}}(undef,length(solid_cells))
     for i in eachindex(IB_nodes)
         IB_nodes[i] = Vector{Vector{PS_Data{DIM,NDF}}}(undef,length(amr.field.boundary.solid_cells[i].quadids))
         for j in eachindex(IB_nodes[i])
@@ -627,13 +651,15 @@ function IB_solid_cells_assign(amr::AMR{DIM,NDF}) where{DIM,NDF}
                 for solid_cell_index in solid_cell_indices
                     push!(IB_nodes[ps_data.bound_enc][solid_cell_index],ps_data)
                 end
+            elseif ps_data.bound_enc<0
+                push!(solid_cells[-ps_data.bound_enc].ps_datas,ps_data)
             end
         end
     end
     return IB_nodes
 end
-function IB_update!(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF} # After partition, IB need to be reinitialized
-    IB_nodes = IB_solid_cells_assign(amr)
+function IB_partition!(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF} # After partition, IB need to be reinitialized
+    IB_nodes = IB_solid_reassign!(ps4est,amr)
     # for i in eachindex(IB_nodes)
     #     IB_nodes[i] = Vector{Vector{PS_Data{DIM,NDF}}}(undef,length(solid_cells[i].quadids))
     #     for j in eachindex(IB_nodes[i])
@@ -645,9 +671,9 @@ function IB_update!(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF} # After 
     Numbers,IB_ranks_table,IB_cells = IB_Numbers_ranks(ps4est,IB_nodes,solid_cells)
     # finalize_IB!(boundary.IB_buffer)
     boundary.IB_buffer = init_IBCells(Numbers,solid_cells,IB_ranks_table,IB_cells)
+    boundary.IB_ranks_table = IB_ranks_table;boundary.IB_cells = IB_cells
     sort_IB_cells!(amr.global_data,boundary)
     init_solid_cells!(boundary)
-    boundary.IB_ranks_table = IB_ranks_table;boundary.IB_cells = IB_cells
 end
 function colinear_test(p1,p2,p3)
     isapprox(p1[1] * (p2[2] - p3[2]) + p2[1] * (p3[2] - p1[2]) + p3[1] * (p1[2] - p2[2]),0.;atol=1e-10)
@@ -684,9 +710,9 @@ function sort_IB_cells!(circle::Circle,config::Configure,solid_cells::SolidCells
         ps_data = solid_cells.ps_datas[i]
         aux_point = calc_intersect_point(circle,ps_data.midpoint)
         if isa(config.IB_sort,DistanceIBSort)
-            basis = [norm(x.midpoint .-aux_point) for x in IB_cells.IB_nodes[i]]
+            distances = [norm(x.midpoint .-aux_point) for x in IB_cells.IB_nodes[i]]
         end
-        index = sortperm(basis)
+        index = sortperm(distances)
         IB_cells.IB_nodes[i] = IB_cells.IB_nodes[i][index]
         if isa(config.IB_interp,BilinearIBInterpolate)
             colinear_reject!(IB_cells.IB_nodes[i])
