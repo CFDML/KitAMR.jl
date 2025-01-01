@@ -27,6 +27,7 @@ const HybridFlux = Union{UGKS} # to add more...
 abstract type AbstractTimeMarchingType end
 struct Rungekuta{O} <: AbstractTimeMarchingType end
 struct Euler <:AbstractTimeMarchingType end
+struct UGKS_Marching<:AbstractTimeMarchingType end
 
 const AbstractICType=Union{Vector{Float64},Function}
 
