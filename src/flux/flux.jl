@@ -70,7 +70,9 @@ function update_flux!(flux::Nothing,micro_flux::Vector{Matrix{Float64}},face::Un
 end
 function update_macro_flux!(flux::Vector,here_data::PS_Data,there_data::PS_Data)
     here_data.flux .+= flux
-    there_data.flux .-= flux
+    if there_data.bound_enc>=0
+        there_data.flux .-= flux
+    end
 end
 function update_macro_flux!(flux::Vector,here_data::PS_Data,::AbstractGhostPsData)
     here_data.flux .+= flux
@@ -80,54 +82,102 @@ function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM},there
     level = vs_data.level;level_n = nvs_data.level
     flux = vs_data.flux;flux_n = nvs_data.flux
     index = j = index_n = 1;flag = 0.
-    @inbounds for i = 1:vs_data.vs_num
-        if heavi[i]
-            @. flux[i, :] += @views here_micro[index, :]
-            if level[i] == level_n[j]
-                @. flux_n[j, :] -= @views here_micro[index, :]
-                j += 1
-            elseif level[i] < level_n[j]
-                while flag != 1.0
-                    @. flux_n[j, :] -= @views here_micro[index, :]
-                    flag += 1 / 2^(DIM * (level_n[j] - level[i]))
+    if there_data.bound_enc<0
+        @inbounds for i = 1:vs_data.vs_num
+            if heavi[i]
+                @. flux[i, :] += @views here_micro[index, :]
+                if level[i] == level_n[j]
                     j += 1
-                end
-                flag = 0.0
-            else
-                @. flux_n[j, :] -=
-                    @view(here_micro[index, :]) / 2^(DIM * (level[i] - level_n[j]))
-                flag += 1 / 2^(DIM * (level[i] - level_n[j]))
-                if flag == 1.0
-                    j += 1
+                elseif level[i] < level_n[j]
+                    while flag != 1.0
+                        flag += 1 / 2^(DIM * (level_n[j] - level[i]))
+                        j += 1
+                    end
                     flag = 0.0
+                else
+                    flag += 1 / 2^(DIM * (level[i] - level_n[j]))
+                    if flag == 1.0
+                        j += 1
+                        flag = 0.0
+                    end
+                end
+                index += 1
+            else
+                if level[i] == level_n[j]
+                    @. flux[i, :] += @views there_micro[index_n, :]
+                    j += 1
+                    index_n += 1
+                elseif level[i] < level_n[j]
+                    while flag != 1.0
+                        @. flux[i, :] +=
+                            @view(there_micro[index_n, :]) /
+                            2^(DIM * (level_n[j] - level[i]))
+                        flag += 1 / 2^(DIM * (level_n[j] - level[i]))
+                        j += 1
+                        index_n += 1
+                    end
+                    flag = 0.0
+                else
+                    @. flux[i, :] += @views there_micro[index_n, :]
+                    flag += 1 / 2^(DIM * (level[i] - level_n[j]))
+                    if flag == 1.0
+                        j += 1
+                        index_n += 1
+                        flag = 0.0
+                    end
                 end
             end
-            index += 1
-        else
-            if level[i] == level_n[j]
-                @. flux_n[j, :] -= @views there_micro[index_n, :]
-                @. flux[i, :] += @views there_micro[index_n, :]
-                j += 1
-                index_n += 1
-            elseif level[i] < level_n[j]
-                while flag != 1.0
-                    @. flux_n[j, :] -= @views there_micro[index_n, :]
-                    @. flux[i, :] +=
-                        @view(there_micro[index_n, :]) /
-                        2^(DIM * (level_n[j] - level[i]))
-                    flag += 1 / 2^(DIM * (level_n[j] - level[i]))
+        end
+    else
+        @inbounds for i = 1:vs_data.vs_num
+            if heavi[i]
+                @. flux[i, :] += @views here_micro[index, :]
+                if level[i] == level_n[j]
+                    @. flux_n[j, :] -= @views here_micro[index, :]
                     j += 1
-                    index_n += 1
-                end
-                flag = 0.0
-            else
-                @. flux[i, :] += @views there_micro[index_n, :]
-                flag += 1 / 2^(DIM * (level[i] - level_n[j]))
-                if flag == 1.0
-                    @. flux_n[j, :] -= @views there_micro[index_n, :]
-                    j += 1
-                    index_n += 1
+                elseif level[i] < level_n[j]
+                    while flag != 1.0
+                        @. flux_n[j, :] -= @views here_micro[index, :]
+                        flag += 1 / 2^(DIM * (level_n[j] - level[i]))
+                        j += 1
+                    end
                     flag = 0.0
+                else
+                    @. flux_n[j, :] -=
+                        @view(here_micro[index, :]) / 2^(DIM * (level[i] - level_n[j]))
+                    flag += 1 / 2^(DIM * (level[i] - level_n[j]))
+                    if flag == 1.0
+                        j += 1
+                        flag = 0.0
+                    end
+                end
+                index += 1
+            else
+                if level[i] == level_n[j]
+                    @. flux_n[j, :] -= @views there_micro[index_n, :]
+                    @. flux[i, :] += @views there_micro[index_n, :]
+                    j += 1
+                    index_n += 1
+                elseif level[i] < level_n[j]
+                    while flag != 1.0
+                        @. flux_n[j, :] -= @views there_micro[index_n, :]
+                        @. flux[i, :] +=
+                            @view(there_micro[index_n, :]) /
+                            2^(DIM * (level_n[j] - level[i]))
+                        flag += 1 / 2^(DIM * (level_n[j] - level[i]))
+                        j += 1
+                        index_n += 1
+                    end
+                    flag = 0.0
+                else
+                    @. flux[i, :] += @views there_micro[index_n, :]
+                    flag += 1 / 2^(DIM * (level[i] - level_n[j]))
+                    if flag == 1.0
+                        @. flux_n[j, :] -= @views there_micro[index_n, :]
+                        j += 1
+                        index_n += 1
+                        flag = 0.0
+                    end
                 end
             end
         end
@@ -199,6 +249,7 @@ function make_face_vs(face::FullFace{DIM,NDF}) where{DIM,NDF}
     rot,direction,_,here_data,there_data = unpack(face)
     vs_data = here_data.vs_data;nvs_data = there_data.vs_data
     here_mid = vs_data.midpoint;there_mid = nvs_data.midpoint
+    there_data.bound_enc<0 && project_solid_cell_slope!(nvs_data,vs_data,direction)
     heavi = [x<=0. for x in rot.*@views here_mid[:,direction]]
     nheavi = [x>0. for x in rot.*@views there_mid[:,direction]]
     @views here_vs = Face_VS_Data{DIM,NDF}(

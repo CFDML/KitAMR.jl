@@ -6,3 +6,4 @@ p
 test_vtk.vtp
 check.png
 .vscode/settings.json
+.DS_Store
