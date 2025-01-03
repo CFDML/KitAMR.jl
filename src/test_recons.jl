@@ -1,6 +1,6 @@
 using KitAMR,MPI
 MPI.Init()
-config = KitAMR.read_config("configure_UGKS.txt")
+config = KitAMR.read_config("configure.txt")
 ps4est,amr = KitAMR.init(config);
 for i in 1:10000
     if amr.global_data.status.ps_adapt_step == 10
