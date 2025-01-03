@@ -1,8 +1,8 @@
 using KitAMR,MPI
 MPI.Init()
-config = KitAMR.read_config("configure.txt")
+config = KitAMR.read_config("configure_UGKS.txt")
 ps4est,amr = KitAMR.init(config);
-for i in 1:100000
+for i in 1:10000
     if amr.global_data.status.ps_adapt_step == 10
         KitAMR.update_slope!(amr)
         KitAMR.update_gradmax!(amr)
