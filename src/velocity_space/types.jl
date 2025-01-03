@@ -26,11 +26,14 @@ end
 #     df::AbstractMatrix
 #     sdf::AbstractMatrix
 # end
-struct Face_VS_Data # different sides of the face combining the face-velocity-space
+struct Face_VS_Data{DIM,NDF} # different sides of the face combining the face-velocity-space
     heavi::Vector{Bool}
     weight::AbstractVector{Float64}
     midpoint::AbstractMatrix{Float64}
     vn::AbstractVector{Float64}
     df::AbstractMatrix{Float64}
     sdf::AbstractArray{Float64}
+end
+function Face_VS_Data(fvd::Face_VS_Data{DIM,NDF},df::AbstractMatrix) where{DIM,NDF}
+    return Face_VS_Data{DIM,NDF}(fvd.heavi,fvd.weight,fvd.midpoint,fvd.vn,df,fvd.sdf)
 end
