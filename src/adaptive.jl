@@ -117,12 +117,12 @@ function ps_replace(::Val{1}, out_quad, in_quads, which_tree, amr::AMR{DIM}) whe
         ps_data = ps_copy(Odata)
         if !isa(ps_data,InsideSolidData)
             ps_data.ds .*= 0.5
-            vs_data = ps_data.vs_data
+            # vs_data = ps_data.vs_data
             @. ps_data.midpoint += 0.5 * ps_data.ds * RMT[DIM][i]
-            for j = 1:DIM
-                @. vs_data.df += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(vs_data.sdf[:, :, j])
-                @. ps_data.w += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(ps_data.sw[:, j])
-            end
+            # for j = 1:DIM
+            #     @. vs_data.df += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(vs_data.sdf[:, :, j])
+            #     @. ps_data.w += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(ps_data.sw[:, j])
+            # end
         end
         insert!(datas, index - 1 + i, ps_data)
         dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
@@ -148,11 +148,11 @@ function ps_replace(::ChildNum, out_quad, in_quads, which_tree, amr::AMR{DIM,NDF
     Odata = Odatas[index]
     ps_data = ps_copy(Odata)
     @. ps_data.midpoint -= 0.5 * ps_data.ds * RMT[DIM][index]
-    vs_data = ps_data.vs_data
-    for i = 1:DIM
-        @. vs_data.df -= 0.5 * ps_data.ds[i] * RMT[DIM][index][i] * @view(vs_data.sdf[:, :, i])
-        @. ps_data.w -= 0.5 * ps_data.ds[i] * RMT[DIM][index][i] * @view(ps_data.sw[:, i])
-    end
+    # vs_data = ps_data.vs_data
+    # for i = 1:DIM
+    #     @. vs_data.df -= 0.5 * ps_data.ds[i] * RMT[DIM][index][i] * @view(vs_data.sdf[:, :, i])
+    #     @. ps_data.w -= 0.5 * ps_data.ds[i] * RMT[DIM][index][i] * @view(ps_data.sw[:, i])
+    # end
     ps_data.ds .*= 2.0
     # end
     index = findfirst(x -> x === Odatas[1], datas)

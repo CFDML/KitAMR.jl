@@ -571,17 +571,6 @@ function init_IB!(ps4est::P_pxest_t,trees::PS_Trees{DIM,NDF},global_data::Global
     search_IB!(IB_nodes,aux_points,trees,global_data)
     Numbers,IB_ranks_table,IB_cells = IB_Numbers_ranks(ps4est,IB_nodes,solid_cells)
     IB_buffer = init_IBCells(Numbers,solid_cells,IB_ranks_table,IB_cells)
-    # for i in eachindex(solid_cells)
-    #     for j in eachindex(solid_cells[i].ps_datas)
-    #         solid_cells[i].ps_datas[j].bound_enc = -i
-    #         for k in eachindex(IB_cells[i].IB_nodes[j])
-    #             IB_node = IB_cells[i].IB_nodes[j][k]
-    #             IB_node.bound_enc = i
-    #             IB_node.solid_cell_index = j
-    #         end
-    #     end
-        
-    # end
     return solid_Numbers,IB_cells,IB_buffer,IB_ranks_table
 end
 function init_ps!(ps4est::P_pxest_t,global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
