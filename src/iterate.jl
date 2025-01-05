@@ -126,10 +126,6 @@ function update_volume!(::Euler,amr::AMR)
             # if ps_data.midpoint==[-0.5078125000000003, -0.02734375]
             #     @show ps_data.prim
             # end
-            # try τ = get_τ(prim, gas.μᵣ, gas.ω)
-            # catch
-            #     @show ps_data.bound_enc ps_data.midpoint ps_data.w ps_data.prim ps_data.neighbor
-            # end
             τ = get_τ(prim, gas.μᵣ, gas.ω)
             ps_data.qf .= qf = calc_qf(vs_data, prim)
             F = discrete_maxwell(vs_data.midpoint, prim, global_data)

@@ -660,20 +660,13 @@ function IB_solid_reassign!(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF} 
 end
 function IB_partition!(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF} # After partition, IB need to be reinitialized
     IB_nodes = IB_solid_reassign!(ps4est,amr)
-    # for i in eachindex(IB_nodes)
-    #     IB_nodes[i] = Vector{Vector{PS_Data{DIM,NDF}}}(undef,length(solid_cells[i].quadids))
-    #     for j in eachindex(IB_nodes[i])
-    #         IB_nodes[i][j] = PS_Data{DIM,NDF}[]
-    #     end
-    # end
     boundary = amr.field.boundary
     solid_cells = boundary.solid_cells
     Numbers,IB_ranks_table,IB_cells = IB_Numbers_ranks(ps4est,IB_nodes,solid_cells)
-    # finalize_IB!(boundary.IB_buffer)
     boundary.IB_buffer = init_IBCells(Numbers,solid_cells,IB_ranks_table,IB_cells)
     boundary.IB_ranks_table = IB_ranks_table;boundary.IB_cells = IB_cells
     sort_IB_cells!(amr.global_data,boundary)
-    init_solid_cells!(boundary)
+    init_solid_cells_partition!(boundary)
 end
 function colinear_test(p1,p2,p3)
     isapprox(p1[1] * (p2[2] - p3[2]) + p2[1] * (p3[2] - p1[2]) + p3[1] * (p1[2] - p2[2]),0.;atol=1e-10)
@@ -742,7 +735,24 @@ function init_solid_cells!(boundary::Boundary{DIM,NDF})where{DIM,NDF}
             vs_data.level = IB_vs.level
             vs_data.weight = IB_vs.weight
 			vs_data.midpoint = IB_vs.midpoint
-            vs_data.df = IB_vs.df
+            vs_data.df = copy(IB_vs.df)
+			vs_data.sdf = zeros(IB_vs.vs_num,NDF,DIM) 
+            vs_data.flux = zeros(IB_vs.vs_num,NDF)
+        end
+    end
+end
+function init_solid_cells_partition!(boundary::Boundary{DIM,NDF})where{DIM,NDF}
+    solid_cells = boundary.solid_cells
+    IB_cells = boundary.IB_cells
+    @inbounds for i in eachindex(solid_cells)
+        for j in eachindex(solid_cells[i].ps_datas)
+            ps_data = solid_cells[i].ps_datas[j]
+            vs_data = ps_data.vs_data
+            IB_node = first(IB_cells[i].IB_nodes[j])
+            IB_vs = IB_node.vs_data
+            vs_data.level = IB_vs.level
+            vs_data.weight = IB_vs.weight
+			vs_data.midpoint = IB_vs.midpoint
 			vs_data.sdf = zeros(IB_vs.vs_num,NDF,DIM) 
             vs_data.flux = zeros(IB_vs.vs_num,NDF)
         end

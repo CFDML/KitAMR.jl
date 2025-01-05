@@ -1,3 +1,13 @@
+function partition_check(p4est::P_pxest_t)
+    pp = PointerWrapper(p4est)
+    gfq = Base.unsafe_wrap(
+        Vector{Int},
+        pointer(pp.global_first_quadrant),
+        MPI.Comm_size(MPI.COMM_WORLD) + 1,
+    )
+    nums = [gfq[i]-gfq[i-1] for i in 2:MPI.Comm_size(MPI.COMM_WORLD)+1]
+    return (maximum(nums)-minimum(nums))/minimum(nums)>0.1
+end
 function partition!(p4est::Ptr{p4est_t})
     pp = PointerWrapper(p4est)
     gfq = Base.unsafe_wrap(

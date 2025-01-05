@@ -272,14 +272,17 @@ function result2vtk(dirname::String,vtkname::String)
         cnn = Ptr{Ptr{p4est_connectivity_t}}(Libc.malloc(sizeof(Ptr{Ptr{p4est_connectivity_t}})))
         ps4est = p4est_load_ext("p",MPI.COMM_WORLD,Cint(0),Cint(0),Cint(1),Cint(0),C_NULL,cnn)
         result = nothing
+        ranks = nothing
         for i = 1:solverset.mpi_size
             if i==1
                 result = load_object(path*"/result_"*string(i-1)*".jld2")
+                ranks = zeros(Int,length(result.solution.ps_solutions))
             else
                 r = load_object(path*"/result_"*string(i-1)*".jld2")
 				append!(result.solution.ps_solutions,r.solution.ps_solutions)
 				append!(result.solution.vs_solutions,r.solution.vs_solutions)
 				append!(result.mesh_info.neighbor_nums,r.mesh_info.neighbor_nums)
+                append!(ranks,ones(Int,length(r.solution.ps_solutions))*(i-1))
             end
         end
         vtk_cnn = Vector{Vector{Int}}(undef,length(result.solution.ps_solutions))
@@ -374,6 +377,7 @@ function result2vtk(dirname::String,vtkname::String)
             vtk["T"] = [1/ps_solution.prim[end] for ps_solution in result.solution.ps_solutions]
             vtk["qfx"] = [ps_solution.qf[1] for ps_solution in result.solution.ps_solutions]
             vtk["qfy"] = [ps_solution.qf[2] for ps_solution in result.solution.ps_solutions]
+            vtk["mpi_rank"] = ranks
         end
 		fp = PointerWrapper(ps4est)
         p4est_connectivity_destroy(pointer(fp.connectivity))
