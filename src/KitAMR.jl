@@ -1,6 +1,6 @@
 module KitAMR
 
-using CairoMakie
+# using CairoMakie
 using MPI
 using JLD2
 using Dates
