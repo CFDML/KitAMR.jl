@@ -164,7 +164,7 @@ function vs_coarsen!(amr::AMR{DIM,NDF})where{DIM,NDF}
         for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
             isa(ps_data,InsideSolidData) && continue
-            ps_data.bound_enc<0 && continue # solid_cell
+            # ps_data.bound_enc<0 && continue # solid_cell
             vs_data = ps_data.vs_data
             U = ps_data.prim[2:1+DIM]
             lnmidpoint = reshape(vs_data.midpoint, :)
@@ -306,3 +306,16 @@ function pre_vs_refine!(trees::PS_Trees{DIM,NDF}, global_data::Global_Data{DIM,N
         vs_refine!(trees, global_data)
     end
 end
+# function update_solid_vs!(amr::AMR)
+#     boundary = amr.field.boundary
+#     solid_cells = boundary.solid_cells
+#     IB_cells = boundary.IB_cells
+#     @inbounds for i in eachindex(solid_cells)
+#         for j in eachindex(solid_cells[i].ps_datas)
+#             ps_data = solid_cells[i].ps_datas[j]
+#             vs_data = ps_data.vs_data
+#             IB_vs = first(IB_cells[i].IB_nodes[j]).vs_data
+#             vs_data.vs_num = IB_vs.vs_num
+#         end
+#     end
+# end

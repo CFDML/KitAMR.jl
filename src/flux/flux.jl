@@ -53,7 +53,9 @@ end
 function face_area(::Flux_Data{HangingFace{DIM,NDF}},here_data::AbstractPsData{DIM},direction,rot) where{DIM,NDF}
     face_area(here_data,direction)/2^(DIM-1)*rot
 end
-face_area(::Any,here_data,direction,rot)=face_area(here_data,direction)*rot
+function face_area(::T,here_data,direction,rot) where{T<:Union{Flux_Data{BackHangingFace{DIM,NDF}},FullFace{DIM,NDF}} where{DIM,NDF}}
+    face_area(here_data,direction)*rot
+end
 function update_flux!(flux::AbstractVector,micro_flux::Vector{Matrix{Float64}},face::Union{FullFace,Flux_Data},heavi::Vector{Bool})
     rot,direction,_,here_data,there_data = unpack(face)
     area = face_area(face,here_data,direction,rot)
@@ -61,7 +63,7 @@ function update_flux!(flux::AbstractVector,micro_flux::Vector{Matrix{Float64}},f
     update_macro_flux!(flux*area,here_data,there_data)
     update_micro_flux!(here_micro*area,there_micro*area,here_data,there_data,heavi)
 end
-function update_flux!(flux::Nothing,micro_flux::Vector{Matrix{Float64}},face::Union{FullFace,Flux_Data},heavi::Vector{Bool})
+function update_flux!(::Nothing,micro_flux::Vector{Matrix{Float64}},face::Union{FullFace,Flux_Data},heavi::Vector{Bool})
     rot,direction,_,here_data,there_data = unpack(face)
     area = face_area(face,here_data,direction,rot)
     here_micro,there_micro = micro_flux
@@ -249,7 +251,8 @@ function make_face_vs(face::FullFace{DIM,NDF}) where{DIM,NDF}
     rot,direction,_,here_data,there_data = unpack(face)
     vs_data = here_data.vs_data;nvs_data = there_data.vs_data
     here_mid = vs_data.midpoint;there_mid = nvs_data.midpoint
-    there_data.bound_enc<0 && project_solid_cell_slope!(nvs_data,vs_data,direction)
+    # there_data.bound_enc<0 && project_solid_cell_slope!(nvs_data,vs_data,direction)
+    there_data.bound_enc<0 && calc_solid_cell_slope!(nvs_data,vs_data,there_data.midpoint,here_data.midpoint,direction)
     heavi = [x<=0. for x in rot.*@views here_mid[:,direction]]
     nheavi = [x>0. for x in rot.*@views there_mid[:,direction]]
     @views here_vs = Face_VS_Data{DIM,NDF}(

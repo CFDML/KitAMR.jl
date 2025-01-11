@@ -19,19 +19,20 @@ end
 function calc_domain_flux(::DVM,here_vs::Face_VS_Data,face::DomainFace{2,NDF,UniformOutflow},amr::AMR) where{NDF}
     _,direction,midpoint,_,ps_data = unpack(face)
     heavi,_,here_mid,here_vn,here_df,here_sdf = unpack(here_vs)
-    Δt = amr.global_data.status.Δt
-    here_ps_mid = ps_data.midpoint
+    # Δt = amr.global_data.status.Δt
+    # here_ps_mid = ps_data.midpoint
     vs_data = ps_data.vs_data
     there_mid = @views vs_data.midpoint[.!heavi,:]
     ndf = @views vs_data.df[.!heavi,:]
     there_vn = @views there_mid[:,direction]
-    @inbounds @views dx = [midpoint[j]-here_mid[i,j]*Δt-here_ps_mid[j] for i in axes(here_mid,1),j in axes(here_mid,2)]
-    @inbounds @views df = [here_df[i,j]+dot(dx[i,:],here_sdf[i,j,:]) for i in axes(here_df,1),j in axes(here_df,2)]
+    # @inbounds @views dx = [midpoint[j]-here_mid[i,j]*Δt-here_ps_mid[j] for i in axes(here_mid,1),j in axes(here_mid,2)]
+    # @inbounds @views df = [here_df[i,j]+dot(dx[i,:],here_sdf[i,j,:]) for i in axes(here_df,1),j in axes(here_df,2)]
+    df = @views vs_data.df[heavi,:]
     @inbounds here_micro = [df[i,j]*here_vn[i] for i in axes(df,1),j in axes(df,2)]
     @inbounds there_micro = [ndf[i,j]*there_vn[i] for i in axes(ndf,1),j in axes(ndf,2)]
     return nothing,[here_micro,there_micro]
 end
-function calc_flux(::DVM,here_vs,there_vs,flux_data::Union{FullFace,Flux_Data},amr::AMR{2,2}) # without face area
+function calc_flux(::DVM,here_vs,there_vs,flux_data::Union{FullFace,Flux_Data},amr::AMR{2,2}) # without face area and Δt
     _,_,midpoint,here_data,there_data = unpack(flux_data)
     Δt = amr.global_data.status.Δt
     here_mid = here_vs.midpoint;there_mid = there_vs.midpoint

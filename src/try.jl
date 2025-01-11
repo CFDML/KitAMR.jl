@@ -72,3 +72,48 @@ findfirst(x->x!=0,numbers)
 gfq[28]
 gfq[29]
 gfq[30]
+# KitAMR.listen_for_save!(amr)
+# boundary = amr.field.boundary
+# IB_cells = boundary.IB_cells[1].IB_nodes
+# for i in eachindex(IB_cells)
+#     for IB_cell in IB_cells[i]
+#         !isa(IB_cell,KitAMR.PS_Data)&&continue
+#         sid = IB_cell.solid_cell_index
+#         if in(1,sid)
+#             IB_cell.prim.=NaN
+#         end
+#     end
+# end
+# faces = amr.field.faces
+# function color(face::KitAMR.InnerFace)
+#     color(face.here_data)
+#     color(face.there_data)
+# end
+# function color(ps_data::KitAMR.PS_Data)
+#     ps_data.prim[1]+=1.
+# end
+# function color(ps_data::KitAMR.AbstractPsData)
+#     return nothing
+# end
+# function color(ps_datas::Vector{KitAMR.PS_Data{DIM,NDF}}) where{DIM,NDF}
+#     for p in ps_datas
+#         color(p)
+#     end
+# end
+# function color(ps_datas::Vector{KitAMR.PS_Data{DIM,NDF}}) where{DIM,NDF}
+#     for p in ps_datas
+#         color(p)
+#     end
+# end
+# function color(ps_datas::Vector{KitAMR.AbstractPsData{DIM,NDF}}) where{DIM,NDF}
+#     for p in ps_datas
+#         color(p)
+#     end
+# end
+# function color(face)
+#     return nothing
+# end
+
+# for face in faces
+#     color(face)
+# end

@@ -68,27 +68,35 @@ mutable struct GhostIBVSData{DIM,NDF} <: AbstractVsData{DIM,NDF}
     # sdf::AbstractArray{Float64}
 end
 mutable struct GhostIBNode{DIM,NDF} # Maybe sdf?
+    solid_cell_index::Vector{Int}
     midpoint::Vector{Float64}
     prim::Vector{Float64}
     vs_data::GhostIBVSData{DIM,NDF}
 end
 const AbstractIBNodes{DIM,NDF} = Union{PS_Data{DIM,NDF},GhostIBNode{DIM,NDF}}
 mutable struct IBCells
-    IB_nodes::Vector{Vector{AbstractIBNodes}} # boundaries{SolidCells{IBNodes{}}}
+    IB_nodes::Vector{Vector{AbstractIBNodes}} # SolidCells{IBNodes{}}
     # quadids::Vector{Vector{Cint}} # Global quadids. Are only needed to be updated before partition.
 end
 mutable struct IBTransferData
+    solid_cell_indices::Matrix{Int}
     midpoints::Matrix{Float64}
     prims::Matrix{Float64}
     level::Vector{Int8}
-    weight::Vector{Float64}
+    # weight::Vector{Float64}
     vs_midpoint::Matrix{Float64}
     df::Matrix{Float64}
     # sdf::Array{Float64}
 end
+# mutable struct IBTransferVsData
+#     level::Vector{Int8}
+#     vs_midpoint::Matrix{Float64}
+#     df::Matrix{Float64}
+# end
 mutable struct IBBuffer
     sdata::Vector{IBTransferData} # Datas of IB nodes to be sent
     rdata::Vector{IBTransferData} # Datas of IB nodes to be received
     r_vs_nums::Vector{Vector{Int}}
+    ghost_nodes::Vector{Vector}
     IBBuffer() = new()
 end

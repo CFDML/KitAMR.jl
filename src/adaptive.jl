@@ -75,9 +75,10 @@ function ps_refine_flag(
     if ps_data.bound_enc!=0||domain_flag(global_data,ps_data.midpoint,ps_data.ds)
         return Cint(1)
     end
-    agrad = maximum(abs.(@view(ps_data.sw[end, :])))
-    rgrad = agrad / global_data.status.gradmax
-    if rgrad > 2.0^(DIM+qp.level[] - global_data.config.solver.AMR_PS_MAXLEVEL) * 0.01
+    # agrad = @views abs.((ps_data.sw[end, :]))
+    agrad = [maximum(abs.(ps_data.sw[i,:])) for i in 1:DIM+2]
+    rgrad = maximum(agrad ./ (global_data.status.gradmax.+EPS))
+    if rgrad > 2.0^(DIM+qp.level[] - global_data.config.solver.AMR_PS_MAXLEVEL) * ADAPT_COEFFI_PS
         flag = Cint(1)
     else
         flag = Cint(0)
@@ -117,12 +118,12 @@ function ps_replace(::Val{1}, out_quad, in_quads, which_tree, amr::AMR{DIM}) whe
         ps_data = ps_copy(Odata)
         if !isa(ps_data,InsideSolidData)
             ps_data.ds .*= 0.5
-            # vs_data = ps_data.vs_data
+            vs_data = ps_data.vs_data
             @. ps_data.midpoint += 0.5 * ps_data.ds * RMT[DIM][i]
-            # for j = 1:DIM
-            #     @. vs_data.df += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(vs_data.sdf[:, :, j])
-            #     @. ps_data.w += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(ps_data.sw[:, j])
-            # end
+            for j = 1:DIM
+                @. vs_data.df += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(vs_data.sdf[:, :, j])
+                @. ps_data.w += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(ps_data.sw[:, j])
+            end
         end
         insert!(datas, index - 1 + i, ps_data)
         dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
@@ -144,15 +145,16 @@ function ps_replace(::ChildNum, out_quad, in_quads, which_tree, amr::AMR{DIM,NDF
             pointer(PointerWrapper(P4est_PS_Data, pw_out_quad.p.user_data[]).ps_data),
         )
     end
-    index = 1
+    # @views _,index = findmax([maximum(abs.(x.sw[end,:])) for x in Odatas])
+    _,index = findmax([x.vs_data.vs_num for x in Odatas])
     Odata = Odatas[index]
     ps_data = ps_copy(Odata)
     @. ps_data.midpoint -= 0.5 * ps_data.ds * RMT[DIM][index]
-    # vs_data = ps_data.vs_data
-    # for i = 1:DIM
-    #     @. vs_data.df -= 0.5 * ps_data.ds[i] * RMT[DIM][index][i] * @view(vs_data.sdf[:, :, i])
-    #     @. ps_data.w -= 0.5 * ps_data.ds[i] * RMT[DIM][index][i] * @view(ps_data.sw[:, i])
-    # end
+    vs_data = ps_data.vs_data
+    for i = 1:DIM
+        @. vs_data.df -= 0.5 * ps_data.ds[i] * RMT[DIM][index][i] * @view(vs_data.sdf[:, :, i])
+        @. ps_data.w -= 0.5 * ps_data.ds[i] * RMT[DIM][index][i] * @view(ps_data.sw[:, i])
+    end
     ps_data.ds .*= 2.0
     # end
     index = findfirst(x -> x === Odatas[1], datas)
@@ -160,6 +162,78 @@ function ps_replace(::ChildNum, out_quad, in_quads, which_tree, amr::AMR{DIM,NDF
     insert!(datas, index, ps_data)
     dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
 end
+# function ps_balance_replace(::Val{1}, out_quad, in_quads, which_tree, amr::AMR{DIM,NDF}) where{DIM,NDF}# refine replace
+#     trees = amr.field.trees
+#     treeid = Int(which_tree) - trees.offset
+#     datas = trees.data[treeid]
+#     pw_out_quad = PointerWrapper(out_quad[1])
+#     Odata = unsafe_pointer_to_objref(
+#         pointer(PointerWrapper(P4est_PS_Data, pw_out_quad.p.user_data[]).ps_data),
+#     )
+#     index = findfirst(x -> x === Odata, datas)
+#     deleteat!(datas, index)
+#     pw_in_quad = PointerWrapper(in_quads[i])
+#     dp = PointerWrapper(P4est_PS_Data, pw_in_quad.p.user_data[])
+#     if !isa(ps_data,InsideSolidData)
+#         if first(Odata.neighbor.state)==BALANCE_FLAG
+#             for i = 1:2^DIM
+#                 ps_data = Odata.neighbor.data[1][i]
+#                 dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
+#                 insert!(datas, index - 1 + i, ps_data)
+#             end
+#         else
+#             children = Vector{PS_Data{DIM,NDF}}(undef,2^DIM)
+#             for i = 1:2^DIM
+#                 ps_data = ps_copy(Odata)
+#                 ps_data.ds .*= 0.5
+#                 vs_data = ps_data.vs_data
+#                 @. ps_data.midpoint += 0.5 * ps_data.ds * RMT[DIM][i]
+#                 for j = 1:DIM
+#                     @. vs_data.df += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(vs_data.sdf[:, :, j])
+#                     @. ps_data.w += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(ps_data.sw[:, j])
+#                 end
+#                 children[i] = ps_data
+#                 ps_data.neighbor
+#                 insert!(datas, index - 1 + i, ps_data)
+#                 dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
+#                 Odata
+#             end
+#         end
+#     end
+# end
+# function ps_balance_replace(::ChildNum, out_quad, in_quads, which_tree, amr::AMR{DIM,NDF}) where{DIM,NDF} # coarsen replace, average or interpolate? Currently interpolation strategy is adopted. If my memory serves me right, problems came out with average most likely due to the iterative balance process.
+#     trees = amr.field.trees
+#     treeid = Int(which_tree) - trees.offset
+#     datas = trees.data[treeid]
+#     pw_in_quad = PointerWrapper(in_quads[1])
+#     dp = PointerWrapper(P4est_PS_Data, pw_in_quad.p.user_data[])
+#     Odatas = Vector{AbstractPsData{DIM,NDF}}(undef, 2^DIM)
+#     # if !any(x->isa(PS_Data,x),Odatas)
+#     #     ps_data = copy(Odatas[1])
+#     # else
+#     for i = 1:2^DIM
+#         pw_out_quad = PointerWrapper(out_quad[i])
+#         Odatas[i] = unsafe_pointer_to_objref(
+#             pointer(PointerWrapper(P4est_PS_Data, pw_out_quad.p.user_data[]).ps_data),
+#         )
+#     end
+#     # @views _,index = findmax([maximum(abs.(x.sw[end,:])) for x in Odatas])
+#     _,index = findmax([x.vs_data.vs_num for x in Odatas])
+#     Odata = Odatas[index]
+#     ps_data = ps_copy(Odata)
+#     @. ps_data.midpoint -= 0.5 * ps_data.ds * RMT[DIM][index]
+#     # vs_data = ps_data.vs_data
+#     # for i = 1:DIM
+#     #     @. vs_data.df -= 0.5 * ps_data.ds[i] * RMT[DIM][index][i] * @view(vs_data.sdf[:, :, i])
+#     #     @. ps_data.w -= 0.5 * ps_data.ds[i] * RMT[DIM][index][i] * @view(ps_data.sw[:, i])
+#     # end
+#     ps_data.ds .*= 2.0
+#     # end
+#     index = findfirst(x -> x === Odatas[1], datas)
+#     deleteat!(datas, index:index+2^DIM-1)
+#     insert!(datas, index, ps_data)
+#     dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
+# end
 function p4est_replace(forest::T1, which_tree, num_out, out_quads::Ptr{T2}, num_in, in_quads) where{T1<:P_pxest_t,T2<:P_pxest_quadrant_t}
     GC.@preserve forest which_tree num_out out_quads num_in in_quads begin
         fp = PointerWrapper(forest)
@@ -281,10 +355,11 @@ function ps_coarsen_flag(ps_datas::Vector{PS_Data}, levels::Vector{Int}, amr::AM
     flag = Cint(1)
     for i = 1:2^DIM
         # (isa(ps_datas[i],InsideSolidData)||ps_datas[i].bound_enc!=0) && continue
-        (ps_datas[i].bound_enc!=0||domain_flag(global_data,ps_datas[i].midpoint,ps_datas[i].ds)) && return Cint(0)
-        agrad = maximum(abs.(@view(ps_datas[i].sw[end, :])))
-        rgrad = agrad / global_data.status.gradmax
-        if rgrad > 2.0^(DIM+levels[i] - global_data.config.solver.AMR_PS_MAXLEVEL) * 0.01
+        ps_data = ps_datas[i]
+        (ps_data.bound_enc!=0||domain_flag(global_data,ps_data.midpoint,ps_data.ds)) && return Cint(0)
+        agrad = [maximum(abs.(ps_data.sw[i,:])) for i in 1:DIM+2]
+        rgrad = maximum(agrad ./ (global_data.status.gradmax.+EPS))
+        if rgrad > 2.0^(DIM+levels[i] - global_data.config.solver.AMR_PS_MAXLEVEL) * ADAPT_COEFFI_PS
             flag = Cint(0)
             return flag
         end

@@ -1,21 +1,3 @@
-pxest_t = Union{p4est_t,p8est_t}
-pxest_ghost_t = Union{p4est_ghost_t,p8est_ghost_t}
-pxest_mesh_t = Union{p4est_mesh_t,p8est_mesh_t}
-
-P_pxest_t = Union{Ptr{p4est_t}, Ptr{p8est_t}}
-P_pxest_ghost_t = Union{Ptr{p4est_ghost_t}, Ptr{p8est_ghost_t}}
-P_pxest_mesh_t = Union{Ptr{p4est_mesh_t}, Ptr{p8est_mesh_t}}
-P_pxest_quadrant_t = Union{Ptr{p4est_quadrant_t}, Ptr{p8est_quadrant_t}}
-P_pxest_iter_volume_info_t = Union{Ptr{p4est_iter_volume_info_t}, Ptr{p8est_iter_volume_info_t}}
-P_pxest_iter_face_info_t = Union{Ptr{p4est_iter_face_info_t}, Ptr{p8est_iter_face_info_t}}
-
-PW_pxest_t = Union{PointerWrapper{p4est_t}, PointerWrapper{p8est_t}}
-PW_pxest_ghost_t = Union{PointerWrapper{p4est_ghost_t}, PointerWrapper{p8est_ghost_t}}
-PW_pxest_mesh_t = Union{PointerWrapper{p4est_mesh_t}, PointerWrapper{p8est_mesh_t}}
-PW_pxest_quadrant_t = Union{PointerWrapper{p4est_quadrant_t}, PointerWrapper{p8est_quadrant_t}}
-PW_pxest_iter_volume_info_t = Union{PointerWrapper{p4est_iter_volume_info_t}, PointerWrapper{p8est_iter_volume_info_t}}
-PW_pxest_iter_face_info_t = Union{PointerWrapper{p4est_iter_face_info_t},PointerWrapper{p8est_iter_face_info_t}}
-
 abstract type AbstractFluxType end
 abstract type AbstractDVMFluxType <: AbstractFluxType end
 struct UGKS<:AbstractDVMFluxType end
@@ -89,15 +71,16 @@ end
 
 mutable struct Status
     max_vs_num::Int
-    gradmax::Float64
+    gradmax::Vector{Float64}
     Δt::Float64
     sim_time::Float64
     ps_adapt_step::Int
     vs_adapt_step::Int
     partition_step::Int
+    save_flag::Base.RefValue{Bool}
 end
-function Status()
-    return Status(0,0.,1.,0.,0,0,0)
+function Status(DIM)
+    return Status(0,ones(DIM+2),1.,0.,1,1,1,Ref(false))
 end
 
 mutable struct Global_Data{DIM,NDF}
@@ -107,7 +90,7 @@ mutable struct Global_Data{DIM,NDF}
     Global_Data(config::Dict) = (n = new{config[:DIM],config[:NDF]}();
     n.config = Configure(config);
     n.forest = Forest(config[:DIM]);
-    n.status = Status();
+    n.status = Status(config[:DIM]);
     n
     )
 end
@@ -137,11 +120,12 @@ end
 
 mutable struct Boundary{DIM,NDF}
     solid_cells::Vector{SolidCells{DIM,NDF}} # Element corresponds to one IB boundary
-    Numbers::Vector{Vector{Int}} # MPI_size{IB_Boundary_Number{}}, represents how many solid_cells for each IB_boundary on each rank
+    solid_numbers::Vector{Vector{Int}} # MPI_size{IB_Boundary_Number{}}, represents how many solid_cells for each IB_boundary on each rank (is necessary?)
     image_points::Vector{Vector{Vector{Float64}}} # Image points of solid_cells sorted by quadid
     aux_points::Vector{Vector{Vector{Float64}}} # Midpoints of aux_points sorted by quadid
     IB_cells::Vector{IBCells} # Element corresponds to one IB boundary
-    IB_ranks_table::Vector{Vector{PS_Data{DIM,NDF}}} # Local IB nodes belonging to solidcells in different processors
+    IB_ranks::Vector{Vector{PS_Data{DIM,NDF}}} # Local IB nodes belonging to solidcells in different processors
+    # IB_ranks_table::Vector{Vector{Vector{PS_Data{DIM,NDF}}}} # Local IB nodes belonging to solidcells in different processors
     IB_buffer::IBBuffer # Buffer for IB communication. Store pointers for memory free.
 end
 mutable struct Field{DIM,NDF}

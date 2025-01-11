@@ -394,7 +394,7 @@ function unpack_data(vs_nums, data, amr::AMR{DIM,NDF}) where{DIM,NDF}
             vs_midpoints =
                 reshape(data.vs_midpoints[DIM*offset+1:DIM*(offset+vs_num)], vs_num, DIM)
             vs_df = reshape(data.vs_df[NDF*offset+1:NDF*(offset+vs_num)], vs_num, NDF)
-            vs_weight = @. tree_weight / 2^(DIM * vs_levels)
+            vs_weight = @. tree_weight / 2.0^(DIM * vs_levels)
             vs_data = VS_Data{DIM,NDF}(
                 vs_num,
                 vs_levels,

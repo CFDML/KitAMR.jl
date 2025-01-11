@@ -41,7 +41,7 @@ function calc_domain_flux(::UGKS,here_vs::Face_VS_Data,face::DomainFace{2,2,Supe
 end
 function calc_domain_flux(::UGKS,here_vs::Face_VS_Data,face::DomainFace{2,2,UniformOutflow},amr::AMR)
     rot,direction,midpoint,_,here_data = unpack(face)
-    heavi,_,_,_,here_df,here_sdf = unpack(here_vs)
+    heavi,here_weight,here_mid,here_vn,here_df,here_sdf = unpack(here_vs)
     global_data = amr.global_data
     gas = global_data.config.gas
     Δt = global_data.status.Δt
@@ -52,16 +52,14 @@ function calc_domain_flux(::UGKS,here_vs::Face_VS_Data,face::DomainFace{2,2,Unif
     there_vn = @views there_mid[:,direction]
     there_df = @views vs_data.df[nheavi,:]
     there_sdf = @views vs_data.sdf[nheavi,:,:]
-    dx = midpoint-here_data.midpoint
-    @inbounds @views begin
-        df = [here_df[i,j]+dot(dx,here_sdf[i,j,:]) for i in axes(here_df,1),j in axes(here_df,2)]
-        ndf = [there_df[i,j]+dot(dx,there_sdf[i,j,:]) for i in axes(there_df,1),j in axes(there_df,2)]
-    end
-    Here_vs = Face_VS_Data(here_vs,df);There_vs = Face_VS_Data{2,2}(nheavi,there_weight,there_mid,there_vn,ndf,zeros(size(there_sdf)))
+    df = here_df
+    ndf = there_df
+    Here_vs = Face_VS_Data{2,2}(heavi,here_weight,here_mid,here_vn,df,zeros(size(here_sdf)))
+    There_vs = Face_VS_Data{2,2}(nheavi,there_weight,there_mid,there_vn,ndf,zeros(size(there_sdf)))
     w0 = calc_w0(Here_vs,There_vs)
     prim0 = get_prim(w0, global_data)
     qf0 = calc_qf(Here_vs,There_vs,prim0)
-    aL, aR = calc_a(w0, prim0, here_data.w, here_data.w, here_data.ds[direction], here_data.ds[direction], global_data, rot)
+    aL, aR = calc_a(w0, prim0, here_data.w, w0, here_data.ds[direction], here_data.ds[direction], global_data, rot)
     Mu, Mv, Mξ, Mu_L, Mu_R = moment_u(prim0, global_data, rot, direction)
     A = calc_A(prim0, aL, aR, Mu, Mv, Mξ, Mu_L, Mu_R, global_data, direction)
     τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
@@ -222,6 +220,10 @@ function calc_flux(::UGKS,here_vs,there_vs,flux_data::Union{FullFace,Flux_Data},
     wL = @. here_data.w+dx[FAT[1][direction]]*here_data.sw[:,FAT[1][direction]]
     wR = @. there_data.w+ndx[FAT[1][direction]]*there_data.sw[:,FAT[1][direction]]
     aL, aR = calc_a(w0, prim0, wL, wR, here_data.ds[direction], there_data.ds[direction], global_data, rot)
+    # try moment_u(prim0, global_data, rot, direction)
+    # catch
+    #     @show here_data.bound_enc there_data.bound_enc typeof(there_data) there_data.vs_data.vs_num there_data.vs_data.level
+    # end
     Mu, Mv, Mξ, Mu_L, Mu_R = moment_u(prim0, global_data, rot, direction)
     A = calc_A(prim0, aL, aR, Mu, Mv, Mξ, Mu_L, Mu_R, global_data, direction)
     τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
