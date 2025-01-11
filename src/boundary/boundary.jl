@@ -27,6 +27,17 @@ function solid_cell_index_decoder(solid_cell_index::Vector{Int})
     ids = findall(x->x!=0,solid_cell_index)
     return solid_cell_index[ids]
 end
+function solid_cell_index2ranks(indices::Vector,quadids::Vector,gfq::Vector) # give the 1-based ranks containing solid_cells in indices
+    qids = quadids[indices]
+    lrank = MPI.Comm_rank(MPI.COMM_WORLD)+1
+    ranks = Int[];lids = Int[]
+    for i in eachindex(qids)
+        rank = findfirst(x->x>qids[i],gfq)-1
+        !(rank==lrank||in(rank,ranks))&&push!(ranks,rank)
+        rank==lrank&&push!(lids,indices[i])
+    end
+    return ranks,lids
+end
 function solid_flag(boundary::Circle,midpoint::AbstractVector) # Does midpoint locate at solid?
     return xor(norm(midpoint.-boundary.center)>boundary.radius,boundary.solid)
 end
@@ -220,39 +231,39 @@ function calc_image_point(solid_midpoints::AbstractVector,aux_points::AbstractVe
     end
     return image_points
 end
-function search_IB!(IB_nodes::Vector{Vector{Vector{PS_Data{DIM,NDF}}}},aux_points::Vector,trees::PS_Trees{DIM,NDF},global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
-    ps_datas = trees.data
-    boundaries = global_data.config.IB
-    for i in eachindex(ps_datas)
-        for j in eachindex(ps_datas[i])
-            ps_data = ps_datas[i][j]
-            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0) && continue
-            for k in eachindex(boundaries)
-                for l in eachindex(aux_points[k])
-                    if IB_flag(boundaries[k],aux_points[k][l],ps_data.midpoint,ps_data.ds)
-                        ps_data.bound_enc = k
-                        solid_cell_index_encoder!(ps_data.solid_cell_index,l)
-                        push!(IB_nodes[k][l],ps_data)
-                    end
-                end
-            end
-        end
-    end
-end
+# function search_IB!(IB_nodes::Vector{Vector{Vector{PS_Data{DIM,NDF}}}},aux_points::Vector,trees::PS_Trees{DIM,NDF},global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+#     ps_datas = trees.data
+#     boundaries = global_data.config.IB
+#     for i in eachindex(ps_datas)
+#         for j in eachindex(ps_datas[i])
+#             ps_data = ps_datas[i][j]
+#             (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0) && continue
+#             for k in eachindex(boundaries)
+#                 for l in eachindex(aux_points[k])
+#                     if IB_flag(boundaries[k],aux_points[k][l],ps_data.midpoint,ps_data.ds)
+#                         ps_data.bound_enc = k
+#                         solid_cell_index_encoder!(ps_data.solid_cell_index,l)
+#                         push!(IB_nodes[k][l],ps_data)
+#                     end
+#                 end
+#             end
+#         end
+#     end
+# end
 
 function update_IB_sdata!(boundary::Boundary)
     sdata = boundary.IB_buffer.sdata
-    IB_ranks_table = boundary.IB_ranks_table
-    for i in eachindex(IB_ranks_table)
+    IB_ranks = boundary.IB_ranks
+    for i in eachindex(IB_ranks)
         i-1==MPI.Comm_rank(MPI.COMM_WORLD)&&continue
-        isempty(IB_ranks_table[i])&&continue
+        all(isempty(IB_ranks[i]))&&continue
         offset = 0
-        for j in eachindex(IB_ranks_table[i])
-            sdata[i].prims[j,:] .= IB_ranks_table[i][j].prim
+        for j in eachindex(IB_ranks[i])
+            sdata[i].prims[j,:] .= IB_ranks[i][j].prim
         end
-        for j in eachindex(IB_ranks_table[i])
-            vs_num = IB_ranks_table[i][j].vs_data.vs_num
-            sdata[i].df[offset+1:offset+vs_num,:] .= IB_ranks_table[i][j].vs_data.df
+        for j in eachindex(IB_ranks[i])
+            vs_num = IB_ranks[i][j].vs_data.vs_num
+            sdata[i].df[offset+1:offset+vs_num,:] .= IB_ranks[i][j].vs_data.df
             offset+=vs_num
         end
     end
@@ -260,7 +271,7 @@ end
 function IB_data_exchange!(amr::AMR)
     boundary = amr.field.boundary
 	update_IB_sdata!(boundary)
-    IB_ranks_table = boundary.IB_ranks_table
+    IB_ranks = boundary.IB_ranks
     sdata = boundary.IB_buffer.sdata
     rdata = boundary.IB_buffer.rdata
     r_vs_nums = boundary.IB_buffer.r_vs_nums
@@ -271,7 +282,7 @@ function IB_data_exchange!(amr::AMR)
     reqs = Vector{MPI.Request}(undef, 0)
     for i in eachindex(sdata)
         i-1 == rank&&continue
-        isempty(IB_ranks_table[i])&&continue
+        isempty(IB_ranks[i])&&continue
         # sreq = MPI.Isend(
         #     sdata[i].midpoints,
         #     MPI.COMM_WORLD;
@@ -343,47 +354,15 @@ function IB_data_exchange!(amr::AMR)
     end
     MPI.Waitall!(reqs)
 end
-# function IB_slope_exchange!(amr::AMR)
-#     boundary = amr.field.boundary
-#     IB_ranks_table = boundary.IB_ranks_table
-#     sdata = boundary.IB_buffer.sdata
-#     rdata = boundary.IB_buffer.rdata
-#     r_vs_nums = boundary.IB_buffer.r_vs_nums
-#     rank = MPI.Comm_rank(MPI.COMM_WORLD)
-#     reqs = Vector{MPI.Request}(undef, 0)
-#     for i in eachindex(sdata)
-#         i-1 == rank&&continue
-#         isempty(IB_ranks_table[i])&&continue
-#         sreq = MPI.Isend(
-#             sdata[i].sdf,
-#             MPI.COMM_WORLD;
-#             dest = i - 1,
-#             tag = COMM_DATA_TAG + rank,
-#         )
-#         push!(reqs, sreq)
-#     end
-#     for i in eachindex(rdata)
-#         i-1 == MPI.Comm_rank(MPI.COMM_WORLD)&&continue
-#         !isassigned(r_vs_nums,i) && continue
-#         rreq = MPI.Irecv!(
-#                 rdata[i].sdf,
-#                 MPI.COMM_WORLD;
-#                 source = i - 1,
-#                 tag = COMM_DATA_TAG + i - 1,
-#             )
-#         push!(reqs, rreq)
-#     end
-#     MPI.Waitall!(reqs)
-# end
 function IB_vs_nums_exchange!(boundary::Boundary)
-    IB_ranks_table = boundary.IB_ranks_table
+    IB_ranks = boundary.IB_ranks
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
     sbuffer = Vector{Vector{Int}}(undef,MPI.Comm_size(MPI.COMM_WORLD)) # rank{solid_cells{vs_data{}}}
     for i in eachindex(sbuffer)
         i-1 == rank&&continue
-        sbuffer[i] = Vector{Int}(undef,length(IB_ranks_table[i]))
-        for j in eachindex(IB_ranks_table[i])
-            sbuffer[i][j] = IB_ranks_table[i][j].vs_data.vs_num
+        sbuffer[i] = Vector{Int}(undef,length(IB_ranks[i]))
+        for j in eachindex(IB_ranks[i])
+            sbuffer[i][j] = IB_ranks[i][j].vs_data.vs_num
         end
     end
     reqs = Vector{MPI.Request}(undef, 0)
@@ -412,56 +391,69 @@ function IB_vs_nums_exchange!(boundary::Boundary)
         MPI.Waitall!(reqs)
     end
 end
-function IB_structure_exchange!(boundary::Boundary)
-    IB_ranks_table = boundary.IB_ranks_table
+function IB_structure_exchange!(amr::AMR{DIM,NDF}) where{DIM,NDF}
+    boundary = amr.field.boundary
+    IB_ranks = boundary.IB_ranks
     sdata = boundary.IB_buffer.sdata
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
     reqs = Vector{MPI.Request}(undef, 0)
-    for i in eachindex(IB_ranks_table)
+    vnums = zeros(Int,length(IB_ranks))
+    for i in eachindex(IB_ranks)
         i-1==rank&&continue
-        isempty(IB_ranks_table[i])&&continue
-        for j in eachindex(IB_ranks_table[i])
-            vnums[i]+=IB_ranks_table[i][j].vs_data.vs_num
+        isempty(IB_ranks[i])&&continue
+        for j in eachindex(IB_ranks[i])
+            vnums[i]+=IB_ranks[i][j].vs_data.vs_num
         end
-        ps_num = length(IB_ranks_table[i])
+        # ps_num = length(IB_ranks[i])
         vs_nums = vnums[i]
-        midpoints = Matrix{Cdouble}(undef,ps_num,DIM)
-        prims = Matrix{Cdouble}(undef,ps_num,DIM+2)
+        # midpoints = Matrix{Cdouble}(undef,ps_num,DIM)
+        # prims = Matrix{Cdouble}(undef,ps_num,DIM+2)
+        vs_midpoint = Matrix{Cdouble}(undef,vs_nums,DIM)
         df = Matrix{Cdouble}(undef,vs_nums,NDF)
         level = Vector{Int8}(undef,vs_nums)
-        sdata[i] = IBTransferData(midpoints,prims,level,df)
+        sdata[i].level = level
+        sdata[i].vs_midpoint = vs_midpoint
+        sdata[i].df = df
+        
         # sdata[i] = sc_malloc(-1,vnums[i]*(sizeof(Cdouble)*NDF+sizeof(Int8))+ps_num*DIM*sizeof(Cdouble))
         # midpoint_buffer = unsafe_wrap(Matrix{Cdouble},Ptr{Cdouble}(sdata[i]),(ps_num,DIM))
         # df_buffer = unsafe_wrap(Matrix{Cdouble},Ptr{Cdouble}(sdata[i]+ps_num*DIM*sizeof(Cdouble)),(vnums[i],NDF))
         # level_buffer = unsafe_wrap(Vector{Int8},Ptr{Int8}(sdata[i]+ps_num*DIM*sizeof(Cdouble)+vnums[i]*sizeof(Cdouble)*NDF),vnums[i])
         # prims_buffer = unsafe_wrap(Matrix{Cdouble},Ptr{Cdouble}(sdata[i]+ps_num*DIM*sizeof(Cdouble)+vnums[i]*(sizeof(Cdouble)*NDF+sizeof(Int8))),(ps_num,DIM+2))
         offset = 0
-        for j in eachindex(IB_ranks_table[i])
-            midpoints[j,:] .= IB_ranks_table[i][j].midpoint
-            prims[j,:] .= IB_ranks_table[i][j].prim
-        end
-        for j in eachindex(IB_ranks_table[i])
-            vs_num = IB_ranks_table[i][j].vs_data.vs_num
-            df[offset+1:offset+vs_num,:] .= IB_ranks_table[i][j].vs_data.df
-            level[offset+1:offset+vs_num] .= IB_ranks_table[i][j].vs_data.level
+        # for j in eachindex(IB_ranks_table[i])
+        #     midpoints[j,:] .= IB_ranks_table[i][j].midpoint
+        #     prims[j,:] .= IB_ranks_table[i][j].prim
+        # end
+        for j in eachindex(IB_ranks[i])
+            vs_num = IB_ranks[i][j].vs_data.vs_num
+            df[offset+1:offset+vs_num,:] .= IB_ranks[i][j].vs_data.df
+            level[offset+1:offset+vs_num] .= IB_ranks[i][j].vs_data.level
             offset+=vs_num
         end
-        sreq = MPI.Isend(
-            sdata[i].midpoints,
-            MPI.COMM_WORLD;
-            dest = i - 1,
-            tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
-        )
-        push!(reqs, sreq)
-        sreq = MPI.Isend(
-            sdata[i].prims,
-            MPI.COMM_WORLD;
-            dest = i - 1,
-            tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
-        )
-        push!(reqs, sreq)
+        # sreq = MPI.Isend(
+        #     sdata[i].midpoints,
+        #     MPI.COMM_WORLD;
+        #     dest = i - 1,
+        #     tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
+        # )
+        # push!(reqs, sreq)
+        # sreq = MPI.Isend(
+        #     sdata[i].prims,
+        #     MPI.COMM_WORLD;
+        #     dest = i - 1,
+        #     tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
+        # )
+        # push!(reqs, sreq)
         sreq = MPI.Isend(
             sdata[i].level,
+            MPI.COMM_WORLD;
+            dest = i - 1,
+            tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
+        )
+        push!(reqs, sreq)
+        sreq = MPI.Isend(
+            sdata[i].vs_midpoint,
             MPI.COMM_WORLD;
             dest = i - 1,
             tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
@@ -480,31 +472,21 @@ function IB_structure_exchange!(boundary::Boundary)
     for i in eachindex(rdata)
         i-1 == rank&&continue
         !isassigned(r_vs_nums,i) && continue
-        ps_num = length(r_vs_nums[i])
         vs_nums = sum(r_vs_nums[i])
+        rdata[i].df = df = Matrix{Cdouble}(undef,vs_nums,NDF)
+        rdata[i].vs_midpoint = vs_midpoint = Matrix{Float64}(undef,vs_nums,DIM)
+        rdata[i].level = level = Vector{Int8}(undef,vs_nums)
+        # rdata[i] = IBTransferVsData(level,vs_midpoint,df)
         # rdata[i] = sc_malloc(-1,sum(r_vs_nums[i])*(sizeof(Cdouble)*NDF+sizeof(Int8))+(2*DIM+2)*ps_nums*sizeof(Cdouble))
-        midpoints = Matrix{Cdouble}(undef,ps_num,DIM)
-        prims = Matrix{Cdouble}(undef,ps_num,DIM+2)
-        df = Matrix{Cdouble}(undef,vs_nums,NDF)
-        level = Vector{Int8}(undef,vs_nums)
-        rdata[i] = IBTransferData(midpoints,prims,level,df)
-        # rdata[i] = sc_malloc(-1,sum(r_vs_nums[i])*(sizeof(Cdouble)*NDF+sizeof(Int8))+(2*DIM+2)*ps_nums*sizeof(Cdouble))
-        rreq = MPI.Irecv!(
-                midpoints,
-                MPI.COMM_WORLD;
-                source = i - 1,
-                tag = COMM_DATA_TAG + i - 1,
-            )
-        push!(reqs, rreq)
-        rreq = MPI.Irecv!(
-                prims,
-                MPI.COMM_WORLD;
-                source = i - 1,
-                tag = COMM_DATA_TAG + i - 1,
-            )
-        push!(reqs, rreq)
         rreq = MPI.Irecv!(
                 level,
+                MPI.COMM_WORLD;
+                source = i - 1,
+                tag = COMM_DATA_TAG + i - 1,
+            )
+        push!(reqs, rreq)
+        rreq = MPI.Irecv!(
+                vs_midpoint,
                 MPI.COMM_WORLD;
                 source = i - 1,
                 tag = COMM_DATA_TAG + i - 1,
@@ -520,33 +502,30 @@ function IB_structure_exchange!(boundary::Boundary)
     end
     MPI.Waitall!(reqs)
 end
-function IB_wrap_update!(boundary::Boundary)
+function IB_wrap_update!(amr::AMR{DIM,NDF}) where{DIM,NDF}
+    boundary = amr.field.boundary
+    quadrature = amr.global_data.config.quadrature
+    vs_trees_num = reduce(*, amr.global_data.config.vs_trees_num)
+    vs_space = 1.0
+    for i = 1:DIM
+        vs_space *= quadrature[2*i] - quadrature[2*i-1]
+    end
+    max_weight = vs_space / vs_trees_num
     rdata = boundary.IB_buffer.rdata
+    ghost_nodes = boundary.IB_buffer.ghost_nodes
     r_vs_nums = boundary.IB_buffer.r_vs_nums
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
     for i in eachindex(rdata)
         i-1==rank&&continue
         !isassigned(r_vs_nums,i)&&continue
         ps_offset = 1;vs_offset = 0
-        # vnums = sum(r_vs_nums[i])
-        # ps_num = length(r_vs_nums[i])
-        midpoints = rdata[i].midpoints
-        df_buffer = rdata[i].df
-        level_buffer = rdata[i].level
-        prims = rdata[i].prims
-        for j in eachindex(IB_cells)
-            for k in eachindex(IB_cells[j].IB_nodes)
-                for l in eachindex(IB_cells[j].IB_nodes[k])
-                    !isa(IB_cells[j].IB_nodes[k][l],GhostIBNode) && continue
-                    vs_num = r_vs_nums[i][ps_offset]
-                    node = IB_cells[j].IB_nodes[k][l]
-                    node.midpoint = @view(midpoints[ps_offset,:])
-                    node.prim = @view(prims[ps_offset,:])
-                    node.vs_data.level = @view(level_buffer[vs_offset+1:vs_offset+vs_num])
-                    node.vs_data.df = @view(df_buffer[vs_offset+1:vs_offset+vs_num,:])
-                    ps_offset+=1;vs_offset+=vs_num
-                end
-            end
+        for _ in eachindex(r_vs_nums[i])
+            vs_num = r_vs_nums[i][ps_offset]
+            level = @views rdata[i].level[vs_offset+1:vs_offset+vs_num]
+            weight = max_weight./2.0.^(DIM*(level))
+            ghost_nodes[i][ps_offset].vs_data = @views GhostIBVSData{DIM,NDF}(vs_num,level,weight,
+            rdata[i].vs_midpoint[vs_offset+1:vs_offset+vs_num,:],rdata[i].df[vs_offset+1:vs_offset+vs_num,:])
+            ps_offset+=1;vs_offset+=vs_num;
         end
     end
 end
@@ -554,8 +533,8 @@ end
 function IB_structure_update!(amr::AMR)
     boundary = amr.field.boundary
     IB_vs_nums_exchange!(boundary)
-    IB_structure_exchange!(boundary)
-    IB_wrap_update!(boundary)
+    IB_structure_exchange!(amr)
+    IB_wrap_update!(amr)
 end
 function update_quadid!_kernel(ip,data,dp)
     quadid = global_quadid(ip)
@@ -569,14 +548,15 @@ end
 function IB_quadid_exchange!(boundary::Boundary)
     rank = MPI.Comm_rank(MPI.COMM_WORLD) 
     solid_cells = boundary.solid_cells
-    Numbers = boundary.Numbers
+    Numbers = boundary.solid_numbers
     rbuffer = Vector{Vector{Vector{Cint}}}(undef,length(solid_cells)) # boundaries{ranks{points}}
     sbuffer = Vector{Vector{Cint}}(undef,length(solid_cells)) # boundaries{points}
     for i in eachindex(solid_cells)
-        buffer = Vector{Cint}(undef,length(solid_cells[i].ps_datas))
-        for j in eachindex(solid_cells[i].ps_datas)
-            buffer[j] = solid_cells[i].ps_datas[j].quadid
-        end
+        # buffer = Vector{Cint}(undef,length(solid_cells[i].ps_datas))
+        # for j in eachindex(solid_cells[i].ps_datas)
+        #     buffer[j] = solid_cells[i].ps_datas[j].quadid
+        # end
+        buffer = [Cint(ps_data.quadid) for ps_data in solid_cells[i].ps_datas]
         solid_cells[i].quadids = sbuffer[i] = buffer
     end
     for i in eachindex(solid_cells)
@@ -616,7 +596,7 @@ function IB_solid_reassign!(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF} 
         MPI.Comm_size(MPI.COMM_WORLD) + 1,
     )
     solid_cells = amr.field.boundary.solid_cells
-    Numbers = amr.field.boundary.Numbers
+    Numbers = amr.field.boundary.solid_numbers
     for i in eachindex(solid_cells)
         solid_cell = solid_cells[i]
         solid_cell.ps_datas = PS_Data{DIM,NDF}[]
@@ -634,23 +614,21 @@ function IB_solid_reassign!(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF} 
             end
         end
     end
-    IB_nodes = Vector{Vector{Vector{PS_Data{DIM,NDF}}}}(undef,length(solid_cells))
-    for i in eachindex(IB_nodes)
-        IB_nodes[i] = Vector{Vector{PS_Data{DIM,NDF}}}(undef,length(amr.field.boundary.solid_cells[i].quadids))
-        for j in eachindex(IB_nodes[i])
-            IB_nodes[i][j] = PS_Data{DIM,NDF}[]
-        end
-    end
+    # IB_nodes = Vector{Vector{Vector{PS_Data{DIM,NDF}}}}(undef,length(solid_cells))
+    # for i in eachindex(IB_nodes)
+    #     IB_nodes[i] = Vector{Vector{PS_Data{DIM,NDF}}}(undef,length(amr.field.boundary.solid_cells[i].quadids))
+    #     for j in eachindex(IB_nodes[i])
+    #         IB_nodes[i][j] = PS_Data{DIM,NDF}[]
+    #     end
+    # end
+    IB_nodes = [PS_Data{DIM,NDF}[] for _ in 1:length(solid_cells)]
     trees = amr.field.trees.data
     for i in eachindex(trees)
         for j in eachindex(trees[i])
             ps_data = trees[i][j]
             isa(ps_data,InsideSolidData)&&continue
             if ps_data.bound_enc>0
-                solid_cell_indices = solid_cell_index_decoder(ps_data.solid_cell_index)
-                for solid_cell_index in solid_cell_indices
-                    push!(IB_nodes[ps_data.bound_enc][solid_cell_index],ps_data)
-                end
+                push!(IB_nodes[ps_data.bound_enc],ps_data)
             elseif ps_data.bound_enc<0
                 push!(solid_cells[-ps_data.bound_enc].ps_datas,ps_data)
             end
@@ -662,11 +640,11 @@ function IB_partition!(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF} # Aft
     IB_nodes = IB_solid_reassign!(ps4est,amr)
     boundary = amr.field.boundary
     solid_cells = boundary.solid_cells
-    Numbers,IB_ranks_table,IB_cells = IB_Numbers_ranks(ps4est,IB_nodes,solid_cells)
-    boundary.IB_buffer = init_IBCells(Numbers,solid_cells,IB_ranks_table,IB_cells)
-    boundary.IB_ranks_table = IB_ranks_table;boundary.IB_cells = IB_cells
+    IB_ranks,IB_ranks_table,IB_cells = IB_Numbers_ranks(ps4est,IB_nodes,solid_cells)
+    boundary.IB_buffer = init_IBCells(ps4est,solid_cells,IB_ranks,IB_ranks_table,IB_cells,amr.global_data)
+    boundary.IB_ranks = IB_ranks;boundary.IB_cells = IB_cells
     sort_IB_cells!(amr.global_data,boundary)
-    init_solid_cells_partition!(boundary)
+    # init_solid_cells_partition!(boundary)
 end
 function colinear_test(p1,p2,p3)
     isapprox(p1[1] * (p2[2] - p3[2]) + p2[1] * (p3[2] - p1[2]) + p3[1] * (p1[2] - p2[2]),0.;atol=1e-10)
@@ -732,29 +710,367 @@ function init_solid_cells!(boundary::Boundary{DIM,NDF})where{DIM,NDF}
             IB_node = first(IB_cells[i].IB_nodes[j])
             IB_vs = IB_node.vs_data
             vs_data.vs_num = IB_vs.vs_num
-            vs_data.level = IB_vs.level
-            vs_data.weight = IB_vs.weight
-			vs_data.midpoint = IB_vs.midpoint
+            vs_data.level = copy(IB_vs.level)
+            vs_data.weight = copy(IB_vs.weight)
+			vs_data.midpoint = copy(IB_vs.midpoint)
             vs_data.df = copy(IB_vs.df)
 			vs_data.sdf = zeros(IB_vs.vs_num,NDF,DIM) 
             vs_data.flux = zeros(IB_vs.vs_num,NDF)
         end
     end
 end
-function init_solid_cells_partition!(boundary::Boundary{DIM,NDF})where{DIM,NDF}
-    solid_cells = boundary.solid_cells
-    IB_cells = boundary.IB_cells
-    @inbounds for i in eachindex(solid_cells)
-        for j in eachindex(solid_cells[i].ps_datas)
-            ps_data = solid_cells[i].ps_datas[j]
-            vs_data = ps_data.vs_data
-            IB_node = first(IB_cells[i].IB_nodes[j])
-            IB_vs = IB_node.vs_data
-            vs_data.level = IB_vs.level
-            vs_data.weight = IB_vs.weight
-			vs_data.midpoint = IB_vs.midpoint
-			vs_data.sdf = zeros(IB_vs.vs_num,NDF,DIM) 
-            vs_data.flux = zeros(IB_vs.vs_num,NDF)
+# function init_solid_cells_partition!(boundary::Boundary{DIM,NDF})where{DIM,NDF}
+#     solid_cells = boundary.solid_cells
+#     IB_cells = boundary.IB_cells
+#     @inbounds for i in eachindex(solid_cells)
+#         for j in eachindex(solid_cells[i].ps_datas)
+#             ps_data = solid_cells[i].ps_datas[j]
+#             vs_data = ps_data.vs_data
+#             IB_node = first(IB_cells[i].IB_nodes[j])
+#             IB_vs = IB_node.vs_data
+#             vs_data.level = IB_vs.level
+#             vs_data.weight = IB_vs.weight
+# 			vs_data.midpoint = IB_vs.midpoint
+# 			vs_data.sdf = zeros(IB_vs.vs_num,NDF,DIM) 
+#             vs_data.flux = zeros(IB_vs.vs_num,NDF)
+#         end
+#     end
+# end
+
+
+function init_IB!(ps4est::P_pxest_t,trees::PS_Trees{DIM,NDF},global_data::Global_Data{DIM,NDF},solid_cells::Vector{T},aux_points::Vector) where{DIM,NDF,T<:SolidCells}
+    solid_Numbers = broadcast_quadid!(solid_cells)
+    IB_nodes = [PS_Data{DIM,NDF}[] for _ in 1:length(solid_cells)]
+    search_IB!(IB_nodes,aux_points,trees,global_data)
+    IB_ranks,IB_ranks_table,IB_cells = IB_Numbers_ranks(ps4est,IB_nodes,solid_cells)
+    IB_buffer = init_IBCells(ps4est,solid_cells,IB_ranks,IB_ranks_table,IB_cells,global_data)
+    return solid_Numbers,IB_cells,IB_buffer,IB_ranks
+end
+function search_IB!(IB_nodes::Vector{Vector{PS_Data{DIM,NDF}}},aux_points::Vector,trees::PS_Trees{DIM,NDF},global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+    ps_datas = trees.data
+    boundaries = global_data.config.IB
+    for i in eachindex(ps_datas)
+        for j in eachindex(ps_datas[i])
+            ps_data = ps_datas[i][j]
+            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0) && continue
+            for k in eachindex(boundaries)
+                for l in eachindex(aux_points[k])
+                    if IB_flag(boundaries[k],aux_points[k][l],ps_data.midpoint,ps_data.ds)
+                        ps_data.bound_enc = k
+                        first(ps_data.solid_cell_index)==0&&push!(IB_nodes[k],ps_data)
+                        solid_cell_index_encoder!(ps_data.solid_cell_index,l)
+                    end
+                end
+            end
         end
     end
+end
+function IB_Numbers_ranks(ps4est::P_pxest_t,IB_nodes::Vector,solid_cells::Vector{SolidCells{DIM,NDF}}) where{DIM,NDF}
+    pp = PointerWrapper(ps4est)
+    gfq = unsafe_wrap(
+        Vector{Int},
+        pointer(pp.global_first_quadrant),
+        MPI.Comm_size(MPI.COMM_WORLD) + 1,
+    )
+    IB_ranks_table = [[PS_Data{DIM,NDF}[] for _ in 1:length(solid_cells)] for _ in 1:length(gfq)-1]
+    IB_cells = Vector{IBCells}(undef,length(solid_cells))
+    rank = MPI.Comm_rank(MPI.COMM_WORLD)
+    for i in eachindex(solid_cells)
+        local_offset = findfirst(x->x>=gfq[rank+1]&&x<gfq[rank+2],solid_cells[i].quadids)
+        IB_nodes_temp = [AbstractIBNodes[] for _ in eachindex(solid_cells[i].ps_datas)]
+        for IB_node in IB_nodes[i]
+            ids = solid_cell_index_decoder(IB_node.solid_cell_index)
+            # for id in ids
+            #     target_id = findfirst(x->x>solid_cells[i].quadids[id],gfq)-1
+            #     if target_id==rank+1
+            #         push!(IB_nodes_temp[id-local_offset+1],IB_node)
+            #     else
+            #         push!(IB_ranks_table[target_id][i],IB_node)
+            #     end
+            # end
+            ranks,lids = solid_cell_index2ranks(ids,solid_cells[i].quadids,gfq)
+            for l in lids
+                push!(IB_nodes_temp[l-local_offset+1],IB_node)
+            end
+            for r in ranks
+                push!(IB_ranks_table[r][i],IB_node)
+            end
+        end
+        IB_cells[i] = IBCells(IB_nodes_temp)
+    end
+    IB_ranks = [[x for u in v for x in u] for v in IB_ranks_table]
+    return IB_ranks,IB_ranks_table,IB_cells
+end
+function init_IBCells(ps4est::P_pxest_t,solid_cells::Vector{T},IB_ranks::Vector,IB_ranks_table::Vector,IB_cells::Vector{IBCells},global_data::Global_Data) where{T<:SolidCells}
+    rNumbers,r_vs_nums,IB_buffer = IB_nodes_communicate(solid_cells,IB_ranks,IB_ranks_table) # rNumbers: Vector{Vector{Int}}
+    ghost_nodes = IB_nodes_data_wrap!(ps4est,rNumbers,r_vs_nums,IB_buffer.rdata,solid_cells,IB_cells,global_data)
+    IB_buffer.r_vs_nums = r_vs_nums;IB_buffer.ghost_nodes = ghost_nodes
+    return IB_buffer
+end
+function IB_nodes_communicate(solid_cells::Vector{T},IB_ranks::Vector,IB_ranks_table::Vector) where{T<:SolidCells}
+    rNumbers,s_vs_nums,r_vs_nums = IB_nodes_pre_communicate(solid_cells,IB_ranks_table) # Communicate Numbers and vs_nums for buffer allocation and topological info quadids.
+    IB_buffer = IB_nodes_data_communicate(IB_ranks,s_vs_nums,r_vs_nums)
+    return rNumbers,r_vs_nums,IB_buffer
+end
+function IB_nodes_pre_communicate(solid_cells::Vector{T},IB_ranks_table::Vector) where{T<:SolidCells}
+    rNumbers = IB_nodes_Numbers_communicate(IB_ranks_table,solid_cells)
+    s_vs_nums,r_vs_nums = IB_nodes_vs_nums_communicate(rNumbers,IB_ranks_table)
+    return rNumbers,s_vs_nums,r_vs_nums
+end
+function IB_nodes_Numbers_communicate(IB_ranks_table::Vector,solid_cells::Vector{T})where{T<:SolidCells}
+    rbuffer = Vector{Vector{Int}}(undef,MPI.Comm_size(MPI.COMM_WORLD)) # rank{boundaries{}}
+    rank = MPI.Comm_rank(MPI.COMM_WORLD)
+    for i in eachindex(rbuffer)
+        i-1==rank&&continue
+        rbuffer[i] = Vector{Int}(undef,length(solid_cells))
+    end
+    sbuffer = Vector{Vector{Int}}(undef,MPI.Comm_size(MPI.COMM_WORLD))
+    for i in eachindex(rbuffer)
+        i-1 == rank && continue
+        sbuffer[i] = [length(IB_ranks_table[i][j]) for j in 1:length(solid_cells)]
+    end
+    reqs = Vector{MPI.Request}(undef, 0)
+    for i in eachindex(sbuffer)
+        i-1 == MPI.Comm_rank(MPI.COMM_WORLD)&&continue
+        sreq = MPI.Isend(
+            sbuffer[i],
+            MPI.COMM_WORLD;
+            dest = i - 1,
+            tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
+        )
+        push!(reqs, sreq)
+    end
+    for i in eachindex(rbuffer)
+        i-1 == MPI.Comm_rank(MPI.COMM_WORLD)&&continue
+        rreq = MPI.Irecv!(
+                rbuffer[i],
+                MPI.COMM_WORLD;
+                source = i - 1,
+                tag = COMM_DATA_TAG + i - 1,
+            )
+        push!(reqs, rreq)
+    end
+    MPI.Waitall!(reqs)
+    return rbuffer
+end
+function IB_nodes_vs_nums_communicate(rNumbers::Vector,IB_ranks_table::Vector)
+    sbuffer = Vector{Vector{Int}}(undef,MPI.Comm_size(MPI.COMM_WORLD)) # rank{boundaries{IB_nodes{}}}
+    for i in eachindex(sbuffer)
+        i-1 == MPI.Comm_rank(MPI.COMM_WORLD)&&continue
+        sbuffer[i] = [x.vs_data.vs_num for v in IB_ranks_table[i] for x in v]
+    end
+    reqs = Vector{MPI.Request}(undef, 0)
+    for i in eachindex(sbuffer)
+        i-1 == MPI.Comm_rank(MPI.COMM_WORLD)&&continue
+        isempty(sbuffer[i])&&continue
+        sreq = MPI.Isend(
+            sbuffer[i],
+            MPI.COMM_WORLD;
+            dest = i - 1,
+            tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
+        )
+        push!(reqs, sreq)
+    end
+    r_vs_nums = Vector{Vector{Int}}(undef,MPI.Comm_size(MPI.COMM_WORLD)) # ranks{IB_nodes{}}
+    for i in eachindex(r_vs_nums)
+        i-1 == MPI.Comm_rank(MPI.COMM_WORLD)&&continue
+        (num = sum(rNumbers[i]))==0 && continue
+        r_vs_nums[i] = Vector{Int}(undef,num)
+        rreq = MPI.Irecv!(
+                r_vs_nums[i],
+                MPI.COMM_WORLD;
+                source = i - 1,
+                tag = COMM_DATA_TAG + i - 1,
+            )
+        push!(reqs, rreq)
+    end
+    MPI.Waitall!(reqs)
+    return sbuffer,r_vs_nums
+end
+function IB_nodes_data_communicate(IB_ranks::Vector{Vector{PS_Data{DIM,NDF}}},s_vs_nums::Vector,r_vs_nums::Vector) where{DIM,NDF}
+    IB_buffer = collect_IB_nodes_data(IB_ranks,s_vs_nums)
+    sdata = IB_buffer.sdata
+    IB_buffer.rdata = rdata = Vector{IBTransferData}(undef,MPI.Comm_size(MPI.COMM_WORLD))
+    reqs = Vector{MPI.Request}(undef, 0)
+    for i in eachindex(sdata)
+        i-1 == MPI.Comm_rank(MPI.COMM_WORLD)&&continue
+        isempty(IB_ranks[i])&&continue
+        sreq = MPI.Isend(
+            sdata[i].solid_cell_indices,
+            MPI.COMM_WORLD;
+            dest = i - 1,
+            tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
+        )
+        push!(reqs, sreq)
+        sreq = MPI.Isend(
+            sdata[i].midpoints,
+            MPI.COMM_WORLD;
+            dest = i - 1,
+            tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
+        )
+        push!(reqs, sreq)
+        sreq = MPI.Isend(
+            sdata[i].prims,
+            MPI.COMM_WORLD;
+            dest = i - 1,
+            tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
+        )
+        push!(reqs, sreq)
+        sreq = MPI.Isend(
+            sdata[i].level,
+            MPI.COMM_WORLD;
+            dest = i - 1,
+            tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
+        )
+        push!(reqs, sreq)
+        sreq = MPI.Isend(
+            sdata[i].vs_midpoint,
+            MPI.COMM_WORLD;
+            dest = i - 1,
+            tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
+        )
+        push!(reqs, sreq)
+        sreq = MPI.Isend(
+            sdata[i].df,
+            MPI.COMM_WORLD;
+            dest = i - 1,
+            tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
+        )
+        push!(reqs, sreq)
+    end
+    for i in eachindex(rdata)
+        i-1 == MPI.Comm_rank(MPI.COMM_WORLD)&&continue
+        !isassigned(r_vs_nums,i) && continue
+        ps_num = length(r_vs_nums[i])
+        vs_nums = sum(r_vs_nums[i])
+        solid_cell_indices = Matrix{Int}(undef,ps_num,SOLID_CELL_ID_NUM)
+        midpoints = Matrix{Cdouble}(undef,ps_num,DIM)
+        prims = Matrix{Cdouble}(undef,ps_num,DIM+2)
+        df = Matrix{Cdouble}(undef,vs_nums,NDF)
+        vs_midpoint = Matrix{Cdouble}(undef,vs_nums,DIM)
+        level = Vector{Int8}(undef,vs_nums)
+        rdata[i] = IBTransferData(solid_cell_indices,midpoints,prims,level,vs_midpoint,df)
+        rreq = MPI.Irecv!(
+                solid_cell_indices,
+                MPI.COMM_WORLD;
+                source = i - 1,
+                tag = COMM_DATA_TAG + i - 1,
+            )
+        push!(reqs, rreq)
+        rreq = MPI.Irecv!(
+                midpoints,
+                MPI.COMM_WORLD;
+                source = i - 1,
+                tag = COMM_DATA_TAG + i - 1,
+            )
+        push!(reqs, rreq)
+        rreq = MPI.Irecv!(
+                prims,
+                MPI.COMM_WORLD;
+                source = i - 1,
+                tag = COMM_DATA_TAG + i - 1,
+            )
+        push!(reqs, rreq)
+        rreq = MPI.Irecv!(
+                level,
+                MPI.COMM_WORLD;
+                source = i - 1,
+                tag = COMM_DATA_TAG + i - 1,
+            )
+        push!(reqs, rreq)
+        rreq = MPI.Irecv!(
+                vs_midpoint,
+                MPI.COMM_WORLD;
+                source = i - 1,
+                tag = COMM_DATA_TAG + i - 1,
+            )
+        push!(reqs, rreq)
+        rreq = MPI.Irecv!(
+                df,
+                MPI.COMM_WORLD;
+                source = i - 1,
+                tag = COMM_DATA_TAG + i - 1,
+            )
+        push!(reqs, rreq)
+    end
+    MPI.Waitall!(reqs)
+    return IB_buffer
+end
+function collect_IB_nodes_data(IB_ranks::Vector{Vector{PS_Data{DIM,NDF}}},s_vs_nums::Vector) where{DIM,NDF}
+    sdata = Vector{IBTransferData}(undef,length(IB_ranks)) # ranks{solid_cells{}}, data distributes as [df(sum(vs_nums),NDF),level(sum(vs_nums))]
+    rank = MPI.Comm_rank(MPI.COMM_WORLD)
+    IB_buffer = IBBuffer();
+    for i in eachindex(IB_ranks)
+        i-1==rank&&continue
+        isempty(IB_ranks[i])&&continue
+        vs_nums = sum(s_vs_nums[i])
+        ps_num = length(IB_ranks[i])
+        solid_cell_indices = Matrix{Int}(undef,ps_num,SOLID_CELL_ID_NUM)
+        midpoints = Matrix{Cdouble}(undef,ps_num,DIM)
+        prims = Matrix{Cdouble}(undef,ps_num,DIM+2)
+        df = Matrix{Cdouble}(undef,vs_nums,NDF)
+        vs_midpoint = Matrix{Cdouble}(undef,vs_nums,DIM)
+        level = Vector{Int8}(undef,vs_nums)
+        sdata[i] = IBTransferData(solid_cell_indices,midpoints,prims,level,vs_midpoint,df)
+        offset = 0; index = 1
+        for j in eachindex(IB_ranks[i])
+            solid_cell_indices[index,:] .= IB_ranks[i][j].solid_cell_index
+            midpoints[index,:] .= IB_ranks[i][j].midpoint
+            prims[index,:] .= IB_ranks[i][j].prim
+            index+=1
+            vs_num = IB_ranks[i][j].vs_data.vs_num
+            df[offset+1:offset+vs_num,:] .= IB_ranks[i][j].vs_data.df
+            vs_midpoint[offset+1:offset+vs_num,:] .= IB_ranks[i][j].vs_data.midpoint
+            level[offset+1:offset+vs_num] .= IB_ranks[i][j].vs_data.level
+            offset+=vs_num
+        end
+    end
+    IB_buffer.sdata = sdata
+    return IB_buffer
+end
+function IB_nodes_data_wrap!(ps4est::P_pxest_t,rNumbers::Vector{Vector{Int}},r_vs_nums::Vector{Vector{Int}},rdata::Vector{IBTransferData},solid_cells::Vector{SolidCells{DIM,NDF}},IB_cells::Vector{IBCells},global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+    quadrature = global_data.config.quadrature
+    vs_trees_num = reduce(*, global_data.config.vs_trees_num)
+    vs_space = 1.0
+    for i = 1:DIM
+        vs_space *= quadrature[2*i] - quadrature[2*i-1]
+    end
+    max_weight = vs_space / vs_trees_num
+    pp = PointerWrapper(ps4est)
+    gfq = unsafe_wrap(
+        Vector{Int},
+        pointer(pp.global_first_quadrant),
+        MPI.Comm_size(MPI.COMM_WORLD) + 1,
+    )
+
+    rank = MPI.Comm_rank(MPI.COMM_WORLD)
+    ghost_nodes = Vector{Vector{GhostIBNode{DIM,NDF}}}(undef,length(rdata))
+    for i in eachindex(rdata)
+        i-1==rank&&continue
+        !isassigned(r_vs_nums,i)&&continue
+        ps_offset = 1;vs_offset = 0
+        ghost_nodes[i] = Vector{GhostIBNode{DIM,NDF}}(undef,sum(rNumbers[i]))
+        for j in eachindex(IB_cells)
+            local_offset = findfirst(x->x>=gfq[rank+1]&&x<gfq[rank+2],solid_cells[j].quadids)
+            sup = findlast(x->x>=gfq[rank+1]&&x<gfq[rank+2],solid_cells[j].quadids)
+            # @show rank local_offset sup
+            for _ in 1:rNumbers[i][j]
+                vs_num = r_vs_nums[i][ps_offset]
+                level = @views rdata[i].level[vs_offset+1:vs_offset+vs_num]
+                weight = max_weight./2.0.^(DIM*(level))
+                ghost_nodes[i][ps_offset] = ghost_node = @views GhostIBNode{DIM,NDF}(rdata[i].solid_cell_indices[ps_offset,:],rdata[i].midpoints[ps_offset,:],
+                    rdata[i].prims[ps_offset,:],GhostIBVSData{DIM,NDF}(vs_num,level,
+                    weight,rdata[i].vs_midpoint[vs_offset+1:vs_offset+vs_num,:],
+                    rdata[i].df[vs_offset+1:vs_offset+vs_num,:]))
+                solid_cell_indices = solid_cell_index_decoder(ghost_node.solid_cell_index)
+                ls = findall(x->x>=local_offset&&x<=sup,solid_cell_indices)
+                local_ids = solid_cell_indices[ls].-local_offset.+1
+                for local_id in local_ids
+                    push!(IB_cells[j].IB_nodes[local_id],ghost_node)
+                end
+                ps_offset+=1;vs_offset+=vs_num
+            end
+        end
+    end
+    return ghost_nodes
 end

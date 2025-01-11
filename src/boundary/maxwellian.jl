@@ -86,17 +86,17 @@ function update_solid_cell!(amr::AMR)
     global_data = amr.global_data
     boundary = amr.field.boundary
     for i in eachindex(boundary.solid_cells)
-        update_solid_cell!(global_data.config.IB[i],boundary.solid_cells[i],boundary.aux_points[i],boundary.IB_cells[i],global_data)
+        @inbounds update_solid_cell!(global_data.config.IB[i],boundary.solid_cells[i],boundary.aux_points[i],boundary.IB_cells[i],global_data)
     end
 end
 
-function vs_projection!(vs_data::AbstractVsData,vs_data_n::AbstractVsData,temp::AbstractMatrix)
+function vs_projection!(vs_data::AbstractVsData{DIM,NDF},vs_data_n::AbstractVsData,temp::AbstractMatrix) where{DIM,NDF}
     j = 1
     flag = 0.0
     level = vs_data.level
     level_n = vs_data_n.level
     df_n = vs_data_n.df
-    for i = 1:vs_data.vs_num
+    @inbounds for i = 1:vs_data.vs_num
         if level[i] == level_n[j]
             @. temp[i, :] .= @views df_n[j, :]
             j += 1
@@ -119,7 +119,7 @@ function vs_projection!(vs_data::AbstractVsData,vs_data_n::AbstractVsData,temp::
 end
 
 function bilinear_coeffi_2D(p1::T,p2::T,p3::T,p4::T) where{T<:AbstractVector{Float64}}
-    return [
+    return @inbounds [
         p1[1] p1[2] p1[1]*p1[2] 1.0;
         p2[1] p2[2] p2[1]*p2[2] 1.0;
         p3[1] p3[2] p3[1]*p3[2] 1.0;
@@ -251,22 +251,22 @@ function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vec
         ps_data = solidcells.ps_datas[i]
         aux_point = calc_intersect_point(circle,ps_data.midpoint)
         image_point = 2*aux_point-ps_data.midpoint
-        vs_data = first(IB_cells.IB_nodes[i]).vs_data
+        # IB_vs = first(IB_cells.IB_nodes[i]).vs_data
+        s_vs_data = ps_data.vs_data
         n = (aux_point-circle.center)/circle.radius # outer normal direction
         aux_vs_temp = Vector{Matrix{Float64}}(undef,6)
         dxL = norm(aux_point-image_point)
         dxR = norm(ps_data.midpoint-aux_point)
         for i in eachindex(aux_vs_temp)
-            aux_vs_temp[i] = zeros(Float64,vs_data.vs_num,NDF)
+            aux_vs_temp[i] = zeros(Float64,s_vs_data.vs_num,NDF)
         end
-        aux_vs_temp[1] .= vs_data.df
+        # aux_vs_temp[1] .= IB_vs.df
         ip_df = aux_vs_temp[end-1]
-
         aux_df = aux_vs_temp[end]
-        for j in 2:4
-            vs_projection!(vs_data,IB_cells.IB_nodes[i][j].vs_data,aux_vs_temp[j])
+        for j in 1:4
+            vs_projection!(s_vs_data,IB_cells.IB_nodes[i][j].vs_data,aux_vs_temp[j])
         end
-        vn = [dot(@view(vs_data.midpoint[j,:]),n) for j in axes(vs_data.midpoint,1)]
+        vn = [dot(@view(s_vs_data.midpoint[j,:]),n) for j in axes(s_vs_data.midpoint,1)]
         Θ = heaviside.(vn)
         points = [IB_cells.IB_nodes[i][j].midpoint for j in 1:4]
         # try Ainv = inv(bilinear_coeffi_2D(points...))
@@ -275,7 +275,7 @@ function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vec
         # end
         Ainv = inv(bilinear_coeffi_2D(points...))
         b = Vector{Float64}(undef,4);ip_coeffi = make_bilinear_coeffi_2D(image_point)
-        for j in axes(ip_df,1)
+        @inbounds for j in axes(ip_df,1)
             for l in 1:NDF
                 for k in 1:4
                     b[k] = aux_vs_temp[k][j,l]
@@ -285,32 +285,35 @@ function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vec
         end   
         # aux_point interpolate by bilinear
         ap_coeffi = make_bilinear_coeffi_2D(aux_point)
-        for j in axes(aux_df,1)
-	    if Θ[j]==0.
+        @inbounds for j in axes(aux_df,1)
+            if Θ[j]==0.
                 for l in 1:NDF
                     for k = 1:4
                         b[k] = aux_vs_temp[k][j,l]
                     end
                     aux_df[j,l] = dot(Ainv*b,ap_coeffi)
                 end
-	    end
+            end
         end   
-        ρw = calc_IB_ρw(aux_point,circle,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
+        ρw = calc_IB_ρw(aux_point,circle,s_vs_data.midpoint,s_vs_data.weight,aux_df,vn,Θ)
         aux_prim = IB_prim(circle,aux_point,ρw)
+        # sdf = (aux_df-ip_df)/dxL
         for j in axes(aux_df,1)
             if Θ[j]==1.
-                aux_df[j,:] .= discrete_maxwell(@view(vs_data.midpoint[j,:]),aux_prim,global_data)
+                aux_df[j,:] .= discrete_maxwell(@view(s_vs_data.midpoint[j,:]),aux_prim,global_data)
             end
         end
-        s_vs_data = ps_data.vs_data
-        s_vs_data.vs_num = vs_data.vs_num
-        s_vs_data.midpoint = vs_data.midpoint
-        s_vs_data.level = vs_data.level
-        s_vs_data.weight = vs_data.weight
-        s_vs_data.df = @. aux_df+(aux_df-ip_df)*dxR/dxL
+        # s_vs_data = ps_data.vs_data
+        # s_vs_data.vs_num = vs_data.vs_num
+        # s_vs_data.midpoint = vs_data.midpoint
+        # s_vs_data.level = vs_data.level
+        # s_vs_data.weight = vs_data.weight
+        # s_vs_data.df = @. aux_df+sdf*dxR
+        s_vs_data.df = @. aux_df+(aux_df-ip_df)/dxL*dxR
+        # s_vs_data.sdf
 		ps_data.w = calc_w0(ps_data)
 		ps_data.prim = get_prim(ps_data,global_data)
-        size(s_vs_data.sdf,1)!=vs_data.vs_num && (s_vs_data.sdf = Array{Float64}(undef,vs_data.vs_num,NDF,DIM))
+        # size(s_vs_data.sdf,1)!=vs_data.vs_num && (s_vs_data.sdf = Array{Float64}(undef,vs_data.vs_num,NDF,DIM))
     end
 end
 function project_solid_cell_slope!(vs_data::AbstractVsData{DIM,NDF},vs_data_n::VS_Data{DIM,NDF},DIR::Integer) where{DIM,NDF}
@@ -341,4 +344,36 @@ function project_solid_cell_slope!(vs_data::AbstractVsData{DIM,NDF},vs_data_n::V
             end
         end
     end
+end
+function calc_solid_cell_slope!(svdata::AbstractVsData{DIM,NDF},fvdata::VS_Data{DIM,NDF},smid::Vector{Float64},fmid::Vector{Float64},direction::Integer) where{DIM,NDF}
+    j = 1
+    flag = 0.0
+    level = svdata.level
+    sdf = @view(svdata.sdf[:,:,direction])
+    df = svdata.df
+    level_n = fvdata.level
+    df_n = fvdata.df
+    dx = fmid[direction]-smid[direction]
+    for i in 1:svdata.vs_num
+        if level[i] == level_n[j]
+            @views @. sdf[i, :] = df_n[j,:]-df[i,:]
+            j += 1
+        elseif level[i] < level_n[j]
+            @views sdf[i, :] .= -df[i,:]
+            while flag != 1.0
+                @views @. sdf[i, :] += df_n[j, :]/ 2^(DIM * (level_n[j] - level[i]))
+                flag += 1 / 2^(DIM * (level_n[j] - level[i]))
+                j += 1
+            end
+            flag = 0.0
+        else
+            @views @. sdf[i, :] = df_n[j,:]-df[i,:]
+            flag += 1 / 2^(DIM * (level[i] - level_n[j]))
+            if flag == 1.0
+                j += 1
+                flag = 0.0
+            end
+        end
+    end
+    sdf./=dx
 end

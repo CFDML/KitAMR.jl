@@ -138,7 +138,10 @@ function update_slope_inner!(
     swL = (ps_data.w - Ldata[1].w) / (ds)
     swR = (Rdata[1].w - ps_data.w) / (ds)
     sw = vanleer(swL, swR)
-    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
+    gradmax = global_data.status.gradmax
+    for i in eachindex(gradmax)
+       @inbounds gradmax[i] = max(gradmax[i], abs(sw[i]))
+    end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata[1].vs_data, Rdata[1].vs_data, ds, ds, dir)
@@ -153,7 +156,10 @@ function update_slope_inner!(
     dir::Integer,
 ) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     sw = (Rdata[1].w - ps_data.w) / ps_data.ds[dir]
-    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
+    gradmax = global_data.status.gradmax
+    for i in eachindex(gradmax)
+       @inbounds gradmax[i] = max(gradmax[i], abs(sw[i]))
+    end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_Lbound_vs!(ps_data.vs_data, Rdata[1].vs_data, ds, dir)
@@ -168,7 +174,10 @@ function update_slope_inner!(
     dir::Integer,
 ) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     sw = (ps_data.w - Ldata[1].w) ./ ps_data.ds[dir]
-    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
+    gradmax = global_data.status.gradmax
+    for i in eachindex(gradmax)
+       @inbounds gradmax[i] = max(gradmax[i], abs(sw[i]))
+    end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_Rbound_vs!(ps_data.vs_data, Ldata[1].vs_data, ds, dir)
@@ -213,7 +222,10 @@ function update_slope_inner!(
         sw .+= (ps_data.w - Ldata[i].w)
     end
     sw ./= 2^(DIM - 1) * 0.75 * ps_data.ds[dir]
-    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
+    gradmax = global_data.status.gradmax
+    for i in eachindex(gradmax)
+       @inbounds gradmax[i] = max(gradmax[i], abs(sw[i]))
+    end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_Rbound_vs!(ps_data.vs_data, Ldata, ds, dir)
@@ -232,7 +244,10 @@ function update_slope_inner!(
         sw .+= (Rdata[i].w - ps_data.w)
     end
     sw ./= 2^(DIM - 1) * 0.75 * ps_data.ds[dir]
-    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
+    gradmax = global_data.status.gradmax
+    for i in eachindex(gradmax)
+       @inbounds gradmax[i] = max(gradmax[i], abs(sw[i]))
+    end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_Lbound_vs!(ps_data.vs_data, Rdata, ds, dir)
@@ -248,7 +263,10 @@ function update_slope_inner!(
     dir::Integer,
 ) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     sw = (Rdata[1].w - ps_data.w) / ps_data.ds[dir] / 1.5
-    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
+    gradmax = global_data.status.gradmax
+    for i in eachindex(gradmax)
+       @inbounds gradmax[i] = max(gradmax[i], abs(sw[i]))
+    end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_Lbound_vs!(ps_data.vs_data, Rdata[1].vs_data, 1.5 * ds, dir)
@@ -263,7 +281,10 @@ function update_slope_inner!(
     dir::Integer,
 ) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     sw = (ps_data.w - Ldata[1].w) ./ ps_data.ds[dir] / 1.5
-    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
+    gradmax = global_data.status.gradmax
+    for i in eachindex(gradmax)
+       @inbounds gradmax[i] = max(gradmax[i], abs(sw[i]))
+    end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_Rbound_vs!(ps_data.vs_data, Ldata[1].vs_data, 1.5 * ds, dir)
@@ -308,7 +329,10 @@ function update_slope_inner!(
     swL = (ps_data.w - Ldata[1].w) / (ds)
     swR = (wR / 2^(DIM - 1) - ps_data.w) / (0.75 * ds)
     sw = vanleer(swL, swR)
-    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
+    gradmax = global_data.status.gradmax
+    for i in eachindex(gradmax)
+       @inbounds gradmax[i] = max(gradmax[i], abs(sw[i]))
+    end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ds, 0.75 * ds, dir)
@@ -331,7 +355,10 @@ function update_slope_inner!(
     swL = (ps_data.w - wL / 2^(DIM - 1)) / (0.75 * ds)
     swR = (Rdata[1].w - ps_data.w) / ds
     sw = vanleer(swL, swR)
-    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
+    gradmax = global_data.status.gradmax
+    for i in eachindex(gradmax)
+       @inbounds gradmax[i] = max(gradmax[i], abs(sw[i]))
+    end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, ds, dir)
@@ -356,7 +383,10 @@ function update_slope_inner!(
     swL = (ps_data.w - wL / 2^(DIM - 1)) / (0.75 * ds)
     swR = (wR / 2^(DIM - 1) - ps_data.w) / (0.75 * ds)
     sw = vanleer(swL, swR)
-    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
+    gradmax = global_data.status.gradmax
+    for i in eachindex(gradmax)
+       @inbounds gradmax[i] = max(gradmax[i], abs(sw[i]))
+    end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, 0.75 * ds, dir)
@@ -375,7 +405,10 @@ function update_slope_inner!(
     swL = (ps_data.w - Ldata[1].w) / ds
     swR = (Rdata[1].w - ps_data.w) / (1.5 * ds)
     sw = vanleer(swL, swR)
-    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
+    gradmax = global_data.status.gradmax
+    for i in eachindex(gradmax)
+       @inbounds gradmax[i] = max(gradmax[i], abs(sw[i]))
+    end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ds, 1.5 * ds, dir)
@@ -394,7 +427,10 @@ function update_slope_inner!(
     swL = (ps_data.w - Ldata[1].w) / (1.5 * ds)
     swR = (Rdata[1].w - ps_data.w) / ds
     sw = vanleer(swL, swR)
-    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
+    gradmax = global_data.status.gradmax
+    for i in eachindex(gradmax)
+       @inbounds gradmax[i] = max(gradmax[i], abs(sw[i]))
+    end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, ds, dir)
@@ -413,7 +449,10 @@ function update_slope_inner!(
     swL = (ps_data.w - Ldata[1].w) / (1.5 * ds)
     swR = (Rdata[1].w - ps_data.w) / (1.5 * ds)
     sw = vanleer(swL, swR)
-    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
+    gradmax = global_data.status.gradmax
+    for i in eachindex(gradmax)
+       @inbounds gradmax[i] = max(gradmax[i], abs(sw[i]))
+    end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, 1.5 * ds, dir)
@@ -436,7 +475,10 @@ function update_slope_inner!(
     swL = (ps_data.w - wL / 2^(DIM - 1)) / (0.75 * ds)
     swR = (Rdata[1].w - ps_data.w) / (1.5 * ds)
     sw = vanleer(swL, swR)
-    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
+    gradmax = global_data.status.gradmax
+    for i in eachindex(gradmax)
+       @inbounds gradmax[i] = max(gradmax[i], abs(sw[i]))
+    end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, 1.5 * ds, dir)
@@ -459,7 +501,10 @@ function update_slope_inner!(
     swL = (ps_data.w - Ldata[1].w) / (1.5 * ds)
     swR = (wR / 2^(DIM - 1) - ps_data.w) / (0.75 * ds)
     sw = vanleer(swL, swR)
-    global_data.status.gradmax = max(global_data.status.gradmax, maximum(abs.(@view(sw[end, :]))))
+    gradmax = global_data.status.gradmax
+    for i in eachindex(gradmax)
+       @inbounds gradmax[i] = max(gradmax[i], abs(sw[i]))
+    end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, 0.75 * ds, dir)
