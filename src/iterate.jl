@@ -123,14 +123,20 @@ function update_volume!(::Euler,amr::AMR)
                 ps_data.flux .= 0.0
             end
             ps_data.prim .= prim = get_prim(ps_data, global_data)
+            # if ps_data.midpoint==[-3.971875, -2.3828125]
+            #     @show minimum(vs_data.df[:,1]) minimum(vs_data.df[:,2])
+            # end
+            # try τ = get_τ(prim, gas.μᵣ, gas.ω)
+            # catch
+            #     @show minimum(vs_data.df[:,1]) minimum(vs_data.df[:,2]) ps_data.midpoint MPI.Comm_rank(MPI.COMM_WORLD)
+            # end
             τ = get_τ(prim, gas.μᵣ, gas.ω)
             ps_data.qf .= qf = calc_qf(vs_data, prim)
             F = discrete_maxwell(vs_data.midpoint, prim, global_data)
-            F⁺ = shakhov_part(vs_data.midpoint, F, prim, qf, global_data)
-            F .+= F⁺
+            F .+= shakhov_part(vs_data.midpoint, F, prim, qf, global_data)
             f = vs_data.df
             Δt = global_data.status.Δt
-            f .= (τ-Δt)/τ*f+Δt/τ*F+Δt/area*vs_data.flux
+            f .= abs.((τ-Δt)/τ*f+Δt/τ*F+Δt/area*vs_data.flux)
             vs_data.flux .= 0.0
         end
     end

@@ -1,6 +1,6 @@
 using KitAMR,MPI
 MPI.Init()
-config = KitAMR.read_config("configure_UGKS.txt")
+config = KitAMR.read_config("configure_DVM.txt")
 ps4est,amr = KitAMR.init(config);
 KitAMR.listen_for_save!()
 for i in 1:100000
@@ -49,6 +49,7 @@ for i in 1:100000
     if MPI.Comm_rank(MPI.COMM_WORLD) == MPI.Comm_size(MPI.COMM_WORLD) - 1
         ps_data = amr.field.trees.data[end][end]
         @show ps_data.vs_data.vs_num
+        # @show minimum(ps_data.vs_data.df[:,1])
     end
     KitAMR.check_for_save!(ps4est,amr)
 end
