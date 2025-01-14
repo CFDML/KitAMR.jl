@@ -74,6 +74,46 @@ function calc_domain_flux(::UGKS,here_vs::Face_VS_Data,face::DomainFace{2,2,Unif
     there_micro = calc_micro_flux(There_vs, there_F, there_F⁺, aR, A, Mξ, Mt, direction)
     return fw,[here_micro,there_micro]
 end
+function calc_domain_flux(::UGKS,here_vs::Face_VS_Data,face::DomainFace{2,2,InterpolatedOutflow},amr::AMR)
+    rot,direction,midpoint,_,here_data = unpack(face)
+    heavi,here_weight,here_mid,here_vn,here_df,here_sdf = unpack(here_vs)
+    global_data = amr.global_data
+    gas = global_data.config.gas
+    Δt = global_data.status.Δt
+    vs_data = here_data.vs_data
+    here_ps_mid = here_data.midpoint
+    nheavi = [!x for x in heavi]
+    there_mid = @views vs_data.midpoint[nheavi,:]
+    there_weight = @views vs_data.weight[nheavi]
+    there_vn = @views there_mid[:,direction]
+    there_df = @views vs_data.df[nheavi,:]+2.0*vs_data.sdf[nheavi,:,direction]*(midpoint[direction]-here_ps_mid[direction])
+    there_sdf = @views vs_data.sdf[nheavi,:,:]
+    dx = midpoint-here_ps_mid
+    ndx = -dx
+    @inbounds @views begin
+        df = [here_df[i,j]+dot(dx,here_sdf[i,j,:]) for i in axes(here_df,1),j in axes(here_df,2)]
+        ndf = [there_df[i,j]+dot(ndx,there_sdf[i,j,:]) for i in axes(there_df,1),j in axes(there_df,2)]
+    end
+    Here_vs = Face_VS_Data{2,2}(heavi,here_weight,here_mid,here_vn,df,here_sdf)
+    There_vs = Face_VS_Data{2,2}(nheavi,there_weight,there_mid,there_vn,ndf,there_sdf)
+    w0 = calc_w0(Here_vs,There_vs)
+    prim0 = get_prim(w0, global_data)
+    qf0 = calc_qf(Here_vs,There_vs,prim0)
+    aL, aR = calc_a(w0, prim0, here_data.w, 2.0*w0-here_data.w, here_data.ds[direction], here_data.ds[direction], global_data, rot)
+    Mu, Mv, Mξ, Mu_L, Mu_R = moment_u(prim0, global_data, rot, direction)
+    A = calc_A(prim0, aL, aR, Mu, Mv, Mξ, Mu_L, Mu_R, global_data, direction)
+    τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
+    Mt = time_int(τ0, Δt)
+    fw = calc_flux_g0_2D2F(prim0, Mt, Mu, Mv, Mξ, Mu_L, Mu_R, aL, aR, A, direction)
+    here_F = discrete_maxwell(Here_vs.midpoint, prim0, global_data)
+    there_F = discrete_maxwell(There_vs.midpoint, prim0, global_data)
+    here_F⁺ = shakhov_part(Here_vs.midpoint, here_F, prim0, qf0, global_data)
+    there_F⁺ = shakhov_part(There_vs.midpoint, there_F, prim0, qf0, global_data)
+    fw += calc_flux_f0(Here_vs, There_vs, here_F⁺, there_F⁺, Mt, direction)
+    here_micro = calc_micro_flux(Here_vs, here_F, here_F⁺, aL, A, Mξ, Mt, direction)
+    there_micro = calc_micro_flux(There_vs, there_F, there_F⁺, aR, A, Mξ, Mt, direction)
+    return fw,[here_micro,there_micro]
+end
 function calc_w0(here_vs::Face_VS_Data{2,2},there_vs::Face_VS_Data)
     @inbounds @views micro_to_macro_2D2F(
         here_vs.midpoint[:,1],here_vs.midpoint[:,2],
@@ -129,7 +169,7 @@ function calc_micro_flux_2D2F(
 ) where {T}
     micro_flux = Matrix{T}(undef, length(u), 2)
     @inbounds begin
-        @. @view(micro_flux[:, 1]) =
+        @. micro_flux[:, 1] =
             Mt[1] * vn * (H0 + H⁺) +
             Mt[2] *
             vn^2 *
@@ -148,7 +188,7 @@ function calc_micro_flux_2D2F(
                 0.5 * at[4] * ((u^2 + v^2) * H0 + B0)
             ) +
             Mt[4] * vn * h - Mt[5] * vn^2 * sh
-        @. @view(micro_flux[:, 2]) =
+        @. micro_flux[:, 2] =
             Mt[1] * vn * (B0 + B⁺) +
             Mt[2] *
             vn^2 *
@@ -220,10 +260,6 @@ function calc_flux(::UGKS,here_vs,there_vs,flux_data::Union{FullFace,Flux_Data},
     wL = @. here_data.w+dx[FAT[1][direction]]*here_data.sw[:,FAT[1][direction]]
     wR = @. there_data.w+ndx[FAT[1][direction]]*there_data.sw[:,FAT[1][direction]]
     aL, aR = calc_a(w0, prim0, wL, wR, here_data.ds[direction], there_data.ds[direction], global_data, rot)
-    # try moment_u(prim0, global_data, rot, direction)
-    # catch
-    #     @show here_data.bound_enc there_data.bound_enc typeof(there_data) there_data.vs_data.vs_num there_data.vs_data.level
-    # end
     Mu, Mv, Mξ, Mu_L, Mu_R = moment_u(prim0, global_data, rot, direction)
     A = calc_A(prim0, aL, aR, Mu, Mv, Mξ, Mu_L, Mu_R, global_data, direction)
     τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
