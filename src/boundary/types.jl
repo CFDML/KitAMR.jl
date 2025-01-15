@@ -42,7 +42,23 @@ struct Circle{T<:AbstractBoundaryType} <: AbstractBoundary
         c.search_coeffi*ds
     )
 end
-
+struct Sphere{T<:AbstractBoundaryType} <: AbstractBoundary # 3D circle
+    center::Vector
+    radius::Real
+    solid::Bool
+    search_coeffi::Real
+    bc::AbstractBCType
+    search_radius::Real
+    Sphere(::Type{T},center::Vector,radius,solid,search_coeffi,bc) where{T<:AbstractBoundaryType} = new{T}(center,radius,solid,search_coeffi,bc)
+    Sphere(c::Sphere{T},ds::Float64) where{T<:AbstractBoundaryType} = new{T}(c.center,
+        c.radius,
+        c.solid,
+        c.search_coeffi,
+        c.bc,
+        c.search_coeffi*ds
+    )
+end
+const AbstractCircle = Union{Circle,Sphere}
 mutable struct SolidCells{DIM,NDF}
     ps_datas::Vector{PS_Data{DIM,NDF}}
     # global_midpoints::Vector{Vector} # Global, store all solidcells' midpoints in global field, which is a compromise to the complexity of solidcells' transportation

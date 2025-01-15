@@ -2,6 +2,7 @@ const COMM_NUMS_TAG = 10000
 const COMM_DATA_TAG = 20000
 const EPS = 1e-12
 const ADAPT_COEFFI_PS = 0.02
+const ADAPT_COEFFI_VS = 1e-4
 const SOLID_CELL_ID_NUM = 8
 const BALANCE_FLAG = 127
 pxest_t = Union{p4est_t,p8est_t}

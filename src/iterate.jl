@@ -99,8 +99,7 @@ function update_volume!(::UGKS_Marching,amr::AMR)
             F .+= F⁺
             f = vs_data.df
             Δt = global_data.status.Δt
-            @inbounds @. f = (f + 0.5 * Δt * (F / τ + (F_ - f) / τ_)) / (1.0 + 0.5 * Δt / τ)
-            @inbounds @. f += vs_data.flux / area / (1.0 + 0.5 * Δt / τ)
+            @inbounds @. f = abs((f + 0.5 * Δt * (F / τ + (F_ - f) / τ_)) / (1.0 + 0.5 * Δt / τ) + vs_data.flux / area / (1.0 + 0.5 * Δt / τ))
             vs_data.flux .= 0.0
         end
     end
@@ -128,7 +127,7 @@ function update_volume!(::Euler,amr::AMR)
             # end
             # try τ = get_τ(prim, gas.μᵣ, gas.ω)
             # catch
-            #     @show minimum(vs_data.df[:,1]) minimum(vs_data.df[:,2]) ps_data.midpoint MPI.Comm_rank(MPI.COMM_WORLD)
+            #    @show vs_data.level vs_data.midpoint
             # end
             τ = get_τ(prim, gas.μᵣ, gas.ω)
             ps_data.qf .= qf = calc_qf(vs_data, prim)
