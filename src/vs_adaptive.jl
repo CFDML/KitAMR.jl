@@ -96,8 +96,8 @@ function flux_refine_replace!(DIM::Integer,NDF::Integer,lnflux::AbstractVector)
     append!(lnflux, zeros((2^DIM - 1) * NDF))
 end
 function vs_refine_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, ::Global_Data{DIM,2}) where{DIM}
-    max(abs(0.5 * (sum((U - midpoint) .^ 2) * df[1] + df[2])* weight) /
-    (w[end] / w[1] - 0.5 * w[1] * sum((U) .^ 2)),df[1]*weight/w[1]) > 0.0001 ? true : false
+    max(abs(0.5 * (sum((U - midpoint) .^ 2) * df[1] + df[2])* weight^2) /
+    (w[end] / w[1] - 0.5 * w[1] * sum((U) .^ 2)),df[1]*weight^2/w[1]) > ADAPT_COEFFI_VS ? true : false
 end
 function midpoint_refine(DIM::Integer,midpoint::AbstractVector, level::Int8, ds::AbstractVector)
     midpoint_new = Matrix{Float64}(undef, 2^DIM, DIM)
@@ -160,6 +160,7 @@ function vs_coarsen!(amr::AMR{DIM,NDF})where{DIM,NDF}
             (global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
             global_data.config.vs_trees_num[i]
     end
+    flag = zeros(global_data.config.solver.AMR_VS_MAXLEVEL)
     for i in eachindex(trees.data)
         for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
@@ -171,25 +172,25 @@ function vs_coarsen!(amr::AMR{DIM,NDF})where{DIM,NDF}
             lndf = reshape(vs_data.df, :)
             lnsdf = reshape(vs_data.sdf, :)
             lnflux = reshape(vs_data.flux, :)
-            index = 1
-            flag = zeros(global_data.config.solver.AMR_VS_MAXLEVEL)
+            index = 1;flag.=0.
             midpoint_index = Matrix{Int}(undef, 2^DIM, DIM)
             df_index = Matrix{Int}(undef, 2^DIM, NDF)
             while index < vs_data.vs_num + 1
                 first_level = vs_data.level[index]
                 if first_level > 0
-                    for i = 1:DIM
+                    for i in axes(midpoint_index,2)
                         midpoint_index[:, i] .=
                             (i-1)*(vs_data.vs_num)+index:(i-1)*(vs_data.vs_num)+index+2^DIM-1
                     end
-                    for i = 1:NDF
+                    for i in axes(df_index,2)
                         df_index[:, i] .=
                             (i-1)*(vs_data.vs_num)+index:(i-1)*(vs_data.vs_num)+index+2^DIM-1
                     end
                     midpoint = @view(lnmidpoint[midpoint_index])
                     df = @view(lndf[df_index])
-                    if flag[first_level] % 1 == 0 &&
-                       !any(x -> x > first_level, @view(vs_data.level[index+1:index+2^DIM-1]))
+                    if all(i->flag[i]%1==0,1:first_level) &&
+                    #    !any(x -> x > first_level, @view(vs_data.level[index+1:index+2^DIM-1]))
+                       all(x -> x == first_level, @view(vs_data.level[index+1:index+2^DIM-1]))
                         if vs_coarsen_flag(
                             ps_data.w,
                             U,
@@ -224,7 +225,7 @@ function vs_coarsen!(amr::AMR{DIM,NDF})where{DIM,NDF}
                         end
                     else
                         for i = 1:first_level
-                            flag[i] += 1 / 2^(DIM * (first_level - i + 1))
+                            flag[i] += 1 / 2^(DIM * (first_level - i+1))
                         end
                     end
                 end
@@ -245,8 +246,8 @@ function vs_coarsen_flag(w::AbstractVector, U::AbstractVector, midpoint::Abstrac
     return true
 end
 function vs_coarsen_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, ::Global_Data{DIM,2}) where{DIM}
-    max(0.5 * (sum((U - midpoint) .^ 2) * df[1] + df[2])* weight /
-    (w[end] / w[1] - 0.5 * w[1] * sum((U) .^ 2)),df[1]*weight/w[1]) < 0.0001 / 2^DIM
+    max(0.5 * (sum((U - midpoint) .^ 2) * df[1] + df[2])* weight^2 /
+    (w[end] / w[1] - 0.5 * w[1] * sum((U) .^ 2)),df[1]*weight^2/w[1]) < 1e-2* ADAPT_COEFFI_VS / 2^DIM
 end
 function midpoint_coarsen(DIM::Integer,midpoint::AbstractVector, level::Int8, ds::AbstractVector)
     ds_new = ds / 2^level

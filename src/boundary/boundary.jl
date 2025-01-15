@@ -38,13 +38,13 @@ function solid_cell_index2ranks(indices::Vector,quadids::Vector,gfq::Vector) # g
     end
     return ranks,lids
 end
-function solid_flag(boundary::Circle,midpoint::AbstractVector) # Does midpoint locate at solid?
+function solid_flag(boundary::AbstractCircle,midpoint::AbstractVector) # Does midpoint locate at solid?
     return xor(norm(midpoint.-boundary.center)>boundary.radius,boundary.solid)
 end
 function solid_flag(::Domain{Maxwellian},::AbstractVector) # Does midpoint locate at solid?
     return false
 end
-function solid_cell_flag(boundary::Circle,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data,inside::Bool) # Ghost nodes, those are inside solid domain and immediately adjacent the boundary.
+function solid_cell_flag(boundary::AbstractCircle,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data,inside::Bool) # Ghost nodes, those are inside solid domain and immediately adjacent the boundary.
     (boundary_flag(boundary,midpoint,ds,global_data) && xor(boundary.solid,!inside)) && return true
     return false
 end
@@ -69,7 +69,7 @@ function calc_intersect_point(boundary::AbstractBoundary,solid_midpoints::Vector
     end
     return aux_points
 end
-function calc_intersect_point(boundary::Circle,midpoint::AbstractVector{Float64})
+function calc_intersect_point(boundary::AbstractCircle,midpoint::AbstractVector{Float64})
     boundary.radius/norm(midpoint-boundary.center)*(midpoint-boundary.center)+boundary.center
 end
 
@@ -197,7 +197,7 @@ function broadcast_quadid!(solid_cells::Vector{T})where{T<:SolidCells}
     return Numbers
 end
 
-function IB_flag(boundary::Circle,aux_point::AbstractVector,midpoint::AbstractVector,::AbstractVector)
+function IB_flag(boundary::AbstractCircle,aux_point::AbstractVector,midpoint::AbstractVector,::AbstractVector)
     # DIM = length(aux_point)
     r = boundary.search_radius
     #=
@@ -676,7 +676,7 @@ function colinear_reject!(IB_nodes::Vector{AbstractIBNodes})
     elseif DIM==3
     end
 end
-function sort_IB_cells!(circle::Circle,config::Configure,solid_cells::SolidCells,::Vector,IB_cells::IBCells)
+function sort_IB_cells!(circle::AbstractCircle,config::Configure,solid_cells::SolidCells,::Vector,IB_cells::IBCells)
     for i in eachindex(solid_cells.ps_datas)
         ps_data = solid_cells.ps_datas[i]
         aux_point = calc_intersect_point(circle,ps_data.midpoint)

@@ -126,14 +126,31 @@ function bilinear_coeffi_2D(p1::T,p2::T,p3::T,p4::T) where{T<:AbstractVector{Flo
         p4[1] p4[2] p4[1]*p4[2] 1.0
     ]
 end
+function bilinear_coeffi_3D(p1::T,p2::T,p3::T,p4::T,p5::T,p6::T,p7::T) where{T<:AbstractVector{Float64}}
+    return @inbounds [
+        p1[1] p1[2] p1[3] p1[1]*p1[2] p1[1]*p1[3] p1[2]*p1[3] 1.0;
+        p2[1] p2[2] p2[3] p2[1]*p2[2] p2[1]*p2[3] p2[2]*p2[3] 1.0;
+        p3[1] p3[2] p3[3] p3[1]*p3[2] p3[1]*p3[3] p3[2]*p3[3] 1.0;
+        p4[1] p4[2] p4[3] p4[1]*p4[2] p4[1]*p4[3] p4[2]*p4[3] 1.0;
+        p5[1] p5[2] p5[3] p5[1]*p5[2] p5[1]*p5[3] p5[2]*p5[3] 1.0;
+        p6[1] p6[2] p6[3] p6[1]*p6[2] p6[1]*p6[3] p6[2]*p6[3] 1.0;
+        p7[1] p7[2] p7[3] p7[1]*p7[2] p7[1]*p7[3] p7[2]*p7[3] 1.0
+    ]
+end
 function calc_IB_ρw(aux_point::AbstractVector,bound::Circle,midpoint::AbstractMatrix,weight::AbstractVector,df::AbstractMatrix,vn::AbstractVector,Θ::AbstractVector)
     calc_IB_ρw_2D(aux_point,bound.bc,midpoint,weight,df,vn,Θ)
+end
+function calc_IB_ρw(aux_point::AbstractVector,bound::Sphere,midpoint::AbstractMatrix,weight::AbstractVector,df::AbstractMatrix,vn::AbstractVector,Θ::AbstractVector)
+    calc_IB_ρw_3D(aux_point,bound.bc,midpoint,weight,df,vn,Θ)
 end
 
 function calc_IB_ρw_2D(::AbstractVector,bc::AbstractVector,midpoint::AbstractMatrix,weight::AbstractVector,df::AbstractMatrix,vn::AbstractVector,Θ::AbstractVector)
     maxwellian_density_2D2F(@view(midpoint[:,1]),@view(midpoint[:,2]),@view(df[:,1]), bc, weight, Θ, vn)
 end
-function IB_prim(circle::Circle,aux_point::AbstractVector,ρw::Real)
+function calc_IB_ρw_3D(::AbstractVector,bc::AbstractVector,midpoint::AbstractMatrix,weight::AbstractVector,df::AbstractMatrix,vn::AbstractVector,Θ::AbstractVector)
+    maxwellian_density_3D1F(@view(midpoint[:,1]),@view(midpoint[:,2]),@view(df[:,1]), bc, weight, Θ, vn)
+end
+function IB_prim(circle::AbstractCircle,aux_point::AbstractVector,ρw::Real)
     IB_prim(circle.bc,aux_point,ρw)
 end
 function IB_prim(bc::AbstractVector,::AbstractVector,ρw::Real)
@@ -314,6 +331,61 @@ function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vec
 		ps_data.w = calc_w0(ps_data)
 		ps_data.prim = get_prim(ps_data,global_data)
         # size(s_vs_data.sdf,1)!=vs_data.vs_num && (s_vs_data.sdf = Array{Float64}(undef,vs_data.vs_num,NDF,DIM))
+    end
+end
+function update_solid_cell!(circle::Sphere,solidcells::SolidCells{DIM,NDF},::Vector{Vector{Float64}},IB_cells::IBCells,global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+    for i in eachindex(solidcells.ps_datas)
+        ps_data = solidcells.ps_datas[i]
+        aux_point = calc_intersect_point(circle,ps_data.midpoint)
+        image_point = 2*aux_point-ps_data.midpoint
+        s_vs_data = ps_data.vs_data
+        n = (aux_point-circle.center)/circle.radius # outer normal direction
+        aux_vs_temp = Vector{Matrix{Float64}}(undef,9)
+        dxL = norm(aux_point-image_point)
+        dxR = norm(ps_data.midpoint-aux_point)
+        for i in eachindex(aux_vs_temp)
+            aux_vs_temp[i] = zeros(Float64,s_vs_data.vs_num,NDF)
+        end
+        ip_df = aux_vs_temp[end-1]
+        aux_df = aux_vs_temp[end]
+        for j in 1:7
+            vs_projection!(s_vs_data,IB_cells.IB_nodes[i][j].vs_data,aux_vs_temp[j])
+        end
+        vn = [dot(@view(s_vs_data.midpoint[j,:]),n) for j in axes(s_vs_data.midpoint,1)]
+        Θ = heaviside.(vn)
+        points = [IB_cells.IB_nodes[i][j].midpoint for j in 1:7]
+        Ainv = inv(bilinear_coeffi_3D(points...))
+        b = Vector{Float64}(undef,7);ip_coeffi = make_bilinear_coeffi_3D(image_point)
+        @inbounds for j in axes(ip_df,1)
+            for l in 1:NDF
+                for k in 1:7
+                    b[k] = aux_vs_temp[k][j,l]
+                end
+                ip_df[j,l] = dot(Ainv*b,ip_coeffi)
+            end
+        end   
+        # aux_point interpolate by bilinear
+        ap_coeffi = make_bilinear_coeffi_2D(aux_point)
+        @inbounds for j in axes(aux_df,1)
+            if Θ[j]==0.
+                for l in 1:NDF
+                    for k = 1:7
+                        b[k] = aux_vs_temp[k][j,l]
+                    end
+                    aux_df[j,l] = dot(Ainv*b,ap_coeffi)
+                end
+            end
+        end   
+        ρw = calc_IB_ρw(aux_point,circle,s_vs_data.midpoint,s_vs_data.weight,aux_df,vn,Θ)
+        aux_prim = IB_prim(circle,aux_point,ρw)
+        for j in axes(aux_df,1)
+            if Θ[j]==1.
+                aux_df[j,:] .= discrete_maxwell(@view(s_vs_data.midpoint[j,:]),aux_prim,global_data)
+            end
+        end
+        s_vs_data.df = @. aux_df+(aux_df-ip_df)/dxL*dxR
+		ps_data.w = calc_w0(ps_data)
+		ps_data.prim = get_prim(ps_data,global_data)
     end
 end
 function project_solid_cell_slope!(vs_data::AbstractVsData{DIM,NDF},vs_data_n::VS_Data{DIM,NDF},DIR::Integer) where{DIM,NDF}

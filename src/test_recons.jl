@@ -13,7 +13,6 @@ for i in 1:100000
         if amr.global_data.status.vs_adapt_step == 10
             KitAMR.vs_refine!(amr)
             KitAMR.vs_coarsen!(amr)
-            # KitAMR.update_solid_vsnum(amr)
             amr.global_data.status.vs_adapt_step=0
         end
         if amr.global_data.status.partition_step%40==0&&KitAMR.partition_check(ps4est)
