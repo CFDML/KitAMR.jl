@@ -6,6 +6,54 @@
 #     end
 #     return false
 # end
+function coarsen_vs_average!(sdf::AbstractArray,sdf_n::AbstractArray,level::Vector,level_n::Vector,::AMR{DIM}) where{DIM}
+    j = 1
+    flag = 0.0
+    for i in axes(sdf,1)
+        if level[i] == level_n[j]
+            @. sdf[i,:,:] += @views sdf_n[j, :, :]
+            j += 1
+        elseif level[i] < level_n[j]
+            while flag != 1.0
+                @. sdf[i, :, :] += @views sdf_n[j, :, :]/ 2^(DIM * (level_n[j] - level[i]))
+                flag += 1 / 2^(DIM * (level_n[j] - level[i]))
+                j += 1
+            end
+            flag = 0.0
+        else
+            @. sdf[i, :, :] += @views sdf_n[j,:,:]
+            flag += 1 / 2^(DIM * (level[i] - level_n[j]))
+            if flag == 1.0
+                j += 1
+                flag = 0.0
+            end
+        end
+    end
+end
+function coarsen_vs_average!(sdf::AbstractMatrix,sdf_n::AbstractMatrix,level::Vector,level_n::Vector,::AMR{DIM}) where{DIM}
+    j = 1
+    flag = 0.0
+    for i in axes(sdf,1)
+        if level[i] == level_n[j]
+            @. sdf[i,:] += @views sdf_n[j, :]
+            j += 1
+        elseif level[i] < level_n[j]
+            while flag != 1.0
+                @. sdf[i, :] += @views sdf_n[j, :]/ 2^(DIM * (level_n[j] - level[i]))
+                flag += 1 / 2^(DIM * (level_n[j] - level[i]))
+                j += 1
+            end
+            flag = 0.0
+        else
+            @. sdf[i, :] += @views sdf_n[j,:]
+            flag += 1 / 2^(DIM * (level[i] - level_n[j]))
+            if flag == 1.0
+                j += 1
+                flag = 0.0
+            end
+        end
+    end
+end
 function boundary_flag(boundary::Domain,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data) # Domain boundary flag
     index = Int(floor((boundary.id-1)/2))+1
     abs(midpoint[index] - global_data.config.geometry[boundary.id]) < ds[index] && return true
@@ -66,6 +114,27 @@ function ps_copy(data::PS_Data{DIM,NDF}) where{DIM,NDF}
     p.flux = zeros(DIM + 2)
     return p
 end
+function ps_merge(Odatas::Vector,index::Int,global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+    data = Odatas[index]
+    vs_data = data.vs_data;vs_num = vs_data.vs_num
+    p = PS_Data(DIM,NDF,
+        data.ds *2.0,
+        data.midpoint - 0.5 * data.ds .* RMT[DIM][index],
+        [sum([x.w[i] for x in Odatas]) for i in 1:DIM+2]./=2^DIM,
+        [sum([x.sw[i,j] for x in Odatas]) for i in 1:DIM+2,j in 1:DIM]./=2^DIM,
+        VS_Data{DIM,NDF}(vs_num,vs_data.level,vs_data.weight,vs_data.midpoint,
+            zeros(vs_num,NDF),zeros(vs_num,NDF,DIM),zeros(vs_num,NDF))
+    )
+    p.neighbor = data.neighbor
+    if !(first(data.neighbor.state)==BALANCE_FLAG)
+        p.neighbor.state[1] = BALANCE_FLAG
+        p.neighbor.data[1] = Odatas
+    end
+    p.prim = get_prim(p.w,global_data)
+    p.qf = Vector{Float64}(undef, DIM)
+    p.flux = zeros(DIM + 2)
+    return p
+end
 function ps_refine_flag(
     ps_data::PS_Data{DIM},
     amr::AMR{DIM},
@@ -112,11 +181,14 @@ function ps_replace(::Val{1}, out_quad, in_quads, which_tree, amr::AMR{DIM}) whe
     )
     index = findfirst(x -> x === Odata, datas)
     deleteat!(datas, index)
+    flag = first(Odata.neighbor.state)==BALANCE_FLAG&&Odata.ds[1]*0.5==Odata.neighbor.data[1][1].ds[1]
     for i = 1:2^DIM
         pw_in_quad = PointerWrapper(in_quads[i])
         dp = PointerWrapper(P4est_PS_Data, pw_in_quad.p.user_data[])
-        ps_data = ps_copy(Odata)
-        if !isa(ps_data,InsideSolidData)
+        if flag
+            ps_data = Odata.neighbor.data[1][i]
+        else
+            ps_data = ps_copy(Odata)
             ps_data.ds .*= 0.5
             vs_data = ps_data.vs_data
             @. ps_data.midpoint += 0.5 * ps_data.ds * RMT[DIM][i]
@@ -124,6 +196,8 @@ function ps_replace(::Val{1}, out_quad, in_quads, which_tree, amr::AMR{DIM}) whe
                 @. vs_data.df += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(vs_data.sdf[:, :, j])
                 @. ps_data.w += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(ps_data.sw[:, j])
             end
+            ps_data.neighbor.state[1] = Odata.neighbor.state[1]
+            ps_data.neighbor.data[1] = Odata.neighbor.data[1]
         end
         insert!(datas, index - 1 + i, ps_data)
         dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
@@ -146,16 +220,15 @@ function ps_replace(::ChildNum, out_quad, in_quads, which_tree, amr::AMR{DIM,NDF
         )
     end
     # @views _,index = findmax([maximum(abs.(x.sw[end,:])) for x in Odatas])
-    _,index = findmax([x.vs_data.vs_num for x in Odatas])
-    Odata = Odatas[index]
-    ps_data = ps_copy(Odata)
-    @. ps_data.midpoint -= 0.5 * ps_data.ds * RMT[DIM][index]
+    _,index = findmin([x.vs_data.vs_num for x in Odatas])
+    ps_data = ps_merge(Odatas,index,amr.global_data)
     vs_data = ps_data.vs_data
-    for i = 1:DIM
-        @. vs_data.df -= 0.5 * ps_data.ds[i] * RMT[DIM][index][i] * @view(vs_data.sdf[:, :, i])
-        @. ps_data.w -= 0.5 * ps_data.ds[i] * RMT[DIM][index][i] * @view(ps_data.sw[:, i])
+    for i in eachindex(Odatas)
+        vs_data_n = Odatas[i].vs_data
+        coarsen_vs_average!(vs_data.sdf,vs_data_n.sdf,vs_data.level,vs_data_n.level,amr)
+        coarsen_vs_average!(vs_data.df,vs_data_n.df,vs_data.level,vs_data_n.level,amr)
     end
-    ps_data.ds .*= 2.0
+    vs_data.df./=2^DIM;vs_data.sdf./=2^DIM
     # end
     index = findfirst(x -> x === Odatas[1], datas)
     deleteat!(datas, index:index+2^DIM-1)
@@ -193,7 +266,7 @@ end
 #                     @. ps_data.w += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(ps_data.sw[:, j])
 #                 end
 #                 children[i] = ps_data
-#                 ps_data.neighbor
+#                 ps_data.neighbor.data
 #                 insert!(datas, index - 1 + i, ps_data)
 #                 dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
 #                 Odata
