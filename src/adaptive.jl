@@ -122,14 +122,17 @@ function ps_merge(Odatas::Vector,index::Int,global_data::Global_Data{DIM,NDF}) w
         data.midpoint - 0.5 * data.ds .* RMT[DIM][index],
         [sum([x.w[i] for x in Odatas]) for i in 1:DIM+2]./=2^DIM,
         [sum([x.sw[i,j] for x in Odatas]) for i in 1:DIM+2,j in 1:DIM]./=2^DIM,
-        VS_Data{DIM,NDF}(vs_num,vs_data.level,vs_data.weight,vs_data.midpoint,
+        VS_Data{DIM,NDF}(vs_num,copy(vs_data.level),copy(vs_data.weight),copy(vs_data.midpoint),
             zeros(vs_num,NDF),zeros(vs_num,NDF,DIM),zeros(vs_num,NDF))
     )
-    p.neighbor = data.neighbor
-    if !(first(data.neighbor.state)==BALANCE_FLAG)
-        p.neighbor.state[1] = BALANCE_FLAG
-        p.neighbor.data[1] = Odatas
-    end
+    # p.neighbor = data.neighbor
+    p.neighbor = Neighbor(DIM,NDF)
+    # if !(first(data.neighbor.state)==BALANCE_FLAG)
+    #     p.neighbor.state[1] = BALANCE_FLAG
+    #     p.neighbor.data[1] = Odatas
+    # end
+    p.neighbor.state[1] = BALANCE_FLAG
+    p.neighbor.data[1] = Odatas
     p.prim = get_prim(p.w,global_data)
     p.qf = Vector{Float64}(undef, DIM)
     p.flux = zeros(DIM + 2)
@@ -181,7 +184,7 @@ function ps_replace(::Val{1}, out_quad, in_quads, which_tree, amr::AMR{DIM}) whe
     )
     index = findfirst(x -> x === Odata, datas)
     deleteat!(datas, index)
-    flag = first(Odata.neighbor.state)==BALANCE_FLAG&&Odata.ds[1]*0.5==Odata.neighbor.data[1][1].ds[1]
+    flag = first(Odata.neighbor.state)==BALANCE_FLAG
     for i = 1:2^DIM
         pw_in_quad = PointerWrapper(in_quads[i])
         dp = PointerWrapper(P4est_PS_Data, pw_in_quad.p.user_data[])
@@ -196,8 +199,8 @@ function ps_replace(::Val{1}, out_quad, in_quads, which_tree, amr::AMR{DIM}) whe
                 @. vs_data.df += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(vs_data.sdf[:, :, j])
                 @. ps_data.w += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(ps_data.sw[:, j])
             end
-            ps_data.neighbor.state[1] = Odata.neighbor.state[1]
-            ps_data.neighbor.data[1] = Odata.neighbor.data[1]
+            # ps_data.neighbor.state[1] = Odata.neighbor.state[1]
+            # ps_data.neighbor.data[1] = Odata.neighbor.data[1]
         end
         insert!(datas, index - 1 + i, ps_data)
         dp[] = P4est_PS_Data(pointer_from_objref(ps_data))

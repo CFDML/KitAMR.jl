@@ -426,7 +426,7 @@ function calc_solid_cell_slope!(svdata::AbstractVsData{DIM,NDF},fvdata::VS_Data{
     level_n = fvdata.level
     df_n = fvdata.df
     dx = fmid[direction]-smid[direction]
-    for i in 1:svdata.vs_num
+    @inbounds for i in 1:svdata.vs_num
         if level[i] == level_n[j]
             @views @. sdf[i, :] = df_n[j,:]-df[i,:]
             j += 1
