@@ -10,7 +10,7 @@ for i in 1:100000
         KitAMR.ps_refine!(ps4est,amr)
         KitAMR.ps_coarsen!(ps4est)
         KitAMR.ps_balance!(ps4est)
-        if amr.global_data.status.vs_adapt_step == 10
+        if amr.global_data.status.vs_adapt_step == 40
             KitAMR.vs_refine!(amr)
             KitAMR.vs_coarsen!(amr)
             amr.global_data.status.vs_adapt_step=0
