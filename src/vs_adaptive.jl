@@ -178,19 +178,18 @@ function vs_coarsen!(amr::AMR{DIM,NDF})where{DIM,NDF}
             while index < vs_data.vs_num + 1
                 first_level = vs_data.level[index]
                 if first_level > 0
-                    for i in axes(midpoint_index,2)
-                        midpoint_index[:, i] .=
-                            (i-1)*(vs_data.vs_num)+index:(i-1)*(vs_data.vs_num)+index+2^DIM-1
-                    end
-                    for i in axes(df_index,2)
-                        df_index[:, i] .=
-                            (i-1)*(vs_data.vs_num)+index:(i-1)*(vs_data.vs_num)+index+2^DIM-1
-                    end
-                    midpoint = @view(lnmidpoint[midpoint_index])
-                    df = @view(lndf[df_index])
-                    if all(i->flag[i]%1==0,1:first_level) &&
-                    #    !any(x -> x > first_level, @view(vs_data.level[index+1:index+2^DIM-1]))
+                    if flag[first_level]%1==0. &&
                        all(x -> x == first_level, @view(vs_data.level[index+1:index+2^DIM-1]))
+                        for i in axes(midpoint_index,2)
+                            midpoint_index[:, i] .=
+                                (i-1)*(vs_data.vs_num)+index:(i-1)*(vs_data.vs_num)+index+2^DIM-1
+                        end
+                        for i in axes(df_index,2)
+                            df_index[:, i] .=
+                                (i-1)*(vs_data.vs_num)+index:(i-1)*(vs_data.vs_num)+index+2^DIM-1
+                        end
+                        midpoint = @view(lnmidpoint[midpoint_index])
+                        df = @view(lndf[df_index])
                         if vs_coarsen_flag(
                             ps_data.w,
                             U,
