@@ -8,8 +8,8 @@ using MPIPreferences: MPIPreferences
 # load all preferences here and access them from the `module LibP4est`.
 using Preferences: @load_preference, set_preferences!, delete_preferences!
 using UUIDs: UUID
-const _PREFERENCE_LIBP4EST = @load_preference("libp4est", "P4est_jll")
-const _PREFERENCE_LIBSC = @load_preference("libsc", _PREFERENCE_LIBP4EST)
+const _PREFERENCE_LIBP4EST = @load_preference("libp4est", ENV["LIBP4EST_PATH"]*"libp4est.so")
+const _PREFERENCE_LIBSC = @load_preference("libsc", ENV["LIBP4EST_PATH"]*"libsc.so")
 
 
 # Include p4est bindings
