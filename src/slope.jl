@@ -162,7 +162,20 @@ function update_slope_inner!(
     end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
-    update_slope_Lbound_vs!(ps_data.vs_data, Rdata[1].vs_data, ds, dir)
+    vs_data = ps_data.vs_data
+    update_slope_Lbound_vs!(vs_data, Rdata[1].vs_data, ds, dir)
+    faceid = 2*dir-1
+    domain = global_data.config.domain[faceid]
+    if isdefined(domain,:bc)
+        bc = get_bc(domain.bc)
+        # sL = Matrix{Float64}(undef,ps_data.vs_data.vs_num,NDF)
+        # @views @inbounds for i in axes(sL,1)
+            
+        # end
+        sL = discrete_maxwell(vs_data.midpoint,bc,global_data)
+        sL .= @. (vs_data.df-sL)/ds
+        vs_data.sdf[:,:,dir] .= @views vanleer(sL,vs_data.sdf[:,:,dir])
+    end
 end
 function update_slope_inner!(
     ::Val{1},
@@ -180,7 +193,20 @@ function update_slope_inner!(
     end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
-    update_slope_Rbound_vs!(ps_data.vs_data, Ldata[1].vs_data, ds, dir)
+    vs_data = ps_data.vs_data
+    update_slope_Rbound_vs!(vs_data, Ldata[1].vs_data, ds, dir)
+    faceid = 2*dir
+    domain = global_data.config.domain[faceid]
+    if isdefined(domain,:bc)
+        bc = get_bc(domain.bc)
+        # sL = Matrix{Float64}(undef,ps_data.vs_data.vs_num,NDF)
+        # @views @inbounds for i in axes(sL,1)
+            
+        # end
+        sR = discrete_maxwell(vs_data.midpoint,bc,global_data)
+        sR .= @. (sR-vs_data.df)/ds
+        vs_data.sdf[:,:,dir] .= @views vanleer(vs_data.sdf[:,:,dir],sR)
+    end
 end
 function update_slope_Rbound_vs!(
     vs_data::AbstractVsData{DIM,NDF},
@@ -534,3 +560,4 @@ function update_slope!(amr::AMR{DIM,NDF}) where{DIM,NDF}
         end
     end
 end
+

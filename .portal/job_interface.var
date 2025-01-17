@@ -1,0 +1,37 @@
+#! /bin/bash 
+####################################################################
+### setting variable below
+GV_TYPE=HPC     ## value = HPC | IndustrialCloud 
+PORTAL_ROOT=$GRIDVIEW_HOME/gridviewAppTemplate/BASIC/BASE/
+NET_TYPE=ib     ## value = default | ib | ethernet | myri 
+CMD_OPTION_ADMIN=''
+CMD_OPTION_USER=''
+MIDFILE_DIR=$GAP_WORK_DIR/.portal
+####################################################################
+SCHED_TYPE=$GAP_SCHED_TYPE  ## value = pbs | slurm
+COMMENT=$GAP_APPNAME
+
+SUBMIT_TYPE=$GAP_SUBMIT_TYPE ## value = cmd | bash | sched
+CMD_FILE=$GAP_CMD_FILE
+BASH_FILE=$GAP_BASH_FILE
+SCHED_FILE=$GAP_SCHED_FILE
+
+JOB_NAME=$GAP_JOB_NAME
+WORK_DIR=$GAP_WORK_DIR
+GUI=$GAP_VNC
+QUEUE=$GAP_QUEUE
+NPROC=$GAP_NPROC 
+NNODE=$GAP_NNODE  
+PPN=$GAP_PPN 
+NGPU=$GAP_NGPU 
+NDCU=$GAP_NDCU 
+NODE_STRING=$GAP_NODE_STRING 
+WALL_TIME=$GAP_WALL_TIME
+JOB_MEM=$GAP_JOB_MEM
+STD_OUT_FILE=$GAP_STD_OUT_FILE
+STD_ERR_FILE=$GAP_STD_ERR_FILE
+MULTI_SUB=$GAP_MULTI_SUB
+CMD_OPTION_WEB=$GAP_ARGUMENTS
+EXCLUSIVE=$GAP_EXCLUSIVE
+SCHEDULER_OPT_WEB=$GAP_SCHEDULER_OPT_WEB
+MODULE_ENV=$GAP_MODULE_ENV
