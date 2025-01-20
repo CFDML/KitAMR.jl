@@ -3,7 +3,7 @@ MPI.Init()
 config = KitAMR.read_config("configure_DVM.txt")
 ps4est,amr = KitAMR.init(config);
 KitAMR.listen_for_save!()
-for i in 1:100000
+for i in 1:4000
     if amr.global_data.status.ps_adapt_step == 10
         KitAMR.update_slope!(amr)
         KitAMR.update_gradmax!(amr)
@@ -15,13 +15,14 @@ for i in 1:100000
             KitAMR.vs_coarsen!(amr)
             amr.global_data.status.vs_adapt_step=0
         end
-        if amr.global_data.status.partition_step%40==0&&KitAMR.partition_check(ps4est)
+        if amr.global_data.status.partition_step%40==0
+            # &&KitAMR.partition_check(ps4est)
             KitAMR.IB_quadid_update!(ps4est,amr)
             KitAMR.ps_partition!(ps4est, amr)
             KitAMR.IB_partition!(ps4est,amr)
             amr.global_data.status.partition_step = 0
         end
-        amr.global_data.status.vs_adapt_step==0&&amr.global_data.status.partition_step!=0&&KitAMR.IB_structure_update!(amr)
+        # amr.global_data.status.vs_adapt_step==0&&amr.global_data.status.partition_step!=0&&KitAMR.IB_structure_update!(amr)
         KitAMR.update_ghost!(ps4est, amr)
         KitAMR.update_neighbor!(ps4est, amr)
         KitAMR.update_faces!(ps4est, amr)

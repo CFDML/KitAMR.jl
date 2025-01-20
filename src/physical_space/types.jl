@@ -20,7 +20,7 @@ mutable struct Neighbor{DIM,NDF}
 end
 
 mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
-    quadid::Int # The unique identification of the ps_data, is currently used for SolidCells and IB nodes' partition. Only need to be updated before partition. Can be negative for SolidCells/IB nodes for the convenience of boundary_flag
+    quadid::Cint # The unique identification of the ps_data, is currently used for SolidCells and IB nodes' partition. Only need to be updated before partition. Can be negative for SolidCells/IB nodes for the convenience of boundary_flag
     bound_enc::Int # 0:fluid_cell;>0:bound_enc th boundary's IB_cell;<0: bound_enc th boundary's solid_cell;
     solid_cell_index::Vector{Int}
     ds::Vector{Float64} # DIM

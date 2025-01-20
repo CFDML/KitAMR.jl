@@ -14,7 +14,7 @@ function vs_refine!(trees::PS_Trees{DIM,NDF}, global_data::Global_Data{DIM,NDF})
         for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
             isa(ps_data,InsideSolidData) && continue
-            ps_data.bound_enc<0 && continue # solid_cell
+            # ps_data.bound_enc<0 && continue # solid_cell
             vs_data = ps_data.vs_data
             U = ps_data.prim[2:1+DIM]
             lnmidpoint = reshape(vs_data.midpoint, :)

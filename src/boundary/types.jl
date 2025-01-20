@@ -61,7 +61,6 @@ end
 const AbstractCircle = Union{Circle,Sphere}
 mutable struct SolidCells{DIM,NDF}
     ps_datas::Vector{PS_Data{DIM,NDF}}
-    # global_midpoints::Vector{Vector} # Global, store all solidcells' midpoints in global field, which is a compromise to the complexity of solidcells' transportation
     quadids::Vector{Cint} # A better choice: store all quadid of SolidCells to avoid extensive comparing iteration. Are only needed to be updated before partition.
     #=
     quadids provide the information of solidcells on other processors. Only after this, the exchange of IB nodes can be executeable.
@@ -71,18 +70,12 @@ function SolidCells(ps_datas::Vector{PS_Data{DIM,NDF}}) where{DIM,NDF}
     quadids = [x.quadid for x in ps_datas]
     return SolidCells{DIM,NDF}(ps_datas,quadids)
 end
-# mutable struct AuxPoints # Global, one-to-one corresponds to solid cells, intersect point(default)/image point
-#     midpoint::Vector{Vector}
-#     mpi_rank::Vector{Integer} # The solidcell corresponding to AuxPoint belongs to which mpi_rank
-#     # local_index::Vector{Integer} # The solidcell's index on its local processor
-# end
 mutable struct GhostIBVSData{DIM,NDF} <: AbstractVsData{DIM,NDF}
     vs_num::Int
     level::AbstractVector{Int8}
     weight::AbstractVector{Float64}
     midpoint::AbstractMatrix{Float64}
     df::AbstractMatrix{Float64}
-    # sdf::AbstractArray{Float64}
 end
 mutable struct GhostIBNode{DIM,NDF} # Maybe sdf?
     solid_cell_index::Vector{Int}
@@ -93,23 +86,15 @@ end
 const AbstractIBNodes{DIM,NDF} = Union{PS_Data{DIM,NDF},GhostIBNode{DIM,NDF}}
 mutable struct IBCells
     IB_nodes::Vector{Vector{AbstractIBNodes}} # SolidCells{IBNodes{}}
-    # quadids::Vector{Vector{Cint}} # Global quadids. Are only needed to be updated before partition.
 end
 mutable struct IBTransferData
     solid_cell_indices::Matrix{Int}
     midpoints::Matrix{Float64}
     prims::Matrix{Float64}
     level::Vector{Int8}
-    # weight::Vector{Float64}
     vs_midpoint::Matrix{Float64}
     df::Matrix{Float64}
-    # sdf::Array{Float64}
 end
-# mutable struct IBTransferVsData
-#     level::Vector{Int8}
-#     vs_midpoint::Matrix{Float64}
-#     df::Matrix{Float64}
-# end
 mutable struct IBBuffer
     sdata::Vector{IBTransferData} # Datas of IB nodes to be sent
     rdata::Vector{IBTransferData} # Datas of IB nodes to be received

@@ -106,13 +106,6 @@ function update_slope_Lbound_vs!(
     diff_R!(vs_data, R_data, dsR, sR)
     vs_data.sdf[:, :, dir] .= sR
 end
-# function update_slope_Lbound_vs1!(vs_data::AbstractVsData,R_data::AbstractVsData,dsR::Float64,dir::Int,)
-#     vs_num = vs_data.vs_num
-#     sR = zeros(vs_num,NDF)
-#     diff_R!(vs_data,R_data,dsR,sR)
-#     @show dsR maximum(sR) dir maximum(R_data.df-vs_data.df)
-#     vs_data.sdf[:,:,dir] .= sR
-# end
 function update_slope_Rbound_vs!(
     vs_data::AbstractVsData{DIM,NDF},
     L_data::AbstractVsData{DIM,NDF},
@@ -133,7 +126,6 @@ function update_slope_inner!(
     Rdata::T2,
     dir::Integer,
 ) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
-    # sw = (Rdata[1].w-Ldata[1].w)/(2. *ps_data.ds[dir])
     ds = ps_data.ds[dir]
     swL = (ps_data.w - Ldata[1].w) / (ds)
     swR = (Rdata[1].w - ps_data.w) / (ds)
@@ -168,10 +160,6 @@ function update_slope_inner!(
     domain = global_data.config.domain[faceid]
     if isdefined(domain,:bc)
         bc = get_bc(domain.bc)
-        # sL = Matrix{Float64}(undef,ps_data.vs_data.vs_num,NDF)
-        # @views @inbounds for i in axes(sL,1)
-            
-        # end
         sL = discrete_maxwell(vs_data.midpoint,bc,global_data)
         sL .= @. (vs_data.df-sL)/ds
         vs_data.sdf[:,:,dir] .= @views vanleer(sL,vs_data.sdf[:,:,dir])
@@ -199,10 +187,6 @@ function update_slope_inner!(
     domain = global_data.config.domain[faceid]
     if isdefined(domain,:bc)
         bc = get_bc(domain.bc)
-        # sL = Matrix{Float64}(undef,ps_data.vs_data.vs_num,NDF)
-        # @views @inbounds for i in axes(sL,1)
-            
-        # end
         sR = discrete_maxwell(vs_data.midpoint,bc,global_data)
         sR .= @. (sR-vs_data.df)/ds
         vs_data.sdf[:,:,dir] .= @views vanleer(vs_data.sdf[:,:,dir],sR)
@@ -350,7 +334,6 @@ function update_slope_inner!(
     for i = 1:2^(DIM-1)
         wR += Rdata[i].w
     end
-    # sw = (wR./2^(DIM-1)-Ldata[1].w)./(1.75*ps_data.ds[dir])
     ds = ps_data.ds[dir]
     swL = (ps_data.w - Ldata[1].w) / (ds)
     swR = (wR / 2^(DIM - 1) - ps_data.w) / (0.75 * ds)
@@ -376,7 +359,6 @@ function update_slope_inner!(
     for i = 1:2^(DIM-1)
         wL += Ldata[i].w
     end
-    # sw = (Rdata[1].w-wL./2^(DIM-1))./(1.75*ps_data.ds[dir])
     ds = ps_data.ds[dir]
     swL = (ps_data.w - wL / 2^(DIM - 1)) / (0.75 * ds)
     swR = (Rdata[1].w - ps_data.w) / ds
@@ -404,7 +386,6 @@ function update_slope_inner!(
         wL += Ldata[i].w
         wR += Rdata[i].w
     end
-    # sw = (wR-wL)./1.5*ps_data.ds[dir]/2^(DIM-1)
     ds = ps_data.ds[dir]
     swL = (ps_data.w - wL / 2^(DIM - 1)) / (0.75 * ds)
     swR = (wR / 2^(DIM - 1) - ps_data.w) / (0.75 * ds)
@@ -426,7 +407,6 @@ function update_slope_inner!(
     Rdata::T2,
     dir::Integer,
 ) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
-    # sw = (Rdata[1].w-Ldata[1].w)./(2.5*ps_data.ds[dir])
     ds = ps_data.ds[dir]
     swL = (ps_data.w - Ldata[1].w) / ds
     swR = (Rdata[1].w - ps_data.w) / (1.5 * ds)
@@ -448,7 +428,6 @@ function update_slope_inner!(
     Rdata::T2,
     dir::Integer,
 ) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
-    # sw = (Rdata[1].w-Ldata[1].w)./(2.5*ps_data.ds[dir])
     ds = ps_data.ds[dir]
     swL = (ps_data.w - Ldata[1].w) / (1.5 * ds)
     swR = (Rdata[1].w - ps_data.w) / ds
@@ -470,7 +449,6 @@ function update_slope_inner!(
     Rdata::T2,
     dir::Integer,
 ) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
-    # sw = (Rdata[1].w-Ldata[1].w)./(3*ps_data.ds[dir])
     ds = ps_data.ds[dir]
     swL = (ps_data.w - Ldata[1].w) / (1.5 * ds)
     swR = (Rdata[1].w - ps_data.w) / (1.5 * ds)
@@ -496,7 +474,6 @@ function update_slope_inner!(
     for i = 1:2^(DIM-1)
         wL += Ldata[i].w
     end
-    # sw = (Rdata[1].w-wL/2^(DIM-1))./(2.25*ps_data.ds[dir])
     ds = ps_data.ds[dir]
     swL = (ps_data.w - wL / 2^(DIM - 1)) / (0.75 * ds)
     swR = (Rdata[1].w - ps_data.w) / (1.5 * ds)
@@ -523,7 +500,6 @@ function update_slope_inner!(
         wR += Rdata[i].w
     end
     ds = ps_data.ds[dir]
-    # sw = (wR/2^(DIM-1)-Ldata[1].w)./(2.25*ps_data.ds[dir])
     swL = (ps_data.w - Ldata[1].w) / (1.5 * ds)
     swR = (wR / 2^(DIM - 1) - ps_data.w) / (0.75 * ds)
     sw = vanleer(swL, swR)

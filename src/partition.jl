@@ -107,7 +107,7 @@ function up_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::Vec
             ps_data = trees[i][j]
             if isa(ps_data,InsideSolidData)
                 push!(encs,0)
-                append!(encs,zeros(SOLID_CELL_ID_NUM))
+                append!(encs,zeros(Int,SOLID_CELL_ID_NUM))
                 append!(ws,zeros(DIM+2))
                 s_vs_nums[index] = 0
             else
@@ -374,7 +374,7 @@ function partition_transfer(
     transfer(sends, s_datas, receives, receive_nums, r_vs_numss)
 end
 function unpack_data(vs_nums, data, amr::AMR{DIM,NDF}) where{DIM,NDF}
-    transfer_ps_datas = Array{AbstractPsData{DIM,NDF}}(undef, length(vs_nums))
+    transfer_ps_datas = Vector{AbstractPsData{DIM,NDF}}(undef, length(vs_nums))
     quadrature = amr.global_data.config.quadrature
     vs_trees_num = reduce(*, amr.global_data.config.vs_trees_num)
     vs_space = 1.0
@@ -478,17 +478,17 @@ function insert_trees!(p4est::P_pxest_t, amr::AMR{DIM,NDF}, ti_data::Transfer_In
     if !isempty(trees)
         if pp.first_local_tree[] < ti_data.old_flt
             for i = 1:ti_data.old_flt-pp.first_local_tree[]
-                pushfirst!(trees, Vector{PS_Data{DIM,NDF}}(undef, 0))
+                pushfirst!(trees, Vector{AbstractPsData{DIM,NDF}}(undef, 0))
             end
         end
         if pp.last_local_tree[] > ti_data.old_llt
             for i = 1:pp.last_local_tree[]-ti_data.old_llt
-                push!(trees, Vector{PS_Data{DIM,NDF}}(undef, 0))
+                push!(trees, Vector{AbstractPsData{DIM,NDF}}(undef, 0))
             end
         end
     else
         for _ = 1:pp.last_local_tree[]-pp.first_local_tree[]+1
-            push!(trees, Vector{PS_Data{DIM,NDF}}(undef, 0))
+            push!(trees, Vector{AbstractPsData{DIM,NDF}}(undef, 0))
         end
     end
     amr.field.trees.offset = pp.first_local_tree[] - 1
