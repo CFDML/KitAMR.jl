@@ -55,20 +55,6 @@ function update_gradmax!(amr::AMR)
     global_data.status.gradmax =
         MPI.Allreduce(global_data.status.gradmax, (x,y)->max.(x,y), MPI.COMM_WORLD)
 end
-# function update_df!(
-#     vs_data::VS_Data,
-#     F::AbstractArray,
-#     F_::AbstractArray,
-#     τ::Real,
-#     τ_::Real,
-#     area::Real,
-#     global_data::Global_Data,
-# )
-#     f = vs_data.df
-#     Δt = global_data.status.Δt
-#     @inbounds @. f = (f + 0.5 * Δt * (F / τ + (F_ - f) / τ_)) / (1.0 + 0.5 * Δt / τ)
-#     @inbounds @. f += vs_data.flux / area / (1.0 + 0.5 * Δt / τ)
-# end
 function update_volume!(amr::AMR)
     time_marching = amr.global_data.config.solver.time_marching
     update_volume!(time_marching,amr)
@@ -122,13 +108,6 @@ function update_volume!(::Euler,amr::AMR)
                 ps_data.flux .= 0.0
             end
             ps_data.prim .= prim = get_prim(ps_data, global_data)
-            # if ps_data.midpoint==[-3.971875, -2.3828125]
-            #     @show minimum(vs_data.df[:,1]) minimum(vs_data.df[:,2])
-            # end
-            # try τ = get_τ(prim, gas.μᵣ, gas.ω)
-            # catch
-            #    @show vs_data.level vs_data.midpoint
-            # end
             τ = get_τ(prim, gas.μᵣ, gas.ω)
             ps_data.qf .= qf = calc_qf(vs_data, prim)
             F = discrete_maxwell(vs_data.midpoint, prim, global_data)
