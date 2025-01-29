@@ -10,7 +10,7 @@ using SpecialFunctions
 using StaticArrays
 # using PythonCall
 using WriteVTK
-
+using Documenter
 using Reexport
 
 include("../lib/P4est/src/P4est.jl")
@@ -36,8 +36,8 @@ include("boundary/boundary.jl")
 include("adaptive.jl")
 include("neighbor.jl")
 include("ghost.jl")
-include("vs_space.jl")
-include("vs_adaptive.jl")
+include("velocity_space/vs_space.jl")
+include("velocity_space/vs_adaptive.jl")
 include("initialize.jl")
 include("partition.jl")
 include("slope.jl")

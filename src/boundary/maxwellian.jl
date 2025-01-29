@@ -176,12 +176,14 @@ function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vec
         aux_vs_temp = Vector{Matrix{Float64}}(undef,6)
         dxL = norm(aux_point-image_point)
         dxR = norm(ps_data.midpoint-aux_point)
-        for i in eachindex(aux_vs_temp)
+        for i in 2:6
             aux_vs_temp[i] = zeros(Float64,s_vs_data.vs_num,NDF)
         end
+        aux_vs_temp[1] = IB_cells.IB_nodes[i][1].vs_data.df
         ip_df = aux_vs_temp[end-1]
         aux_df = aux_vs_temp[end]
-        for j in 1:4
+        # IB_vs = IB_cells.IB_nodes[i][1].vs_data
+        for j in 2:4
             vs_projection!(s_vs_data,IB_cells.IB_nodes[i][j].vs_data,aux_vs_temp[j])
         end
         vn = [dot(@view(s_vs_data.midpoint[j,:]),n) for j in axes(s_vs_data.midpoint,1)]
@@ -190,22 +192,43 @@ function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vec
         Ainv = inv(bilinear_coeffi_2D(points...))
         b = Vector{Float64}(undef,4);ip_coeffi = make_bilinear_coeffi_2D(image_point)
         @inbounds for j in axes(ip_df,1)
+            # V2 = @views sum(IB_vs.midpoint[j,:].^2)
             for l in 1:NDF
                 for k in 1:4
                     b[k] = aux_vs_temp[k][j,l]
+                    # temp = aux_vs_temp[k][j,l]
+                    # b[k] = temp<EPS ? 0. : temp
                 end
-                ip_df[j,l] = dot(Ainv*b,ip_coeffi)
+                # ip_df[j,l] = dot(Ainv*(b./ab),ip_coeffi).*ab
+                # if V2>4/ps_data.prim[end]^2
+                #     ip_df[j,l] = dot(Ainv*(b.*V2),ip_coeffi)/V2
+                # else
+                    ip_df[j,l] = dot(Ainv*b,ip_coeffi)
+                # end
+                # if isnan(ip_df[j,l])
+                #     @show b ip_coeffi Ainv
+                # end
             end
         end   
         # aux_point interpolate by bilinear
         ap_coeffi = make_bilinear_coeffi_2D(aux_point)
         @inbounds for j in axes(aux_df,1)
             if Θ[j]==0.
+                # V2 = @views sum(IB_vs.midpoint[j,:].^2)
                 for l in 1:NDF
                     for k = 1:4
                         b[k] = aux_vs_temp[k][j,l]
+                        # temp = aux_vs_temp[k][j,l]
+                        # b[k] = temp<EPS ? 0. : temp
                     end
-                    aux_df[j,l] = dot(Ainv*b,ap_coeffi)
+                    # ab = maximum(abs.(b))
+                    # (ab==0.)&&(ab=EPS)
+                    # aux_df[j,l] = dot(Ainv*(b./ab),ap_coeffi).*ab
+                    # if V2>4/ps_data.prim[end]^2
+                    #     aux_df[j,l] = dot(Ainv*(b.*V2),ap_coeffi)/V2
+                    # else
+                        aux_df[j,l] = dot(Ainv*b,ap_coeffi)
+                    # end
                 end
             end
         end   
@@ -217,6 +240,14 @@ function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vec
             end
         end
         @. s_vs_data.df = aux_df+(aux_df-ip_df)/dxL*dxR
+        # ps_data.flux[1:DIM] .= n
+        # >>for gaussian weight
+        # prims = [[x.prim[l] for x in IB_cells.IB_nodes[i][1:4]] for l in 1:DIM+2]
+        # ip_prim = [dot(Ainv*prims[l],ip_coeffi) for l in 1:DIM+2] # prim at aux_point interpolated by fluid cells
+        # aux_fprim = [dot(Ainv*prims[l],ap_coeffi) for l in 1:DIM+2] # prim at aux_point interpolated by fluid cells
+        # ps_data.sw[:,1] .= aux_fprim
+        # ps_data.sw[:,2] .= aux_prim+(aux_prim-ip_prim)/dxL*dxR
+        # <<for gaussian weight
 		ps_data.w = calc_w0(ps_data)
 		ps_data.prim = get_prim(ps_data,global_data)
     end

@@ -114,7 +114,10 @@ function update_volume!(::Euler,amr::AMR)
             F .+= shakhov_part(vs_data.midpoint, F, prim, qf, global_data)
             f = vs_data.df
             Δt = global_data.status.Δt
-            f .= abs.((τ-Δt)/τ*f+Δt/τ*F+Δt/area*vs_data.flux)
+            @. f = abs((τ-Δt)/τ*f+Δt/τ*F+Δt/area*vs_data.flux)
+            # for fi in f
+            #     fi<0. &&(fi=0.)
+            # end
             vs_data.flux .= 0.0
         end
     end

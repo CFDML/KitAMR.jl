@@ -8,6 +8,14 @@ function partition_check(p4est::P_pxest_t)
     nums = [gfq[i]-gfq[i-1] for i in 2:MPI.Comm_size(MPI.COMM_WORLD)+1]
     return (maximum(nums)-minimum(nums))/minimum(nums)>0.1
 end
+function partition_weight(p4est::P_pxest_t,which_tree,quadrant::P_pxest_quadrant_t)
+    qp = PointerWrapper(quadrant)
+    dp = PointerWrapper(P4est_PS_Data,qp.p.user_data[])
+    ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+    isa(ps_data,InsideSolidData)&&return Cint(0)
+    ps_data.bound_enc<0&&return Cint(2)
+    return Cint(1)
+end
 function partition!(p4est::Ptr{p4est_t})
     pp = PointerWrapper(p4est)
     gfq = Base.unsafe_wrap(
@@ -18,7 +26,8 @@ function partition!(p4est::Ptr{p4est_t})
     src_gfq = copy(gfq)
     src_flt = pp.first_local_tree[]
     src_llt = pp.last_local_tree[]
-    p4est_partition(p4est, 0, C_NULL)
+    p4est_partition(p4est, 0, @cfunction(partition_weight,Cint,(Ptr{p4est_t},p4est_topidx_t,Ptr{p4est_quadrant_t})))
+    # p4est_partition(p4est, 0, C_NULL)
     # dest_gfq = Base.unsafe_wrap(Vector{Int},pointer(pp.global_first_quadrant),MPI.Comm_size(MPI.COMM_WORLD)+1)
     return src_gfq, gfq, src_flt, src_llt
 end
