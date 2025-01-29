@@ -7,9 +7,6 @@ end
 function flux!(face::DomainFace,amr::AMR)
     here_vs = make_face_vs(face)
     flux,micro_flux = calc_domain_flux(amr.global_data.config.solver.flux,here_vs,face,amr)
-    # if face.ps_data.midpoint==[-3.9625, -4.96875]
-    #     @show flux face.direction
-    # end
     update_domain_flux!(flux,micro_flux,face,here_vs.heavi)
 end
 function flux!(face::FullFace,amr::AMR)
@@ -67,7 +64,6 @@ function update_flux!(::Nothing,micro_flux::Vector{Matrix{Float64}},face::Union{
     rot,direction,_,here_data,there_data = unpack(face)
     area = face_area(face,here_data,direction,rot)
     here_micro,there_micro = micro_flux
-    # update_macro_flux!(flux*area,here_data,there_data)
     update_micro_flux!(here_micro*area,there_micro*area,here_data,there_data,heavi)
 end
 function update_macro_flux!(flux::Vector,here_data::PS_Data,there_data::PS_Data)

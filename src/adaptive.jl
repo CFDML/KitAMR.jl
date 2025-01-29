@@ -46,6 +46,32 @@ function vs_merge!(sdf::AbstractMatrix,sdf_n::AbstractMatrix,level::Vector,level
         end
     end
 end
+# function vs_merge!(sdf::AbstractMatrix,sdf_n::AbstractMatrix,level::Vector,level_n::Vector,prim::Vector,midpoint::AbstractMatrix,midpoint_n::AbstractMatrix,::AMR{DIM}) where{DIM}
+#     j = 1
+#     flag = 0.0
+#     λ = prim[end]
+#     U = prim[2:end-1]
+#     for i in axes(sdf,1)
+#         if level[i] == level_n[j]
+#             @. sdf[i,:] += @views sdf_n[j, :]
+#             j += 1
+#         elseif level[i] < level_n[j]
+#             while flag != 1.0
+#                 @. sdf[i, :] += @views sdf_n[j, :]/ 2^(DIM * (level_n[j] - level[i]))*exp(-λ*(sum((midpoint[i,:]-U).^2)-sum((midpoint_n[j,:]-U).^2)))
+#                 flag += 1 / 2^(DIM * (level_n[j] - level[i]))
+#                 j += 1
+#             end
+#             flag = 0.0
+#         else
+#             @. sdf[i, :] += @views sdf_n[j,:]*exp(-λ*(sum((midpoint[i,:]-U).^2)-sum((midpoint_n[j,:]-U).^2)))
+#             flag += 1 / 2^(DIM * (level[i] - level_n[j]))
+#             if flag == 1.0
+#                 j += 1
+#                 flag = 0.0
+#             end
+#         end
+#     end
+# end
 function boundary_flag(boundary::Domain,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data) # Domain boundary flag
     index = Int(floor((boundary.id-1)/2))+1
     abs(midpoint[index] - global_data.config.geometry[boundary.id]) < ds[index] && return true
@@ -168,7 +194,7 @@ function ps_replace(::Val{1}, out_quad, in_quads, which_tree, amr::AMR{DIM}) whe
     )
     index = findfirst(x -> x === Odata, datas)
     deleteat!(datas, index)
-    flag = first(Odata.neighbor.state)==BALANCE_FLAG
+    flag = Odata.neighbor.state[1]==BALANCE_FLAG
     for i = 1:2^DIM
         pw_in_quad = PointerWrapper(in_quads[i])
         dp = PointerWrapper(P4est_PS_Data, pw_in_quad.p.user_data[])
@@ -205,6 +231,9 @@ function ps_replace(::ChildNum, out_quad, in_quads, which_tree, amr::AMR{DIM,NDF
             pointer(PointerWrapper(P4est_PS_Data, pw_out_quad.p.user_data[]).ps_data),
         )
     end
+    if any(x->x<0,[x.bound_enc for x in Odatas])
+        @error `solid_cells coarsen!`
+    end
     if Odatas[1].neighbor.state[2]==BALANCE_FLAG
         ps_data = first(Odatas[1].neighbor.data[2])
     else
@@ -214,6 +243,7 @@ function ps_replace(::ChildNum, out_quad, in_quads, which_tree, amr::AMR{DIM,NDF
         for i in eachindex(Odatas)
             vs_data_n = Odatas[i].vs_data
             vs_merge!(vs_data.sdf,vs_data_n.sdf,vs_data.level,vs_data_n.level,amr)
+            # vs_merge!(vs_data.df,vs_data_n.df,vs_data.level,vs_data_n.level,ps_data.prim,vs_data.midpoint,vs_data_n.midpoint,amr)
             vs_merge!(vs_data.df,vs_data_n.df,vs_data.level,vs_data_n.level,amr)
         end
         vs_data.df./=2^DIM;vs_data.sdf./=2^DIM

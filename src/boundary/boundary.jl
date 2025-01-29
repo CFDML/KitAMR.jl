@@ -53,7 +53,10 @@ end
 function calc_intersect_point(boundary::AbstractCircle,midpoint::AbstractVector{Float64})
     boundary.radius/norm(midpoint-boundary.center)*(midpoint-boundary.center)+boundary.center
 end
-
+function calc_normal(midpoint::AbstractVector,circle::Circle)
+    aux_point = calc_intersect_point(circle,midpoint)
+    return (aux_point-circle.center)/circle.radius # outer normal direction
+end
 function pre_broadcast_boundary_points(boundary_points::Vector)
     Nb = length(boundary_points)
     numbers = Vector{Int}(undef,Nb)
@@ -417,6 +420,7 @@ function IB_structure_update!(amr::AMR)
     IB_vs_nums_exchange!(boundary)
     IB_structure_exchange!(amr)
     IB_wrap_update!(amr)
+    reinit_solid_cells!(boundary)
 end
 function update_quadid!_kernel(ip,data,dp)
     quadid = global_quadid(ip)
@@ -520,10 +524,11 @@ function IB_partition!(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF} # Aft
     boundary.IB_buffer = init_IBCells(ps4est,solid_cells,IB_ranks,IB_ranks_table,IB_cells,amr.global_data)
     boundary.IB_ranks = IB_ranks;boundary.IB_cells = IB_cells
     sort_IB_cells!(amr.global_data,boundary)
-    # init_solid_cells_partition!(boundary)
+    reinit_solid_cells!(boundary)
 end
 function colinear_test(p1,p2,p3)
-    isapprox(p1[1] * (p2[2] - p3[2]) + p2[1] * (p3[2] - p1[2]) + p3[1] * (p1[2] - p2[2]),0.;atol=1e-10)
+    # n = norm(p1-p2)
+    isapprox((p1[1] * (p2[2] - p3[2]) + p2[1] * (p3[2] - p1[2]) + p3[1] * (p1[2] - p2[2])),0.;atol=1e-12)
 end
 function colinear_reject!(IB_nodes::Vector{AbstractIBNodes})
     DIM = length(first(IB_nodes).midpoint)
@@ -576,7 +581,8 @@ function sort_IB_cells!(global_data::Global_Data,boundary::Boundary)
     end
 end
 
-function init_solid_cells!(boundary::Boundary{DIM,NDF})where{DIM,NDF}
+function init_solid_cells!(boundary::Boundary{DIM,NDF},global_data::Global_Data{DIM,NDF})where{DIM,NDF}
+    IBs = global_data.config.IB
     solid_cells = boundary.solid_cells
     IB_cells = boundary.IB_cells
     @inbounds for i in eachindex(solid_cells)
@@ -589,9 +595,30 @@ function init_solid_cells!(boundary::Boundary{DIM,NDF})where{DIM,NDF}
             vs_data.level = copy(IB_vs.level)
             vs_data.weight = copy(IB_vs.weight)
 			vs_data.midpoint = copy(IB_vs.midpoint)
-            vs_data.df = copy(IB_vs.df)
+            ps_data.prim = get_bc(IBs[i].bc)
+            vs_data.df = discrete_maxwell(ps_data,global_data)
 			vs_data.sdf = zeros(IB_vs.vs_num,NDF,DIM) 
             vs_data.flux = zeros(IB_vs.vs_num,NDF)
+        end
+    end
+end
+function reinit_solid_cells!(boundary::Boundary{DIM,NDF})where{DIM,NDF}
+    solid_cells = boundary.solid_cells
+    IB_cells = boundary.IB_cells
+    @inbounds for i in eachindex(solid_cells)
+        for j in eachindex(solid_cells[i].ps_datas)
+            ps_data = solid_cells[i].ps_datas[j]
+            vs_data = ps_data.vs_data
+            IB_node = first(IB_cells[i].IB_nodes[j])
+            IB_vs = IB_node.vs_data
+            df_temp = zeros(IB_vs.vs_num,NDF)
+            vs_projection!(IB_vs,vs_data,df_temp)
+            vs_data.df = df_temp
+            vs_data.vs_num = IB_vs.vs_num
+            vs_data.level = copy(IB_vs.level)
+            vs_data.weight = copy(IB_vs.weight)
+			vs_data.midpoint = copy(IB_vs.midpoint)
+			vs_data.sdf = zeros(vs_data.vs_num,NDF,DIM) 
         end
     end
 end
@@ -636,7 +663,7 @@ function IB_Numbers_ranks(ps4est::P_pxest_t,IB_nodes::Vector,solid_cells::Vector
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
     for i in eachindex(solid_cells)
         local_offset = findfirst(x->x>=gfq[rank+1]&&x<gfq[rank+2],solid_cells[i].quadids)
-        IB_nodes_temp = [AbstractIBNodes[] for _ in eachindex(solid_cells[i].ps_datas)]
+        IB_nodes_temp = [AbstractIBNodes[] for _ in solid_cells[i].ps_datas]
         for IB_node in IB_nodes[i]
             ids = solid_cell_index_decoder(IB_node.solid_cell_index)
             ranks,lids = solid_cell_index2ranks(ids,solid_cells[i].quadids,gfq)
@@ -678,11 +705,11 @@ function IB_nodes_Numbers_communicate(IB_ranks_table::Vector,solid_cells::Vector
     sbuffer = Vector{Vector{Int}}(undef,MPI.Comm_size(MPI.COMM_WORLD))
     for i in eachindex(rbuffer)
         i-1 == rank && continue
-        sbuffer[i] = [length(IB_ranks_table[i][j]) for j in 1:length(solid_cells)]
+        sbuffer[i] = [length(x) for x in IB_ranks_table[i]]
     end
     reqs = Vector{MPI.Request}(undef, 0)
     for i in eachindex(sbuffer)
-        i-1 == MPI.Comm_rank(MPI.COMM_WORLD)&&continue
+        i-1 == rank&&continue
         sreq = MPI.Isend(
             sbuffer[i],
             MPI.COMM_WORLD;
@@ -692,7 +719,7 @@ function IB_nodes_Numbers_communicate(IB_ranks_table::Vector,solid_cells::Vector
         push!(reqs, sreq)
     end
     for i in eachindex(rbuffer)
-        i-1 == MPI.Comm_rank(MPI.COMM_WORLD)&&continue
+        i-1 == rank&&continue
         rreq = MPI.Irecv!(
                 rbuffer[i],
                 MPI.COMM_WORLD;
@@ -863,12 +890,11 @@ function collect_IB_nodes_data(IB_ranks::Vector{Vector{PS_Data{DIM,NDF}}},s_vs_n
         vs_midpoint = Matrix{Cdouble}(undef,vs_nums,DIM)
         level = Vector{Int8}(undef,vs_nums)
         sdata[i] = IBTransferData(solid_cell_indices,midpoints,prims,level,vs_midpoint,df)
-        offset = 0; index = 1
+        offset = 0
         for j in eachindex(IB_ranks[i])
-            solid_cell_indices[index,:] .= IB_ranks[i][j].solid_cell_index
-            midpoints[index,:] .= IB_ranks[i][j].midpoint
-            prims[index,:] .= IB_ranks[i][j].prim
-            index+=1
+            solid_cell_indices[j,:] .= IB_ranks[i][j].solid_cell_index
+            midpoints[j,:] .= IB_ranks[i][j].midpoint
+            prims[j,:] .= IB_ranks[i][j].prim
             vs_num = IB_ranks[i][j].vs_data.vs_num
             df[offset+1:offset+vs_num,:] .= IB_ranks[i][j].vs_data.df
             vs_midpoint[offset+1:offset+vs_num,:] .= IB_ranks[i][j].vs_data.midpoint
@@ -906,7 +932,7 @@ function IB_nodes_data_wrap!(ps4est::P_pxest_t,rNumbers::Vector{Vector{Int}},r_v
             for _ in 1:rNumbers[i][j]
                 vs_num = r_vs_nums[i][ps_offset]
                 level = @views rdata[i].level[vs_offset+1:vs_offset+vs_num]
-                weight = max_weight./2.0.^(DIM*(level))
+                weight = max_weight./2.0.^(DIM*level)
                 ghost_nodes[i][ps_offset] = ghost_node = @views GhostIBNode{DIM,NDF}(
                     rdata[i].solid_cell_indices[ps_offset,:],rdata[i].midpoints[ps_offset,:],
                     rdata[i].prims[ps_offset,:],GhostIBVSData{DIM,NDF}(vs_num,level,
@@ -920,7 +946,7 @@ function IB_nodes_data_wrap!(ps4est::P_pxest_t,rNumbers::Vector{Vector{Int}},r_v
                 end
                 ps_offset+=1;vs_offset+=vs_num
             end
-        end
+        end 
     end
     return ghost_nodes
 end

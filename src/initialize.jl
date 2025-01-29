@@ -179,6 +179,7 @@ function init_ps_p4est_kernel(ip, data, dp)
                 ps_data.bound_enc = -i
                 push!(solid_cells[i].ps_datas,ps_data)
                 push!(solid_cells[i].quadids,ps_data.quadid)
+                ps_data.flux[1:length(midpoint)] = calc_normal(midpoint,boundaries[i])
             end
         end
     else
@@ -259,7 +260,7 @@ function init_field!(global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
         solid_numbers,IB_cells,IB_buffer,IB_ranks = init_IB!(ps4est,trees,global_data,solid_cells,aux_points)
         boundary = Boundary{DIM,NDF}(solid_cells,solid_numbers,image_points,aux_points,IB_cells,IB_ranks,IB_buffer)
         sort_IB_cells!(global_data,boundary)
-		init_solid_cells!(boundary)
+		init_solid_cells!(boundary,global_data)
         return trees, boundary, ps4est
     end
 end
