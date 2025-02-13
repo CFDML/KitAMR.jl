@@ -166,12 +166,16 @@ end
 function make_bilinear_coeffi_2D(image_point::AbstractVector)
     return [image_point[1],image_point[2],image_point[1]*image_point[2],1.]
 end
+function make_bilinear_coeffi_3D(image_point::AbstractVector)
+    return [image_point[1],image_point[2],image_point[3],image_point[1]*image_point[2],image_point[1]*image_point[3],image_point[2]*image_point[3],1.]
+end
 function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vector{Vector{Float64}},IB_cells::IBCells,global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     for i in eachindex(solidcells.ps_datas)
         ps_data = solidcells.ps_datas[i]
         aux_point = calc_intersect_point(circle,ps_data.midpoint)
         image_point = 2*aux_point-ps_data.midpoint
         s_vs_data = ps_data.vs_data
+        dx = ps_data.ds[1];dy = ps_data.ds[2]
         n = (aux_point-circle.center)/circle.radius # outer normal direction
         aux_vs_temp = Vector{Matrix{Float64}}(undef,6)
         dxL = norm(aux_point-image_point)
@@ -180,17 +184,20 @@ function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vec
             aux_vs_temp[i] = zeros(Float64,s_vs_data.vs_num,NDF)
         end
         aux_vs_temp[1] = IB_cells.IB_nodes[i][1].vs_data.df
+        # @assert !any(x->abs(x)>100,aux_vs_temp[1]) `IB_vs error!`,aux_vs_temp[1]
         ip_df = aux_vs_temp[end-1]
         aux_df = aux_vs_temp[end]
         # IB_vs = IB_cells.IB_nodes[i][1].vs_data
         for j in 2:4
             vs_projection!(s_vs_data,IB_cells.IB_nodes[i][j].vs_data,aux_vs_temp[j])
+            # @assert !any(x->isnan(x),aux_vs_temp[j]) `projection error!`,aux_vs_temp[j],IB_cells.IB_nodes[i][j].vs_data.df
         end
         vn = [dot(@view(s_vs_data.midpoint[j,:]),n) for j in axes(s_vs_data.midpoint,1)]
         Θ = heaviside.(vn)
         points = [IB_cells.IB_nodes[i][j].midpoint for j in 1:4]
-        Ainv = inv(bilinear_coeffi_2D(points...))
-        b = Vector{Float64}(undef,4);ip_coeffi = make_bilinear_coeffi_2D(image_point)
+        dA = √(dx*dy)
+        Ainv = inv(bilinear_coeffi_2D(points...)./dA)
+        b = Vector{Float64}(undef,4);ip_coeffi = make_bilinear_coeffi_2D(image_point)./dA
         @inbounds for j in axes(ip_df,1)
             # V2 = @views sum(IB_vs.midpoint[j,:].^2)
             for l in 1:NDF
@@ -211,7 +218,7 @@ function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vec
             end
         end   
         # aux_point interpolate by bilinear
-        ap_coeffi = make_bilinear_coeffi_2D(aux_point)
+        ap_coeffi = make_bilinear_coeffi_2D(aux_point)./dA
         @inbounds for j in axes(aux_df,1)
             if Θ[j]==0.
                 # V2 = @views sum(IB_vs.midpoint[j,:].^2)
@@ -227,16 +234,19 @@ function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vec
                     # if V2>4/ps_data.prim[end]^2
                     #     aux_df[j,l] = dot(Ainv*(b.*V2),ap_coeffi)/V2
                     # else
-                        aux_df[j,l] = dot(Ainv*b,ap_coeffi)
+                        aux_df[j,l] = max(dot(Ainv*b,ap_coeffi),0)
+                        # @assert !isnan(aux_df[j,l]) `interpolate error!`,b,Ainv,ap_coeffi,points
                     # end
                 end
             end
         end   
         ρw = calc_IB_ρw(aux_point,circle,s_vs_data.midpoint,s_vs_data.weight,aux_df,vn,Θ)
+        # @assert !isnan(ρw) `ρw error`,ρw,aux_df,aux_vs_temp[1],aux_vs_temp[2],aux_vs_temp[3],aux_vs_temp[4]
         aux_prim = IB_prim(circle,aux_point,ρw)
         for j in axes(aux_df,1)
             if Θ[j]==1.
                 aux_df[j,:] .= discrete_maxwell(@view(s_vs_data.midpoint[j,:]),aux_prim,global_data)
+                # @assert !any(x->isnan(x),@views aux_df[j,:]) `maxwell error!`,aux_prim
             end
         end
         @. s_vs_data.df = aux_df+(aux_df-ip_df)/dxL*dxR
@@ -262,12 +272,13 @@ function update_solid_cell!(circle::Sphere,solidcells::SolidCells{DIM,NDF},::Vec
         aux_vs_temp = Vector{Matrix{Float64}}(undef,9)
         dxL = norm(aux_point-image_point)
         dxR = norm(ps_data.midpoint-aux_point)
-        for i in eachindex(aux_vs_temp)
+        for i in 2:9
             aux_vs_temp[i] = zeros(Float64,s_vs_data.vs_num,NDF)
         end
+        aux_vs_temp[1] = IB_cells.IB_nodes[i][1].vs_data.df
         ip_df = aux_vs_temp[end-1]
         aux_df = aux_vs_temp[end]
-        for j in 1:7
+        for j in 2:7
             vs_projection!(s_vs_data,IB_cells.IB_nodes[i][j].vs_data,aux_vs_temp[j])
         end
         vn = [dot(@view(s_vs_data.midpoint[j,:]),n) for j in axes(s_vs_data.midpoint,1)]
@@ -302,7 +313,7 @@ function update_solid_cell!(circle::Sphere,solidcells::SolidCells{DIM,NDF},::Vec
                 aux_df[j,:] .= discrete_maxwell(@view(s_vs_data.midpoint[j,:]),aux_prim,global_data)
             end
         end
-        s_vs_data.df = @. aux_df+(aux_df-ip_df)/dxL*dxR
+        @. s_vs_data.df = aux_df+(aux_df-ip_df)/dxL*dxR
 		ps_data.w = calc_w0(ps_data)
 		ps_data.prim = get_prim(ps_data,global_data)
     end

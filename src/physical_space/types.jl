@@ -28,6 +28,7 @@ mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
     qf::Vector{Float64}
     w::Vector{Float64}
     sw::Matrix{Float64} # DIM + 2 x DIM
+    # ssw::Array{Float64}
     prim::Vector{Float64}
     flux::Vector{Float64}
     vs_data::VS_Data{DIM,NDF}

@@ -36,3 +36,21 @@ function MPI_tune(f::Function,args...)
     end
 end
 
+function check!(i,ps4est,amr)
+    if amr.global_data.status.residual.step%RES_CHECK_INTERVAL==0
+        if MPI.Comm_rank(MPI.COMM_WORLD) == 0
+            i+=1
+            @show i
+            sim_time = amr.global_data.status.sim_time
+            @show sim_time
+            res = maximum(amr.global_data.status.residual.residual)
+            @show res
+            pp = PointerWrapper(ps4est)
+            local_num_quadrants = pp.local_num_quadrants[]
+            @show local_num_quadrants
+            ref_vs_num = amr.global_data.status.max_vs_num
+            @show ref_vs_num
+        end
+    end
+    check_for_save!(ps4est,amr)
+end
