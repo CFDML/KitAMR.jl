@@ -527,8 +527,8 @@ function IB_partition!(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF} # Aft
     reinit_solid_cells!(boundary)
 end
 function colinear_test(p1,p2,p3)
-    # n = norm(p1-p2)
-    isapprox((p1[1] * (p2[2] - p3[2]) + p2[1] * (p3[2] - p1[2]) + p3[1] * (p1[2] - p2[2])),0.;atol=1e-12)
+    n2 = sum(p1.^2-p2.^2)
+    isapprox((p1[1] * (p2[2] - p3[2]) + p2[1] * (p3[2] - p1[2]) + p3[1] * (p1[2] - p2[2]))/n2,0.;atol=1e-3)
 end
 function colinear_reject!(IB_nodes::Vector{AbstractIBNodes})
     DIM = length(first(IB_nodes).midpoint)

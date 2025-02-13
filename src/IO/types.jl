@@ -7,11 +7,11 @@ struct PS_Solution
     qf::Vector{Float64}
 end
 function PS_Solution(ps_data::PS_Data{DIM}) where{DIM}
-    if ps_data.bound_enc<0
-        prim = Vector{Float64}(undef,DIM+2);prim.=NaN
-        qf = Vector{Float64}(undef,DIM);qf.=NaN
-        return PS_Solution(prim, qf)
-    end
+    # if ps_data.bound_enc<0
+    #     prim = Vector{Float64}(undef,DIM+2);prim.=NaN
+    #     qf = Vector{Float64}(undef,DIM);qf.=NaN
+    #     return PS_Solution(prim, qf)
+    # end
     return PS_Solution(ps_data.prim, ps_data.qf)
 end
 function PS_Solution(ps_data::InsideSolidData{DIM,NDF}) where{DIM,NDF}

@@ -1,4 +1,4 @@
-function calc_domain_flux(::DVM,here_vs::Face_VS_Data,face::DomainFace{2,NDF,SuperSonicInflow},amr::AMR) where{NDF}
+function calc_domain_flux(::DVM,here_vs::Face_VS_Data,face::DomainFace{DIM,NDF,SuperSonicInflow},amr::AMR) where{DIM,NDF}
     _,direction,midpoint,_,ps_data = unpack(face)
     heavi,_,here_mid,here_vn,here_df,here_sdf = unpack(here_vs)
     Δt = amr.global_data.status.Δt
@@ -16,9 +16,9 @@ function calc_domain_flux(::DVM,here_vs::Face_VS_Data,face::DomainFace{2,NDF,Sup
     @inbounds there_micro = [there_df[i,j]*there_vn[i] for i in axes(there_df,1),j in axes(there_df,2)]
     return nothing,[here_micro,there_micro]
 end
-function calc_domain_flux(::DVM,here_vs::Face_VS_Data,face::DomainFace{2,NDF,UniformOutflow},amr::AMR) where{NDF}
-    _,direction,midpoint,_,ps_data = unpack(face)
-    heavi,_,here_mid,here_vn,here_df,here_sdf = unpack(here_vs)
+function calc_domain_flux(::DVM,here_vs::Face_VS_Data,face::DomainFace{DIM,NDF,UniformOutflow},amr::AMR) where{DIM,NDF}
+    _,direction,_,_,ps_data = unpack(face)
+    heavi,_,_,here_vn,_,_ = unpack(here_vs)
     vs_data = ps_data.vs_data
     there_mid = @views vs_data.midpoint[.!heavi,:]
     ndf = @views vs_data.df[.!heavi,:]
@@ -50,7 +50,7 @@ function calc_domain_flux(::DVM,here_vs::Face_VS_Data,face::DomainFace{2,NDF,Int
     end
     return nothing,[here_micro,there_micro]
 end
-function calc_flux(::DVM,here_vs,there_vs,flux_data::Union{FullFace,Flux_Data},amr::AMR{2,2}) # without face area and Δt
+function calc_flux(::DVM,here_vs,there_vs,flux_data::Union{FullFace,Flux_Data},amr::AMR{DIM,NDF}) where{DIM,NDF} # without face area and Δt
     _,_,midpoint,here_data,there_data = unpack(flux_data)
     Δt = amr.global_data.status.Δt
     here_mid = here_vs.midpoint;there_mid = there_vs.midpoint

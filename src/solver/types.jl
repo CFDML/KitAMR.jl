@@ -45,6 +45,7 @@ function Configure(config::Dict)
             setfield!(gas,i,config[i])
         end
     end
+    gas.μᵣ = ref_vhs_vis(gas.Kn,gas.αᵣ,gas.ωᵣ)
     IB = config[:IB]
     for i in eachindex(IB)
         if isa(IB[i],Circle)&&!isdefined(IB[i],:search_radius)
@@ -68,19 +69,40 @@ mutable struct Forest{DIM}
     n
     )
 end
-
+mutable struct Residual
+    step::Int
+    residual::Vector{Float64}
+    sumRes::Vector{Float64}
+    sumAvg::Vector{Float64}
+    redundant_step::Int
+end
+function Residual(DIM::Int)
+    return Residual(1,ones(DIM+2),zeros(DIM+2),zeros(DIM+2),0)
+end
 mutable struct Status
-    max_vs_num::Int
+    max_vs_num::Int # maximum vs_num among ghost quadrants
     gradmax::Vector{Float64}
     Δt::Float64
     sim_time::Float64
     ps_adapt_step::Int
     vs_adapt_step::Int
     partition_step::Int
+    residual::Residual
     save_flag::Base.RefValue{Bool}
+    stable_flag::Vector{Bool}
 end
-function Status(DIM)
-    return Status(0,ones(DIM+2),1.,0.,1,1,1,Ref(false))
+function Status(config)
+    DIM = config[:DIM]
+    trees_num = config[:trees_num]
+    geometry = config[:geometry]
+    vs_trees_num = config[:vs_trees_num]
+    quadrature = config[:quadrature]
+    ds = [(geometry[2*i]-geometry[2*i-1])/trees_num[i]/2^config[:AMR_PS_MAXLEVEL] for i in 1:DIM]
+    U = [max(quadrature[2*i],abs(quadrature[2*i-1])) -
+        (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
+        2^config[:AMR_VS_MAXLEVEL] / 2 for i in 1:DIM]
+    Δt = config[:CFL]*minimum(ds ./ U)
+    return Status(0,ones(DIM+2),Δt,0.,1,1,1,Residual(DIM),Ref(false),[true,true])
 end
 
 mutable struct Global_Data{DIM,NDF}
@@ -90,7 +112,7 @@ mutable struct Global_Data{DIM,NDF}
     Global_Data(config::Dict) = (n = new{config[:DIM],config[:NDF]}();
     n.config = Configure(config);
     n.forest = Forest(config[:DIM]);
-    n.status = Status(config[:DIM]);
+    n.status = Status(config);
     n
     )
 end
