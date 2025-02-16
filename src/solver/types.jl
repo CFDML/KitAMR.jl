@@ -24,7 +24,14 @@ function Solver(config::Dict)
     return Solver(config[:CFL],config[:AMR_PS_MAXLEVEL],
         config[:AMR_VS_MAXLEVEL],config[:flux],config[:time_marching])
 end
-
+mutable struct UDF
+    static_ps_refine_flag::Function
+    static_ps_coarsen_flag::Function
+    vs_refine_flag::Function
+    vs_coarsen_flag::Function 
+    UDF()=new()
+end
+null_udf(args...) = false
 struct Configure{DIM,NDF}
     geometry::Vector{Float64}
     trees_num::Vector{Int64}
@@ -37,6 +44,7 @@ struct Configure{DIM,NDF}
     IB_interp::AbstractIBInterpolateType
     gas::Gas
     solver::Solver
+    user_defined::UDF
 end
 function Configure(config::Dict)
     gas = Gas()
@@ -53,9 +61,17 @@ function Configure(config::Dict)
             IB[i] = Circle(IB[i],ds)
         end
     end
+    user_defined = UDF()
+    for i in fieldnames(UDF)
+        if haskey(config,i)
+            setfield!(user_defined,i,config[i])
+        else
+            setfield!(user_defined,i,null_udf)
+        end
+    end
     return Configure{config[:DIM],config[:NDF]}(config[:geometry],config[:trees_num],
         config[:quadrature],config[:vs_trees_num],config[:IC],config[:domain],config[:IB],
-        config[:IB_sort],config[:IB_interp],gas,Solver(config))
+        config[:IB_sort],config[:IB_interp],gas,Solver(config),user_defined)
 end
 
 mutable struct Forest{DIM}

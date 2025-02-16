@@ -235,6 +235,7 @@ function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vec
                     #     aux_df[j,l] = dot(Ainv*(b.*V2),ap_coeffi)/V2
                     # else
                         aux_df[j,l] = max(dot(Ainv*b,ap_coeffi),0)
+                        # aux_df[j,l] = dot(Ainv*b,ap_coeffi)
                         # @assert !isnan(aux_df[j,l]) `interpolate error!`,b,Ainv,ap_coeffi,points
                     # end
                 end

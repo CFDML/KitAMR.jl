@@ -73,7 +73,7 @@ function domain_flag(global_data::Global_Data,midpoint::AbstractVector,ds::Abstr
     end
     return false
 end
-function boundary_flag(global_data::Global_Data,midpoint::AbstractVector,ds::AbstractVector)
+function boundary_flag(midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data) # Is the cell at midpoint 
     domain = global_data.config.domain
     boundary = global_data.config.IB
     for i in eachindex(domain)
@@ -81,22 +81,19 @@ function boundary_flag(global_data::Global_Data,midpoint::AbstractVector,ds::Abs
     end
     return solid_cell_flag(boundary,midpoint,ds,global_data)
 end
-function boundary_flag(
-    fp::PW_pxest_t,
-    treeid,
-    qp::PW_pxest_quadrant_t,
+function both_sides_boundary_flag(
+    midpoint::Vector{Float64},ds::Vector{Float64},
     global_data::Global_Data{DIM},
 ) where{DIM}
     domain = global_data.config.domain
     boundary = global_data.config.IB
-    ds, midpoint = quad_to_cell(fp, treeid, qp)
     for i in eachindex(domain)
-        boundary_flag(domain[i],midpoint,ds,global_data) && return Cint(1)
+        boundary_flag(domain[i],midpoint,ds,global_data) && return true
     end
     for i in eachindex(boundary)
-        boundary_flag(boundary[i],midpoint,ds,global_data) && return Cint(1)
+        boundary_flag(boundary[i],midpoint,ds,global_data) && return true
     end
-    return Cint(0)
+    return false
 end
 function ps_copy(data::PS_Data{DIM,NDF}) where{DIM,NDF}
     p = PS_Data(DIM,NDF,
@@ -347,7 +344,9 @@ function pre_ps_coarsen_flag(forest::Ptr{p4est_t},which_tree,quadrants)
         for i = 1:2^DIM
             qp = PointerWrapper(quadrants_wrap[i])
             ds,midpoint = quad_to_cell(fp,which_tree,qp)
-            (IB_flag(global_data.config.IB,aux_points,midpoint,ds)||boundary_flag(global_data,midpoint,ds))&&return Cint(0)
+            (global_data.config.user_defined.static_ps_refine_flag(midpoint,ds,global_data)||
+                IB_flag(global_data.config.IB,aux_points,midpoint,ds)||
+                boundary_flag(midpoint,ds,global_data))&&return Cint(0)
         end
         return Cint(1)
     end
@@ -361,7 +360,7 @@ function pre_ps_coarsen_flag(forest::Ptr{p8est_t},which_tree,quadrants)
         for i = 1:2^DIM
             qp = PointerWrapper(quadrants_wrap[i])
             ds,midpoint = quad_to_cell(fp,which_tree,qp)
-            (IB_flag(global_data.config.IB,aux_points,midpoint,ds)||boundary_flag(global_data,midpoint,ds))&&return Cint(0)
+            (IB_flag(global_data.config.IB,aux_points,midpoint,ds)||boundary_flag(midpoint,ds,global_data))&&return Cint(0)
         end
         return Cint(1)
     end
@@ -525,7 +524,12 @@ function pre_ps_refine_flag(forest::P_pxest_t, which_tree, quadrant)
         fp = PointerWrapper(forest)
         qp = PointerWrapper(quadrant)
         global_data = unsafe_pointer_to_objref(pointer(fp.user_pointer))
-        boundary_flag(fp, which_tree, qp, global_data)
+        ds, midpoint = quad_to_cell(fp, which_tree, qp)
+        if global_data.config.user_defined.static_ps_refine_flag(midpoint,ds,global_data)||both_sides_boundary_flag(midpoint, ds, global_data)
+            return Cint(1)
+        else
+            return Cint(0)
+        end
     end
 end
 function pre_ps_refine!(p4est::Ptr{p4est_t},global_data::Global_Data)

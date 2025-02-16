@@ -1,5 +1,26 @@
+struct ConfigureForSave{DIM,NDF}
+    geometry::Vector{Float64}
+    trees_num::Vector{Int64}
+    quadrature::Vector{Float64}
+    vs_trees_num::Vector{Int64}
+    IC::AbstractICType
+    domain::Vector{Domain}
+    IB::Vector{AbstractBoundary}
+    IB_sort::AbstractIBSortType
+    IB_interp::AbstractIBInterpolateType
+    gas::Gas
+    solver::Solver
+end
+function ConfigureForSave(config::Configure{DIM,NDF}) where{DIM,NDF}
+    return ConfigureForSave{DIM,NDF}(
+        config.geometry,config.trees_num,config.quadrature,
+        config.vs_trees_num,config.IC,config.domain,
+        config.IB,config.IB_sort,config.IB_interp,config.gas,
+        config.solver
+    )
+end
 struct SolverSet
-    config::Configure
+    config::ConfigureForSave
     mpi_size::Int
 end
 struct PS_Solution
@@ -38,4 +59,8 @@ end
 struct Result
     solution::Solution
     mesh_info::MeshInfo
+end
+struct Boundary_Solution
+    midpoints::Vector{Vector{Float64}}
+    ps_solutions::Vector{PS_Solution}
 end

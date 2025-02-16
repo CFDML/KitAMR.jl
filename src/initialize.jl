@@ -157,7 +157,8 @@ function init_ps_p4est_kernel(ip, data, dp)
     solid_cell_flags = Vector{Bool}(undef,length(global_data.config.IB))
     for i in eachindex(boundaries)
         inside = solid_flag(boundaries[i],midpoint)
-	solid_cell_flags[i] = solid_cell_flag(boundaries[i],midpoint,ds,global_data,inside)&&ip.quad.level[]==global_data.config.solver.AMR_PS_MAXLEVEL
+	    solid_cell_flags[i] = solid_cell_flag(boundaries[i],midpoint,ds,global_data,inside)&&ip.quad.level[]==global_data.config.solver.AMR_PS_MAXLEVEL
+        # solid_cell_flags[i] = solid_cell_flag(boundaries[i],midpoint,ds,global_data,inside)
         flag = flag&&(!inside||solid_cell_flags[i])
         !flag&&break
     end
