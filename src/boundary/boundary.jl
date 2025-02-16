@@ -1,4 +1,71 @@
 get_bc(bc::AbstractVector) = bc
+# function save_boundary_result(ib::Circle,ps_data::PS_Data,ib_nodes::Vector{AbstractIBNodes},::Global_Data)
+#     aux_point = calc_intersect_point(ib,ps_data.midpoint)
+#     image_point = 2*aux_point-ps_data.midpoint
+#     dxL = norm(aux_point-image_point)
+#     dxR = norm(ps_data.midpoint-aux_point)
+#     dx = ps_data.ds[1];dy = ps_data.ds[2]
+#     dA = √(dx*dy)
+#     points = [ib_nodes[j].midpoint for j in 1:4]
+#     Ainv = inv(bilinear_coeffi_2D(points...)./dA)
+#     ip_coeffi = make_bilinear_coeffi_2D(image_point)./dA
+#     b = Vector{Float64}(undef,4)
+#     prim = Vector{Float64}(undef,4);qf = Vector{Float64}(undef,2)
+#     for i in eachindex(prim)
+#         for j = 1:4
+#             b[j] = ib_nodes[j].prim[i]
+#         end
+#         prim[i] = dot(Ainv*b,ip_coeffi)
+#     end
+#     qfs = @views [calc_qf(ib_nodes[i].vs_data,ib_nodes[i].prim) for i in 1:4]
+#     for i in eachindex(qf)
+#         for j = 1:4
+#             b[j] = qfs[j][i]
+#         end
+#         qf[i] = dot(Ainv*b,ip_coeffi)
+#     end
+#     qf_s = calc_qf(ps_data.vs_data,ps_data.prim)
+#     aux_prim = @. ps_data.prim+(prim-ps_data.prim)/(dxL+dxR)*dxR
+#     aux_qf = @. qf_s+(qf-qf_s)/(dxL+dxR)*dxR
+#     return aux_point,PS_Solution(aux_prim,aux_qf)
+# end
+function calc_w0(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{2,2})
+    @views micro_to_macro_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],weight)
+end
+function calc_qf(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,prim::AbstractVector,::Global_Data{2,2})
+    @views heat_flux_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],prim,weight)
+end
+function save_boundary_result(ib::Circle,ps_data::PS_Data{DIM,NDF},ib_nodes::Vector{AbstractIBNodes},global_data::Global_Data) where{DIM,NDF}
+    aux_point = calc_intersect_point(ib,ps_data.midpoint)
+    dx = ps_data.ds[1];dy = ps_data.ds[2]
+    dA = √(dx*dy)
+    points = [ib_nodes[j].midpoint for j in 1:4]
+    Ainv = inv(bilinear_coeffi_2D(points...)./dA)
+    ap_coeffi = make_bilinear_coeffi_2D(aux_point)./dA
+    b = Vector{Float64}(undef,4)
+    # prim = Vector{Float64}(undef,4);qf = Vector{Float64}(undef,2)
+    aux_vs_temp = Vector{Matrix{Float64}}(undef,5)
+    for i in 2:5
+        aux_vs_temp[i] = zeros(Float64,ps_data.vs_data.vs_num,NDF)
+    end
+    aux_vs_temp[1] = ib_nodes[1].vs_data.df
+    aux_df = aux_vs_temp[end]
+    for j in 2:4
+        vs_projection!(ps_data.vs_data,ib_nodes[j].vs_data,aux_vs_temp[j])
+    end
+    @inbounds for j in axes(aux_df,1)
+        for l in 1:NDF
+            for k in 1:4
+                b[k] = aux_vs_temp[k][j,l]
+            end
+            aux_df[j,l] = dot(Ainv*b,ap_coeffi)
+        end
+    end
+    aux_w = calc_w0(ps_data.vs_data.midpoint,aux_df,ps_data.vs_data.weight,global_data)
+    aux_prim = get_prim(aux_w,global_data)
+    aux_qf = calc_qf(ps_data.vs_data.midpoint,aux_df,ps_data.vs_data.weight,aux_prim,global_data)
+    return aux_point,PS_Solution(aux_prim,aux_qf)
+end
 function solid_cell_index_encoder!(solid_cell_index::Vector{Int},now_index::Int)
     id = findfirst(x->x==0,solid_cell_index)
     isnothing(id) && (@error `A larger SOLID_CELL_ID_NUM is needed!`)
@@ -32,6 +99,17 @@ end
 function solid_cell_flag(boundaries::Vector{AbstractBoundary},midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data)
     for boundary in boundaries
         solid_cell_flag(boundary,midpoint,ds,global_data,solid_flag(boundary,midpoint))&& return true
+    end
+    return false
+end
+function InsideSolid_flag(boundary::AbstractBoundary,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data)
+    inside = solid_flag(boundary,midpoint)
+    (solid_flag(boundary,midpoint)&&!solid_cell_flag(boundary,midpoint,ds,global_data,inside))&& return true # In solid region and not the ghost cell( a.k.a. solid cell)
+    return false
+end
+function InsideSolid_flag(boundaries::Vector{AbstractBoundary},midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data)
+    for boundary in boundaries
+        InsideSolid_flag(boundary,midpoint,ds,global_data) && return true
     end
     return false
 end
