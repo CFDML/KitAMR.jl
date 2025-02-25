@@ -169,9 +169,281 @@ end
 function make_bilinear_coeffi_3D(image_point::AbstractVector)
     return [image_point[1],image_point[2],image_point[3],image_point[1]*image_point[2],image_point[1]*image_point[3],image_point[2]*image_point[3],1.]
 end
+# function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vector{Vector{Float64}},IB_cells::IBCells,global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+#     for i in eachindex(solidcells.ps_datas)
+#         ps_data = solidcells.ps_datas[i]
+#         aux_point = calc_intersect_point(circle,ps_data.midpoint)
+#         image_point = 2*aux_point-ps_data.midpoint
+#         s_vs_data = ps_data.vs_data
+#         dx = ps_data.ds[1];dy = ps_data.ds[2]
+#         n = (aux_point-circle.center)/circle.radius # outer normal direction
+#         aux_vs_temp = Vector{Matrix{Float64}}(undef,6)
+#         dxL = norm(aux_point-image_point)
+#         dxR = norm(ps_data.midpoint-aux_point)
+#         for i in 2:6
+#             aux_vs_temp[i] = zeros(Float64,s_vs_data.vs_num,NDF)
+#         end
+#         aux_vs_temp[1] = IB_cells.IB_nodes[i][1].vs_data.df
+#         # @assert !any(x->abs(x)>100,aux_vs_temp[1]) `IB_vs error!`,aux_vs_temp[1]
+#         ip_df = aux_vs_temp[end-1]
+#         aux_df = aux_vs_temp[end]
+#         # IB_vs = IB_cells.IB_nodes[i][1].vs_data
+#         vn = [dot(@view(s_vs_data.midpoint[j,:]),n) for j in axes(s_vs_data.midpoint,1)]
+#         Θ = heaviside.(vn)
+#         dA = √(dx*dy)
+#         # try
+#         #     Ainv = inv(bilinear_coeffi_2D(points...)./dA)
+#         # catch
+#         #     @show points
+#         # end
+#         # A = nothing;temp_id = nothing
+#         # while true
+#         angle = abs(atan(n[2]/n[1]))
+#         ratio = abs(ps_data.prim[end]-IB_cells.IB_nodes[i][end].prim[end])/circle.search_radius/global_data.status.gradmax[end]
+#         if ratio<10
+#             # if angle>35/180*π&&angle<55/180*π
+#             #     temp_id = upwind_template(IB_cells.templates[i],IB_cells.IB_nodes[i],aux_point,IB_cells.IB_nodes[i][1].prim)
+#             # else
+#             temp_id = IB_cells.templates[i][1]      
+#             # end
+#         else
+#             temp_id = IB_cells.templates[i][rand(1:length(IB_cells.templates[i]))]
+#         end
+#         points = [IB_cells.IB_nodes[i][temp_id[j]].midpoint for j in 1:4]
+#         A = bilinear_coeffi_2D(points...)./dA
+#             # if rank(A)<4
+#             #     @show A
+#             #     deleteat!(IB_cells.templates[i],id)
+#             # else
+#             #     break
+#             # end
+#             # if length(IB_cells.templates[i])<1
+#             #     @show ps_data.midpoint aux_point
+#             #     throw(`Larger search coefficient is requested!`)
+#             # end
+#         # end
+#         # points = [IB_cells.IB_nodes[i][j].midpoint for j in 1:4]
+#         # A =bilinear_coeffi_2D(points...)./dA
+#         # if rank(A)<4
+#         #     @show A inv(A)
+#         #     throw(`Singular Error!`)
+#         # end
+#         Ainv = inv(A)
+#         for j in 2:4
+#             vs_projection!(s_vs_data,IB_cells.IB_nodes[i][temp_id[j]].vs_data,aux_vs_temp[j])
+#             # @assert !any(x->isnan(x),aux_vs_temp[j]) `projection error!`,aux_vs_temp[j],IB_cells.IB_nodes[i][j].vs_data.df
+#         end
+#         b = Vector{Float64}(undef,4);ip_coeffi = make_bilinear_coeffi_2D(image_point)./dA
+#         @inbounds for j in axes(ip_df,1)
+#             # V2 = @views sum(IB_vs.midpoint[j,:].^2)
+#             for l in 1:NDF
+#                 for k in 1:4
+#                     b[k] = aux_vs_temp[k][j,l]
+#                     # temp = aux_vs_temp[k][j,l]
+#                     # b[k] = temp<EPS ? 0. : temp
+#                 end
+#                 # ip_df[j,l] = dot(Ainv*(b./ab),ip_coeffi).*ab
+#                 # if V2>4/ps_data.prim[end]^2
+#                 #     ip_df[j,l] = dot(Ainv*(b.*V2),ip_coeffi)/V2
+#                 # else
+#                     ip_df[j,l] = dot(Ainv*b,ip_coeffi)
+#                 # end
+#                 # if isnan(ip_df[j,l])
+#                 #     @show b ip_coeffi Ainv
+#                 # end
+#             end
+#         end   
+#         # aux_point interpolate by bilinear
+#         ap_coeffi = make_bilinear_coeffi_2D(aux_point)./dA
+#         @inbounds for j in axes(aux_df,1)
+#             if Θ[j]==0.
+#                 # V2 = @views sum(IB_vs.midpoint[j,:].^2)
+#                 for l in 1:NDF
+#                     for k = 1:4
+#                         b[k] = aux_vs_temp[k][j,l]
+#                         # temp = aux_vs_temp[k][j,l]
+#                         # b[k] = temp<EPS ? 0. : temp
+#                     end
+#                     # ab = maximum(abs.(b))
+#                     # (ab==0.)&&(ab=EPS)
+#                     # aux_df[j,l] = dot(Ainv*(b./ab),ap_coeffi).*ab
+#                     # if V2>4/ps_data.prim[end]^2
+#                     #     aux_df[j,l] = dot(Ainv*(b.*V2),ap_coeffi)/V2
+#                     # else
+#                         # aux_df[j,l] = max(dot(Ainv*b,ap_coeffi),0)
+#                         aux_df[j,l] = dot(Ainv*b,ap_coeffi)
+#                         # @assert !isnan(aux_df[j,l]) `interpolate error!`,b,Ainv,ap_coeffi,points
+#                     # end
+#                 end
+#             end
+#         end   
+#         ρw = calc_IB_ρw(aux_point,circle,s_vs_data.midpoint,s_vs_data.weight,aux_df,vn,Θ)
+#         # @assert !isnan(ρw) `ρw error`,ρw,aux_df,aux_vs_temp[1],aux_vs_temp[2],aux_vs_temp[3],aux_vs_temp[4]
+#         aux_prim = IB_prim(circle,aux_point,ρw)
+#         for j in axes(aux_df,1)
+#             if Θ[j]==1.
+#                 # df = discrete_maxwell(@view(s_vs_data.midpoint[j,:]),aux_prim,global_data)
+#                 # aux_df[j,:] .= df.+shakhov_part(@view(s_vs_data.midpoint[j,:]),df,aux_prim,aux_qf,global_data)
+#                 aux_df[j,:] .= discrete_maxwell(@view(s_vs_data.midpoint[j,:]),aux_prim,global_data)
+#                 # @assert !any(x->isnan(x),@views aux_df[j,:]) `maxwell error!`,aux_prim
+#             end
+#         end
+#         @. s_vs_data.df = aux_df+(aux_df-ip_df)/dxL*dxR
+#         # ps_data.flux[1:DIM] .= n
+#         # >>for gaussian weight
+#         # prims = [[x.prim[l] for x in IB_cells.IB_nodes[i][1:4]] for l in 1:DIM+2]
+#         # ip_prim = [dot(Ainv*prims[l],ip_coeffi) for l in 1:DIM+2] # prim at aux_point interpolated by fluid cells
+#         # aux_fprim = [dot(Ainv*prims[l],ap_coeffi) for l in 1:DIM+2] # prim at aux_point interpolated by fluid cells
+#         # ps_data.sw[:,1] .= aux_fprim
+#         # ps_data.sw[:,2] .= aux_prim+(aux_prim-ip_prim)/dxL*dxR
+#         # <<for gaussian weight
+# 		ps_data.w = calc_w0(ps_data)
+# 		ps_data.prim = get_prim(ps_data,global_data)
+#     end
+# end
+# function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vector{Vector{Float64}},IB_cells::IBCells,global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+#     for i in eachindex(solidcells.ps_datas)
+#         ps_data = solidcells.ps_datas[i]
+#         aux_point = calc_intersect_point(circle,ps_data.midpoint)
+#         # image_point = 2*aux_point-ps_data.midpoint
+#         s_vs_data = ps_data.vs_data
+#         dx = ps_data.ds[1];dy = ps_data.ds[2]
+#         n = (aux_point-circle.center)/circle.radius # outer normal direction
+#         aux_vs_temp = Vector{Matrix{Float64}}(undef,6)
+        
+#         for i in 2:6
+#             aux_vs_temp[i] = zeros(Float64,s_vs_data.vs_num,NDF)
+#         end
+#         aux_vs_temp[1] = IB_cells.IB_nodes[i][1].vs_data.df
+#         # @assert !any(x->abs(x)>100,aux_vs_temp[1]) `IB_vs error!`,aux_vs_temp[1]
+#         ip_df = aux_vs_temp[end-1]
+#         aux_df = aux_vs_temp[end]
+#         # IB_vs = IB_cells.IB_nodes[i][1].vs_data
+#         vn = [dot(@view(s_vs_data.midpoint[j,:]),n) for j in axes(s_vs_data.midpoint,1)]
+#         Θ = heaviside.(vn)
+#         dA = √(dx*dy)
+#         # try
+#         #     Ainv = inv(bilinear_coeffi_2D(points...)./dA)
+#         # catch
+#         #     @show points
+#         # end
+#         # A = nothing;temp_id = nothing
+#         # while true
+#         # angle = abs(atan(n[2]/n[1]))
+#         # ratio = abs(ps_data.prim[end]-IB_cells.IB_nodes[i][end].prim[end])/circle.search_radius/global_data.status.gradmax[end]
+#         # if ratio<10
+#             # if angle>35/180*π&&angle<55/180*π
+#         temp_id,weight = upwind_template(IB_cells.templates[i],IB_cells.IB_nodes[i],aux_point,IB_cells.IB_nodes[i][1].prim)
+#             # else
+#         if weight<0
+#             temp_id = IB_cells.templates[i][1]      
+#             # end
+#         # else
+#         #     # temp_id = IB_cells.templates[i][rand(1:length(IB_cells.templates[i]))]
+#         end
+#         points = [IB_cells.IB_nodes[i][temp_id[j]].midpoint for j in 1:4]
+#         image_point = [sum([p[1] for p in points])/4,sum([p[2] for p in points])/4]
+#         # dxL = norm(aux_point-image_point)
+#         # dxR = norm(ps_data.midpoint-aux_point)
+#         A = bilinear_coeffi_2D(points...)./dA
+#             # if rank(A)<4
+#             #     @show A
+#             #     deleteat!(IB_cells.templates[i],id)
+#             # else
+#             #     break
+#             # end
+#             # if length(IB_cells.templates[i])<1
+#             #     @show ps_data.midpoint aux_point
+#             #     throw(`Larger search coefficient is requested!`)
+#             # end
+#         # end
+#         # points = [IB_cells.IB_nodes[i][j].midpoint for j in 1:4]
+#         # A =bilinear_coeffi_2D(points...)./dA
+#         # if rank(A)<4
+#         #     @show A inv(A)
+#         #     throw(`Singular Error!`)
+#         # end
+#         Ainv = inv(A)
+#         for j in 2:4
+#             vs_projection!(s_vs_data,IB_cells.IB_nodes[i][temp_id[j]].vs_data,aux_vs_temp[j])
+#             # @assert !any(x->isnan(x),aux_vs_temp[j]) `projection error!`,aux_vs_temp[j],IB_cells.IB_nodes[i][j].vs_data.df
+#         end
+#         b = Vector{Float64}(undef,4);ip_coeffi = make_bilinear_coeffi_2D(image_point)./dA
+#         @inbounds for j in axes(ip_df,1)
+#             # V2 = @views sum(IB_vs.midpoint[j,:].^2)
+#             for l in 1:NDF
+#                 for k in 1:4
+#                     b[k] = aux_vs_temp[k][j,l]
+#                     # temp = aux_vs_temp[k][j,l]
+#                     # b[k] = temp<EPS ? 0. : temp
+#                 end
+#                 # ip_df[j,l] = dot(Ainv*(b./ab),ip_coeffi).*ab
+#                 # if V2>4/ps_data.prim[end]^2
+#                 #     ip_df[j,l] = dot(Ainv*(b.*V2),ip_coeffi)/V2
+#                 # else
+#                     ip_df[j,l] = dot(Ainv*b,ip_coeffi)
+#                 # end
+#                 # if isnan(ip_df[j,l])
+#                 #     @show b ip_coeffi Ainv
+#                 # end
+#             end
+#         end   
+#         # aux_point interpolate by bilinear
+#         ap_coeffi = make_bilinear_coeffi_2D(aux_point)./dA
+#         @inbounds for j in axes(aux_df,1)
+#             if Θ[j]==0.
+#                 # V2 = @views sum(IB_vs.midpoint[j,:].^2)
+#                 for l in 1:NDF
+#                     for k = 1:4
+#                         b[k] = aux_vs_temp[k][j,l]
+#                         # temp = aux_vs_temp[k][j,l]
+#                         # b[k] = temp<EPS ? 0. : temp
+#                     end
+#                     # ab = maximum(abs.(b))
+#                     # (ab==0.)&&(ab=EPS)
+#                     # aux_df[j,l] = dot(Ainv*(b./ab),ap_coeffi).*ab
+#                     # if V2>4/ps_data.prim[end]^2
+#                     #     aux_df[j,l] = dot(Ainv*(b.*V2),ap_coeffi)/V2
+#                     # else
+#                         # aux_df[j,l] = max(dot(Ainv*b,ap_coeffi),0)
+#                         aux_df[j,l] = dot(Ainv*b,ap_coeffi)
+#                         # @assert !isnan(aux_df[j,l]) `interpolate error!`,b,Ainv,ap_coeffi,points
+#                     # end
+#                 end
+#             end
+#         end   
+#         ρw = calc_IB_ρw(aux_point,circle,s_vs_data.midpoint,s_vs_data.weight,aux_df,vn,Θ)
+#         # @assert !isnan(ρw) `ρw error`,ρw,aux_df,aux_vs_temp[1],aux_vs_temp[2],aux_vs_temp[3],aux_vs_temp[4]
+#         aux_prim = IB_prim(circle,aux_point,ρw)
+#         for j in axes(aux_df,1)
+#             if Θ[j]==1.
+#                 # df = discrete_maxwell(@view(s_vs_data.midpoint[j,:]),aux_prim,global_data)
+#                 # aux_df[j,:] .= df.+shakhov_part(@view(s_vs_data.midpoint[j,:]),df,aux_prim,aux_qf,global_data)
+#                 aux_df[j,:] .= discrete_maxwell(@view(s_vs_data.midpoint[j,:]),aux_prim,global_data)
+#                 # @assert !any(x->isnan(x),@views aux_df[j,:]) `maxwell error!`,aux_prim
+#             end
+#         end
+#         dxL = aux_point[1]-image_point[1];dxR = ps_data.midpoint[1]-aux_point[1]
+#         dyL = aux_point[2]-image_point[2];dyR = ps_data.midpoint[2]-aux_point[2]
+#         s1 = dot([dxR,dyR],IB_cells.IB_nodes[i][1].midpoint-image_point)
+#         @. s_vs_data.df = aux_df+0.5*abs(sign((aux_df-aux_vs_temp[1]))+sign(aux_vs_temp[1]-ip_df)*s1)*(aux_df-ip_df)*(dxR*dyL+dyR*dxL)/(dxL*dyL)
+#         # ps_data.flux[1:DIM] .= n
+#         # >>for gaussian weight
+#         # prims = [[x.prim[l] for x in IB_cells.IB_nodes[i][1:4]] for l in 1:DIM+2]
+#         # ip_prim = [dot(Ainv*prims[l],ip_coeffi) for l in 1:DIM+2] # prim at aux_point interpolated by fluid cells
+#         # aux_fprim = [dot(Ainv*prims[l],ap_coeffi) for l in 1:DIM+2] # prim at aux_point interpolated by fluid cells
+#         # ps_data.sw[:,1] .= aux_fprim
+#         # ps_data.sw[:,2] .= aux_prim+(aux_prim-ip_prim)/dxL*dxR
+#         # <<for gaussian weight
+# 		ps_data.w = calc_w0(ps_data)
+# 		ps_data.prim = get_prim(ps_data,global_data)
+#     end
+# end
 function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vector{Vector{Float64}},IB_cells::IBCells,global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     for i in eachindex(solidcells.ps_datas)
         ps_data = solidcells.ps_datas[i]
+        nnodes = ps_data.neighbor.data
+        fnnodes = findall(x->!isa(x[1],InsideSolidData)&&x[1].bound_enc>0,nnodes)
         aux_point = calc_intersect_point(circle,ps_data.midpoint)
         image_point = 2*aux_point-ps_data.midpoint
         s_vs_data = ps_data.vs_data
@@ -188,15 +460,51 @@ function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vec
         ip_df = aux_vs_temp[end-1]
         aux_df = aux_vs_temp[end]
         # IB_vs = IB_cells.IB_nodes[i][1].vs_data
-        for j in 2:4
-            vs_projection!(s_vs_data,IB_cells.IB_nodes[i][j].vs_data,aux_vs_temp[j])
-            # @assert !any(x->isnan(x),aux_vs_temp[j]) `projection error!`,aux_vs_temp[j],IB_cells.IB_nodes[i][j].vs_data.df
-        end
         vn = [dot(@view(s_vs_data.midpoint[j,:]),n) for j in axes(s_vs_data.midpoint,1)]
         Θ = heaviside.(vn)
-        points = [IB_cells.IB_nodes[i][j].midpoint for j in 1:4]
         dA = √(dx*dy)
-        Ainv = inv(bilinear_coeffi_2D(points...)./dA)
+        # try
+        #     Ainv = inv(bilinear_coeffi_2D(points...)./dA)
+        # catch
+        #     @show points
+        # end
+        # A = nothing;temp_id = nothing
+        # while true
+        angle = abs(atan(n[2]/n[1]))
+        ratio = abs(ps_data.prim[end]-IB_cells.IB_nodes[i][end].prim[end])/circle.search_radius/global_data.status.gradmax[end]
+        if ratio<10
+            # if angle>35/180*π&&angle<55/180*π
+            #     temp_id = upwind_template(IB_cells.templates[i],IB_cells.IB_nodes[i],aux_point,IB_cells.IB_nodes[i][1].prim)
+            # else
+            temp_id = IB_cells.templates[i][1]      
+            # end
+        else
+            temp_id = IB_cells.templates[i][rand(1:length(IB_cells.templates[i]))]
+        end
+        points = [IB_cells.IB_nodes[i][temp_id[j]].midpoint for j in 1:4]
+        A = bilinear_coeffi_2D(points...)./dA
+            # if rank(A)<4
+            #     @show A
+            #     deleteat!(IB_cells.templates[i],id)
+            # else
+            #     break
+            # end
+            # if length(IB_cells.templates[i])<1
+            #     @show ps_data.midpoint aux_point
+            #     throw(`Larger search coefficient is requested!`)
+            # end
+        # end
+        # points = [IB_cells.IB_nodes[i][j].midpoint for j in 1:4]
+        # A =bilinear_coeffi_2D(points...)./dA
+        # if rank(A)<4
+        #     @show A inv(A)
+        #     throw(`Singular Error!`)
+        # end
+        Ainv = inv(A)
+        for j in 2:4
+            vs_projection!(s_vs_data,IB_cells.IB_nodes[i][temp_id[j]].vs_data,aux_vs_temp[j])
+            # @assert !any(x->isnan(x),aux_vs_temp[j]) `projection error!`,aux_vs_temp[j],IB_cells.IB_nodes[i][j].vs_data.df
+        end
         b = Vector{Float64}(undef,4);ip_coeffi = make_bilinear_coeffi_2D(image_point)./dA
         @inbounds for j in axes(ip_df,1)
             # V2 = @views sum(IB_vs.midpoint[j,:].^2)
@@ -234,8 +542,8 @@ function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vec
                     # if V2>4/ps_data.prim[end]^2
                     #     aux_df[j,l] = dot(Ainv*(b.*V2),ap_coeffi)/V2
                     # else
-                        aux_df[j,l] = max(dot(Ainv*b,ap_coeffi),0)
-                        # aux_df[j,l] = dot(Ainv*b,ap_coeffi)
+                        # aux_df[j,l] = max(dot(Ainv*b,ap_coeffi),0)
+                        aux_df[j,l] = dot(Ainv*b,ap_coeffi)
                         # @assert !isnan(aux_df[j,l]) `interpolate error!`,b,Ainv,ap_coeffi,points
                     # end
                 end
@@ -246,6 +554,8 @@ function update_solid_cell!(circle::Circle,solidcells::SolidCells{DIM,NDF},::Vec
         aux_prim = IB_prim(circle,aux_point,ρw)
         for j in axes(aux_df,1)
             if Θ[j]==1.
+                # df = discrete_maxwell(@view(s_vs_data.midpoint[j,:]),aux_prim,global_data)
+                # aux_df[j,:] .= df.+shakhov_part(@view(s_vs_data.midpoint[j,:]),df,aux_prim,aux_qf,global_data)
                 aux_df[j,:] .= discrete_maxwell(@view(s_vs_data.midpoint[j,:]),aux_prim,global_data)
                 # @assert !any(x->isnan(x),@views aux_df[j,:]) `maxwell error!`,aux_prim
             end
@@ -309,8 +619,11 @@ function update_solid_cell!(circle::Sphere,solidcells::SolidCells{DIM,NDF},::Vec
         end   
         ρw = calc_IB_ρw(aux_point,circle,s_vs_data.midpoint,s_vs_data.weight,aux_df,vn,Θ)
         aux_prim = IB_prim(circle,aux_point,ρw)
+        # aux_qf = calc_qf(s_vs_data.midpoint,aux_df,s_vs_data.weight,aux_prim,global_data)
         for j in axes(aux_df,1)
             if Θ[j]==1.
+                # df = discrete_maxwell(@view(s_vs_data.midpoint[j,:]),aux_prim,global_data)
+                # aux_df[j,:] .= df.+shakhov_part(@view(s_vs_data.midpoint[j,:]),df,aux_prim,aux_qf,global_data)
                 aux_df[j,:] .= discrete_maxwell(@view(s_vs_data.midpoint[j,:]),aux_prim,global_data)
             end
         end

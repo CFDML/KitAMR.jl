@@ -126,17 +126,23 @@ function update_slope_inner!(
     Rdata::T2,
     dir::Integer,
 ) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
-    ds = ps_data.ds[dir]
-    swL = (ps_data.w - Ldata[1].w) / (ds)
-    swR = (Rdata[1].w - ps_data.w) / (ds)
-    sw = vanleer(swL, swR)
-    gradmax = global_data.status.gradmax
-    for i in eachindex(gradmax)
-       @inbounds gradmax[i] = max(gradmax[i], abs(sw[i]))
+    if Ldata[1].bound_enc<0
+        update_slope_inner!(Val(0),Val(1),ps_data,global_data,Ldata,Rdata,dir)
+    elseif Rdata[1].bound_enc<0
+        update_slope_inner!(Val(1),Val(0),ps_data,global_data,Ldata,Rdata,dir)
+    else
+        ds = ps_data.ds[dir]
+        swL = (ps_data.w - Ldata[1].w) / (ds)
+        swR = (Rdata[1].w - ps_data.w) / (ds)
+        sw = vanleer(swL, swR)
+        gradmax = global_data.status.gradmax
+        for i in eachindex(gradmax)
+        @inbounds gradmax[i] = max(gradmax[i], abs(sw[i]))
+        end
+        ps_data.sw[:, dir] .= sw
+        ds = ps_data.ds[dir]
+        update_slope_inner_vs!(ps_data.vs_data, Ldata[1].vs_data, Rdata[1].vs_data, ds, ds, dir)
     end
-    ps_data.sw[:, dir] .= sw
-    ds = ps_data.ds[dir]
-    update_slope_inner_vs!(ps_data.vs_data, Ldata[1].vs_data, Rdata[1].vs_data, ds, ds, dir)
 end
 function update_slope_inner!(
     ::Val{0},

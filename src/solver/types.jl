@@ -169,8 +169,7 @@ end
 mutable struct Field{DIM,NDF}
     trees::PS_Trees{DIM,NDF}
     faces::Vector{AbstractFace}
-    boundary::Boundary{DIM,NDF}
-    # solid_cells::Vector{Vector{PS_Data{DIM,NDF}}} # Outer vector corresbonds to boundaries
+    # boundary::Boundary{DIM,NDF}
 end
 
 

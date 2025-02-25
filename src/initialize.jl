@@ -226,7 +226,7 @@ function pre_refine!(ps4est::P_pxest_t,global_data::Global_Data)
     pre_ps_coarsen!(ps4est;recursive=1)
     pre_ps_balance!(ps4est)
     AMR_partition(ps4est)
-    return aux_points,image_points
+    # return aux_points,image_points
 end
 function init_ps!(ps4est::P_pxest_t,global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     fp = PointerWrapper(ps4est)
@@ -256,13 +256,13 @@ function init_field!(global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
             P4est_PS_Data,
             pointer_from_objref(global_data),
         )
-        aux_points,image_points = pre_refine!(ps4est,global_data)
+        pre_refine!(ps4est,global_data)
         trees,solid_cells = init_ps!(ps4est,global_data)
-        solid_numbers,IB_cells,IB_buffer,IB_ranks = init_IB!(ps4est,trees,global_data,solid_cells,aux_points)
-        boundary = Boundary{DIM,NDF}(solid_cells,solid_numbers,image_points,aux_points,IB_cells,IB_ranks,IB_buffer)
-        sort_IB_cells!(global_data,boundary)
-		init_solid_cells!(boundary,global_data)
-        return trees, boundary, ps4est
+        # solid_numbers,IB_cells,IB_buffer,IB_ranks = init_IB!(ps4est,trees,global_data,solid_cells,aux_points)
+        # boundary = Boundary{DIM,NDF}(solid_cells,solid_numbers,image_points,aux_points,IB_cells,IB_ranks,IB_buffer)
+        # sort_IB_cells!(global_data,boundary)
+		# init_solid_cells!(boundary,global_data)
+        return trees, ps4est
     end
 end
 function initialize_ghost(p4est::P_pxest_t,global_data::Global_Data)
@@ -272,19 +272,20 @@ function initialize_ghost(p4est::P_pxest_t,global_data::Global_Data)
 end
 function init(config::Dict)
     global_data = Global_Data(config)
-    trees, boundary, ps4est = init_field!(global_data)
+    trees, ps4est = init_field!(global_data)
     ghost_ps = AMR_ghost_new(ps4est)
     mesh_ps = AMR_mesh_new(ps4est, ghost_ps)
     global_data.forest.p4est = ps4est
     global_data.forest.ghost = ghost_ps
     global_data.forest.mesh = mesh_ps
     ghost = initialize_ghost(ps4est, global_data)
-    field = Field{config[:DIM],config[:NDF]}(trees,Vector{AbstractFace}(undef,0),boundary)
+    field = Field{config[:DIM],config[:NDF]}(trees,Vector{AbstractFace}(undef,0))
     amr = AMR(
         global_data,ghost,field
     )
     PointerWrapper(ps4est).user_pointer = pointer_from_objref(amr)
     initialize_neighbor_data!(ps4est, amr)
+    initialize_solid_neighbor!(amr)
     initialize_faces!(ps4est, amr)
     return (ps4est, amr)
 end

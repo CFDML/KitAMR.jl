@@ -95,6 +95,24 @@ function shakhov_part(
         global_data.config.gas.K,
     )
 end
+function shakhov_part(
+    midpoint::AbstractVector,
+    F::T,
+    prim::AbstractVector,
+    qf::AbstractVector,
+    global_data::Global_Data{2,2},
+) where{T<:Union{Tuple,AbstractVector}}
+    shakhov_part_2D2F(
+        midpoint[1],
+        midpoint[2],
+        F[1],
+        F[2],
+        prim,
+        qf,
+        global_data.config.gas.Pr,
+        global_data.config.gas.K,
+    )
+end
 # function shakhov_part(
 #     midpoint::AbstractMatrix,
 #     F::AbstractMatrix,

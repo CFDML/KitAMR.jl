@@ -27,15 +27,20 @@ struct PS_Solution
     prim::Vector{Float64}
     qf::Vector{Float64}
 end
+struct Boundary_PS_Solution
+    prim::Vector{Float64}
+    qf::Vector{Float64}
+    p::Vector{Float64}
+end
 function PS_Solution(ps_data::PS_Data{DIM}) where{DIM}
-    # if ps_data.bound_enc<0
-    #     prim = Vector{Float64}(undef,DIM+2);prim.=NaN
-    #     qf = Vector{Float64}(undef,DIM);qf.=NaN
-    #     return PS_Solution(prim, qf)
-    # end
+    if ps_data.bound_enc<0
+        prim = Vector{Float64}(undef,DIM+2);prim.=NaN
+        qf = Vector{Float64}(undef,DIM);qf.=NaN
+        return PS_Solution(prim, qf)
+    end
     return PS_Solution(ps_data.prim, ps_data.qf)
 end
-function PS_Solution(ps_data::InsideSolidData{DIM,NDF}) where{DIM,NDF}
+function PS_Solution(::InsideSolidData{DIM,NDF}) where{DIM,NDF}
     prim = Vector{Float64}(undef,DIM+2);prim.=NaN
     qf = Vector{Float64}(undef,DIM);qf.=NaN
     return PS_Solution(prim, qf)
@@ -62,5 +67,5 @@ struct Result
 end
 struct Boundary_Solution
     midpoints::Vector{Vector{Float64}}
-    ps_solutions::Vector{PS_Solution}
+    ps_solutions::Vector{Boundary_PS_Solution}
 end
