@@ -6,6 +6,7 @@ const RFT = [[],[[2, 4], [1, 4], [3, 2], [1, 3]],[[-1,-1,-1],[1,-1,-1],[-1,1,-1]
 const RMT = [[],[[-1, -1], [1, -1], [-1, 1], [1, 1]],[[-1,-1,-1],[1,-1,-1],[-1,1,-1],[1,1,-1],[-1,-1,1],[1,-1,1],[-1,1,1],[1,1,1]]] # refine midpoint table
 const NMT = [[],[[-1,0],[1,0],[0,-1],[0,1]]] # neighbor midpoint table
 const FAT = [[2,1],[[2,3],[1,3],[1,2]]]# face area table
+const CLP = [1,3,5,7] # Vertices' indices in cut_rect
 const pxest_ts = [p4est_t,p8est_t]
 const pxest_quadrant_ts = [p4est_quadrant_t,p8est_quadrant_t]
 const pxest_ghost_ts = [p4est_ghost_t,p8est_ghost_t]

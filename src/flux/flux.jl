@@ -75,6 +75,12 @@ end
 function update_macro_flux!(flux::Vector,here_data::PS_Data,::AbstractGhostPsData)
     here_data.flux .+= flux
 end
+function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM},::SolidNeighbor{DIM},heavi::Vector{Bool}) where{DIM}
+    vs_data = here_data.vs_data;flux = vs_data.flux
+    @. flux[heavi,:]+=@views here_micro
+    nheavi = [!x for x in heavi]
+    @. flux[nheavi,:]+=@views there_micro
+end
 function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM},there_data::PS_Data,heavi::Vector{Bool}) where{DIM}
     vs_data = here_data.vs_data;nvs_data = there_data.vs_data
     level = vs_data.level;level_n = nvs_data.level

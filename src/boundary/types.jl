@@ -84,8 +84,12 @@ mutable struct GhostIBNode{DIM,NDF} # Maybe sdf?
     vs_data::GhostIBVSData{DIM,NDF}
 end
 const AbstractIBNodes{DIM,NDF} = Union{PS_Data{DIM,NDF},GhostIBNode{DIM,NDF}}
-mutable struct IBCells
-    IB_nodes::Vector{Vector{AbstractIBNodes}} # SolidCells{IBNodes{}}
+mutable struct IBCells{DIM,NDF}
+    IB_nodes::Vector{Vector{AbstractIBNodes{DIM,NDF}}} # SolidCells{IBNodes{}}
+    templates::Vector{Vector{Vector{Int}}} # Available templates indices
+end
+function IBCells(IB_nodes::Vector{Vector{AbstractIBNodes{DIM,NDF}}}) where{DIM,NDF}
+    return IBCells{DIM,NDF}(IB_nodes,Vector{Vector{Vector{Int}}}(undef,length(IB_nodes)))
 end
 mutable struct IBTransferData
     solid_cell_indices::Matrix{Int}

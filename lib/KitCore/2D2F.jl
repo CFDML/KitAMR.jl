@@ -20,6 +20,29 @@ function discrete_maxwell_2D2F(u::Real,v::Real,prim::AbstractVector,K::Real)
     return h,b
 end
 function shakhov_part_2D2F(
+    u::Real,
+    v::Real,
+    H::Real,
+    B::Real,
+    prim::AbstractVector,
+    qf::AbstractVector,
+    Pr::Real,
+    K::Real,
+) 
+    F⁺ = Vector{Float64}(undef, 2)
+    @inbounds F⁺[1] =
+        0.8 * (1 - Pr) * prim[4]^2 / prim[1] *
+        ((u - prim[2]) * qf[1] + (v - prim[3]) * qf[2]) *
+        (2 * prim[4] * ((u - prim[2])^2 + (v - prim[3])^2) + K - 5) *
+        H
+    @inbounds F⁺[2] =
+        0.8 * (1 - Pr) * prim[4]^2 / prim[1] *
+        ((u - prim[2]) * qf[1] + (v - prim[3]) * qf[2]) *
+        (2 * prim[4] * ((u - prim[2])^2 + (v - prim[3])^2) + K - 3) *
+        B
+    return F⁺
+end
+function shakhov_part_2D2F(
     u::AbstractVector{T},
     v::AbstractVector,
     H::AbstractVector,

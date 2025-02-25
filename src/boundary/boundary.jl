@@ -35,36 +35,92 @@ end
 function calc_qf(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,prim::AbstractVector,::Global_Data{2,2})
     @views heat_flux_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],prim,weight)
 end
-function save_boundary_result(ib::Circle,ps_data::PS_Data{DIM,NDF},ib_nodes::Vector{AbstractIBNodes},global_data::Global_Data) where{DIM,NDF}
-    aux_point = calc_intersect_point(ib,ps_data.midpoint)
-    dx = ps_data.ds[1];dy = ps_data.ds[2]
-    dA = √(dx*dy)
-    points = [ib_nodes[j].midpoint for j in 1:4]
-    Ainv = inv(bilinear_coeffi_2D(points...)./dA)
-    ap_coeffi = make_bilinear_coeffi_2D(aux_point)./dA
-    b = Vector{Float64}(undef,4)
-    # prim = Vector{Float64}(undef,4);qf = Vector{Float64}(undef,2)
-    aux_vs_temp = Vector{Matrix{Float64}}(undef,5)
-    for i in 2:5
-        aux_vs_temp[i] = zeros(Float64,ps_data.vs_data.vs_num,NDF)
-    end
-    aux_vs_temp[1] = ib_nodes[1].vs_data.df
-    aux_df = aux_vs_temp[end]
-    for j in 2:4
-        vs_projection!(ps_data.vs_data,ib_nodes[j].vs_data,aux_vs_temp[j])
-    end
-    @inbounds for j in axes(aux_df,1)
-        for l in 1:NDF
-            for k in 1:4
-                b[k] = aux_vs_temp[k][j,l]
-            end
-            aux_df[j,l] = dot(Ainv*b,ap_coeffi)
+function calc_pressure(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{2})
+    @views pressure_2D(midpoint[:,1],midpoint[:,2],df[:,1],weight)
+end
+# function save_boundary_result(ib::Circle,ps_data::PS_Data{DIM,NDF},ib_nodes::Vector{AbstractIBNodes{DIM,NDF}},templates::Vector{Vector{Int}},global_data::Global_Data) where{DIM,NDF}
+#     aux_point = calc_intersect_point(ib,ps_data.midpoint)
+#     dx = ps_data.ds[1];dy = ps_data.ds[2]
+#     dA = √(dx*dy)
+#     # n = (aux_point-ib.center)/ib.radius # outer normal direction
+#     # angle = abs(atan(n[2]/n[1]))
+#     # if angle>35/180*π&&angle<55/180*π
+#     #     template = upwind_template(templates,ib_nodes,aux_point,ib_nodes[1].prim)
+#     # else
+#     template = templates[1]
+#     # end
+#     points = [ib_nodes[template[j]].midpoint for j in 1:4]
+#     Ainv = inv(bilinear_coeffi_2D(points...)./dA)
+#     ap_coeffi = make_bilinear_coeffi_2D(aux_point)./dA
+#     b = Vector{Float64}(undef,4)
+#     # prim = Vector{Float64}(undef,4);qf = Vector{Float64}(undef,2)
+#     aux_vs_temp = Vector{Matrix{Float64}}(undef,5)
+#     for i in 2:5
+#         aux_vs_temp[i] = zeros(Float64,ps_data.vs_data.vs_num,NDF)
+#     end
+#     aux_vs_temp[1] = ib_nodes[1].vs_data.df
+#     aux_df = aux_vs_temp[end]
+#     for j in 2:4
+#         vs_projection!(ps_data.vs_data,ib_nodes[template[j]].vs_data,aux_vs_temp[j])
+#     end
+#     @inbounds for j in axes(aux_df,1)
+#         for l in 1:NDF
+#             for k in 1:4
+#                 b[k] = aux_vs_temp[k][j,l]
+#             end
+#             aux_df[j,l] = dot(Ainv*b,ap_coeffi)
+#         end
+#     end
+#     aux_w = calc_w0(ps_data.vs_data.midpoint,aux_df,ps_data.vs_data.weight,global_data)
+#     aux_prim = get_prim(aux_w,global_data)
+#     aux_qf = calc_qf(ps_data.vs_data.midpoint,aux_df,ps_data.vs_data.weight,aux_prim,global_data)
+#     aux_p = calc_pressure(ps_data.vs_data.midpoint,aux_df,ps_data.vs_data.weight,global_data)
+#     return aux_point,Boundary_PS_Solution(aux_prim,aux_qf,aux_p)
+# end
+function save_boundary_result!(ib::Circle,ps_data,solid_neighbor::SolidNeighbor{DIM,NDF,ID},boundary_results,amr::AMR{DIM,NDF}) where{DIM,NDF,ID}
+    global_data = amr.global_data
+    vs_data = ps_data.vs_data
+    aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
+    vn = @views [dot(v,n) for v in eachrow(ps_data.vs_data.midpoint)]
+    Θ = heaviside.(vn)
+    ib_df = vs_data.df;ib_sdf = vs_data.sdf
+    aux_df = zeros(vs_data.vs_num,NDF)
+    dir = get_dir(ID)
+    for i in 1:vs_data.vs_num
+        if Θ[i]==0.
+            aux_df[i,:] .= @views max.(ib_df[i,:]+(aux_point[dir]-ps_data.midpoint[dir])*ib_sdf[i,:,dir],0.)
         end
     end
-    aux_w = calc_w0(ps_data.vs_data.midpoint,aux_df,ps_data.vs_data.weight,global_data)
+    ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
+    aux_prim = IB_prim(ib,aux_point,ρw)
+    for i in 1:vs_data.vs_num
+        if Θ[i]==1.
+            aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),aux_prim,amr.global_data)
+        end
+    end
+    cvc = solid_neighbor.cvc
+    for i in eachindex(cvc.index)
+        id = cvc.index[i]
+        if Θ[id]==1.
+            aux_df[id,:] .*= cvc.solid_weight[i]
+            aux_df[id,:] .+= (1-cvc.solid_weight[i])*@views max.(ib_df[id,:]+(aux_point[dir]-ps_data.midpoint[dir])*ib_sdf[id,:,dir],0.)
+        else
+            aux_df[id,:] .*= 1-cvc.solid_weight[i]
+            aux_df[id,:] .+= cvc.solid_weight[i].*discrete_maxwell(@view(vs_data.midpoint[id,:]),aux_prim,amr.global_data)
+        end
+    end
+    aux_w = calc_w0(solid_neighbor.vs_data.midpoint,aux_df,solid_neighbor.vs_data.weight,global_data)
     aux_prim = get_prim(aux_w,global_data)
-    aux_qf = calc_qf(ps_data.vs_data.midpoint,aux_df,ps_data.vs_data.weight,aux_prim,global_data)
-    return aux_point,PS_Solution(aux_prim,aux_qf)
+    aux_qf = calc_qf(solid_neighbor.vs_data.midpoint,aux_df,solid_neighbor.vs_data.weight,aux_prim,global_data)
+    aux_p = calc_pressure(solid_neighbor.vs_data.midpoint,aux_df,solid_neighbor.vs_data.weight,global_data)
+    push!(boundary_results[ps_data.bound_enc].midpoints,aux_point)
+    push!(boundary_results[ps_data.bound_enc].ps_solutions,Boundary_PS_Solution(aux_prim,aux_qf,aux_p))
+end
+function save_boundary_result!(ib::AbstractBoundary,ps_data::PS_Data{DIM,NDF},boundary_results::Vector{Boundary_Solution},amr::AMR{DIM,NDF}) where{DIM,NDF}
+    solid_neighbors = findall(x->!isnothing(x[1])&&x[1].bound_enc<0,ps_data.neighbor.data)
+    for i in solid_neighbors
+        save_boundary_result!(ib,ps_data,ps_data.neighbor.data[i][1],boundary_results,amr)
+    end
 end
 function solid_cell_index_encoder!(solid_cell_index::Vector{Int},now_index::Int)
     id = findfirst(x->x==0,solid_cell_index)
@@ -221,7 +277,25 @@ function pre_broadcast_quadid(solid_cells::Vector{T}) where{T<:SolidCells}
     end
     return Numbers
 end
-
+function upwind_weight(points,aux_point,prim)
+    # sum(@views [dot(aux_point-x,prim[2:end-1])/norm((x-aux_point)) for x in points[2:end]])
+    average_point = sum(points)/length(points)
+    sum([sum((p-average_point).^2) for p in points])*dot(aux_point-average_point,prim[2:end-1])
+end
+function upwind_template(templates,ib_nodes,aux_point,prim)
+    weight = -Inf;template = Int[]
+    for temp in templates
+        w = upwind_weight([x.midpoint for x in ib_nodes[temp]],aux_point,prim)
+        if w>weight
+            template = temp;weight = w
+        end
+    end
+    # if aux_point[1]>0&&aux_point[2]>0
+    #     @show aux_point [x.midpoint for x in ib_nodes[template]] prim
+    # end
+    # isnothing(template)&&throw(`No upwind template found. Larger search coefficient is requested.`)
+    return template,weight
+end
 function broadcast_quadid!(solid_cells::Vector{T})where{T<:SolidCells}
     Numbers = pre_broadcast_quadid(solid_cells)
     rbuffer = Vector{Vector{Vector{Cint}}}(undef,length(solid_cells)) # boundaries{ranks{points}}
@@ -608,8 +682,7 @@ function colinear_test(p1,p2,p3)
     n2 = sum(p1.^2-p2.^2)
     isapprox((p1[1] * (p2[2] - p3[2]) + p2[1] * (p3[2] - p1[2]) + p3[1] * (p1[2] - p2[2]))/n2,0.;atol=1e-3)
 end
-function colinear_reject!(IB_nodes::Vector{AbstractIBNodes})
-    DIM = length(first(IB_nodes).midpoint)
+function colinear_reject!(IB_nodes::Vector{AbstractIBNodes{DIM,NDF}}) where{DIM,NDF}
     if DIM==2
         index = zeros(Int,4)
         index[1],index[2] = 1,2
@@ -635,6 +708,37 @@ function colinear_reject!(IB_nodes::Vector{AbstractIBNodes})
     elseif DIM==3
     end
 end
+function singular_test(p1,p2,p3,p4,::BilinearIBInterpolate)
+    A = bilinear_coeffi_2D(p1,p2,p3,p4)
+    rank(A)<4&&return true
+    # @show det(A)
+    return false
+end
+function available_templates!(IB_cell::IBCells{DIM},interp_t::AbstractIBInterpolateType) where{DIM}
+    IB_nodes = IB_cell.IB_nodes
+    for solid_id in eachindex(IB_cell.IB_nodes)
+        IB_nodes = IB_cell.IB_nodes[solid_id]
+        if DIM==2
+            templates = Vector{Int}[]
+            for i in 2:length(IB_nodes), j in (i+1):length(IB_nodes), k in (j+1):length(IB_nodes)
+                index = collect(1:4)
+                index[2:4] .= i,j,k
+                # for l in 1:4, m in l+1:4, n in m+1:4
+                    # if singular_test(IB_nodes[index[l]].midpoint,IB_nodes[index[m]].midpoint,IB_nodes[index[n]].midpoint,interp_t)
+                    # if singular_test(IB_nodes[index[1]].midpoint,IB_nodes[index[2]].midpoint,IB_nodes[index[3]].midpoint,IB_nodes[index[4]].midpoint,interp_t)
+                    #     flag = false
+                    # end
+                # end
+                if !singular_test(IB_nodes[index[1]].midpoint,IB_nodes[index[2]].midpoint,IB_nodes[index[3]].midpoint,IB_nodes[index[4]].midpoint,interp_t)
+                    push!(templates,index) 
+                end
+            end
+            length(templates)<1&& throw(`Search coefficient is requested to be larger.`)
+            IB_cell.templates[solid_id] = templates
+        elseif DIM==3
+        end
+    end
+end
 function sort_IB_cells!(circle::AbstractCircle,config::Configure,solid_cells::SolidCells,::Vector,IB_cells::IBCells)
     for i in eachindex(solid_cells.ps_datas)
         ps_data = solid_cells.ps_datas[i]
@@ -644,9 +748,11 @@ function sort_IB_cells!(circle::AbstractCircle,config::Configure,solid_cells::So
         end
         index = sortperm(distances)
         IB_cells.IB_nodes[i] = IB_cells.IB_nodes[i][index]
-        if isa(config.IB_interp,BilinearIBInterpolate)
-            colinear_reject!(IB_cells.IB_nodes[i])
-        end
+        # if isa(config.IB_interp,BilinearIBInterpolate)
+        #     colinear_reject!(IB_cells.IB_nodes[i])
+        #     # available_templates!(IB_cells)
+        # end
+        available_templates!(IB_cells,config.IB_interp)
     end
 end
 function sort_IB_cells!(global_data::Global_Data,boundary::Boundary)
@@ -741,7 +847,7 @@ function IB_Numbers_ranks(ps4est::P_pxest_t,IB_nodes::Vector,solid_cells::Vector
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
     for i in eachindex(solid_cells)
         local_offset = findfirst(x->x>=gfq[rank+1]&&x<gfq[rank+2],solid_cells[i].quadids)
-        IB_nodes_temp = [AbstractIBNodes[] for _ in solid_cells[i].ps_datas]
+        IB_nodes_temp = [AbstractIBNodes{DIM,NDF}[] for _ in solid_cells[i].ps_datas]
         for IB_node in IB_nodes[i]
             ids = solid_cell_index_decoder(IB_node.solid_cell_index)
             ranks,lids = solid_cell_index2ranks(ids,solid_cells[i].quadids,gfq)
@@ -1027,4 +1133,145 @@ function IB_nodes_data_wrap!(ps4est::P_pxest_t,rNumbers::Vector{Vector{Int}},r_v
         end 
     end
     return ghost_nodes
+end
+
+
+
+function initialize_solid_neighbor!(amr::AMR)
+    for tree in amr.field.trees.data
+        for ps_data in tree
+            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0)&&continue
+            initialize_solid_neighbor!(ps_data,amr)
+        end
+    end
+end
+function calc_intersect(f_midpoint,s_midpoint,circle::Circle)
+    c = circle.center;r = circle.radius
+    if abs(f_midpoint[1]-s_midpoint[1])<EPS
+        t = acos((f_midpoint[1]-c[1])/r)
+        if f_midpoint[2]>c[2]
+            ap = [r*cos(t),r*sin(t)];n=ap./r
+        else
+            ap = [r*cos(t),-r*sin(t)];n = ap./r
+        end
+    else
+        t = asin((f_midpoint[2]-c[2])/r)
+        if f_midpoint[1]>c[1]
+            ap = [r*cos(t),r*sin(t)];n = ap./r
+        else
+            ap = [-r*cos(t),r*sin(t)];n = ap./r
+        end
+    end
+    return ap,n
+end
+function initialize_cutted_velocity_cell(n::Vector{Float64},vs_data::VS_Data{2},amr::AMR{2})
+    any(x->x==0.,n)&&return CuttedVelocityCell(Int[],Float64[])
+    global_data = amr.global_data
+    du = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
+        global_data.config.vs_trees_num[i] for i in 1:2]
+    vertices = [zeros(2) for _ in 1:4]
+    index = Int[];solid_weight = Float64[]
+    for i in 1:vs_data.vs_num
+        for j in eachindex(vertices)
+            vertices[j] .= @views 0.5*RMT[2][j].*du+vs_data.midpoint[i,:]
+        end
+        flag,weight = cut_rect(n,vertices)
+        if flag
+            push!(index,i);push!(solid_weight,weight)
+        end
+    end
+    return CuttedVelocityCell(index,solid_weight)
+end
+function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF}) where{DIM,NDF}
+    solid_dirs = findall(x->!isnothing(x[1])&&x[1].bound_enc<0,ps_data.neighbor.data)
+    vs_data = ps_data.vs_data
+    for i in solid_dirs
+        solid_cell = ps_data.neighbor.data[i][1]
+        if ps_data.bound_enc!=0
+            ps_data.bound_enc!=-solid_cell.bound_enc&&throw(`Different immersed boundaries correspond to the same fluid cell!`)
+        end
+        ps_data.bound_enc=-solid_cell.bound_enc
+        ib = amr.global_data.config.IB[-solid_cell.bound_enc]
+        aux_point,normal = calc_intersect(ps_data.midpoint,solid_cell.midpoint,ib)
+        ic = get_bc(ib.bc)
+        svsdata = VS_Data{DIM,NDF}(
+            vs_data.vs_num,
+            vs_data.level,
+            vs_data.weight,
+            vs_data.midpoint,
+            discrete_maxwell(ps_data.vs_data.midpoint,ic,amr.global_data),
+            zeros(vs_data.vs_num,NDF,DIM),
+            # zeros(vs_data.vs_num,NDF,DIM),
+            Matrix{Float64}(undef,0,0)
+        )
+        cvc = initialize_cutted_velocity_cell(normal,svsdata,amr)
+        ps_data.neighbor.data[i][1] = SolidNeighbor{DIM,NDF,i}(
+            solid_cell.bound_enc,aux_point,normal,
+            solid_cell.midpoint,ic,cvc,svsdata
+        )
+        # if any(x->isnan(x),ps_data.neighbor.data[i][1].vs_data.df)
+        #     throw(`initial sn.df nan!`)
+        # end
+    end
+        
+end
+
+function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidNeighbor{DIM,NDF,ID},amr::AMR) where{DIM,NDF,ID}
+    ib = amr.global_data.config.IB[ps_data.bound_enc]
+    vs_data = ps_data.vs_data
+    aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
+    dxL = norm(aux_point-ps_data.midpoint)
+    dxR = norm(solid_neighbor.midpoint-aux_point)
+    ib_df = vs_data.df;ib_sdf = vs_data.sdf
+    vn = @views [dot(v,n) for v in eachrow(ps_data.vs_data.midpoint)]
+    aux_df = zeros(vs_data.vs_num,NDF)
+    dir = get_dir(ID)
+    Θ = heaviside.(vn)
+    for i in 1:vs_data.vs_num
+        if Θ[i]==0.
+            aux_df[i,:] .= @views max.(ib_df[i,:]+(aux_point[dir]-ps_data.midpoint[dir])*ib_sdf[i,:,dir],0.)
+        end
+    end
+    ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
+    aux_prim = IB_prim(ib,aux_point,ρw)
+    for i in 1:vs_data.vs_num
+        if Θ[i]==1.
+            aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),aux_prim,amr.global_data)
+        end
+    end
+    # Correction by cut-cell in velocity method
+    cvc = solid_neighbor.cvc
+    for i in eachindex(cvc.index)
+        id = cvc.index[i]
+        if Θ[id]==1.
+            aux_df[id,:] .*= cvc.solid_weight[i]
+            aux_df[id,:] .+= (1-cvc.solid_weight[i])*@views max.(ib_df[id,:]+(aux_point[dir]-ps_data.midpoint[dir])*ib_sdf[id,:,dir],0.)
+        else
+            aux_df[id,:] .*= 1-cvc.solid_weight[i]
+            aux_df[id,:] .+= cvc.solid_weight[i].*discrete_maxwell(@view(vs_data.midpoint[id,:]),aux_prim,amr.global_data)
+        end
+    end
+    if dxL<0.25*ps_data.ds[dir]
+        dxL = ps_data.ds[dir]+dxL
+        ip_temp = zeros(vs_data.vs_num,NDF)
+        new_ID = ID + (ID%2==0 ? -1 : 1)
+        vs_projection!(vs_data,ps_data.neighbor.data[new_ID][1].vs_data,ip_temp)
+        @. solid_neighbor.vs_data.df = aux_df+(aux_df-ip_temp)/dxL*dxR
+    else
+        @. solid_neighbor.vs_data.df = aux_df+(aux_df-vs_data.df)/dxL*dxR
+    end
+end
+function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF}) where{DIM,NDF}
+    solid_neighbors = findall(x->!isnothing(x[1])&&x[1].bound_enc<0,ps_data.neighbor.data)
+    for i in solid_neighbors
+        update_solid_neighbor!(ps_data,ps_data.neighbor.data[i][1],amr)
+    end
+end
+function update_solid_neighbor!(amr::AMR{DIM,NDF}) where{DIM,NDF}
+    for tree in amr.field.trees.data
+        for ps_data in tree
+            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<=0)&&continue
+            update_solid_neighbor!(ps_data,amr)
+        end
+    end
 end

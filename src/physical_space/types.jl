@@ -18,7 +18,15 @@ mutable struct Neighbor{DIM,NDF}
     n.state = zeros(Int8, 2*DIM);
     n)
 end
-
+mutable struct SolidNeighbor{DIM,NDF,ID} <:AbstractPsData{DIM,NDF}
+    bound_enc::Int
+    aux_point::Vector{Float64}
+    normal::Vector{Float64}
+    midpoint::Vector{Float64}
+    prim::Vector{Float64}
+    cvc::CuttedVelocityCell
+    vs_data::VS_Data{DIM,NDF}
+end
 mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
     quadid::Cint # The unique identification of the ps_data, is currently used for SolidCells and IB nodes' partition. Only need to be updated before partition. Can be negative for SolidCells/IB nodes for the convenience of boundary_flag
     bound_enc::Int # 0:fluid_cell;>0:bound_enc th boundary's IB_cell;<0: bound_enc th boundary's solid_cell;

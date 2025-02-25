@@ -1,5 +1,10 @@
 abstract type AbstractVsData{DIM,NDF} end
 
+struct CuttedVelocityCell
+    index::Vector{Int}
+    solid_weight::Vector{Float64} # Range from 0 to 1, representing the percent of the solid part.
+end
+
 mutable struct VS_Data{DIM,NDF} <: AbstractVsData{DIM,NDF}
     vs_num::Int
     level::Vector{Int8} # vs_num
