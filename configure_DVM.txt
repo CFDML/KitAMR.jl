@@ -25,6 +25,7 @@ DIM = 2
 NDF = 2
 AMR_PS_MAXLEVEL = 3
 AMR_VS_MAXLEVEL = 2
+PS_DYNAMIC_AMR = false
 geometry = [-4.,8.,-5.,5.]
 trees_num = [40,40]
 quadrature = [-10.,15.,-10.,10.]
