@@ -19,10 +19,15 @@ struct Solver
     AMR_VS_MAXLEVEL::Int
     flux::AbstractFluxType
     time_marching::AbstractTimeMarchingType
+    PS_DYNAMIC_AMR::Bool
+    VS_DYNAMIC_AMR::Bool
 end
 function Solver(config::Dict)
     return Solver(config[:CFL],config[:AMR_PS_MAXLEVEL],
-        config[:AMR_VS_MAXLEVEL],config[:flux],config[:time_marching])
+        config[:AMR_VS_MAXLEVEL],config[:flux],config[:time_marching],
+        (haskey(config,:PS_DYNAMIC_AMR) ? config[:PS_DYNAMIC_AMR] : true),
+        (haskey(config,:VS_DYNAMIC_AMR) ? config[:VS_DYNAMIC_AMR] : true)
+        )
 end
 mutable struct UDF
     static_ps_refine_flag::Function

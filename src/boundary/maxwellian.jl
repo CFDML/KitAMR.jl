@@ -117,7 +117,6 @@ function vs_projection!(vs_data::AbstractVsData{DIM,NDF},vs_data_n::AbstractVsDa
         end
     end
 end
-
 function bilinear_coeffi_2D(p1::T,p2::T,p3::T,p4::T) where{T<:AbstractVector{Float64}}
     return @inbounds [
         p1[1] p1[2] p1[1]*p1[2] 1.0;

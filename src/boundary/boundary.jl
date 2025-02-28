@@ -86,27 +86,31 @@ function save_boundary_result!(ib::Circle,ps_data,solid_neighbor::SolidNeighbor{
     ib_df = vs_data.df;ib_sdf = vs_data.sdf
     aux_df = zeros(vs_data.vs_num,NDF)
     dir = get_dir(ID)
-    for i in 1:vs_data.vs_num
-        if Θ[i]==0.
-            aux_df[i,:] .= @views max.(ib_df[i,:]+(aux_point[dir]-ps_data.midpoint[dir])*ib_sdf[i,:,dir],0.)
+    if solid_neighbor.average_num==0
+        for i in 1:vs_data.vs_num
+            if Θ[i]==0.
+                aux_df[i,:] .= @views ib_df[i,:]+(aux_point[dir]-ps_data.midpoint[dir])*ib_sdf[i,:,dir]
+            end
         end
-    end
-    ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
-    aux_prim = IB_prim(ib,aux_point,ρw)
-    for i in 1:vs_data.vs_num
-        if Θ[i]==1.
-            aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),aux_prim,amr.global_data)
+        ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
+        aux_prim = IB_prim(ib,aux_point,ρw)
+        for i in 1:vs_data.vs_num
+            if Θ[i]==1.
+                aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),aux_prim,amr.global_data)
+            end
         end
-    end
-    cvc = solid_neighbor.cvc
-    for i in eachindex(cvc.index)
-        id = cvc.index[i]
-        if Θ[id]==1.
-            aux_df[id,:] .*= cvc.solid_weight[i]
-            aux_df[id,:] .+= (1-cvc.solid_weight[i])*@views max.(ib_df[id,:]+(aux_point[dir]-ps_data.midpoint[dir])*ib_sdf[id,:,dir],0.)
-        else
-            aux_df[id,:] .*= 1-cvc.solid_weight[i]
-            aux_df[id,:] .+= cvc.solid_weight[i].*discrete_maxwell(@view(vs_data.midpoint[id,:]),aux_prim,amr.global_data)
+    else
+        for i in 1:vs_data.vs_num
+            if Θ[i]==0.
+                aux_df[i,:] .= ib_df[i,:]
+            end
+        end
+        ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
+        aux_prim = IB_prim(ib,aux_point,ρw)
+        for i in 1:vs_data.vs_num
+            if Θ[i]==1.
+                aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),aux_prim,amr.global_data)
+            end
         end
     end
     aux_w = calc_w0(solid_neighbor.vs_data.midpoint,aux_df,solid_neighbor.vs_data.weight,global_data)
@@ -1164,24 +1168,6 @@ function calc_intersect(f_midpoint,s_midpoint,circle::Circle)
     end
     return ap,n
 end
-function initialize_cutted_velocity_cell(n::Vector{Float64},vs_data::VS_Data{2},amr::AMR{2})
-    any(x->x==0.,n)&&return CuttedVelocityCell(Int[],Float64[])
-    global_data = amr.global_data
-    du = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
-        global_data.config.vs_trees_num[i] for i in 1:2]
-    vertices = [zeros(2) for _ in 1:4]
-    index = Int[];solid_weight = Float64[]
-    for i in 1:vs_data.vs_num
-        for j in eachindex(vertices)
-            vertices[j] .= @views 0.5*RMT[2][j].*du+vs_data.midpoint[i,:]
-        end
-        flag,weight = cut_rect(n,vertices)
-        if flag
-            push!(index,i);push!(solid_weight,weight)
-        end
-    end
-    return CuttedVelocityCell(index,solid_weight)
-end
 function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF}) where{DIM,NDF}
     solid_dirs = findall(x->!isnothing(x[1])&&x[1].bound_enc<0,ps_data.neighbor.data)
     vs_data = ps_data.vs_data
@@ -1204,67 +1190,85 @@ function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF})
             # zeros(vs_data.vs_num,NDF,DIM),
             Matrix{Float64}(undef,0,0)
         )
-        cvc = initialize_cutted_velocity_cell(normal,svsdata,amr)
+        dir = get_dir(i)
+        av_num = abs(solid_cell.midpoint[dir]-ps_data.midpoint[dir])<10*ps_data.ds[dir]^2 ? 1 : 0
         ps_data.neighbor.data[i][1] = SolidNeighbor{DIM,NDF,i}(
-            solid_cell.bound_enc,aux_point,normal,
-            solid_cell.midpoint,ic,cvc,svsdata
+            solid_cell.bound_enc,av_num,aux_point,normal,
+            solid_cell.midpoint,ic,svsdata
         )
         # if any(x->isnan(x),ps_data.neighbor.data[i][1].vs_data.df)
         #     throw(`initial sn.df nan!`)
         # end
     end
-        
+    av_id = findall(x->ps_data.neighbor.data[x][1].average_num==1,solid_dirs)
+    for id in av_id
+        i = solid_dir[id]
+        ps_data.neighbor.data[i][1].average_num = length(av_id)
+    end
 end
 
 function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidNeighbor{DIM,NDF,ID},amr::AMR) where{DIM,NDF,ID}
     ib = amr.global_data.config.IB[ps_data.bound_enc]
     vs_data = ps_data.vs_data
     aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
-    dxL = norm(aux_point-ps_data.midpoint)
+    # dxL = norm(aux_point-ps_data.midpoint)
+    dir = get_dir(ID)
+    dxL = ps_data.ds[dir]
     dxR = norm(solid_neighbor.midpoint-aux_point)
     ib_df = vs_data.df;ib_sdf = vs_data.sdf
     vn = @views [dot(v,n) for v in eachrow(ps_data.vs_data.midpoint)]
     aux_df = zeros(vs_data.vs_num,NDF)
-    dir = get_dir(ID)
     Θ = heaviside.(vn)
-    for i in 1:vs_data.vs_num
-        if Θ[i]==0.
-            aux_df[i,:] .= @views max.(ib_df[i,:]+(aux_point[dir]-ps_data.midpoint[dir])*ib_sdf[i,:,dir],0.)
+    if solid_neighbor.average_num==0
+        for i in 1:vs_data.vs_num
+            if Θ[i]==0.
+                aux_df[i,:] .= @views ib_df[i,:]+(aux_point[dir]-ps_data.midpoint[dir])*ib_sdf[i,:,dir]
+            end
         end
-    end
-    ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
-    aux_prim = IB_prim(ib,aux_point,ρw)
-    for i in 1:vs_data.vs_num
-        if Θ[i]==1.
-            aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),aux_prim,amr.global_data)
+        ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
+        aux_prim = IB_prim(ib,aux_point,ρw)
+        for i in 1:vs_data.vs_num
+            if Θ[i]==1.
+                aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),aux_prim,amr.global_data)
+            end
         end
-    end
-    # Correction by cut-cell in velocity method
-    cvc = solid_neighbor.cvc
-    for i in eachindex(cvc.index)
-        id = cvc.index[i]
-        if Θ[id]==1.
-            aux_df[id,:] .*= cvc.solid_weight[i]
-            aux_df[id,:] .+= (1-cvc.solid_weight[i])*@views max.(ib_df[id,:]+(aux_point[dir]-ps_data.midpoint[dir])*ib_sdf[id,:,dir],0.)
-        else
-            aux_df[id,:] .*= 1-cvc.solid_weight[i]
-            aux_df[id,:] .+= cvc.solid_weight[i].*discrete_maxwell(@view(vs_data.midpoint[id,:]),aux_prim,amr.global_data)
-        end
-    end
-    if dxL<0.25*ps_data.ds[dir]
-        dxL = ps_data.ds[dir]+dxL
-        ip_temp = zeros(vs_data.vs_num,NDF)
-        new_ID = ID + (ID%2==0 ? -1 : 1)
-        vs_projection!(vs_data,ps_data.neighbor.data[new_ID][1].vs_data,ip_temp)
-        @. solid_neighbor.vs_data.df = aux_df+(aux_df-ip_temp)/dxL*dxR
-    else
+    # if dxL<0.1*ps_data.ds[dir]
+    # dxL = ps_data.ds[dir]+dxL
+    # ip_temp = zeros(vs_data.vs_num,NDF)
+    # new_ID = ID + (ID%2==0 ? -1 : 1)
+    # vs_projection!(vs_data,ps_data.neighbor.data[new_ID][1].vs_data,ip_temp)
+    # @. solid_neighbor.vs_data.df = aux_df+(aux_df-ip_temp)/dxL*dxR
+    # else
         @. solid_neighbor.vs_data.df = aux_df+(aux_df-vs_data.df)/dxL*dxR
+    else
+        for i in 1:vs_data.vs_num
+            if Θ[i]==0.
+                aux_df[i,:] .= ib_df[i,:]
+            end
+        end
+        ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
+        aux_prim = IB_prim(ib,aux_point,ρw)
+        for i in 1:vs_data.vs_num
+            if Θ[i]==1.
+                aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),aux_prim,amr.global_data)
+            end
+        end
+        @. solid_neighbor.vs_data.df = aux_df
     end
+    # end
 end
 function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF}) where{DIM,NDF}
     solid_neighbors = findall(x->!isnothing(x[1])&&x[1].bound_enc<0,ps_data.neighbor.data)
     for i in solid_neighbors
         update_solid_neighbor!(ps_data,ps_data.neighbor.data[i][1],amr)
+    end
+    av_ids = findall(x->ps_data.neighbor.data[x][1].average_num!=0,solid_neighbors)
+    if !isempty(av_ids)
+        num = length(av_ids)
+        ps_data.vs_data.df .= 0.
+        for i in av_ids
+            @. ps_data.vs_data.df+=ps_data.neighbor.data[solid_neighbors[i]][1].vs_data.df/num
+        end
     end
 end
 function update_solid_neighbor!(amr::AMR{DIM,NDF}) where{DIM,NDF}
@@ -1274,4 +1278,29 @@ function update_solid_neighbor!(amr::AMR{DIM,NDF}) where{DIM,NDF}
             update_solid_neighbor!(ps_data,amr)
         end
     end
+end
+# function update_solid_neighbor_structure!(ps_data::PS_Data{DIM,NDF},::AMR{DIM,NDF}) where{DIM,NDF}
+#     solid_dirs = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
+#     vs_data = ps_data.vs_data
+#     for i in solid_dirs
+#         solid_cell = ps_data.neighbor.data[i][1]
+#         svsdata = solid_cell.vs_data
+#         svsdata.vs_num = vs_data.vs_num
+#         if svsdata.midpoint!=vs_data.midpoint
+#             throw(`svsdata error!`)
+#         end
+#         svsdata.df = zeros(vs_data.vs_num,NDF)
+#         svsdata.sdf = zeros(vs_data.vs_num,NDF,DIM)
+#     end
+# end
+# function update_solid_neighbor_structure!(amr::AMR{DIM,NDF}) where{DIM,NDF}
+#     for tree in amr.field.trees.data
+#         for ps_data in tree
+#             (isa(ps_data,InsideSolidData)||ps_data.bound_enc<=0)&&continue
+#             update_solid_neighbor_structure!(ps_data,amr)
+#         end
+#     end
+# end
+function update_solid!(amr::AMR{DIM,NDF}) where{DIM,NDF}
+    initialize_solid_neighbor!(amr)
 end

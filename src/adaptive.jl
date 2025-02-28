@@ -571,26 +571,35 @@ end
 function adaptive!(ps4est::P_pxest_t,amr::AMR;ps_interval=10,vs_interval=80,partition_interval=40)
     amr.global_data.status.residual.redundant_step>0&&(return nothing)
     if amr.global_data.status.ps_adapt_step == ps_interval
-        update_slope!(amr)
-        update_gradmax!(amr)
-        ps_refine!(ps4est,amr)
-        ps_coarsen!(ps4est)
-        ps_balance!(ps4est)
+        if amr.global_data.config.solver.PS_DYNAMIC_AMR
+            update_slope!(amr)
+            update_gradmax!(amr)
+            ps_refine!(ps4est,amr)
+            ps_coarsen!(ps4est)
+            ps_balance!(ps4est)
+        end
         if amr.global_data.status.vs_adapt_step == vs_interval
-            vs_refine!(amr)
-            vs_coarsen!(amr)
-            amr.global_data.status.vs_adapt_step=0
+            if amr.global_data.config.solver.VS_DYNAMIC_AMR
+                vs_refine!(amr)
+                vs_coarsen!(amr)
+                amr.global_data.status.vs_adapt_step=0
+            end
         end
-        if amr.global_data.status.partition_step%partition_interval==0&&partition_check(ps4est)
-            IB_quadid_update!(ps4est,amr)
-            ps_partition!(ps4est, amr)
-            IB_partition!(ps4est,amr)
-            amr.global_data.status.partition_step = 0
+        # if amr.global_data.status.partition_step%partition_interval==0
+        #     if amr.global_data.config.solver.PS_DYNAMIC_AMR||amr.global_data.config.solver.VS_DYNAMIC_AMR
+        #         # IB_quadid_update!(ps4est,amr)
+        #         ps_partition!(ps4est, amr)
+        #         # IB_partition!(ps4est,amr)
+        #         amr.global_data.status.partition_step = 0
+        #     end
+        # end
+        # amr.global_data.status.vs_adapt_step==0&&amr.global_data.status.partition_step!=0&&IB_structure_update!(amr)
+        if amr.global_data.config.solver.PS_DYNAMIC_AMR||amr.global_data.status.vs_adapt_step==0||amr.global_data.status.partition_step == 0
+            update_ghost!(ps4est, amr)
+            update_neighbor!(ps4est, amr)
+            update_solid!(amr)
+            update_faces!(ps4est, amr)
         end
-        amr.global_data.status.vs_adapt_step==0&&amr.global_data.status.partition_step!=0&&IB_structure_update!(amr)
-        update_ghost!(ps4est, amr)
-        update_neighbor!(ps4est, amr)
-        update_faces!(ps4est, amr)
         amr.global_data.status.ps_adapt_step = 0
     end
     return nothing
