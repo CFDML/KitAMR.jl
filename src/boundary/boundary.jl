@@ -1,34 +1,57 @@
 get_bc(bc::AbstractVector) = bc
-# function save_boundary_result(ib::Circle,ps_data::PS_Data,ib_nodes::Vector{AbstractIBNodes},::Global_Data)
-#     aux_point = calc_intersect_point(ib,ps_data.midpoint)
-#     image_point = 2*aux_point-ps_data.midpoint
-#     dxL = norm(aux_point-image_point)
-#     dxR = norm(ps_data.midpoint-aux_point)
-#     dx = ps_data.ds[1];dy = ps_data.ds[2]
-#     dA = √(dx*dy)
-#     points = [ib_nodes[j].midpoint for j in 1:4]
-#     Ainv = inv(bilinear_coeffi_2D(points...)./dA)
-#     ip_coeffi = make_bilinear_coeffi_2D(image_point)./dA
-#     b = Vector{Float64}(undef,4)
-#     prim = Vector{Float64}(undef,4);qf = Vector{Float64}(undef,2)
-#     for i in eachindex(prim)
-#         for j = 1:4
-#             b[j] = ib_nodes[j].prim[i]
-#         end
-#         prim[i] = dot(Ainv*b,ip_coeffi)
-#     end
-#     qfs = @views [calc_qf(ib_nodes[i].vs_data,ib_nodes[i].prim) for i in 1:4]
-#     for i in eachindex(qf)
-#         for j = 1:4
-#             b[j] = qfs[j][i]
-#         end
-#         qf[i] = dot(Ainv*b,ip_coeffi)
-#     end
-#     qf_s = calc_qf(ps_data.vs_data,ps_data.prim)
-#     aux_prim = @. ps_data.prim+(prim-ps_data.prim)/(dxL+dxR)*dxR
-#     aux_qf = @. qf_s+(qf-qf_s)/(dxL+dxR)*dxR
-#     return aux_point,PS_Solution(aux_prim,aux_qf)
-# end
+function calc_IB_ρw(aux_point::AbstractVector,bound::Circle,midpoint::AbstractMatrix,weight::AbstractVector,df::AbstractMatrix,vn::AbstractVector,Θ::AbstractVector)
+    calc_IB_ρw_2D(aux_point,bound.bc,midpoint,weight,df,vn,Θ)
+end
+function calc_IB_ρw(aux_point::AbstractVector,bound::Sphere,midpoint::AbstractMatrix,weight::AbstractVector,df::AbstractMatrix,vn::AbstractVector,Θ::AbstractVector)
+    calc_IB_ρw_3D(aux_point,bound.bc,midpoint,weight,df,vn,Θ)
+end
+
+function calc_IB_ρw_2D(::AbstractVector,bc::AbstractVector,midpoint::AbstractMatrix,weight::AbstractVector,df::AbstractMatrix,vn::AbstractVector,Θ::AbstractVector)
+    maxwellian_density_2D2F(@view(midpoint[:,1]),@view(midpoint[:,2]),@view(df[:,1]), bc, weight, Θ, vn)
+end
+function calc_IB_ρw_3D(::AbstractVector,bc::AbstractVector,midpoint::AbstractMatrix,weight::AbstractVector,df::AbstractMatrix,vn::AbstractVector,Θ::AbstractVector)
+    maxwellian_density_3D1F(@view(midpoint[:,1]),@view(midpoint[:,2]),@view(df[:,1]), bc, weight, Θ, vn)
+end
+function IB_prim(circle::AbstractCircle,aux_point::AbstractVector,ρw::Real)
+    IB_prim(circle.bc,aux_point,ρw)
+end
+function IB_prim(bc::AbstractVector,::AbstractVector,ρw::Real)
+    prim = copy(bc)
+    prim[1] = ρw
+    return prim
+end
+function calc_solid_cell_slope!(svdata::AbstractVsData{DIM,NDF},fvdata::VS_Data{DIM,NDF},smid::Vector{Float64},fmid::Vector{Float64},direction::Integer) where{DIM,NDF}
+    j = 1
+    flag = 0.0
+    level = svdata.level
+    sdf = @view(svdata.sdf[:,:,direction])
+    df = svdata.df
+    level_n = fvdata.level
+    df_n = fvdata.df
+    dx = fmid[direction]-smid[direction]
+    @inbounds for i in 1:svdata.vs_num
+        if level[i] == level_n[j]
+            @views @. sdf[i, :] = df_n[j,:]-df[i,:]
+            j += 1
+        elseif level[i] < level_n[j]
+            @views sdf[i, :] .= -df[i,:]
+            while flag != 1.0
+                @views @. sdf[i, :] += df_n[j, :]/ 2^(DIM * (level_n[j] - level[i]))
+                flag += 1 / 2^(DIM * (level_n[j] - level[i]))
+                j += 1
+            end
+            flag = 0.0
+        else
+            @views @. sdf[i, :] = df_n[j,:]-df[i,:]
+            flag += 1 / 2^(DIM * (level[i] - level_n[j]))
+            if flag == 1.0
+                j += 1
+                flag = 0.0
+            end
+        end
+    end
+    sdf./=dx
+end
 function calc_w0(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{2,2})
     @views micro_to_macro_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],weight)
 end
@@ -38,60 +61,19 @@ end
 function calc_pressure(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{2})
     @views pressure_2D(midpoint[:,1],midpoint[:,2],df[:,1],weight)
 end
-# function save_boundary_result(ib::Circle,ps_data::PS_Data{DIM,NDF},ib_nodes::Vector{AbstractIBNodes{DIM,NDF}},templates::Vector{Vector{Int}},global_data::Global_Data) where{DIM,NDF}
-#     aux_point = calc_intersect_point(ib,ps_data.midpoint)
-#     dx = ps_data.ds[1];dy = ps_data.ds[2]
-#     dA = √(dx*dy)
-#     # n = (aux_point-ib.center)/ib.radius # outer normal direction
-#     # angle = abs(atan(n[2]/n[1]))
-#     # if angle>35/180*π&&angle<55/180*π
-#     #     template = upwind_template(templates,ib_nodes,aux_point,ib_nodes[1].prim)
-#     # else
-#     template = templates[1]
-#     # end
-#     points = [ib_nodes[template[j]].midpoint for j in 1:4]
-#     Ainv = inv(bilinear_coeffi_2D(points...)./dA)
-#     ap_coeffi = make_bilinear_coeffi_2D(aux_point)./dA
-#     b = Vector{Float64}(undef,4)
-#     # prim = Vector{Float64}(undef,4);qf = Vector{Float64}(undef,2)
-#     aux_vs_temp = Vector{Matrix{Float64}}(undef,5)
-#     for i in 2:5
-#         aux_vs_temp[i] = zeros(Float64,ps_data.vs_data.vs_num,NDF)
-#     end
-#     aux_vs_temp[1] = ib_nodes[1].vs_data.df
-#     aux_df = aux_vs_temp[end]
-#     for j in 2:4
-#         vs_projection!(ps_data.vs_data,ib_nodes[template[j]].vs_data,aux_vs_temp[j])
-#     end
-#     @inbounds for j in axes(aux_df,1)
-#         for l in 1:NDF
-#             for k in 1:4
-#                 b[k] = aux_vs_temp[k][j,l]
-#             end
-#             aux_df[j,l] = dot(Ainv*b,ap_coeffi)
-#         end
-#     end
-#     aux_w = calc_w0(ps_data.vs_data.midpoint,aux_df,ps_data.vs_data.weight,global_data)
-#     aux_prim = get_prim(aux_w,global_data)
-#     aux_qf = calc_qf(ps_data.vs_data.midpoint,aux_df,ps_data.vs_data.weight,aux_prim,global_data)
-#     aux_p = calc_pressure(ps_data.vs_data.midpoint,aux_df,ps_data.vs_data.weight,global_data)
-#     return aux_point,Boundary_PS_Solution(aux_prim,aux_qf,aux_p)
-# end
 function save_boundary_result!(ib::Circle,ps_data,solid_neighbor::SolidNeighbor{DIM,NDF,ID},boundary_results,amr::AMR{DIM,NDF}) where{DIM,NDF,ID}
     global_data = amr.global_data
     vs_data = ps_data.vs_data
+    solid_cell = solid_neighbor.solid_cell;s_vs_data = solid_cell.vs_data
     aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
     vn = @views [dot(v,n) for v in eachrow(ps_data.vs_data.midpoint)]
     Θ = heaviside.(vn)
-    ib_df = vs_data.df;ib_sdf = vs_data.sdf
+    ib_df = vs_data.df
     aux_df = zeros(vs_data.vs_num,NDF)
     dir = get_dir(ID)
     if solid_neighbor.average_num==0
-        for i in 1:vs_data.vs_num
-            if Θ[i]==0.
-                aux_df[i,:] .= @views ib_df[i,:]+(aux_point[dir]-ps_data.midpoint[dir])*ib_sdf[i,:,dir]
-            end
-        end
+        vs_interpolate!(ib_df,vs_data.level,ps_data.midpoint[dir],s_vs_data.df,
+            s_vs_data.level,solid_cell.midpoint[dir],aux_df,aux_point[dir],amr)
         ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
         aux_prim = IB_prim(ib,aux_point,ρw)
         for i in 1:vs_data.vs_num
@@ -113,15 +95,15 @@ function save_boundary_result!(ib::Circle,ps_data,solid_neighbor::SolidNeighbor{
             end
         end
     end
-    aux_w = calc_w0(solid_neighbor.vs_data.midpoint,aux_df,solid_neighbor.vs_data.weight,global_data)
+    aux_w = calc_w0(vs_data.midpoint,aux_df,vs_data.weight,global_data)
     aux_prim = get_prim(aux_w,global_data)
-    aux_qf = calc_qf(solid_neighbor.vs_data.midpoint,aux_df,solid_neighbor.vs_data.weight,aux_prim,global_data)
-    aux_p = calc_pressure(solid_neighbor.vs_data.midpoint,aux_df,solid_neighbor.vs_data.weight,global_data)
+    aux_qf = calc_qf(vs_data.midpoint,aux_df,vs_data.weight,aux_prim,global_data)
+    aux_p = calc_pressure(vs_data.midpoint,aux_df,vs_data.weight,global_data)
     push!(boundary_results[ps_data.bound_enc].midpoints,aux_point)
     push!(boundary_results[ps_data.bound_enc].ps_solutions,Boundary_PS_Solution(aux_prim,aux_qf,aux_p))
 end
 function save_boundary_result!(ib::AbstractBoundary,ps_data::PS_Data{DIM,NDF},boundary_results::Vector{Boundary_Solution},amr::AMR{DIM,NDF}) where{DIM,NDF}
-    solid_neighbors = findall(x->!isnothing(x[1])&&x[1].bound_enc<0,ps_data.neighbor.data)
+    solid_neighbors = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
     for i in solid_neighbors
         save_boundary_result!(ib,ps_data,ps_data.neighbor.data[i][1],boundary_results,amr)
     end
@@ -1141,6 +1123,103 @@ end
 
 
 
+function vs_extrapolate!(df::AbstractMatrix{Float64},sdf::AbstractMatrix{Float64},level::AbstractVector{Int8},dft::AbstractMatrix{Float64},levelt::Vector{Int8},dx::Float64,::AMR{DIM,NDF}) where{DIM,NDF}
+    j = 1;flag = 0.0
+    @inbounds for i in axes(dft,1)
+        if levelt[i] == level[j]
+            @. dft[i, :] = @views df[j, :]+sdf[j,:]*dx
+            j += 1
+        elseif levelt[i] < level[j]
+            while flag != 1.0
+                @. dft[i, :] += @views (df[j, :]+sdf[j,:]*dx)/ 2^(DIM * (level[j] - levelt[i]))
+                flag += 1 / 2^(DIM * (level[j] - levelt[i]))
+                j += 1
+            end
+            flag = 0.0
+        else
+            @. dft[i, :] = @views df[j,:]+sdf[j,:]*dx
+            flag += 1 / 2^(DIM * (levelt[i] - level[j]))
+            if flag == 1.0
+                j += 1
+                flag = 0.0
+            end
+        end
+    end
+end
+function vs_extrapolate!(df::AbstractMatrix{Float64},sdf::AbstractMatrix{Float64},level::AbstractVector{Int8},dft::AbstractMatrix{Float64},levelt::Vector{Int8},dx::Float64,weight::AbstractVector{Float64},::AMR{DIM,NDF}) where{DIM,NDF}
+    j = 1;flag = 0.0
+    @inbounds for i in axes(dft,1)
+        if levelt[i] == level[j]
+            @. dft[i, :] += @views (df[j, :]+sdf[j,:]*dx)*weight[i]
+            j += 1
+        elseif levelt[i] < level[j]
+            while flag != 1.0
+                @. dft[i, :] += @views (df[j, :]+sdf[j,:]*dx)/ 2^(DIM * (level[j] - levelt[i]))*weight[i]
+                flag += 1 / 2^(DIM * (level[j] - levelt[i]))
+                j += 1
+            end
+            flag = 0.0
+        else
+            @. dft[i, :] += @views (df[j,:]+sdf[j,:]*dx)*weight[i]
+            flag += 1 / 2^(DIM * (levelt[i] - level[j]))
+            if flag == 1.0
+                j += 1
+                flag = 0.0
+            end
+        end
+    end
+end
+function update_solid_cell!(::Val{1},ps_data::PS_Data{DIM,NDF},fluid_cells::Vector,dirs::Vector{Int},::Vector{Float64},amr::AMR{DIM,NDF}) where{DIM,NDF}
+    vs_data = ps_data.vs_data
+    f_vs_data = fluid_cells[1].vs_data
+    dir = dirs[1]
+    fdf = f_vs_data.df;fsdf = @views f_vs_data.sdf[:,:,dir];dx = ps_data.midpoint[dir]-fluid_cells[1].midpoint[dir]
+    vs_data.df.=0.
+    vs_extrapolate!(fdf,fsdf,f_vs_data.level,vs_data.df,vs_data.level,dx,amr)    
+end
+function update_solid_cell!(::Val{2},ps_data::PS_Data{2,NDF},fluid_cells::Vector,dirs::Vector{Int},rots::Vector{Float64},amr::AMR{2,NDF}) where{NDF}
+    if dirs[1]==dirs[2]
+        throw(`The solid region is too thin that only one solid_cell is contained.`)
+    end
+    vs_data = ps_data.vs_data;vs_data.df.=0.
+    # weight = [u[1]^2/sum(u.^2) for u in eachrow(vs_data.midpoint)] # cosθ^2
+    weightx = [abs(u[1])/norm(u) for u in eachrow(vs_data.midpoint)] # cosθ
+    weighty = [abs(u[2])/norm(u) for u in eachrow(vs_data.midpoint)] # sinθ
+    weights = Matrix{Float64}(undef,length(weightx),length(fluid_cells))
+    for i in eachindex(fluid_cells)
+        dir = dirs[i];rot = rots[i]
+        # weights[:,i] .= (dir==1 ? copy(weight) : 1 .-weight)
+        weights[:,i] .= (dir==1 ? copy(weightx) : copy(weighty))
+        opp_id = findall(x->x*rot>0,@views vs_data.midpoint[:,dir])
+        weights[opp_id,i] .= 0.
+    end
+    weight_i = Vector{Float64}(undef,length(weightx))
+    weight_sum = sum(weights,dims=2)
+    for i in eachindex(fluid_cells)
+        f_vs_data = fluid_cells[i].vs_data
+        dir = dirs[i]
+        for j in eachindex(weight_i)
+            weight_i[j] = weight_sum[j]==0 ? 1/length(fluid_cells) : weights[j,i]/weight_sum[j]
+        end
+        fdf = f_vs_data.df;fsdf = @views f_vs_data.sdf[:,:,dir];dx = ps_data.midpoint[dir]-fluid_cells[i].midpoint[dir]
+        vs_extrapolate!(fdf,fsdf,f_vs_data.level,vs_data.df,vs_data.level,dx,weight_i,amr)
+    end
+end
+function update_solid_cell!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF}) where{DIM,NDF}
+    fluid_dirs = findall(x->!isnothing(x[1])&&!isa(x[1],AbstractInsideSolidData)&&x[1].bound_enc>=0,ps_data.neighbor.data)
+    fluid_cells = [ps_data.neighbor.data[i][1] for i in fluid_dirs]
+    dirs = get_dir.(fluid_dirs)
+    rots = get_rot.(fluid_dirs)
+    update_solid_cell!(Val(length(fluid_dirs)),ps_data,fluid_cells,dirs,rots,amr)
+end
+function update_solid_cell!(amr::AMR)
+    for tree in amr.field.trees.data
+        for ps_data in tree
+            (isa(ps_data,InsideSolidData)||ps_data.bound_enc>=0)&&continue
+            update_solid_cell!(ps_data,amr)
+        end
+    end
+end
 function initialize_solid_neighbor!(amr::AMR)
     for tree in amr.field.trees.data
         for ps_data in tree
@@ -1179,22 +1258,21 @@ function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF})
         ps_data.bound_enc=-solid_cell.bound_enc
         ib = amr.global_data.config.IB[-solid_cell.bound_enc]
         aux_point,normal = calc_intersect(ps_data.midpoint,solid_cell.midpoint,ib)
+        dir = get_dir(i)
+        av_num = abs(solid_cell.midpoint[dir]-ps_data.midpoint[dir])<10*ps_data.ds[dir]^2 ? 1 : 0
         ic = get_bc(ib.bc)
         svsdata = VS_Data{DIM,NDF}(
             vs_data.vs_num,
             vs_data.level,
             vs_data.weight,
             vs_data.midpoint,
-            discrete_maxwell(ps_data.vs_data.midpoint,ic,amr.global_data),
+            discrete_maxwell(vs_data.midpoint,ic,amr.global_data),
             zeros(vs_data.vs_num,NDF,DIM),
             # zeros(vs_data.vs_num,NDF,DIM),
             Matrix{Float64}(undef,0,0)
         )
-        dir = get_dir(i)
-        av_num = abs(solid_cell.midpoint[dir]-ps_data.midpoint[dir])<10*ps_data.ds[dir]^2 ? 1 : 0
         ps_data.neighbor.data[i][1] = SolidNeighbor{DIM,NDF,i}(
-            solid_cell.bound_enc,av_num,aux_point,normal,
-            solid_cell.midpoint,ic,svsdata
+            solid_cell.bound_enc,av_num,aux_point,normal,solid_cell,solid_cell.midpoint,svsdata
         )
         # if any(x->isnan(x),ps_data.neighbor.data[i][1].vs_data.df)
         #     throw(`initial sn.df nan!`)
@@ -1206,7 +1284,32 @@ function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF})
         ps_data.neighbor.data[i][1].average_num = length(av_id)
     end
 end
-
+function vs_interpolate!(f_df::AbstractMatrix,f_level::AbstractVector{Int8},fx,s_df,s_level,sx,b_df,bx,::AMR{DIM,NDF}) where{DIM,NDF}
+    j = 1;flag = 0.0
+    @inbounds for i in axes(f_df,1)
+        if f_level[i] == s_level[j]
+            @. b_df[i, :] = @views f_df[i,:]+(s_df[j, :]-f_df[i,:])/(sx-fx)*(bx-fx)
+            j += 1
+        elseif f_level[i] < s_level[j]
+            @. b_df[i,:] = @views -f_df[i,:]
+            while flag != 1.0
+                @. b_df[i, :] += @views s_df[j,:]/ 2^(DIM * (s_level[j] - f_level[i]))
+                flag += 1 / 2^(DIM * (s_level[j] - f_level[i]))
+                j += 1
+            end
+            @. b_df[i,:]*=(bx-fx)/(sx-fx)
+            @. b_df[i,:] += @views f_df[i,:]
+            flag = 0.0
+        else
+            @. b_df[i, :] += @views f_df[i,:]+(s_df[j, :]-f_df[i,:])/(sx-fx)*(bx-fx)
+            flag += 1 / 2^(DIM * (f_level[i] - s_level[j]))
+            if flag == 1.0
+                j += 1
+                flag = 0.0
+            end
+        end
+    end
+end
 function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidNeighbor{DIM,NDF,ID},amr::AMR) where{DIM,NDF,ID}
     ib = amr.global_data.config.IB[ps_data.bound_enc]
     vs_data = ps_data.vs_data
@@ -1214,17 +1317,15 @@ function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidN
     # dxL = norm(aux_point-ps_data.midpoint)
     dir = get_dir(ID)
     dxL = ps_data.ds[dir]
-    dxR = norm(solid_neighbor.midpoint-aux_point)
-    ib_df = vs_data.df;ib_sdf = vs_data.sdf
+    solid_cell = solid_neighbor.solid_cell;s_vs_data = solid_cell.vs_data
+    dxR = norm(solid_cell.midpoint-aux_point)
+    ib_df = vs_data.df
     vn = @views [dot(v,n) for v in eachrow(ps_data.vs_data.midpoint)]
     aux_df = zeros(vs_data.vs_num,NDF)
     Θ = heaviside.(vn)
     if solid_neighbor.average_num==0
-        for i in 1:vs_data.vs_num
-            if Θ[i]==0.
-                aux_df[i,:] .= @views ib_df[i,:]+(aux_point[dir]-ps_data.midpoint[dir])*ib_sdf[i,:,dir]
-            end
-        end
+        vs_interpolate!(ib_df,vs_data.level,ps_data.midpoint[dir],s_vs_data.df,
+            s_vs_data.level,solid_cell.midpoint[dir],aux_df,aux_point[dir],amr)
         ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
         aux_prim = IB_prim(ib,aux_point,ρw)
         for i in 1:vs_data.vs_num
@@ -1232,13 +1333,6 @@ function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidN
                 aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),aux_prim,amr.global_data)
             end
         end
-    # if dxL<0.1*ps_data.ds[dir]
-    # dxL = ps_data.ds[dir]+dxL
-    # ip_temp = zeros(vs_data.vs_num,NDF)
-    # new_ID = ID + (ID%2==0 ? -1 : 1)
-    # vs_projection!(vs_data,ps_data.neighbor.data[new_ID][1].vs_data,ip_temp)
-    # @. solid_neighbor.vs_data.df = aux_df+(aux_df-ip_temp)/dxL*dxR
-    # else
         @. solid_neighbor.vs_data.df = aux_df+(aux_df-vs_data.df)/dxL*dxR
     else
         for i in 1:vs_data.vs_num
@@ -1257,18 +1351,49 @@ function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidN
     end
     # end
 end
+function vs_average!(dfs::Vector,levels,df,level,::AMR{DIM,NDF}) where{DIM,NDF}
+    num = length(dfs)
+    for k in eachindex(dfs)
+        j = 1;flag = 0.0
+        dfn = dfs[k]
+        leveln = levels[k]
+        @inbounds for i in axes(df,1)
+            if level[i] == leveln[j]
+                @. df[i, :] = @views dfn[j,:]/num
+                j += 1
+            elseif level[i] < leveln[j]
+                while flag != 1.0
+                    @. df[i, :] += @views dfn[j,:]/ 2^(DIM * (leveln[j] - level[i]))/num
+                    flag += 1 / 2^(DIM * (level[j] - leveln[i]))
+                    j += 1
+                end
+                flag = 0.0
+            else
+                @. df[i, :] += @views dfn[j,:]/num
+                flag += 1 / 2^(DIM * (level[i] - leveln[j]))
+                if flag == 1.0
+                    j += 1
+                    flag = 0.0
+                end
+            end
+        end
+    end
+end
 function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF}) where{DIM,NDF}
-    solid_neighbors = findall(x->!isnothing(x[1])&&x[1].bound_enc<0,ps_data.neighbor.data)
+    solid_neighbors = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
     for i in solid_neighbors
         update_solid_neighbor!(ps_data,ps_data.neighbor.data[i][1],amr)
     end
     av_ids = findall(x->ps_data.neighbor.data[x][1].average_num!=0,solid_neighbors)
     if !isempty(av_ids)
-        num = length(av_ids)
+        # num = length(av_ids)
         ps_data.vs_data.df .= 0.
-        for i in av_ids
-            @. ps_data.vs_data.df+=ps_data.neighbor.data[solid_neighbors[i]][1].vs_data.df/num
-        end
+        dfs = [ps_data.neighbor.data[solid_neighbors[i]][1].vs_data.df for i in av_ids]
+        levels = [ps_data.neighbor.data[solid_neighbors[i]][1].vs_data.level for i in av_ids]
+        # for i in av_ids
+        #     @. ps_data.vs_data.df+=ps_data.neighbor.data[solid_neighbors[i]][1].vs_data.df/num
+        # end
+        vs_average!(dfs,levels,ps_data.vs_data.df,ps_data.vs_data.level,amr)
     end
 end
 function update_solid_neighbor!(amr::AMR{DIM,NDF}) where{DIM,NDF}
@@ -1279,28 +1404,6 @@ function update_solid_neighbor!(amr::AMR{DIM,NDF}) where{DIM,NDF}
         end
     end
 end
-# function update_solid_neighbor_structure!(ps_data::PS_Data{DIM,NDF},::AMR{DIM,NDF}) where{DIM,NDF}
-#     solid_dirs = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
-#     vs_data = ps_data.vs_data
-#     for i in solid_dirs
-#         solid_cell = ps_data.neighbor.data[i][1]
-#         svsdata = solid_cell.vs_data
-#         svsdata.vs_num = vs_data.vs_num
-#         if svsdata.midpoint!=vs_data.midpoint
-#             throw(`svsdata error!`)
-#         end
-#         svsdata.df = zeros(vs_data.vs_num,NDF)
-#         svsdata.sdf = zeros(vs_data.vs_num,NDF,DIM)
-#     end
-# end
-# function update_solid_neighbor_structure!(amr::AMR{DIM,NDF}) where{DIM,NDF}
-#     for tree in amr.field.trees.data
-#         for ps_data in tree
-#             (isa(ps_data,InsideSolidData)||ps_data.bound_enc<=0)&&continue
-#             update_solid_neighbor_structure!(ps_data,amr)
-#         end
-#     end
-# end
 function update_solid!(amr::AMR{DIM,NDF}) where{DIM,NDF}
     initialize_solid_neighbor!(amr)
 end

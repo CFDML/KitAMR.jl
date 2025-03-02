@@ -198,7 +198,7 @@ function re_init_vs4est!(trees, global_data)
         for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
             isa(ps_data,InsideSolidData)&&continue
-            ps_data.bound_enc<0 && continue
+            # ps_data.bound_enc<0 && continue
             ps_data.vs_data.df .=
                 discrete_maxwell(ps_data, global_data)
         end
@@ -286,6 +286,7 @@ function init(config::Dict)
     PointerWrapper(ps4est).user_pointer = pointer_from_objref(amr)
     initialize_neighbor_data!(ps4est, amr)
     initialize_solid_neighbor!(amr)
+    data_exchange!(ps4est, amr)
     initialize_faces!(ps4est, amr)
     return (ps4est, amr)
 end

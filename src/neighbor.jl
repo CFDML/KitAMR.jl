@@ -25,7 +25,7 @@ function access_neighbor(
         )
         qid = unsafe_wrap_sc(Cint, neighbor_qid)
         encs = unsafe_wrap_sc(Cint, neighbor_encs)
-        neighbor = similar(encs, Neighbor_Quad{DIM,NDF})
+        neighbor = similar(encs, NeighborQuad{DIM,NDF})
         state = 0
         (length(encs) == 0 || encs === nothing) && return [nothing], state # boundary:: type = nothing, state = 0
         for i in eachindex(encs)
@@ -92,7 +92,7 @@ function access_neighbor(
         )
         qid = unsafe_wrap_sc(Cint, neighbor_qid)
         encs = unsafe_wrap_sc(Cint, neighbor_encs)
-        neighbor = similar(encs, Neighbor_Quad{DIM,NDF})
+        neighbor = similar(encs, NeighborQuad{DIM,NDF})
         state = 0
         (length(encs) == 0 || encs === nothing) && return [nothing], state # boundary:: type = nothing, state = 0
         for i in eachindex(encs)
