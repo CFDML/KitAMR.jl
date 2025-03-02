@@ -570,7 +570,9 @@ end
 
 function adaptive!(ps4est::P_pxest_t,amr::AMR;ps_interval=10,vs_interval=80,partition_interval=40)
     amr.global_data.status.residual.redundant_step>0&&(return nothing)
-    if amr.global_data.status.ps_adapt_step == ps_interval
+    res = maximum(amr.global_data.status.residual.residual)
+    converge_ratio = res/TOLERANCE>100 ? 1 : Int(floor(100*TOLERANCE/res))
+    if amr.global_data.status.ps_adapt_step == ps_interval*converge_ratio
         if amr.global_data.config.solver.PS_DYNAMIC_AMR
             update_slope!(amr)
             update_gradmax!(amr)
@@ -578,7 +580,7 @@ function adaptive!(ps4est::P_pxest_t,amr::AMR;ps_interval=10,vs_interval=80,part
             ps_coarsen!(ps4est)
             ps_balance!(ps4est)
         end
-        if amr.global_data.status.vs_adapt_step == vs_interval
+        if amr.global_data.status.vs_adapt_step == vs_interval*converge_ratio
             if amr.global_data.config.solver.VS_DYNAMIC_AMR
                 vs_refine!(amr)
                 vs_coarsen!(amr)

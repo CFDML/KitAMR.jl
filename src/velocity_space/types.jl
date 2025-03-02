@@ -12,7 +12,7 @@ end
 
 mutable struct Ghost_VS_Data{DIM,NDF} <: AbstractVsData{DIM,NDF}
     vs_num::Int
-    level::Vector{Int} # vs_num
+    level::Vector{Int8} # vs_num
     weight::Vector{Float64} # vs_num
     midpoint::Matrix{Float64} # vs_num x DIM
     df::Matrix{Float64} # vs_num x NDF
