@@ -484,7 +484,7 @@ end
 function ps_balance!(p4est::Ptr{p4est_t})
     p4est_balance_ext(
         p4est,
-        P4EST_CONNECT_FACE,
+        P4EST_CONNECT_FULL,
         C_NULL,
         @cfunction(
             p4est_replace,
@@ -562,7 +562,7 @@ function pre_ps_refine!(p4est::Ptr{p8est_t},global_data::Global_Data)
 end
 
 function pre_ps_balance!(p4est::Ptr{p4est_t})
-    p4est_balance_ext(p4est, P4EST_CONNECT_FACE, C_NULL, C_NULL)
+    p4est_balance_ext(p4est, P4EST_CONNECT_FULL, C_NULL, C_NULL)
 end
 function pre_ps_balance!(p4est::Ptr{p8est_t})
     p8est_balance_ext(p4est, P8EST_CONNECT_FACE, C_NULL, C_NULL)

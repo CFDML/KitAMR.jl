@@ -147,6 +147,18 @@ function initialize_neighbor_data!(ip::PointerWrapper{p4est_iter_volume_info_t},
             i - 1,
         )
     end
+    if ps_data.bound_enc<0
+        for i in 4:7
+            data,state = access_neighbor(
+                pointer(ip.p4est),
+                local_quadid(ip),
+                amr.global_data,
+                amr.ghost.ghost_wrap,
+                i,
+            )
+            push!(ps_data.neighbor.data,data);push!(ps_data.neighbor.state,state)
+        end
+    end
 end
 function initialize_neighbor_data!(ip::PointerWrapper{p8est_iter_volume_info_t}, data, dp)
     amr = unsafe_pointer_to_objref(data)
@@ -190,6 +202,18 @@ function update_neighbor_kernel!(ip::PointerWrapper{p4est_iter_volume_info_t}, d
             i - 1,
         )
     end
+    if ps_data.bound_enc<0
+        for i in 4:7
+            data,state = access_neighbor(
+                pointer(ip.p4est),
+                local_quadid(ip),
+                amr.global_data,
+                amr.ghost.ghost_wrap,
+                i,
+            )
+        end
+        push!(ps_data.neighbor.data,data);push!(ps_data.neighbor.state,state)
+    end
 end
 function update_neighbor_kernel!(ip::PointerWrapper{p8est_iter_volume_info_t}, data, dp)
     amr = unsafe_pointer_to_objref(data)
@@ -221,7 +245,7 @@ function update_neighbor!(p4est::Ptr{p4est_t}, amr::AMR)
     global_data = amr.global_data
     p4est_mesh_destroy(global_data.forest.mesh)
     global_data.forest.mesh =
-        p4est_mesh_new_ext(p4est, global_data.forest.ghost, 1, 1, P4EST_CONNECT_FACE)
+        p4est_mesh_new_ext(p4est, global_data.forest.ghost, 1, 1,  P4EST_CONNECT_FULL)
     update_neighbor_kernel!(p4est, amr)
 end
 function update_neighbor!(p4est::Ptr{p8est_t}, amr::AMR)

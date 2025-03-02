@@ -362,7 +362,7 @@ function update_ghost!(p4est::Ptr{p4est_t}, amr::AMR)
     global_data = amr.global_data
     finalize_ghost!(ghost_exchange)
     p4est_ghost_destroy(global_data.forest.ghost)
-    global_data.forest.ghost = p4est_ghost_new(p4est, P4EST_CONNECT_FACE)
+    global_data.forest.ghost = p4est_ghost_new(p4est, P4EST_CONNECT_FULL)
     amr.ghost.ghost_exchange = initialize_ghost_exchange(p4est, global_data)
     amr.ghost.ghost_wrap = initialize_ghost_wrap(global_data, amr.ghost.ghost_exchange)
 end
