@@ -1169,48 +1169,88 @@ function vs_extrapolate!(df::AbstractMatrix{Float64},sdf::AbstractMatrix{Float64
         end
     end
 end
-function update_solid_cell!(::Val{1},ps_data::PS_Data{DIM,NDF},fluid_cells::Vector,dirs::Vector{Int},::Vector{Float64},amr::AMR{DIM,NDF}) where{DIM,NDF}
-    vs_data = ps_data.vs_data
-    f_vs_data = fluid_cells[1].vs_data
-    dir = dirs[1]
-    fdf = f_vs_data.df;fsdf = @views f_vs_data.sdf[:,:,dir];dx = ps_data.midpoint[dir]-fluid_cells[1].midpoint[dir]
-    vs_data.df.=0.
-    vs_extrapolate!(fdf,fsdf,f_vs_data.level,vs_data.df,vs_data.level,dx,amr)    
+function vs_extrapolate!(df::AbstractMatrix{Float64},sdf::AbstractArray{Float64},level::AbstractVector{Int8},dft::AbstractMatrix{Float64},levelt::Vector{Int8},dx::Vector{Float64},weight::AbstractVector{Float64},::AMR{DIM,NDF}) where{DIM,NDF}
+    ddf = [dot(sdf[i,j,:],dx) for i in axes(sdf,1), j in axes(sdf,2)]
+    j = 1;flag = 0.0
+    @inbounds for i in axes(dft,1)
+        if levelt[i] == level[j]
+            @. dft[i, :] += @views (df[j, :]+ddf[j,:])*weight[i]
+            j += 1
+        elseif levelt[i] < level[j]
+            while flag != 1.0
+                @. dft[i, :] += @views (df[j, :]+ddf[j,:])/ 2^(DIM * (level[j] - levelt[i]))*weight[i]
+                flag += 1 / 2^(DIM * (level[j] - levelt[i]))
+                j += 1
+            end
+            flag = 0.0
+        else
+            @. dft[i, :] += @views (df[j,:]+ddf[j,:])*weight[i]
+            flag += 1 / 2^(DIM * (levelt[i] - level[j]))
+            if flag == 1.0
+                j += 1
+                flag = 0.0
+            end
+        end
+    end
 end
-function update_solid_cell!(::Val{2},ps_data::PS_Data{2,NDF},fluid_cells::Vector,dirs::Vector{Int},rots::Vector{Float64},amr::AMR{2,NDF}) where{NDF}
-    if dirs[1]==dirs[2]
-        throw(`The solid region is too thin that only one solid_cell is contained.`)
-    end
+# function update_solid_cell!(::Val{1},ps_data::PS_Data{DIM,NDF},fluid_cells::Vector,dirs::Vector{Int},::Vector{Float64},amr::AMR{DIM,NDF}) where{DIM,NDF}
+#     vs_data = ps_data.vs_data
+#     f_vs_data = fluid_cells[1].vs_data
+#     dir = dirs[1]
+#     fdf = f_vs_data.df;fsdf = @views f_vs_data.sdf[:,:,dir];dx = ps_data.midpoint[dir]-fluid_cells[1].midpoint[dir]
+#     vs_data.df.=0.
+#     vs_extrapolate!(fdf,fsdf,f_vs_data.level,vs_data.df,vs_data.level,dx,amr)    
+# end
+# function update_solid_cell!(::Val{2},ps_data::PS_Data{2,NDF},fluid_cells::Vector,dirs::Vector{Int},rots::Vector{Float64},amr::AMR{2,NDF}) where{NDF}
+#     if dirs[1]==dirs[2]
+#         throw(`The solid region is too thin that only one solid_cell is contained.`)
+#     end
+#     vs_data = ps_data.vs_data;vs_data.df.=0.
+#     weight = [u[1]^2/sum(u.^2) for u in eachrow(vs_data.midpoint)] # cosθ^2
+#     # weightx = [abs(u[1])/norm(u) for u in eachrow(vs_data.midpoint)] # cosθ
+#     # weighty = [abs(u[2])/norm(u) for u in eachrow(vs_data.midpoint)] # sinθ
+#     weights = Matrix{Float64}(undef,length(weightx),length(fluid_cells))
+#     for i in eachindex(fluid_cells)
+#         dir = dirs[i];rot = rots[i]
+#         # weights[:,i] .= (dir==1 ? copy(weight) : 1 .-weight)
+#         weights[:,i] .= (dir==1 ? copy(weightx) : copy(weighty))
+#         opp_id = findall(x->x*rot>0,@views vs_data.midpoint[:,dir])
+#         weights[opp_id,i] .= 0.
+#     end
+#     weight_i = Vector{Float64}(undef,length(weightx))
+#     weight_sum = sum(weights,dims=2)
+#     for i in eachindex(fluid_cells)
+#         f_vs_data = fluid_cells[i].vs_data
+#         dir = dirs[i]
+#         for j in eachindex(weight_i)
+#             weight_i[j] = weight_sum[j]==0 ? 1/length(fluid_cells) : weights[j,i]/weight_sum[j]
+#         end
+#         fdf = f_vs_data.df;fsdf = @views f_vs_data.sdf[:,:,dir];dx = ps_data.midpoint[dir]-fluid_cells[i].midpoint[dir]
+#         vs_extrapolate!(fdf,fsdf,f_vs_data.level,vs_data.df,vs_data.level,dx,weight_i,amr)
+#     end
+# end
+function update_solid_cell!(ps_data::PS_Data{2,NDF},fluid_cells::Vector,amr::AMR{2,NDF}) where{NDF}
     vs_data = ps_data.vs_data;vs_data.df.=0.
-    # weight = [u[1]^2/sum(u.^2) for u in eachrow(vs_data.midpoint)] # cosθ^2
-    weightx = [abs(u[1])/norm(u) for u in eachrow(vs_data.midpoint)] # cosθ
-    weighty = [abs(u[2])/norm(u) for u in eachrow(vs_data.midpoint)] # sinθ
-    weights = Matrix{Float64}(undef,length(weightx),length(fluid_cells))
+    weights = Matrix{Float64}(undef,vs_data.vs_num,length(fluid_cells))
     for i in eachindex(fluid_cells)
-        dir = dirs[i];rot = rots[i]
-        # weights[:,i] .= (dir==1 ? copy(weight) : 1 .-weight)
-        weights[:,i] .= (dir==1 ? copy(weightx) : copy(weighty))
-        opp_id = findall(x->x*rot>0,@views vs_data.midpoint[:,dir])
-        weights[opp_id,i] .= 0.
+        l = fluid_cells[i].midpoint-ps_data.midpoint;l/=norm(l)
+        weights[:,i] .= [max(0.,dot(u,l)/norm(u))^2 for u in eachrow(vs_data.midpoint)]
     end
-    weight_i = Vector{Float64}(undef,length(weightx))
+    weight_i = Vector{Float64}(undef,vs_data.vs_num)
     weight_sum = sum(weights,dims=2)
     for i in eachindex(fluid_cells)
         f_vs_data = fluid_cells[i].vs_data
-        dir = dirs[i]
         for j in eachindex(weight_i)
-            weight_i[j] = weight_sum[j]==0 ? 1/length(fluid_cells) : weights[j,i]/weight_sum[j]
+            weight_i[j] = weight_sum[j]==0. ? 1.0/length(fluid_cells) : weights[j,i]/weight_sum[j]
         end
-        fdf = f_vs_data.df;fsdf = @views f_vs_data.sdf[:,:,dir];dx = ps_data.midpoint[dir]-fluid_cells[i].midpoint[dir]
+        fdf = f_vs_data.df;fsdf = f_vs_data.sdf;dx = ps_data.midpoint-fluid_cells[i].midpoint
         vs_extrapolate!(fdf,fsdf,f_vs_data.level,vs_data.df,vs_data.level,dx,weight_i,amr)
     end
 end
 function update_solid_cell!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF}) where{DIM,NDF}
     fluid_dirs = findall(x->!isnothing(x[1])&&!isa(x[1],AbstractInsideSolidData)&&x[1].bound_enc>=0,ps_data.neighbor.data)
     fluid_cells = [ps_data.neighbor.data[i][1] for i in fluid_dirs]
-    dirs = get_dir.(fluid_dirs)
-    rots = get_rot.(fluid_dirs)
-    update_solid_cell!(Val(length(fluid_dirs)),ps_data,fluid_cells,dirs,rots,amr)
+    update_solid_cell!(ps_data,fluid_cells,amr)
 end
 function update_solid_cell!(amr::AMR)
     for tree in amr.field.trees.data

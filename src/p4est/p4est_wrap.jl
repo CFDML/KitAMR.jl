@@ -428,7 +428,7 @@ function AMR_face_iterate(
 end
 
 function AMR_ghost_new(p4est::Ptr{p4est_t})
-    GC.@preserve p4est p4est_ghost_new(p4est, P4EST_CONNECT_FACE)
+    GC.@preserve p4est p4est_ghost_new(p4est, P4EST_CONNECT_FULL)
 end
 function AMR_ghost_new(p4est::Ptr{p8est_t})
     GC.@preserve p4est p8est_ghost_new(p4est, P8EST_CONNECT_FACE)
@@ -442,7 +442,7 @@ function AMR_partition(p4est::Ptr{p8est_t})
 end
 
 function AMR_mesh_new(p4est::Ptr{p4est_t},ghost::Ptr{p4est_ghost_t})
-    GC.@preserve p4est ghost p4est_mesh_new_ext(p4est,ghost,1,1,P4EST_CONNECT_FACE)
+    GC.@preserve p4est ghost p4est_mesh_new_ext(p4est,ghost,1,1,P4EST_CONNECT_FULL)
 end
 function AMR_mesh_new(p4est::Ptr{p8est_t},ghost::Ptr{p8est_ghost_t})
     GC.@preserve p4est ghost p8est_mesh_new_ext(p4est,ghost,1,1,P8EST_CONNECT_FACE)
