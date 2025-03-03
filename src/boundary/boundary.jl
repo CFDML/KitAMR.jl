@@ -1233,7 +1233,7 @@ function update_solid_cell!(ps_data::PS_Data{2,NDF},fluid_cells::Vector,amr::AMR
     vs_data = ps_data.vs_data;vs_data.df.=0.
     weights = Matrix{Float64}(undef,vs_data.vs_num,length(fluid_cells))
     for i in eachindex(fluid_cells)
-        l = fluid_cells[i].midpoint-ps_data.midpoint;l/=norm(l)
+        l = ps_data.midpoint-fluid_cells[i].midpoint;l/=norm(l)
         weights[:,i] .= [max(0.,dot(u,l)/norm(u))^2 for u in eachrow(vs_data.midpoint)]
     end
     weight_i = Vector{Float64}(undef,vs_data.vs_num)
