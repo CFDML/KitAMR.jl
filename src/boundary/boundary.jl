@@ -1308,7 +1308,6 @@ function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF})
             vs_data.midpoint,
             discrete_maxwell(vs_data.midpoint,ic,amr.global_data),
             zeros(vs_data.vs_num,NDF,DIM),
-            # zeros(vs_data.vs_num,NDF,DIM),
             Matrix{Float64}(undef,0,0)
         )
         ps_data.neighbor.data[i][1] = SolidNeighbor{DIM,NDF,i}(
@@ -1354,7 +1353,6 @@ function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidN
     ib = amr.global_data.config.IB[ps_data.bound_enc]
     vs_data = ps_data.vs_data
     aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
-    # dxL = norm(aux_point-ps_data.midpoint)
     dir = get_dir(ID)
     dxL = ps_data.ds[dir]
     solid_cell = solid_neighbor.solid_cell;s_vs_data = solid_cell.vs_data
@@ -1399,7 +1397,7 @@ function vs_average!(dfs::Vector,levels,df,level,::AMR{DIM,NDF}) where{DIM,NDF}
         leveln = levels[k]
         @inbounds for i in axes(df,1)
             if level[i] == leveln[j]
-                @. df[i, :] = @views dfn[j,:]/num
+                @. df[i, :] += @views dfn[j,:]/num
                 j += 1
             elseif level[i] < leveln[j]
                 while flag != 1.0
@@ -1426,13 +1424,9 @@ function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF}) whe
     end
     av_ids = findall(x->ps_data.neighbor.data[x][1].average_num!=0,solid_neighbors)
     if !isempty(av_ids)
-        # num = length(av_ids)
         ps_data.vs_data.df .= 0.
         dfs = [ps_data.neighbor.data[solid_neighbors[i]][1].vs_data.df for i in av_ids]
         levels = [ps_data.neighbor.data[solid_neighbors[i]][1].vs_data.level for i in av_ids]
-        # for i in av_ids
-        #     @. ps_data.vs_data.df+=ps_data.neighbor.data[solid_neighbors[i]][1].vs_data.df/num
-        # end
         vs_average!(dfs,levels,ps_data.vs_data.df,ps_data.vs_data.level,amr)
     end
 end
