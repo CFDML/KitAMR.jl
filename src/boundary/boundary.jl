@@ -58,6 +58,11 @@ end
 function calc_qf(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,prim::AbstractVector,::Global_Data{2,2})
     @views heat_flux_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],prim,weight)
 end
+function calc_boundary_qf(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,fprim::AbstractVector,sprim::AbstractVector,Θ::AbstractVector,::Global_Data{2,2})
+    fweight = @. weight*(1.0-Θ)
+    sweight = @. weight*Θ
+    @views heat_flux_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],fprim,fweight)+heat_flux_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],sprim,sweight)
+end
 function calc_pressure(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{2})
     @views pressure_2D(midpoint[:,1],midpoint[:,2],df[:,1],weight)
 end
@@ -74,11 +79,12 @@ function save_boundary_result!(ib::Circle,ps_data,solid_neighbor::SolidNeighbor{
     if solid_neighbor.average_num==0
         vs_interpolate!(ib_df,vs_data.level,ps_data.midpoint[dir],s_vs_data.df,
             s_vs_data.level,solid_cell.midpoint[dir],aux_df,aux_point[dir],amr)
+        f_prim = get_prim(calc_w0(vs_data.midpoint,aux_df,vs_data.weight,global_data),global_data)
         ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
-        aux_prim = IB_prim(ib,aux_point,ρw)
+        s_prim = IB_prim(ib,aux_point,ρw)
         for i in 1:vs_data.vs_num
             if Θ[i]==1.
-                aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),aux_prim,amr.global_data)
+                aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),s_prim,amr.global_data)
             end
         end
     else
@@ -87,16 +93,18 @@ function save_boundary_result!(ib::Circle,ps_data,solid_neighbor::SolidNeighbor{
                 aux_df[i,:] .= ib_df[i,:]
             end
         end
+        f_prim = get_prim(calc_w0(vs_data.midpoint,ib_df,vs_data.weight,global_data),global_data)
         ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
-        aux_prim = IB_prim(ib,aux_point,ρw)
+        s_prim = IB_prim(ib,aux_point,ρw)
         for i in 1:vs_data.vs_num
             if Θ[i]==1.
-                aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),aux_prim,amr.global_data)
+                aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),s_prim,amr.global_data)
             end
         end
     end
     aux_w = calc_w0(vs_data.midpoint,aux_df,vs_data.weight,global_data)
     aux_prim = get_prim(aux_w,global_data)
+    # aux_qf = calc_boundary_qf(vs_data.midpoint,aux_df,vs_data.weight,f_prim,s_prim,Θ,global_data)
     aux_qf = calc_qf(vs_data.midpoint,aux_df,vs_data.weight,aux_prim,global_data)
     aux_p = calc_pressure(vs_data.midpoint,aux_df,vs_data.weight,global_data)
     push!(boundary_results[ps_data.bound_enc].midpoints,aux_point)
@@ -1299,7 +1307,7 @@ function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF})
         ib = amr.global_data.config.IB[-solid_cell.bound_enc]
         aux_point,normal = calc_intersect(ps_data.midpoint,solid_cell.midpoint,ib)
         dir = get_dir(i)
-        av_num = abs(solid_cell.midpoint[dir]-ps_data.midpoint[dir])<10*ps_data.ds[dir]^2 ? 1 : 0
+        av_num = abs(aux_point[dir]-ps_data.midpoint[dir])<5.0*ps_data.ds[dir]^2 ? 1 : 0
         ic = get_bc(ib.bc)
         svsdata = VS_Data{DIM,NDF}(
             vs_data.vs_num,
@@ -1319,7 +1327,7 @@ function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF})
     end
     av_id = findall(x->ps_data.neighbor.data[x][1].average_num==1,solid_dirs)
     for id in av_id
-        i = solid_dir[id]
+        i = solid_dirs[id]
         ps_data.neighbor.data[i][1].average_num = length(av_id)
     end
 end
@@ -1354,8 +1362,8 @@ function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidN
     vs_data = ps_data.vs_data
     aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
     dir = get_dir(ID)
-    dxL = ps_data.ds[dir]
     solid_cell = solid_neighbor.solid_cell;s_vs_data = solid_cell.vs_data
+    dxL = norm(ps_data.midpoint-aux_point)
     dxR = norm(solid_cell.midpoint-aux_point)
     ib_df = vs_data.df
     vn = @views [dot(v,n) for v in eachrow(ps_data.vs_data.midpoint)]
