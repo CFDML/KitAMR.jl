@@ -24,7 +24,7 @@
 DIM = 2
 NDF = 2
 AMR_PS_MAXLEVEL = 3
-AMR_VS_MAXLEVEL = 3
+AMR_VS_MAXLEVEL = 2
 PS_DYNAMIC_AMR = false
 geometry = [-4.,8.,-15.,15.]
 trees_num = [80,200]

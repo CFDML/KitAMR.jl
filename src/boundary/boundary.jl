@@ -73,33 +73,18 @@ function save_boundary_result!(ib::Circle,ps_data,solid_neighbor::SolidNeighbor{
     aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
     vn = @views [dot(v,n) for v in eachrow(ps_data.vs_data.midpoint)]
     Θ = heaviside.(vn)
-    ib_df = vs_data.df
-    aux_df = zeros(vs_data.vs_num,NDF)
     dir = get_dir(ID)
-    if solid_neighbor.average_num==0
-        vs_interpolate!(ib_df,vs_data.level,ps_data.midpoint[dir],s_vs_data.df,
-            s_vs_data.level,solid_cell.midpoint[dir],aux_df,aux_point[dir],amr)
-        f_prim = get_prim(calc_w0(vs_data.midpoint,aux_df,vs_data.weight,global_data),global_data)
-        ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
-        s_prim = IB_prim(ib,aux_point,ρw)
-        for i in 1:vs_data.vs_num
-            if Θ[i]==1.
-                aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),s_prim,amr.global_data)
-            end
-        end
-    else
-        for i in 1:vs_data.vs_num
-            if Θ[i]==0.
-                aux_df[i,:] .= ib_df[i,:]
-            end
-        end
-        f_prim = get_prim(calc_w0(vs_data.midpoint,ib_df,vs_data.weight,global_data),global_data)
-        ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
-        s_prim = IB_prim(ib,aux_point,ρw)
-        for i in 1:vs_data.vs_num
-            if Θ[i]==1.
-                aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),s_prim,amr.global_data)
-            end
+    ib_point = aux_point[dir]+0.5*(ps_data.midpoint[dir]-solid_cell.midpoint[dir])
+    ib_df = @views vs_data.df+vs_data.sdf[:,:,dir]*(ib_point-ps_data.midpoint[dir])
+    aux_df = zeros(vs_data.vs_num,NDF)
+    vs_interpolate!(ib_df,vs_data.level,ib_point,s_vs_data.df,
+        s_vs_data.level,solid_cell.midpoint[dir],aux_df,aux_point[dir],amr)
+    # f_prim = get_prim(calc_w0(vs_data.midpoint,aux_df,vs_data.weight,global_data),global_data)
+    ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
+    s_prim = IB_prim(ib,aux_point,ρw)
+    for i in 1:vs_data.vs_num
+        if Θ[i]==1.
+            aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),s_prim,amr.global_data)
         end
     end
     aux_w = calc_w0(vs_data.midpoint,aux_df,vs_data.weight,global_data)
@@ -1306,8 +1291,6 @@ function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF})
         ps_data.bound_enc=-solid_cell.bound_enc
         ib = amr.global_data.config.IB[-solid_cell.bound_enc]
         aux_point,normal = calc_intersect(ps_data.midpoint,solid_cell.midpoint,ib)
-        dir = get_dir(i)
-        av_num = abs(aux_point[dir]-ps_data.midpoint[dir])<5.0*ps_data.ds[dir]^2 ? 1 : 0
         ic = get_bc(ib.bc)
         svsdata = VS_Data{DIM,NDF}(
             vs_data.vs_num,
@@ -1319,16 +1302,11 @@ function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF})
             Matrix{Float64}(undef,0,0)
         )
         ps_data.neighbor.data[i][1] = SolidNeighbor{DIM,NDF,i}(
-            solid_cell.bound_enc,av_num,aux_point,normal,solid_cell,solid_cell.midpoint,svsdata
+            solid_cell.bound_enc,aux_point,normal,solid_cell,solid_cell.midpoint,svsdata
         )
         # if any(x->isnan(x),ps_data.neighbor.data[i][1].vs_data.df)
         #     throw(`initial sn.df nan!`)
         # end
-    end
-    av_id = findall(x->ps_data.neighbor.data[x][1].average_num==1,solid_dirs)
-    for id in av_id
-        i = solid_dirs[id]
-        ps_data.neighbor.data[i][1].average_num = length(av_id)
     end
 end
 function vs_interpolate!(f_df::AbstractMatrix,f_level::AbstractVector{Int8},fx,s_df,s_level,sx,b_df,bx,::AMR{DIM,NDF}) where{DIM,NDF}
@@ -1363,79 +1341,28 @@ function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidN
     aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
     dir = get_dir(ID)
     solid_cell = solid_neighbor.solid_cell;s_vs_data = solid_cell.vs_data
-    dxL = norm(ps_data.midpoint-aux_point)
+    dxL = 0.5*ps_data.ds[dir]
     dxR = norm(solid_cell.midpoint-aux_point)
-    ib_df = vs_data.df
     vn = @views [dot(v,n) for v in eachrow(ps_data.vs_data.midpoint)]
     aux_df = zeros(vs_data.vs_num,NDF)
+    ib_point = aux_point[dir]+0.5*(ps_data.midpoint[dir]-solid_cell.midpoint[dir])
+    ib_df = @views vs_data.df+vs_data.sdf[:,:,dir]*(ib_point-ps_data.midpoint[dir])
     Θ = heaviside.(vn)
-    if solid_neighbor.average_num==0
-        vs_interpolate!(ib_df,vs_data.level,ps_data.midpoint[dir],s_vs_data.df,
-            s_vs_data.level,solid_cell.midpoint[dir],aux_df,aux_point[dir],amr)
-        ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
-        aux_prim = IB_prim(ib,aux_point,ρw)
-        for i in 1:vs_data.vs_num
-            if Θ[i]==1.
-                aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),aux_prim,amr.global_data)
-            end
-        end
-        @. solid_neighbor.vs_data.df = aux_df+(aux_df-vs_data.df)/dxL*dxR
-    else
-        for i in 1:vs_data.vs_num
-            if Θ[i]==0.
-                aux_df[i,:] .= ib_df[i,:]
-            end
-        end
-        ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
-        aux_prim = IB_prim(ib,aux_point,ρw)
-        for i in 1:vs_data.vs_num
-            if Θ[i]==1.
-                aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),aux_prim,amr.global_data)
-            end
-        end
-        @. solid_neighbor.vs_data.df = aux_df
-    end
-    # end
-end
-function vs_average!(dfs::Vector,levels,df,level,::AMR{DIM,NDF}) where{DIM,NDF}
-    num = length(dfs)
-    for k in eachindex(dfs)
-        j = 1;flag = 0.0
-        dfn = dfs[k]
-        leveln = levels[k]
-        @inbounds for i in axes(df,1)
-            if level[i] == leveln[j]
-                @. df[i, :] += @views dfn[j,:]/num
-                j += 1
-            elseif level[i] < leveln[j]
-                while flag != 1.0
-                    @. df[i, :] += @views dfn[j,:]/ 2^(DIM * (leveln[j] - level[i]))/num
-                    flag += 1 / 2^(DIM * (level[j] - leveln[i]))
-                    j += 1
-                end
-                flag = 0.0
-            else
-                @. df[i, :] += @views dfn[j,:]/num
-                flag += 1 / 2^(DIM * (level[i] - leveln[j]))
-                if flag == 1.0
-                    j += 1
-                    flag = 0.0
-                end
-            end
+    vs_interpolate!(ib_df,vs_data.level,ib_point,s_vs_data.df,
+        s_vs_data.level,solid_cell.midpoint[dir],aux_df,aux_point[dir],amr)
+    ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
+    aux_prim = IB_prim(ib,aux_point,ρw)
+    for i in 1:vs_data.vs_num
+        if Θ[i]==1.
+            aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),aux_prim,amr.global_data)
         end
     end
+    @. solid_neighbor.vs_data.df = aux_df+(aux_df-ib_df)/dxL*dxR
 end
 function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF}) where{DIM,NDF}
     solid_neighbors = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
     for i in solid_neighbors
         update_solid_neighbor!(ps_data,ps_data.neighbor.data[i][1],amr)
-    end
-    av_ids = findall(x->ps_data.neighbor.data[x][1].average_num!=0,solid_neighbors)
-    if !isempty(av_ids)
-        ps_data.vs_data.df .= 0.
-        dfs = [ps_data.neighbor.data[solid_neighbors[i]][1].vs_data.df for i in av_ids]
-        levels = [ps_data.neighbor.data[solid_neighbors[i]][1].vs_data.level for i in av_ids]
-        vs_average!(dfs,levels,ps_data.vs_data.df,ps_data.vs_data.level,amr)
     end
 end
 function update_solid_neighbor!(amr::AMR{DIM,NDF}) where{DIM,NDF}
