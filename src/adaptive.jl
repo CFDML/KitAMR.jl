@@ -181,10 +181,6 @@ function ps_replace(::Val{1}, out_quad, in_quads, which_tree, amr::AMR{DIM}) whe
             ps_data = Odata.neighbor.data[1][i]
         else
             ps_data = ps_copy(Odata)
-        if flag
-            ps_data = Odata.neighbor.data[1][i]
-        else
-            ps_data = ps_copy(Odata)
             ps_data.ds .*= 0.5
             vs_data = ps_data.vs_data
             @. ps_data.midpoint += 0.5 * ps_data.ds * RMT[DIM][i]
