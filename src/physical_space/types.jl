@@ -1,6 +1,6 @@
 abstract type AbstractPsData{DIM,NDF} end
 abstract type AbstractGhostPsData{DIM,NDF} <: AbstractPsData{DIM,NDF} end
-Neighbor_Quad{DIM,NDF} = Union{AbstractPsData{DIM,NDF}, Nothing}
+NeighborQuad{DIM,NDF} = Union{AbstractPsData{DIM,NDF}, Nothing}
 
 ChildNum = Union{Val{4},Val{8}}
 NeighborNum = Union{Val{2},Val{4}}
@@ -11,16 +11,23 @@ HalfSizeNeighbor = Union{Val{2},Val{4}}
 DoubleSizeNeighbor = Val{-1}
 
 mutable struct Neighbor{DIM,NDF}
-    data::Vector{Vector{Neighbor_Quad{DIM,NDF}}}
+    data::Vector{Vector{NeighborQuad{DIM,NDF}}}
     state::Vector{Int}
     Neighbor(DIM,NDF) = (n = new{DIM,NDF}();
-    n.data = Vector{Vector{Neighbor_Quad{DIM,NDF}}}(undef, 2*DIM);
+    n.data = Vector{Vector{NeighborQuad{DIM,NDF}}}(undef, 2*DIM);
     n.state = zeros(Int8, 2*DIM);
     n)
 end
-
+mutable struct SolidNeighbor{DIM,NDF,ID} <:AbstractPsData{DIM,NDF}
+    bound_enc::Int
+    aux_point::Vector{Float64}
+    normal::Vector{Float64}
+    solid_cell::AbstractPsData{DIM,NDF}
+    midpoint::Vector{Float64}
+    vs_data::VS_Data{DIM,NDF}
+end
 mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
-    quadid::Int # The unique identification of the ps_data, is currently used for SolidCells and IB nodes' partition. Only need to be updated before partition. Can be negative for SolidCells/IB nodes for the convenience of boundary_flag
+    quadid::Cint # The unique identification of the ps_data, is currently used for SolidCells and IB nodes' partition. Only need to be updated before partition. Can be negative for SolidCells/IB nodes for the convenience of boundary_flag
     bound_enc::Int # 0:fluid_cell;>0:bound_enc th boundary's IB_cell;<0: bound_enc th boundary's solid_cell;
     solid_cell_index::Vector{Int}
     ds::Vector{Float64} # DIM
@@ -28,6 +35,7 @@ mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
     qf::Vector{Float64}
     w::Vector{Float64}
     sw::Matrix{Float64} # DIM + 2 x DIM
+    # ssw::Array{Float64}
     prim::Vector{Float64}
     flux::Vector{Float64}
     vs_data::VS_Data{DIM,NDF}
@@ -90,6 +98,11 @@ mutable struct Ghost_PS_Data{DIM,NDF}<:AbstractGhostPsData{DIM,NDF}
     sw::Matrix{Cdouble}
     vs_data::Ghost_VS_Data{DIM,NDF}
 end
+# mutable struct SingularSolidNeighbor{DIM,NDF,ID} <: AbstractPsData{DIM,NDF}
+#     aux_point::Vector{Float64}
+#     normal::Vector{Float64}
+#     ghost_ps_data::Ghost_PS_Data{DIM,NDF}
+# end
 mutable struct GhostInsideSolidData{DIM,NDF} <: AbstractGhostPsData{DIM,NDF} end
 
 abstract type AbstractFace end

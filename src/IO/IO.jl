@@ -258,10 +258,75 @@ function save_result(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF}
     p4est_save_ext("p",ps4est,Cint(0),Cint(0))
     if rank==0
         size = MPI.Comm_size(MPI.COMM_WORLD)
-        solverset = SolverSet(config,size)
+        solverset = SolverSet(ConfigureForSave(config),size)
         save_object(dir_path * "solverset.jld2", solverset)
     end
     save_object(dir_path * "result_"*string(rank)*".jld2", result)
+    save_boundary_result(dir_path,amr)
+end
+# function save_boundary_result(dir_path::String,amr::AMR{DIM,NDF}) where{DIM,NDF}
+#     boundary = amr.field.boundary
+#     ibs = amr.global_data.config.IB
+#     boundary_results = Vector{Boundary_Solution}(undef,length(ibs))
+#     for i in eachindex(ibs)
+#         ib = ibs[i]
+#         solid_cells = boundary.solid_cells[i]
+#         ib_nodes = boundary.IB_cells[i].IB_nodes
+#         midpoints = Vector{Vector{Float64}}(undef,length(solid_cells.ps_datas))
+#         ps_solutions = Vector{Boundary_PS_Solution}(undef,length(solid_cells.ps_datas))
+#         for j in eachindex(solid_cells.ps_datas)
+#             midpoints[j],ps_solutions[j] = save_boundary_result(ib,solid_cells.ps_datas[j],ib_nodes[j],boundary.IB_cells[i].templates[j],amr.global_data)
+#         end
+#         boundary_results[i] = Boundary_Solution(midpoints,ps_solutions)
+#     end
+#     rank = MPI.Comm_rank(MPI.COMM_WORLD)
+#     save_object(dir_path*"boundary_result_"*string(rank)*".jld2",boundary_results)
+# end
+function save_boundary_result(dir_path::String,amr::AMR{DIM,NDF}) where{DIM,NDF}
+    ibs = amr.global_data.config.IB
+    boundary_results = [Boundary_Solution(Vector{Float64}[],Boundary_PS_Solution[])]
+    for tree in amr.field.trees.data
+        for ps_data in tree
+            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<=0)&&continue
+            ib = ibs[ps_data.bound_enc]
+            save_boundary_result!(ib,ps_data,boundary_results,amr)
+        end
+    end
+    rank = MPI.Comm_rank(MPI.COMM_WORLD)
+    save_object(dir_path*"boundary_result_"*string(rank)*".jld2",boundary_results)
+end
+function boundary_write_csv(csvname,results,config::ConfigureForSave{2})
+    for i in eachindex(config.IB)
+        df = DataFrame()
+        df.x=[x[1] for x in results[i].midpoints];df.y=[x[2] for x in results[i].midpoints]
+        df.rho=[x.prim[1] for x in results[i].ps_solutions]
+        df.u=[x.prim[2] for x in results[i].ps_solutions]
+        df.v=[x.prim[3] for x in results[i].ps_solutions]
+        df.T=[1/x.prim[4] for x in results[i].ps_solutions]
+        df.qfx=[x.qf[1] for x in results[i].ps_solutions];df.qfy=[x.qf[2] for x in results[i].ps_solutions]
+        df.p11 = [x.p[1] for x in results[i].ps_solutions];df.p12 = [x.p[2] for x in results[i].ps_solutions]
+        df.p22 = [x.p[3] for x in results[i].ps_solutions]
+        CSV.write(csvname*"_"*string(i)*".csv",df)
+    end
+end
+function boundary_result2csv(dirname::String,csvname::String)
+    path = "./"*dirname
+    solverset = load_object(path*"/solverset.jld2")
+    results = nothing
+    for i in 1:solverset.mpi_size
+        if i==1
+            results = load_object(path*"/boundary_result_"*string(i-1)*".jld2")
+        else
+            rs = load_object(path*"/boundary_result_"*string(i-1)*".jld2")
+            for j in eachindex(rs)
+                r = rs[j]
+                result = results[j]
+                append!(result.ps_solutions,r.ps_solutions)
+                append!(result.midpoints,r.midpoints)
+            end
+        end
+    end
+    boundary_write_csv(csvname,results,solverset.config)
 end
 function result2vtk(dirname::String,vtkname::String)
     !MPI.Initialized() && MPI.Init()
@@ -372,11 +437,15 @@ function result2vtk(dirname::String,vtkname::String)
         end
         vtk_grid(vtkname,vertices,cells) do vtk
             vtk["rho"] = [ps_solution.prim[1] for ps_solution in result.solution.ps_solutions]
-            vtk["u"] = [ps_solution.prim[2] for ps_solution in result.solution.ps_solutions]
-            vtk["v"] = [ps_solution.prim[3] for ps_solution in result.solution.ps_solutions]
+            # vtk["u"] = [ps_solution.prim[2] for ps_solution in result.solution.ps_solutions]
+            # vtk["v"] = [ps_solution.prim[3] for ps_solution in result.solution.ps_solutions]
+            vtk["velocity"] = ([ps_solution.prim[2] for ps_solution in result.solution.ps_solutions],
+                [ps_solution.prim[3] for ps_solution in result.solution.ps_solutions])
             vtk["T"] = [1/ps_solution.prim[end] for ps_solution in result.solution.ps_solutions]
-            vtk["qfx"] = [ps_solution.qf[1] for ps_solution in result.solution.ps_solutions]
-            vtk["qfy"] = [ps_solution.qf[2] for ps_solution in result.solution.ps_solutions]
+            # vtk["qfx"] = [ps_solution.qf[1] for ps_solution in result.solution.ps_solutions]
+            # vtk["qfy"] = [ps_solution.qf[2] for ps_solution in result.solution.ps_solutions]
+            vtk["qf"] = ([ps_solution.qf[1] for ps_solution in result.solution.ps_solutions],
+                [ps_solution.qf[2] for ps_solution in result.solution.ps_solutions])
             vtk["mpi_rank"] = ranks
         end
 		fp = PointerWrapper(ps4est)

@@ -8,6 +8,15 @@ function partition_check(p4est::P_pxest_t)
     nums = [gfq[i]-gfq[i-1] for i in 2:MPI.Comm_size(MPI.COMM_WORLD)+1]
     return (maximum(nums)-minimum(nums))/minimum(nums)>0.1
 end
+function partition_weight(p4est::P_pxest_t,which_tree,quadrant::P_pxest_quadrant_t)
+    qp = PointerWrapper(quadrant)
+    dp = PointerWrapper(P4est_PS_Data,qp.p.user_data[])
+    ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+    isa(ps_data,InsideSolidData)&&return Cint(0)
+    ps_data.bound_enc<0&&return Cint(0)
+    ps_data.bound_enc>0&&return Cint(2*ps_data.vs_data.vs_num)
+    return Cint(ps_data.vs_data.vs_num)
+end
 function partition!(p4est::Ptr{p4est_t})
     pp = PointerWrapper(p4est)
     gfq = Base.unsafe_wrap(
@@ -18,7 +27,8 @@ function partition!(p4est::Ptr{p4est_t})
     src_gfq = copy(gfq)
     src_flt = pp.first_local_tree[]
     src_llt = pp.last_local_tree[]
-    p4est_partition(p4est, 0, C_NULL)
+    p4est_partition(p4est, 0, @cfunction(partition_weight,Cint,(Ptr{p4est_t},p4est_topidx_t,Ptr{p4est_quadrant_t})))
+    # p4est_partition(p4est, 0, C_NULL)
     # dest_gfq = Base.unsafe_wrap(Vector{Int},pointer(pp.global_first_quadrant),MPI.Comm_size(MPI.COMM_WORLD)+1)
     return src_gfq, gfq, src_flt, src_llt
 end
@@ -107,7 +117,7 @@ function up_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::Vec
             ps_data = trees[i][j]
             if isa(ps_data,InsideSolidData)
                 push!(encs,0)
-                append!(encs,zeros(SOLID_CELL_ID_NUM))
+                append!(encs,zeros(Int,SOLID_CELL_ID_NUM))
                 append!(ws,zeros(DIM+2))
                 s_vs_nums[index] = 0
             else
@@ -374,7 +384,7 @@ function partition_transfer(
     transfer(sends, s_datas, receives, receive_nums, r_vs_numss)
 end
 function unpack_data(vs_nums, data, amr::AMR{DIM,NDF}) where{DIM,NDF}
-    transfer_ps_datas = Array{AbstractPsData{DIM,NDF}}(undef, length(vs_nums))
+    transfer_ps_datas = Vector{AbstractPsData{DIM,NDF}}(undef, length(vs_nums))
     quadrature = amr.global_data.config.quadrature
     vs_trees_num = reduce(*, amr.global_data.config.vs_trees_num)
     vs_space = 1.0
@@ -478,17 +488,17 @@ function insert_trees!(p4est::P_pxest_t, amr::AMR{DIM,NDF}, ti_data::Transfer_In
     if !isempty(trees)
         if pp.first_local_tree[] < ti_data.old_flt
             for i = 1:ti_data.old_flt-pp.first_local_tree[]
-                pushfirst!(trees, Vector{PS_Data{DIM,NDF}}(undef, 0))
+                pushfirst!(trees, Vector{AbstractPsData{DIM,NDF}}(undef, 0))
             end
         end
         if pp.last_local_tree[] > ti_data.old_llt
             for i = 1:pp.last_local_tree[]-ti_data.old_llt
-                push!(trees, Vector{PS_Data{DIM,NDF}}(undef, 0))
+                push!(trees, Vector{AbstractPsData{DIM,NDF}}(undef, 0))
             end
         end
     else
         for _ = 1:pp.last_local_tree[]-pp.first_local_tree[]+1
-            push!(trees, Vector{PS_Data{DIM,NDF}}(undef, 0))
+            push!(trees, Vector{AbstractPsData{DIM,NDF}}(undef, 0))
         end
     end
     amr.field.trees.offset = pp.first_local_tree[] - 1

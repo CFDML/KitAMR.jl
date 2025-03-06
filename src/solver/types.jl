@@ -19,12 +19,24 @@ struct Solver
     AMR_VS_MAXLEVEL::Int
     flux::AbstractFluxType
     time_marching::AbstractTimeMarchingType
+    PS_DYNAMIC_AMR::Bool
+    VS_DYNAMIC_AMR::Bool
 end
 function Solver(config::Dict)
     return Solver(config[:CFL],config[:AMR_PS_MAXLEVEL],
-        config[:AMR_VS_MAXLEVEL],config[:flux],config[:time_marching])
+        config[:AMR_VS_MAXLEVEL],config[:flux],config[:time_marching],
+        (haskey(config,:PS_DYNAMIC_AMR) ? config[:PS_DYNAMIC_AMR] : true),
+        (haskey(config,:VS_DYNAMIC_AMR) ? config[:VS_DYNAMIC_AMR] : true)
+        )
 end
-
+mutable struct UDF
+    static_ps_refine_flag::Function
+    static_ps_coarsen_flag::Function
+    vs_refine_flag::Function
+    vs_coarsen_flag::Function 
+    UDF()=new()
+end
+null_udf(args...) = false
 struct Configure{DIM,NDF}
     geometry::Vector{Float64}
     trees_num::Vector{Int64}
@@ -37,6 +49,7 @@ struct Configure{DIM,NDF}
     IB_interp::AbstractIBInterpolateType
     gas::Gas
     solver::Solver
+    user_defined::UDF
 end
 function Configure(config::Dict)
     gas = Gas()
@@ -45,6 +58,7 @@ function Configure(config::Dict)
             setfield!(gas,i,config[i])
         end
     end
+    gas.μᵣ = ref_vhs_vis(gas.Kn,gas.αᵣ,gas.ωᵣ)
     IB = config[:IB]
     for i in eachindex(IB)
         if isa(IB[i],Circle)&&!isdefined(IB[i],:search_radius)
@@ -52,9 +66,17 @@ function Configure(config::Dict)
             IB[i] = Circle(IB[i],ds)
         end
     end
+    user_defined = UDF()
+    for i in fieldnames(UDF)
+        if haskey(config,i)
+            setfield!(user_defined,i,config[i])
+        else
+            setfield!(user_defined,i,null_udf)
+        end
+    end
     return Configure{config[:DIM],config[:NDF]}(config[:geometry],config[:trees_num],
         config[:quadrature],config[:vs_trees_num],config[:IC],config[:domain],config[:IB],
-        config[:IB_sort],config[:IB_interp],gas,Solver(config))
+        config[:IB_sort],config[:IB_interp],gas,Solver(config),user_defined)
 end
 
 mutable struct Forest{DIM}
@@ -68,19 +90,40 @@ mutable struct Forest{DIM}
     n
     )
 end
-
+mutable struct Residual
+    step::Int
+    residual::Vector{Float64}
+    sumRes::Vector{Float64}
+    sumAvg::Vector{Float64}
+    redundant_step::Int
+end
+function Residual(DIM::Int)
+    return Residual(1,ones(DIM+2),zeros(DIM+2),zeros(DIM+2),0)
+end
 mutable struct Status
-    max_vs_num::Int
+    max_vs_num::Int # maximum vs_num among ghost quadrants
     gradmax::Vector{Float64}
     Δt::Float64
     sim_time::Float64
     ps_adapt_step::Int
     vs_adapt_step::Int
     partition_step::Int
+    residual::Residual
     save_flag::Base.RefValue{Bool}
+    stable_flag::Vector{Bool}
 end
-function Status(DIM)
-    return Status(0,ones(DIM+2),1.,0.,1,1,1,Ref(false))
+function Status(config)
+    DIM = config[:DIM]
+    trees_num = config[:trees_num]
+    geometry = config[:geometry]
+    vs_trees_num = config[:vs_trees_num]
+    quadrature = config[:quadrature]
+    ds = [(geometry[2*i]-geometry[2*i-1])/trees_num[i]/2^config[:AMR_PS_MAXLEVEL] for i in 1:DIM]
+    U = [max(quadrature[2*i],abs(quadrature[2*i-1])) -
+        (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
+        2^config[:AMR_VS_MAXLEVEL] / 2 for i in 1:DIM]
+    Δt = config[:CFL]*minimum(ds ./ U)
+    return Status(0,ones(DIM+2),Δt,0.,1,1,1,Residual(DIM),Ref(false),[true,true])
 end
 
 mutable struct Global_Data{DIM,NDF}
@@ -90,7 +133,7 @@ mutable struct Global_Data{DIM,NDF}
     Global_Data(config::Dict) = (n = new{config[:DIM],config[:NDF]}();
     n.config = Configure(config);
     n.forest = Forest(config[:DIM]);
-    n.status = Status(config[:DIM]);
+    n.status = Status(config);
     n
     )
 end
@@ -131,8 +174,7 @@ end
 mutable struct Field{DIM,NDF}
     trees::PS_Trees{DIM,NDF}
     faces::Vector{AbstractFace}
-    boundary::Boundary{DIM,NDF}
-    # solid_cells::Vector{Vector{PS_Data{DIM,NDF}}} # Outer vector corresbonds to boundaries
+    # boundary::Boundary{DIM,NDF}
 end
 
 

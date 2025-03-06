@@ -7,9 +7,6 @@ end
 function flux!(face::DomainFace,amr::AMR)
     here_vs = make_face_vs(face)
     flux,micro_flux = calc_domain_flux(amr.global_data.config.solver.flux,here_vs,face,amr)
-    # if face.ps_data.midpoint==[-3.9625, -4.96875]
-    #     @show flux face.direction
-    # end
     update_domain_flux!(flux,micro_flux,face,here_vs.heavi)
 end
 function flux!(face::FullFace,amr::AMR)
@@ -67,7 +64,6 @@ function update_flux!(::Nothing,micro_flux::Vector{Matrix{Float64}},face::Union{
     rot,direction,_,here_data,there_data = unpack(face)
     area = face_area(face,here_data,direction,rot)
     here_micro,there_micro = micro_flux
-    # update_macro_flux!(flux*area,here_data,there_data)
     update_micro_flux!(here_micro*area,there_micro*area,here_data,there_data,heavi)
 end
 function update_macro_flux!(flux::Vector,here_data::PS_Data,there_data::PS_Data)
@@ -78,6 +74,12 @@ function update_macro_flux!(flux::Vector,here_data::PS_Data,there_data::PS_Data)
 end
 function update_macro_flux!(flux::Vector,here_data::PS_Data,::AbstractGhostPsData)
     here_data.flux .+= flux
+end
+function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM},::SolidNeighbor{DIM},heavi::Vector{Bool}) where{DIM}
+    vs_data = here_data.vs_data;flux = vs_data.flux
+    @. flux[heavi,:]+=@views here_micro
+    nheavi = [!x for x in heavi]
+    @. flux[nheavi,:]+=@views there_micro
 end
 function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM},there_data::PS_Data,heavi::Vector{Bool}) where{DIM}
     vs_data = here_data.vs_data;nvs_data = there_data.vs_data
@@ -251,7 +253,6 @@ function make_face_vs(face::FullFace{DIM,NDF}) where{DIM,NDF}
     rot,direction,_,here_data,there_data = unpack(face)
     vs_data = here_data.vs_data;nvs_data = there_data.vs_data
     here_mid = vs_data.midpoint;there_mid = nvs_data.midpoint
-    # there_data.bound_enc<0 && project_solid_cell_slope!(nvs_data,vs_data,direction)
     there_data.bound_enc<0 && calc_solid_cell_slope!(nvs_data,vs_data,there_data.midpoint,here_data.midpoint,direction)
     heavi = [x<=0. for x in rot.*@views here_mid[:,direction]]
     nheavi = [x>0. for x in rot.*@views there_mid[:,direction]]
