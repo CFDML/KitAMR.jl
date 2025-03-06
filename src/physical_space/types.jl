@@ -20,14 +20,11 @@ mutable struct Neighbor{DIM,NDF}
 end
 mutable struct SolidNeighbor{DIM,NDF,ID} <:AbstractPsData{DIM,NDF}
     bound_enc::Int
-    average_num::Int # In case that the aux_point is too close to the fluid point, to keep accuracy order, the fluid's distribution function needs to be set to the boundary's. When the case appearse in multiple directions, the average strategy is adopted. 
     aux_point::Vector{Float64}
     normal::Vector{Float64}
     solid_cell::AbstractPsData{DIM,NDF}
     midpoint::Vector{Float64}
     vs_data::VS_Data{DIM,NDF}
-    # midpoint::Vector{Float64}
-    # prim::Vector{Float64}
 end
 mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
     quadid::Cint # The unique identification of the ps_data, is currently used for SolidCells and IB nodes' partition. Only need to be updated before partition. Can be negative for SolidCells/IB nodes for the convenience of boundary_flag
