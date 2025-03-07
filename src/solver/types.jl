@@ -45,11 +45,16 @@ struct Configure{DIM,NDF}
     IC::AbstractICType
     domain::Vector{Domain}
     IB::Vector{AbstractBoundary}
-    IB_sort::AbstractIBSortType
-    IB_interp::AbstractIBInterpolateType
     gas::Gas
     solver::Solver
     user_defined::UDF
+end
+function config_IB(ib::Circle,config::Dict)
+    ds = minimum([(config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i]/2^config[:AMR_PS_MAXLEVEL] for i in 1:config[:DIM]])
+    Circle(ib,ds)
+end
+function config_IB(ib::Vertices,config::Dict)
+    Vertices(ib,config)
 end
 function Configure(config::Dict)
     gas = Gas()
@@ -61,10 +66,7 @@ function Configure(config::Dict)
     gas.μᵣ = ref_vhs_vis(gas.Kn,gas.αᵣ,gas.ωᵣ)
     IB = config[:IB]
     for i in eachindex(IB)
-        if isa(IB[i],Circle)&&!isdefined(IB[i],:search_radius)
-            ds = minimum([(config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i]/2^config[:AMR_PS_MAXLEVEL] for i in 1:config[:DIM]])
-            IB[i] = Circle(IB[i],ds)
-        end
+        IB[i] = config_IB(IB[i],config)
     end
     user_defined = UDF()
     for i in fieldnames(UDF)
@@ -76,7 +78,7 @@ function Configure(config::Dict)
     end
     return Configure{config[:DIM],config[:NDF]}(config[:geometry],config[:trees_num],
         config[:quadrature],config[:vs_trees_num],config[:IC],config[:domain],config[:IB],
-        config[:IB_sort],config[:IB_interp],gas,Solver(config),user_defined)
+        gas,Solver(config),user_defined)
 end
 
 mutable struct Forest{DIM}
@@ -161,20 +163,9 @@ mutable struct Ghost
     ghost_wrap::Vector{AbstractGhostPsData}
 end
 
-mutable struct Boundary{DIM,NDF}
-    solid_cells::Vector{SolidCells{DIM,NDF}} # Element corresponds to one IB boundary
-    solid_numbers::Vector{Vector{Int}} # MPI_size{IB_Boundary_Number{}}, represents how many solid_cells for each IB_boundary on each rank (is necessary?)
-    image_points::Vector{Vector{Vector{Float64}}} # Image points of solid_cells sorted by quadid
-    aux_points::Vector{Vector{Vector{Float64}}} # Midpoints of aux_points sorted by quadid
-    IB_cells::Vector{IBCells} # Element corresponds to one IB boundary
-    IB_ranks::Vector{Vector{PS_Data{DIM,NDF}}} # Local IB nodes belonging to solidcells in different processors
-    # IB_ranks_table::Vector{Vector{Vector{PS_Data{DIM,NDF}}}} # Local IB nodes belonging to solidcells in different processors
-    IB_buffer::IBBuffer # Buffer for IB communication. Store pointers for memory free.
-end
 mutable struct Field{DIM,NDF}
     trees::PS_Trees{DIM,NDF}
     faces::Vector{AbstractFace}
-    # boundary::Boundary{DIM,NDF}
 end
 
 

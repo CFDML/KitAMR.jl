@@ -8,11 +8,8 @@ abstract type InterpolatedOutflow <: AbstractBoundaryType end
 abstract type AxisSymmetric <: AbstractBoundaryType end
 abstract type Period <: AbstractBoundaryType end
 const AbstractBCType = Union{Vector,Function}
-abstract type AbstractIBSortType end
-abstract type AbstractIBInterpolateType end
 
-struct DistanceIBSort<:AbstractIBSortType end
-struct BilinearIBInterpolate<:AbstractIBInterpolateType end
+
 struct Domain{T<:AbstractBoundaryType} <: AbstractBoundary
     id::Int
     bc::AbstractBCType
@@ -59,6 +56,30 @@ struct Sphere{T<:AbstractBoundaryType} <: AbstractBoundary # 3D circle
     )
 end
 const AbstractCircle = Union{Circle,Sphere}
+
+struct Vertices{DIM,T<:AbstractBoundaryType} <: AbstractBoundary
+    vertices::Vector{Vector{Float64}} # Vertices of the boundary, sorted in clockwise or counterclockwise order. 
+    solid::Bool # Is solid inside the boundary?
+    refine_coeffi::Real
+    bc::AbstractBCType
+    box::Vector{Vector{Float64}} # [[xmin,ymin,zmin],[xmax,ymax,zmax]]
+    refine_radius::Real
+    Vertices(::Type{T},file::String,solid,refine_coeffi,bc) where{T<:AbstractBoundaryType}= (
+        s = CSV.read(file,DataFrame;header=true);
+        DIM = length(names(s));
+        vertices = DIM==2 ? [[s.x[i],s.y[i]] for i in eachindex(s.x)] : [[s.x[i],s.y[i],s.z[i]] for i in eachindex(s.x)];
+        if vertices[1]==vertices[end]
+            vertices = vertices[1:end-1]
+        end;
+        box = DIM==2 ? [[minimum(s.x),minimum(s.y)],[maximum(s.x),maximum(s.y)]] : [[minimum(s.x),minimum(s.y),minimum(s.z)],[maximum(s.x),maximum(s.y),maximum(s.z)]];
+        new{DIM,T}(vertices,solid,refine_coeffi,bc,box)
+    )
+    Vertices(v::Vertices{DIM,T},config) where{DIM,T<:AbstractBoundaryType} =(
+        ds_max = maximum([(config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i] for i in 1:config[:DIM]]);
+        ds = norm([(config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i]/2^config[:AMR_PS_MAXLEVEL] for i in 1:config[:DIM]]);
+        new{DIM,T}(v.vertices,v.solid,v.refine_coeffi,v.bc,[v.box[1].-ds_max,v.box[2].+ds_max],v.refine_coeffi*ds)
+    )
+end
 mutable struct SolidCells{DIM,NDF}
     ps_datas::Vector{PS_Data{DIM,NDF}}
     quadids::Vector{Cint} # A better choice: store all quadid of SolidCells to avoid extensive comparing iteration. Are only needed to be updated before partition.

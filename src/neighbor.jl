@@ -202,7 +202,7 @@ function update_neighbor_kernel!(ip::PointerWrapper{p4est_iter_volume_info_t}, d
             i - 1,
         )
     end
-    if ps_data.bound_enc<0
+    if length(ps_data.neighbor.data) > 4
         for i in 4:7
             ps_data.neighbor.data[i+1],ps_data.neighbor.state[i+1] = access_neighbor(
                 pointer(ip.p4est),
@@ -211,6 +211,17 @@ function update_neighbor_kernel!(ip::PointerWrapper{p4est_iter_volume_info_t}, d
                 amr.ghost.ghost_wrap,
                 i,
             )
+        end
+    elseif ps_data.bound_enc<0
+        for i in 4:7
+            data,state = access_neighbor(
+                pointer(ip.p4est),
+                local_quadid(ip),
+                amr.global_data,
+                amr.ghost.ghost_wrap,
+                i,
+            )
+            push!(ps_data.neighbor.data,data);push!(ps_data.neighbor.state,state)
         end
     end
 end
