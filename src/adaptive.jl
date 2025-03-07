@@ -50,22 +50,6 @@ function boundary_flag(boundary::Domain,midpoint::AbstractVector,ds::AbstractVec
     index = Int(floor((boundary.id-1)/2))+1
     abs(midpoint[index] - global_data.config.geometry[boundary.id]) < ds[index] && return true
 end
-function boundary_flag(boundary::Circle,midpoint::AbstractVector,ds::AbstractVector,::Global_Data) # Circle type IB boundary flag
-    flag = 0
-    for i = 1:4
-        flag += norm(midpoint.+ds.*NMT[2][i].-boundary.center)>boundary.radius ? 1 : -1 # any neighbor cross boundary?
-    end
-    abs(flag)==4 && return false
-    return true
-end
-function boundary_flag(boundary::Sphere,midpoint::AbstractVector,ds::AbstractVector,::Global_Data) # Circle type IB boundary flag
-    flag = 0
-    for i = 1:6
-        flag += norm(midpoint.+ds.*NMT[3][i].-boundary.center)>boundary.radius ? 1 : -1 # any neighbor cross boundary?
-    end
-    abs(flag)==6 && return false
-    return true
-end
 function domain_flag(global_data::Global_Data,midpoint::AbstractVector,ds::AbstractVector) # domain flag for physical space dynamic adaptive
     domains = global_data.config.domain
     for domain in domains
@@ -81,17 +65,28 @@ function boundary_flag(midpoint::AbstractVector,ds::AbstractVector,global_data::
     end
     return solid_cell_flag(boundary,midpoint,ds,global_data)
 end
-function both_sides_boundary_flag(
-    midpoint::Vector{Float64},ds::Vector{Float64},
-    global_data::Global_Data{DIM},
-) where{DIM}
+# function both_sides_boundary_flag(
+#     midpoint::Vector{Float64},ds::Vector{Float64},
+#     global_data::Global_Data{DIM},
+# ) where{DIM}
+#     domain = global_data.config.domain
+#     boundary = global_data.config.IB
+#     for i in eachindex(domain)
+#         boundary_flag(domain[i],midpoint,ds,global_data) && return true
+#     end
+#     for i in eachindex(boundary)
+#         boundary_flag(boundary[i],midpoint,ds,global_data) && return true
+#     end
+#     return false
+# end
+function pre_ps_refine_flag(midpoint,ds,global_data::Global_Data{DIM}) where{DIM}
     domain = global_data.config.domain
     boundary = global_data.config.IB
     for i in eachindex(domain)
         boundary_flag(domain[i],midpoint,ds,global_data) && return true
     end
     for i in eachindex(boundary)
-        boundary_flag(boundary[i],midpoint,ds,global_data) && return true
+        pre_ps_refine_flag(boundary[i],midpoint,ds,global_data) && return true
     end
     return false
 end
@@ -525,7 +520,7 @@ function pre_ps_refine_flag(forest::P_pxest_t, which_tree, quadrant)
         qp = PointerWrapper(quadrant)
         global_data = unsafe_pointer_to_objref(pointer(fp.user_pointer))
         ds, midpoint = quad_to_cell(fp, which_tree, qp)
-        if global_data.config.user_defined.static_ps_refine_flag(midpoint,ds,global_data,qp.level[])||both_sides_boundary_flag(midpoint, ds, global_data)
+        if global_data.config.user_defined.static_ps_refine_flag(midpoint,ds,global_data,qp.level[])||pre_ps_refine_flag(midpoint, ds, global_data)
             return Cint(1)
         else
             return Cint(0)
@@ -587,15 +582,12 @@ function adaptive!(ps4est::P_pxest_t,amr::AMR;ps_interval=10,vs_interval=80,part
                 amr.global_data.status.vs_adapt_step=0
             end
         end
-        # if amr.global_data.status.partition_step%partition_interval==0
-        #     if amr.global_data.config.solver.PS_DYNAMIC_AMR||amr.global_data.config.solver.VS_DYNAMIC_AMR
-        #         # IB_quadid_update!(ps4est,amr)
-        #         ps_partition!(ps4est, amr)
-        #         # IB_partition!(ps4est,amr)
-        #         amr.global_data.status.partition_step = 0
-        #     end
-        # end
-        # amr.global_data.status.vs_adapt_step==0&&amr.global_data.status.partition_step!=0&&IB_structure_update!(amr)
+        if amr.global_data.status.partition_step%partition_interval*converge_ratio==0
+            if amr.global_data.config.solver.PS_DYNAMIC_AMR||amr.global_data.config.solver.VS_DYNAMIC_AMR
+                ps_partition!(ps4est, amr)
+                amr.global_data.status.partition_step = 0
+            end
+        end
         if amr.global_data.config.solver.PS_DYNAMIC_AMR||amr.global_data.status.vs_adapt_step==0||amr.global_data.status.partition_step == 0
             update_ghost!(ps4est, amr)
             update_neighbor!(ps4est, amr)
