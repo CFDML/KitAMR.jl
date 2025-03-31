@@ -43,11 +43,12 @@ struct VelocityTemplates
 end
 mutable struct CuttedVelocityCells
     indices::Vector{Int}
+    weight::Vector{Float64}
     gas_dfs::Matrix{Float64}
     solid_dfs::Matrix{Float64}
     gas_midpoints::Matrix{Float64}
     solid_midpoints::Matrix{Float64}
     gas_weights::Vector{Float64}
     solid_weights::Vector{Float64} # Range from 0 to 1, representing the percent of the solid part.
-    templates::Vector{VelocityTemplates}
+    # templates::Vector{VelocityTemplates}
 end

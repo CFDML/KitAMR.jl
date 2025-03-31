@@ -72,7 +72,7 @@ function cut_rect(n::Vector{Float64},vertices::Vector{Vector{Float64}}) # The sp
 #         |     |     |
 #     1(2)|-----2-----|3(4) x
     =#
-    points = Vector{Float64}[];indices = Int[];i = 1
+    points = Vector{Float64}[];indices = Int[];i = 0
     xmin,xmax,ymin,ymax = vertices[1][1],vertices[2][1],vertices[1][2],vertices[3][2]
     y = -n[1]/n[2]*xmin
     if y<ymax&&y>ymin
@@ -99,7 +99,7 @@ function cut_rect(n::Vector{Float64},vertices::Vector{Vector{Float64}}) # The sp
         i+=1
     end
     clp = findall(x->dot(x,n)==0.,vertices) # Number of vertices lying on the discontinuity
-    if length(clp)+i==1
+    if length(clp)+i<2
         return false,0.,0.,Float64[],Float64[]
     else
         append!(points,vertices)
@@ -115,6 +115,10 @@ function cut_rect(n::Vector{Float64},vertices::Vector{Vector{Float64}}) # The sp
         end
         for i in 0:length(indices)-(bid-aid)
             index = bid+i>length(indices) ? (bid+i)%length(indices) : bid+i
+            # try B[:,i+1] .= points[index]
+            # catch
+            #     @show clp bid aid i index length(indices)
+            # end
             B[:,i+1] .= points[index]
         end
         l = points[bid]-points[aid]

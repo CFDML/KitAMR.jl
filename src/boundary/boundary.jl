@@ -349,33 +349,33 @@ function initialize_solid_neighbor!(amr::AMR)
         end
     end
 end
-function bilinear_coeffi_2D(p::AbstractMatrix) 
-    return @inbounds [
-        p[1,1] p[1,2] p[1,1]*p[1,2] 1.0;
-        p[2,1] p[2,2] p[2,1]*p[2,2] 1.0;
-        p[3,1] p[3,2] p[3,1]*p[3,2] 1.0;
-        p[4,1] p[4,2] p[4,1]*p[4,2] 1.0
-    ]
-end
-function opposite_condition(test_point,midpoint,closest_point)
-    all(x->x>=0,(test_point-midpoint).*(midpoint-closest_point))
-end
-function initialize_velocitytemplates(midpoint::Vector{Float64},vs_data::AbstractVsData{2},du::Vector{Float64})
-    id_in = findall(x->norm(x-midpoint)<norm(du)+EPS,eachrow(vs_data.midpoint))
-    id_s = sortperm([norm(x-midpoint) for x in eachrow(@views vs_data.midpoint[id_in,:])])
-    id = zeros(Int,4)
-    id[1:3] .= id_s[1:3]
-    id[4] = findfirst(x->opposite_condition(x,midpoint,vs_data.midpoint[id[1],:]),eachrow(@views vs_data.midpoint[id_s[4:end],:]))
-    midpoints = bilinear_coeffi_2D(@views vs_data.midpoint[id,:])
-    try inv(midpoints)
-    catch
-        dis = [norm(x-midpoint) for x in eachrow(@views vs_data.midpoint[id,:])]
-        @show dis
-        @show vs_data.midpoint[id,:] midpoint
-        throw(`singular!`)
-    end
-    return VelocityTemplates(id,inv(midpoints))
-end
+# function bilinear_coeffi_2D(p::AbstractMatrix) 
+#     return @inbounds [
+#         p[1,1] p[1,2] p[1,1]*p[1,2] 1.0;
+#         p[2,1] p[2,2] p[2,1]*p[2,2] 1.0;
+#         p[3,1] p[3,2] p[3,1]*p[3,2] 1.0;
+#         p[4,1] p[4,2] p[4,1]*p[4,2] 1.0
+#     ]
+# end
+# function opposite_condition(test_point,midpoint,closest_point)
+#     all(x->x>=0,(test_point-midpoint).*(midpoint-closest_point))
+# end
+# function initialize_velocitytemplates(midpoint::Vector{Float64},vs_data::AbstractVsData{2},du::Vector{Float64})
+#     id_in = findall(x->norm(x-midpoint)<norm(du)+EPS,eachrow(vs_data.midpoint))
+#     id_s = sortperm([norm(x-midpoint) for x in eachrow(@views vs_data.midpoint[id_in,:])])
+#     id = zeros(Int,4)
+#     id[1:3] .= id_s[1:3]
+#     id[4] = findfirst(x->opposite_condition(x,midpoint,vs_data.midpoint[id[1],:]),eachrow(@views vs_data.midpoint[id_s[4:end],:]))
+#     midpoints = bilinear_coeffi_2D(@views vs_data.midpoint[id,:])
+#     try inv(midpoints)
+#     catch
+#         dis = [norm(x-midpoint) for x in eachrow(@views vs_data.midpoint[id,:])]
+#         @show dis
+#         @show vs_data.midpoint[id,:] midpoint
+#         throw(`singular!`)
+#     end
+#     return VelocityTemplates(id,inv(midpoints))
+# end
 function initialize_cutted_velocity_cell(n::Vector{Float64},vs_data::VS_Data{2},amr::AMR{2,NDF}) where{NDF}
     any(x->abs(x)<1e-6,n)&&return CuttedVelocityCell(Int[],Vector{Float64}[],Vector{Float64}[],Float64[],VelocityTemplates[])
     global_data = amr.global_data
@@ -384,23 +384,26 @@ function initialize_cutted_velocity_cell(n::Vector{Float64},vs_data::VS_Data{2},
     vertices = [zeros(2) for _ in 1:4]
     index = Int[];solid_weights = Float64[];gas_weights = Float64[]
     solid_midpoints = Vector{Float64}[];gas_midpoints = Vector{Float64}[]
-    templates = VelocityTemplates[]
+    # templates = VelocityTemplates[]
     for i in 1:vs_data.vs_num
         ddu = du./2^(vs_data.level[i])
         for j in eachindex(vertices)
-            vertices[j] .= @views 0.5*RMT[2][j].*ddu+vs_data.midpoint[i,:]
+            vertices[j] .= @views 0.5*ANTIVT[2][j].*ddu+vs_data.midpoint[i,:]
         end
         flag,solid_weight,gas_weight,solid_mid,gas_mid = cut_rect(n,vertices)
         if flag
             push!(index,i);push!(solid_weights,solid_weight);push!(gas_weights,gas_weight)
             push!(solid_midpoints,solid_mid);push!(gas_midpoints,gas_mid)
-            push!(templates,initialize_velocitytemplates(gas_mid,vs_data,du))
+            # push!(templates,initialize_velocitytemplates(gas_mid,vs_data,du))
         end
     end
     N = length(index)
     gas_dfs = zeros(N,NDF);solid_dfs = zeros(N,NDF)
     gas_midpoints = [gas_midpoints[i][j] for i in 1:N,j in 1:2];solid_midpoints = [solid_midpoints[i][j] for i in 1:N,j in 1:2]
-    return CuttedVelocityCell(index,gas_dfs,solid_dfs,gas_midpoints,solid_midpoints,gas_weights,solid_weights,templates)
+    # return CuttedVelocityCell(index,gas_dfs,solid_dfs,gas_midpoints,solid_midpoints,gas_weights,solid_weights,templates)
+    weight = copy(vs_data.weight)
+    weight[index].=0.
+    return CuttedVelocityCells(index,weight,gas_dfs,solid_dfs,gas_midpoints,solid_midpoints,gas_weights,solid_weights)
 end
 function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF}) where{DIM,NDF}
     solid_dirs = findall(x->!isnothing(x[1])&&x[1].bound_enc<0,ps_data.neighbor.data)
@@ -417,14 +420,13 @@ function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF})
         svsdata = VS_Data{DIM,NDF}(
             vs_data.vs_num,
             vs_data.level,
-            copy(vs_data.weight),
+            vs_data.weight,
             vs_data.midpoint,
             discrete_maxwell(vs_data.midpoint,ic,amr.global_data),
             zeros(vs_data.vs_num,NDF,DIM),
             Matrix{Float64}(undef,0,0)
         )
         cvc = initialize_cutted_velocity_cell(normal,svsdata,amr)
-        svsdata.weight[cvc.indices].=0.
         ps_data.neighbor.data[i][1] = SolidNeighbor{DIM,NDF,i}(
             solid_cell.bound_enc,aux_point,normal,solid_cell,solid_cell.midpoint,zeros(DIM+2),cvc,svsdata
         )
@@ -459,42 +461,48 @@ end
 function make_bilinear_coeffi_2D(image_point::AbstractVector)
     return [image_point[1],image_point[2],image_point[1]*image_point[2],1.]
 end
+# function cvc_gas_correction!(aux_df,solid_neighbor::SolidNeighbor{DIM,NDF}) where{DIM,NDF}
+#     cvc = solid_neighbor.cvc
+#     b = Vector{Float64}(undef,4)
+#     for i in eachindex(cvc.indices)
+#         coeffi = make_bilinear_coeffi_2D(@views cvc.gas_midpoints[i,:])
+#         template = cvc.templates[i]
+#         for j in 1:NDF
+#             for k in eachindex(b)
+#                 b[k] = aux_df[template.indices[k],j]
+#             end
+#             cvc.gas_dfs[i,j] = dot(template.Ainv*b,coeffi)
+#         end
+#     end
+# end
 function cvc_gas_correction!(aux_df,solid_neighbor::SolidNeighbor{DIM,NDF}) where{DIM,NDF}
     cvc = solid_neighbor.cvc
-    b = Vector{Float64}(undef,4)
     for i in eachindex(cvc.indices)
-        coeffi = make_bilinear_coeffi_2D(@views cvc.gas_midpoints[i,:])
-        template = cvc.templates[i]
-        for j in 1:NDF
-            for k in eachindex(b)
-                b[k] = aux_df[template.indices[k],j]
-            end
-            cvc.gas_dfs[i,j] = dot(template.Ainv*b,coeffi)
-        end
+        @views cvc.gas_dfs[i,:] .= aux_df[cvc.indices[i],:]
     end
 end
 function cvc_density(aux_df,ib::AbstractCircle,vn,Θ,solid_neighbor)
     vs_data = solid_neighbor.vs_data
     cvc = solid_neighbor.cvc
     n = solid_neighbor.normal
-    @inbounds @views SF = sum(@. vs_data.weight * vn * aux_df[:,1] * (1.0 - Θ))
-    prim = get_bc(ib)
+    @inbounds @views SF = sum(@. cvc.weight * vn * aux_df[:,1] * (1.0 - Θ))
+    prim = get_bc(ib.bc)
     @inbounds SG = prim[4] / π *
-        sum(@. @views vs_data.weight * vn * exp(-prim[4] * ((vs_data.midpoint[:,1] - prim[2])^2 + (vs_data.midpoint[:,2] - prim[3])^2)) * Θ)
+        sum(@. @views cvc.weight * vn * exp(-prim[4] * ((vs_data.midpoint[:,1] - prim[2])^2 + (vs_data.midpoint[:,2] - prim[3])^2)) * Θ)
     for i in eachindex(cvc.indices)
-        midpoint = cvc.gas_midpoints[i]
-        if (vn_i = dot(midpoint,n))>0
-            SF += cvc.gas_weights[i]*vn_i*cvc.gas_dfs[i,1]
-        else
-            SG += @views cvc.gas_weights[i]*vn_i*exp(-prim[4] * ((cvc.solid_midpoints[i,1] - prim[2])^2 + (cvc.solid_midpoints[i,2] - prim[3])^2))
-        end
+        gas_mid = @views cvc.gas_midpoints[i,:]
+        solid_mid = @views cvc.solid_midpoints[i,:]
+        gas_vn = dot(gas_mid,n)
+        solid_vn = dot(solid_mid,n)
+        SF += cvc.gas_weights[i]*gas_vn*cvc.gas_dfs[i,1]
+        SG += @views prim[4] / π *cvc.solid_weights[i]*solid_vn*exp(-prim[4] * ((solid_mid[1] - prim[2])^2 + (solid_mid[2] - prim[3])^2))
     end
     return -SF/SG
 end
 function cvc_correction!(aux_df,aux_prim,solid_neighbor,amr)
     cvc = solid_neighbor.cvc
     for i in eachindex(cvc.indices)
-        cvc.solid_dfs[i,:] = discrete_maxwell(@view(cvc.solid_midpoints[i,:]),aux_prim,amr.global_data)
+        cvc.solid_dfs[i,:] .= discrete_maxwell(@view(cvc.solid_midpoints[i,:]),aux_prim,amr.global_data)
         @views @. aux_df[cvc.indices[i],:] = (cvc.gas_weights[i]*cvc.gas_dfs[i,:]+cvc.solid_weights[i]*cvc.solid_dfs[i,:])/(cvc.gas_weights[i]+cvc.solid_weights[i])
     end
 end
@@ -514,7 +522,7 @@ function update_solid_neighbor!(::DVM,ps_data::PS_Data{DIM,NDF},solid_neighbor::
     vs_interpolate!(ib_df,vs_data.level,ib_point,s_vs_data.df,
         s_vs_data.level,solid_cell.midpoint[dir],aux_df,aux_point[dir],amr)
     cvc_gas_correction!(aux_df,solid_neighbor)
-    ρw = cvc_density(aux_point,ib,vn,Θ,solid_neighbor)
+    ρw = cvc_density(aux_df,ib,vn,Θ,solid_neighbor)
     aux_prim = IB_prim(ib,aux_point,ρw)
     for i in 1:vs_data.vs_num
         if Θ[i]==1.
