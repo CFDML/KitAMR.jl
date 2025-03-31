@@ -1,9 +1,31 @@
+function calc_domain_flux(::DVM,here_vs::Face_VS_Data,face::DomainFace{DIM,NDF,Maxwellian},amr::AMR) where{DIM,NDF}
+    _,direction,midpoint,_,ps_data = unpack(face)
+    heavi,here_weight,here_mid,here_vn,here_df,here_sdf = unpack(here_vs)
+    Δt = amr.global_data.status.Δt
+    vs_data = ps_data.vs_data
+    nheavi = [!x for x in heavi]
+    there_mid = @views vs_data.midpoint[nheavi,:]
+    there_weight = @views vs_data.weight[nheavi]
+    there_vn = @views there_mid[:,direction]
+    @inbounds @views dx = [midpoint[j]-here_mid[i,j]*Δt-ps_data.midpoint[j] for i in axes(here_mid,1),j in axes(here_mid,2)]
+    @inbounds @views df = [here_df[i,j]+dot(dx[i,:],here_sdf[i,j,:]) for i in axes(here_df,1),j in axes(here_df,2)]
+    bc = get_bc(face.domain.bc)
+    bc[1] = calc_ρw(there_mid,df,bc,here_vn,there_vn,here_weight,there_weight,amr)
+    there_df = Matrix{Float64}(undef,size(there_mid,1),NDF)
+    for i in axes(there_df,1)
+        @views there_df[i,:] .= discrete_maxwell(there_mid[i,:],bc,amr.global_data)
+    end
+    @inbounds here_micro = [df[i,j]*here_vn[i] for i in axes(df,1),j in axes(df,2)]
+    @inbounds there_micro = [there_df[i,j]*there_vn[i] for i in axes(there_df,1),j in axes(there_df,2)]
+    return nothing,[here_micro,there_micro]
+end
 function calc_domain_flux(::DVM,here_vs::Face_VS_Data,face::DomainFace{DIM,NDF,SuperSonicInflow},amr::AMR) where{DIM,NDF}
     _,direction,midpoint,_,ps_data = unpack(face)
     heavi,_,here_mid,here_vn,here_df,here_sdf = unpack(here_vs)
     Δt = amr.global_data.status.Δt
     vs_data = ps_data.vs_data
-    there_mid = @views vs_data.midpoint[.!heavi,:]
+    nheavi = [!x for x in heavi]
+    there_mid = @views vs_data.midpoint[nheavi,:]
     there_vn = @views there_mid[:,direction]
     @inbounds @views dx = [midpoint[j]-here_mid[i,j]*Δt-ps_data.midpoint[j] for i in axes(here_mid,1),j in axes(here_mid,2)]
     @inbounds @views df = [here_df[i,j]+dot(dx[i,:],here_sdf[i,j,:]) for i in axes(here_df,1),j in axes(here_df,2)]
@@ -20,8 +42,9 @@ function calc_domain_flux(::DVM,here_vs::Face_VS_Data,face::DomainFace{DIM,NDF,U
     _,direction,_,_,ps_data = unpack(face)
     heavi,_,_,here_vn,_,_ = unpack(here_vs)
     vs_data = ps_data.vs_data
-    there_mid = @views vs_data.midpoint[.!heavi,:]
-    ndf = @views vs_data.df[.!heavi,:]
+    nheavi = [!x for x in heavi]
+    there_mid = @views vs_data.midpoint[nheavi,:]
+    ndf = @views vs_data.df[nheavi,:]
     there_vn = @views there_mid[:,direction]
     df = @views vs_data.df[heavi,:]
     @inbounds here_micro = [df[i,j]*here_vn[i] for i in axes(df,1),j in axes(df,2)]

@@ -64,7 +64,7 @@ function Configure(config::Dict)
         end
     end
     gas.μᵣ = ref_vhs_vis(gas.Kn,gas.αᵣ,gas.ωᵣ)
-    IB = config[:IB]
+    IB = haskey(config,:IB) ? config[:IB] : []
     for i in eachindex(IB)
         IB[i] = config_IB(IB[i],config)
     end
@@ -77,7 +77,7 @@ function Configure(config::Dict)
         end
     end
     return Configure{config[:DIM],config[:NDF]}(config[:geometry],config[:trees_num],
-        config[:quadrature],config[:vs_trees_num],config[:IC],config[:domain],config[:IB],
+        config[:quadrature],config[:vs_trees_num],config[:IC],config[:domain],IB,
         gas,Solver(config),user_defined)
 end
 

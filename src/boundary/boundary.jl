@@ -1,6 +1,6 @@
 include("Circle.jl")
 include("Vertices.jl")
-get_bc(bc::AbstractVector) = bc
+get_bc(bc::AbstractVector) = copy(bc)
 function calc_IB_ρw_2D(::AbstractVector,bc::AbstractVector,midpoint::AbstractMatrix,weight::AbstractVector,df::AbstractMatrix,vn::AbstractVector,Θ::AbstractVector)
     maxwellian_density_2D2F(@view(midpoint[:,1]),@view(midpoint[:,2]),@view(df[:,1]), bc, weight, Θ, vn)
 end
@@ -84,6 +84,7 @@ function save_boundary_result!(ib::AbstractBoundary,ps_data,solid_neighbor::Soli
     aux_qf = calc_qf(vs_data.midpoint,aux_df,vs_data.weight,aux_prim,global_data)
     aux_p = calc_pressure(vs_data.midpoint,aux_df,vs_data.weight,global_data)
     push!(boundary_results[ps_data.bound_enc].midpoints,aux_point)
+    push!(boundary_results[ps_data.bound_enc].normal,n)
     push!(boundary_results[ps_data.bound_enc].ps_solutions,Boundary_PS_Solution(aux_prim,aux_qf,aux_p))
 end
 function save_boundary_result!(ib::AbstractBoundary,ps_data::PS_Data{DIM,NDF},boundary_results::Vector{Boundary_Solution},amr::AMR{DIM,NDF}) where{DIM,NDF}
@@ -112,10 +113,18 @@ function solid_cell_index2ranks(indices::Vector,quadids::Vector,gfq::Vector) # g
     end
     return ranks,lids
 end
-function solid_flag(::Domain{Maxwellian},::AbstractVector) # Does midpoint locate at solid?
+function solid_flag(::Domain,::AbstractVector) # Does midpoint locate at solid?
     return false
 end
-
+function solid_flag(midpoint,global_data::Global_Data)
+    for boundary in global_data.config.IB
+        solid_flag(boundary,midpoint) && return true
+    end
+    for domain in global_data.config.domain
+        solid_flag(domain,midpoint) && return true
+    end
+    return false
+end
 function solid_cell_flag(boundaries::Vector{AbstractBoundary},midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data)
     for boundary in boundaries
         solid_cell_flag(boundary,midpoint,ds,global_data,solid_flag(boundary,midpoint))&& return true
@@ -258,7 +267,7 @@ function vs_extrapolate!(df::AbstractMatrix{Float64},sdf::AbstractMatrix{Float64
     end
 end
 function vs_extrapolate!(df::AbstractMatrix{Float64},sdf::AbstractArray{Float64},level::AbstractVector{Int8},dft::AbstractMatrix{Float64},levelt::Vector{Int8},dx::Vector{Float64},weight::AbstractVector{Float64},::AMR{DIM,NDF}) where{DIM,NDF}
-    ddf = [dot(sdf[i,j,:],dx) for i in axes(sdf,1), j in axes(sdf,2)]
+    ddf = @views [dot(sdf[i,j,:],dx) for i in axes(sdf,1), j in axes(sdf,2)]
     j = 1;flag = 0.0
     @inbounds for i in axes(dft,1)
         if levelt[i] == level[j]
@@ -281,7 +290,7 @@ function vs_extrapolate!(df::AbstractMatrix{Float64},sdf::AbstractArray{Float64}
         end
     end
 end
-function update_solid_cell!(ps_data::PS_Data{2,NDF},fluid_cells::Vector,amr::AMR{2,NDF}) where{NDF}
+function update_solid_cell!(::DVM,ps_data::PS_Data{2,NDF},fluid_cells::Vector,amr::AMR{2,NDF}) where{NDF}
     vs_data = ps_data.vs_data;vs_data.df.=0.
     weights = Matrix{Float64}(undef,vs_data.vs_num,length(fluid_cells))
     for i in eachindex(fluid_cells)
@@ -299,10 +308,30 @@ function update_solid_cell!(ps_data::PS_Data{2,NDF},fluid_cells::Vector,amr::AMR
         vs_extrapolate!(fdf,fsdf,f_vs_data.level,vs_data.df,vs_data.level,dx,weight_i,amr)
     end
 end
+function update_solid_cell!(::UGKS,ps_data::PS_Data{2,NDF},fluid_cells::Vector,amr::AMR{2,NDF}) where{NDF}
+    vs_data = ps_data.vs_data;vs_data.df.=0.;ps_data.w .= 0.
+    weights = Matrix{Float64}(undef,vs_data.vs_num,length(fluid_cells))
+    for i in eachindex(fluid_cells)
+        l = ps_data.midpoint-fluid_cells[i].midpoint;l/=norm(l)
+        weights[:,i] .= [max(0.,dot(u,l)/norm(u))^2 for u in eachrow(vs_data.midpoint)]
+    end
+    weight_i = Vector{Float64}(undef,vs_data.vs_num)
+    weight_sum = sum(weights,dims=2)
+    for i in eachindex(fluid_cells)
+        f_vs_data = fluid_cells[i].vs_data
+        for j in eachindex(weight_i)
+            weight_i[j] = weight_sum[j]==0. ? 1.0/length(fluid_cells) : weights[j,i]/weight_sum[j]
+        end
+        fdf = f_vs_data.df;fsdf = f_vs_data.sdf;dx = ps_data.midpoint-fluid_cells[i].midpoint
+        vs_extrapolate!(fdf,fsdf,f_vs_data.level,vs_data.df,vs_data.level,dx,weight_i,amr)
+        dw = @views [dot(sw[i,:],dx) for i in axes(sw,1)]
+        ps_data.w.+=(fluid_cells[i].w+dw)*weight_i
+    end
+end
 function update_solid_cell!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF}) where{DIM,NDF}
     fluid_dirs = findall(x->!isnothing(x[1])&&!isa(x[1],AbstractInsideSolidData)&&x[1].bound_enc>=0,ps_data.neighbor.data)
     fluid_cells = [ps_data.neighbor.data[i][1] for i in fluid_dirs]
-    update_solid_cell!(ps_data,fluid_cells,amr)
+    update_solid_cell!(amr.global_data.config.solver.flux,ps_data,fluid_cells,amr)
 end
 function update_solid_cell!(amr::AMR)
     for tree in amr.field.trees.data
@@ -320,7 +349,59 @@ function initialize_solid_neighbor!(amr::AMR)
         end
     end
 end
-
+function bilinear_coeffi_2D(p::AbstractMatrix) 
+    return @inbounds [
+        p[1,1] p[1,2] p[1,1]*p[1,2] 1.0;
+        p[2,1] p[2,2] p[2,1]*p[2,2] 1.0;
+        p[3,1] p[3,2] p[3,1]*p[3,2] 1.0;
+        p[4,1] p[4,2] p[4,1]*p[4,2] 1.0
+    ]
+end
+function opposite_condition(test_point,midpoint,closest_point)
+    all(x->x>=0,(test_point-midpoint).*(midpoint-closest_point))
+end
+function initialize_velocitytemplates(midpoint::Vector{Float64},vs_data::AbstractVsData{2},du::Vector{Float64})
+    id_in = findall(x->norm(x-midpoint)<norm(du)+EPS,eachrow(vs_data.midpoint))
+    id_s = sortperm([norm(x-midpoint) for x in eachrow(@views vs_data.midpoint[id_in,:])])
+    id = zeros(Int,4)
+    id[1:3] .= id_s[1:3]
+    id[4] = findfirst(x->opposite_condition(x,midpoint,vs_data.midpoint[id[1],:]),eachrow(@views vs_data.midpoint[id_s[4:end],:]))
+    midpoints = bilinear_coeffi_2D(@views vs_data.midpoint[id,:])
+    try inv(midpoints)
+    catch
+        dis = [norm(x-midpoint) for x in eachrow(@views vs_data.midpoint[id,:])]
+        @show dis
+        @show vs_data.midpoint[id,:] midpoint
+        throw(`singular!`)
+    end
+    return VelocityTemplates(id,inv(midpoints))
+end
+function initialize_cutted_velocity_cell(n::Vector{Float64},vs_data::VS_Data{2},amr::AMR{2,NDF}) where{NDF}
+    any(x->abs(x)<1e-6,n)&&return CuttedVelocityCell(Int[],Vector{Float64}[],Vector{Float64}[],Float64[],VelocityTemplates[])
+    global_data = amr.global_data
+    du = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
+        global_data.config.vs_trees_num[i] for i in 1:2]
+    vertices = [zeros(2) for _ in 1:4]
+    index = Int[];solid_weights = Float64[];gas_weights = Float64[]
+    solid_midpoints = Vector{Float64}[];gas_midpoints = Vector{Float64}[]
+    templates = VelocityTemplates[]
+    for i in 1:vs_data.vs_num
+        ddu = du./2^(vs_data.level[i])
+        for j in eachindex(vertices)
+            vertices[j] .= @views 0.5*RMT[2][j].*ddu+vs_data.midpoint[i,:]
+        end
+        flag,solid_weight,gas_weight,solid_mid,gas_mid = cut_rect(n,vertices)
+        if flag
+            push!(index,i);push!(solid_weights,solid_weight);push!(gas_weights,gas_weight)
+            push!(solid_midpoints,solid_mid);push!(gas_midpoints,gas_mid)
+            push!(templates,initialize_velocitytemplates(gas_mid,vs_data,du))
+        end
+    end
+    N = length(index)
+    gas_dfs = zeros(N,NDF);solid_dfs = zeros(N,NDF)
+    gas_midpoints = [gas_midpoints[i][j] for i in 1:N,j in 1:2];solid_midpoints = [solid_midpoints[i][j] for i in 1:N,j in 1:2]
+    return CuttedVelocityCell(index,gas_dfs,solid_dfs,gas_midpoints,solid_midpoints,gas_weights,solid_weights,templates)
+end
 function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF}) where{DIM,NDF}
     solid_dirs = findall(x->!isnothing(x[1])&&x[1].bound_enc<0,ps_data.neighbor.data)
     vs_data = ps_data.vs_data
@@ -336,14 +417,16 @@ function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF})
         svsdata = VS_Data{DIM,NDF}(
             vs_data.vs_num,
             vs_data.level,
-            vs_data.weight,
+            copy(vs_data.weight),
             vs_data.midpoint,
             discrete_maxwell(vs_data.midpoint,ic,amr.global_data),
             zeros(vs_data.vs_num,NDF,DIM),
             Matrix{Float64}(undef,0,0)
         )
+        cvc = initialize_cutted_velocity_cell(normal,svsdata,amr)
+        svsdata.weight[cvc.indices].=0.
         ps_data.neighbor.data[i][1] = SolidNeighbor{DIM,NDF,i}(
-            solid_cell.bound_enc,aux_point,normal,solid_cell,solid_cell.midpoint,svsdata
+            solid_cell.bound_enc,aux_point,normal,solid_cell,solid_cell.midpoint,zeros(DIM+2),cvc,svsdata
         )
     end
 end
@@ -373,7 +456,49 @@ function vs_interpolate!(f_df::AbstractMatrix,f_level::AbstractVector{Int8},fx,s
         end
     end
 end
-function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidNeighbor{DIM,NDF,ID},amr::AMR) where{DIM,NDF,ID}
+function make_bilinear_coeffi_2D(image_point::AbstractVector)
+    return [image_point[1],image_point[2],image_point[1]*image_point[2],1.]
+end
+function cvc_gas_correction!(aux_df,solid_neighbor::SolidNeighbor{DIM,NDF}) where{DIM,NDF}
+    cvc = solid_neighbor.cvc
+    b = Vector{Float64}(undef,4)
+    for i in eachindex(cvc.indices)
+        coeffi = make_bilinear_coeffi_2D(@views cvc.gas_midpoints[i,:])
+        template = cvc.templates[i]
+        for j in 1:NDF
+            for k in eachindex(b)
+                b[k] = aux_df[template.indices[k],j]
+            end
+            cvc.gas_dfs[i,j] = dot(template.Ainv*b,coeffi)
+        end
+    end
+end
+function cvc_density(aux_df,ib::AbstractCircle,vn,Θ,solid_neighbor)
+    vs_data = solid_neighbor.vs_data
+    cvc = solid_neighbor.cvc
+    n = solid_neighbor.normal
+    @inbounds @views SF = sum(@. vs_data.weight * vn * aux_df[:,1] * (1.0 - Θ))
+    prim = get_bc(ib)
+    @inbounds SG = prim[4] / π *
+        sum(@. @views vs_data.weight * vn * exp(-prim[4] * ((vs_data.midpoint[:,1] - prim[2])^2 + (vs_data.midpoint[:,2] - prim[3])^2)) * Θ)
+    for i in eachindex(cvc.indices)
+        midpoint = cvc.gas_midpoints[i]
+        if (vn_i = dot(midpoint,n))>0
+            SF += cvc.gas_weights[i]*vn_i*cvc.gas_dfs[i,1]
+        else
+            SG += @views cvc.gas_weights[i]*vn_i*exp(-prim[4] * ((cvc.solid_midpoints[i,1] - prim[2])^2 + (cvc.solid_midpoints[i,2] - prim[3])^2))
+        end
+    end
+    return -SF/SG
+end
+function cvc_correction!(aux_df,aux_prim,solid_neighbor,amr)
+    cvc = solid_neighbor.cvc
+    for i in eachindex(cvc.indices)
+        cvc.solid_dfs[i,:] = discrete_maxwell(@view(cvc.solid_midpoints[i,:]),aux_prim,amr.global_data)
+        @views @. aux_df[cvc.indices[i],:] = (cvc.gas_weights[i]*cvc.gas_dfs[i,:]+cvc.solid_weights[i]*cvc.solid_dfs[i,:])/(cvc.gas_weights[i]+cvc.solid_weights[i])
+    end
+end
+function update_solid_neighbor!(::DVM,ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidNeighbor{DIM,NDF,ID},amr::AMR) where{DIM,NDF,ID}
     ib = amr.global_data.config.IB[ps_data.bound_enc]
     vs_data = ps_data.vs_data
     aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
@@ -388,6 +513,35 @@ function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidN
     Θ = heaviside.(vn)
     vs_interpolate!(ib_df,vs_data.level,ib_point,s_vs_data.df,
         s_vs_data.level,solid_cell.midpoint[dir],aux_df,aux_point[dir],amr)
+    cvc_gas_correction!(aux_df,solid_neighbor)
+    ρw = cvc_density(aux_point,ib,vn,Θ,solid_neighbor)
+    aux_prim = IB_prim(ib,aux_point,ρw)
+    for i in 1:vs_data.vs_num
+        if Θ[i]==1.
+            aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),aux_prim,amr.global_data)
+        end
+    end
+    cvc_correction!(aux_df,aux_prim,solid_neighbor,amr)
+    @. solid_neighbor.vs_data.df = aux_df+(aux_df-ib_df)/dxL*dxR
+end
+function update_solid_neighbor!(::UGKS,ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidNeighbor{DIM,NDF,ID},amr::AMR) where{DIM,NDF,ID}
+    ib = amr.global_data.config.IB[ps_data.bound_enc]
+    vs_data = ps_data.vs_data
+    aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
+    dir = get_dir(ID)
+    solid_cell = solid_neighbor.solid_cell;s_vs_data = solid_cell.vs_data
+    dxL = 0.5*ps_data.ds[dir]
+    dxR = norm(solid_cell.midpoint-aux_point)
+    vn = @views [dot(v,n) for v in eachrow(ps_data.vs_data.midpoint)]
+    aux_df = zeros(vs_data.vs_num,NDF)
+    ib_point = aux_point[dir]+0.5*(ps_data.midpoint[dir]-solid_cell.midpoint[dir])
+    ib_df = @views vs_data.df+vs_data.sdf[:,:,dir]*(ib_point-ps_data.midpoint[dir])
+    Θ = heaviside.(vn)
+    vs_interpolate!(ib_df,vs_data.level,ib_point,s_vs_data.df,
+        s_vs_data.level,solid_cell.midpoint[dir],aux_df,aux_point[dir],amr)
+
+
+        
     ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
     aux_prim = IB_prim(ib,aux_point,ρw)
     for i in 1:vs_data.vs_num
@@ -400,7 +554,7 @@ end
 function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF}) where{DIM,NDF}
     solid_neighbors = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
     for i in solid_neighbors
-        update_solid_neighbor!(ps_data,ps_data.neighbor.data[i][1],amr)
+        update_solid_neighbor!(amr.global_data.config.solver.flux,ps_data,ps_data.neighbor.data[i][1],amr)
     end
 end
 function update_solid_neighbor!(amr::AMR{DIM,NDF}) where{DIM,NDF}

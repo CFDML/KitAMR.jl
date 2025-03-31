@@ -110,12 +110,13 @@ function residual_check!(ps_data::PS_Data,prim::Vector{Float64},global_data::Glo
 end
 function residual_comm!(global_data::Global_Data)
     Res = global_data.status.residual
+    fp = PointerWrapper(global_data.forest.p4est)
+    N = fp.global_num_quadrants[]
     Res.step%RES_CHECK_INTERVAL!=0&&(return nothing)
     MPI.Reduce!(Res.sumRes,(x,y)->x.+y,0,MPI.COMM_WORLD)
     MPI.Reduce!(Res.sumAvg,(x,y)->x.+y,0,MPI.COMM_WORLD)
     if MPI.Comm_rank(MPI.COMM_WORLD)==0
-        nx = maximum(global_data.config.trees_num*2^global_data.config.solver.AMR_PS_MAXLEVEL)
-        @. Res.residual=sqrt(Res.sumRes*nx)/(Res.sumAvg+EPS)
+        @. Res.residual=sqrt(Res.sumRes*N)/(Res.sumAvg+EPS)
     end
     MPI.Bcast!(Res.residual,0,MPI.COMM_WORLD)
     Res.sumRes.=0.;Res.sumAvg.=0.

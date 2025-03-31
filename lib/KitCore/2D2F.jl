@@ -98,7 +98,7 @@ function maxwellian_density_2D2F(
     @inbounds SF = sum(@. weight * vn * h * (1.0 - Θ))
     @inbounds SG =
         prim[4] / π *
-        sum(@. weight * vn * exp(-prim[4] * ((u - prim[2])^2 + (v - prim[3])^2)) * Θ)
+        sum(@. weight * vn * exp(-prim[4] * ((u - prim[2])^2 + (v - prim[3])^2)) * Θ) #1/(2*√(π*prim[4]))
     return -SF / SG
 end
 function macro_flux_2D2F(
