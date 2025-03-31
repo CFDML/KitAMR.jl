@@ -98,26 +98,32 @@ function cut_rect(n::Vector{Float64},vertices::Vector{Vector{Float64}}) # The sp
         push!(indices,6)
         i+=1
     end
-    clp = findall(x->dot(x,n)==0.,vertices)
+    clp = findall(x->dot(x,n)==0.,vertices) # Number of vertices lying on the discontinuity
     if length(clp)+i==1
-        return false,0.
+        return false,0.,0.,Float64[],Float64[]
     else
         append!(points,vertices)
-        append!(indices,CLP)
+        append!(indices,CLP) # CLP is defined in dim.jl
         sid = sortperm(indices)
         indices = indices[sid]
         points = points[sid]
         aid = findfirst(x->iseven(x)||in(x,CLP[clp]),indices)
         bid = findlast(x->iseven(x)||in(x,CLP[clp]),indices)
-        A = Matrix{Float64}(undef,2,bid-aid+1)
+        A = Matrix{Float64}(undef,2,bid-aid+1);B = Matrix{Float64}(undef,2,length(indices)-(bid-aid)+1)
         for i in aid:bid
             A[:,i-aid+1] .= points[i]
         end
+        for i in 0:length(indices)-(bid-aid)
+            index = bid+i>length(indices) ? (bid+i)%length(indices) : bid+i
+            B[:,i+1] .= points[index]
+        end
         l = points[bid]-points[aid]
         if n[1]*l[2]-n[2]*l[1]<0
-            return true,gaussian_area(A)/((xmax-xmin)*(ymax-ymin))
+            solid_weight = gaussian_area(A)
+            return true,solid_weight,((xmax-xmin)*(ymax-ymin))-solid_weight,vec(sum(A,dims=2))./size(A,2),vec(sum(B,dims=2))./size(B,2) # solid first
         else
-            return true,1-gaussian_area(A)/((xmax-xmin)*(ymax-ymin))
+            gas_weight = gaussian_area(A)
+            return true,((xmax-xmin)*(ymax-ymin))-gas_weight,gas_weight,vec(sum(B,dims=2))./size(B,2),vec(sum(A,dims=2))./size(A,2)
         end
     end
 end

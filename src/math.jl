@@ -168,7 +168,22 @@ function calc_qf(vs_data::AbstractVsData{3,1}, prim::AbstractVector)
         vs_data.weight,
     )
 end
-
+function calc_ρw(
+    there_midpoint::AbstractMatrix,
+    here_df::AbstractMatrix,
+    prim,
+    here_vn::AbstractVector,
+    there_vn::AbstractVector,
+    here_weight,
+    there_weight,
+    ::AMR{2,2}
+)
+    @inbounds @views SF = sum(@. here_weight * here_vn * here_df[:,1])
+    @inbounds @views SG =
+        prim[4] / π *
+        sum(@. there_weight * there_vn * exp(-prim[4] * ((there_midpoint[:,1] - prim[2])^2 + (there_midpoint[:,2] - prim[3])^2)))
+    return -SF / SG
+end
 function calc_ρw(
     vs_data::VS_Data{2,2},
     df0::AbstractMatrix,

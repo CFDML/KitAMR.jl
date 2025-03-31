@@ -65,5 +65,6 @@ struct Result
 end
 struct Boundary_Solution
     midpoints::Vector{Vector{Float64}}
+    normal::Vector{Vector{Float64}}
     ps_solutions::Vector{Boundary_PS_Solution}
 end

@@ -24,6 +24,8 @@ mutable struct SolidNeighbor{DIM,NDF,ID} <:AbstractPsData{DIM,NDF}
     normal::Vector{Float64}
     solid_cell::AbstractPsData{DIM,NDF}
     midpoint::Vector{Float64}
+    w::Vector{Float64}
+    cvc::CuttedVelocityCells
     vs_data::VS_Data{DIM,NDF}
 end
 mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}

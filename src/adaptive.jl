@@ -132,6 +132,7 @@ function ps_refine_flag(
     if ps_data.bound_enc!=0||domain_flag(global_data,ps_data.midpoint,ps_data.ds)
         return Cint(1)
     end
+    global_data.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,global_data,qp.level[]) && return Cint(1)
     agrad = [maximum(abs.(ps_data.sw[i,:])) for i in 1:DIM+2]
     rgrad = maximum(agrad ./ (global_data.status.gradmax.+EPS))
     if rgrad > 2.0^(DIM+qp.level[] - global_data.config.solver.AMR_PS_MAXLEVEL) * ADAPT_COEFFI_PS
@@ -339,7 +340,7 @@ function pre_ps_coarsen_flag(forest::Ptr{p4est_t},which_tree,quadrants)
         for i = 1:2^DIM
             qp = PointerWrapper(quadrants_wrap[i])
             ds,midpoint = quad_to_cell(fp,which_tree,qp)
-            (global_data.config.user_defined.static_ps_refine_flag(midpoint,ds,global_data,qp.level[])||
+            (global_data.config.user_defined.static_ps_refine_flag(midpoint,ds,global_data,qp.level[])&&!solid_flag(midpoint,global_data)||
                 IB_flag(global_data.config.IB,aux_points,midpoint,ds)||
                 boundary_flag(midpoint,ds,global_data))&&return Cint(0)
         end
@@ -381,6 +382,7 @@ function ps_coarsen_flag(ps_datas::Vector{PS_Data}, levels::Vector{Int}, amr::AM
     for i = 1:2^DIM
         ps_data = ps_datas[i]
         (ps_data.bound_enc!=0||domain_flag(global_data,ps_data.midpoint,ps_data.ds)) && return Cint(0)
+        global_data.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,global_data,levels[i]-1) && return Cint(0)
         agrad = [maximum(abs.(ps_data.sw[i,:])) for i in 1:DIM+2]
         rgrad = maximum(agrad ./ (global_data.status.gradmax.+EPS))
         if rgrad > 2.0^(DIM+levels[i] - global_data.config.solver.AMR_PS_MAXLEVEL) * ADAPT_COEFFI_PS

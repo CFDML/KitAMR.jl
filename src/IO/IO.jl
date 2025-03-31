@@ -284,7 +284,7 @@ end
 # end
 function save_boundary_result(dir_path::String,amr::AMR{DIM,NDF}) where{DIM,NDF}
     ibs = amr.global_data.config.IB
-    boundary_results = [Boundary_Solution(Vector{Float64}[],Boundary_PS_Solution[])]
+    boundary_results = [Boundary_Solution(Vector{Float64}[],Vector{Float64}[],Boundary_PS_Solution[])]
     for tree in amr.field.trees.data
         for ps_data in tree
             (isa(ps_data,InsideSolidData)||ps_data.bound_enc<=0)&&continue
@@ -299,6 +299,7 @@ function boundary_write_csv(csvname,results,config::ConfigureForSave{2})
     for i in eachindex(config.IB)
         df = DataFrame()
         df.x=[x[1] for x in results[i].midpoints];df.y=[x[2] for x in results[i].midpoints]
+        df.nx = [x[1] for x in results[i].normal];df.ny = [x[2] for x in results[i].normal]
         df.rho=[x.prim[1] for x in results[i].ps_solutions]
         df.u=[x.prim[2] for x in results[i].ps_solutions]
         df.v=[x.prim[3] for x in results[i].ps_solutions]
@@ -323,6 +324,7 @@ function boundary_result2csv(dirname::String,csvname::String)
                 result = results[j]
                 append!(result.ps_solutions,r.ps_solutions)
                 append!(result.midpoints,r.midpoints)
+                append!(result.normal,r.normal)
             end
         end
     end
@@ -440,7 +442,8 @@ function result2vtk(dirname::String,vtkname::String)
             # vtk["u"] = [ps_solution.prim[2] for ps_solution in result.solution.ps_solutions]
             # vtk["v"] = [ps_solution.prim[3] for ps_solution in result.solution.ps_solutions]
             vtk["velocity"] = ([ps_solution.prim[2] for ps_solution in result.solution.ps_solutions],
-                [ps_solution.prim[3] for ps_solution in result.solution.ps_solutions])
+                [ps_solution.prim[3] for ps_solution in result.solution.ps_solutions],
+                [0. for _ in result.solution.ps_solutions])
             vtk["T"] = [1/ps_solution.prim[end] for ps_solution in result.solution.ps_solutions]
             # vtk["qfx"] = [ps_solution.qf[1] for ps_solution in result.solution.ps_solutions]
             # vtk["qfy"] = [ps_solution.qf[2] for ps_solution in result.solution.ps_solutions]
