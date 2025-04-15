@@ -115,19 +115,15 @@ function cut_rect(n::Vector{Float64},vertices::Vector{Vector{Float64}}) # The sp
         end
         for i in 0:length(indices)-(bid-aid)
             index = bid+i>length(indices) ? (bid+i)%length(indices) : bid+i
-            # try B[:,i+1] .= points[index]
-            # catch
-            #     @show clp bid aid i index length(indices)
-            # end
             B[:,i+1] .= points[index]
         end
         l = points[bid]-points[aid]
         if n[1]*l[2]-n[2]*l[1]<0
-            solid_weight = gaussian_area(A)
-            return true,solid_weight,((xmax-xmin)*(ymax-ymin))-solid_weight,vec(sum(A,dims=2))./size(A,2),vec(sum(B,dims=2))./size(B,2) # solid first
-        else
             gas_weight = gaussian_area(A)
-            return true,((xmax-xmin)*(ymax-ymin))-gas_weight,gas_weight,vec(sum(B,dims=2))./size(B,2),vec(sum(A,dims=2))./size(A,2)
+            return true,gas_weight,((xmax-xmin)*(ymax-ymin))-gas_weight,vec(sum(A,dims=2))./size(A,2),vec(sum(B,dims=2))./size(B,2) # solid first
+        else
+            solid_weight = gaussian_area(A)
+            return true,((xmax-xmin)*(ymax-ymin))-solid_weight,solid_weight,vec(sum(B,dims=2))./size(B,2),vec(sum(A,dims=2))./size(A,2)
         end
     end
 end

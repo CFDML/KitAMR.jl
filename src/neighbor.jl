@@ -159,6 +159,7 @@ function initialize_neighbor_data!(ip::PointerWrapper{p4est_iter_volume_info_t},
             push!(ps_data.neighbor.data,data);push!(ps_data.neighbor.state,state)
         end
     end
+    return nothing
 end
 function initialize_neighbor_data!(ip::PointerWrapper{p8est_iter_volume_info_t}, data, dp)
     amr = unsafe_pointer_to_objref(data)
@@ -173,6 +174,7 @@ function initialize_neighbor_data!(ip::PointerWrapper{p8est_iter_volume_info_t},
             i - 1,
         )
     end
+    return nothing
 end
 function initialize_neighbor_data!(info, data)
     AMR_volume_iterate(info, data, P4est_PS_Data, initialize_neighbor_data!)
@@ -185,6 +187,36 @@ function initialize_neighbor_data!(ps4est::P_pxest_t, amr::AMR)
         p_amr,
         initialize_neighbor_data!,
     )
+end
+
+function initialize_gas_cells_neighbor_data!(ps4est::P_pxest_t, amr::AMR)
+    p_amr = pointer_from_objref(amr)
+    GC.@preserve amr AMR_4est_volume_iterate(
+        ps4est,
+        amr.global_data.forest.ghost,
+        p_amr,
+        initialize_gas_cells_neighbor_data!,
+    )
+end
+function initialize_gas_cells_neighbor_data!(info,data)
+    AMR_volume_iterate(info, data, P4est_PS_Data, initialize_gas_cells_neighbor_data!)
+end
+function initialize_gas_cells_neighbor_data!(ip::PointerWrapper{p4est_iter_volume_info_t}, data, dp)
+    amr = unsafe_pointer_to_objref(data)
+    ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+    isa(ps_data,InsideSolidData) && return nothing
+    ps_data.bound_enc<=0&&return nothing
+    for i in 4:7
+        data,state = access_neighbor(
+            pointer(ip.p4est),
+            local_quadid(ip),
+            amr.global_data,
+            amr.ghost.ghost_wrap,
+            i,
+        )
+        push!(ps_data.neighbor.data,data);push!(ps_data.neighbor.state,state)
+    end
+    return nothing
 end
 #=
 face_micro_nums: 1->4时记1，只需在state=-1时+0.25即可
@@ -212,7 +244,7 @@ function update_neighbor_kernel!(ip::PointerWrapper{p4est_iter_volume_info_t}, d
                 i,
             )
         end
-    elseif ps_data.bound_enc<0
+    elseif ps_data.bound_enc!=0
         for i in 4:7
             data,state = access_neighbor(
                 pointer(ip.p4est),
