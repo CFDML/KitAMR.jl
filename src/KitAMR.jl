@@ -8,6 +8,7 @@ using Parameters
 using SpecialFunctions
 using StaticArrays
 # using PythonCall
+using Suppressor
 using WriteVTK
 using Documenter
 using Reexport

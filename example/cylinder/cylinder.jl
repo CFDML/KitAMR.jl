@@ -1,7 +1,7 @@
 using KitAMR,MPI
-include("udf.jl")
+include("./example/cylinder/cylinder_udf.jl")
 MPI.Init()
-config = KitAMR.read_config("configure_newIB.txt")
+config = KitAMR.read_config("./example/cylinder/configure_cylinder.txt")
 ps4est,amr = KitAMR.init(config);
 KitAMR.listen_for_save!()
 max_sim_time = 20.
@@ -18,7 +18,7 @@ for i in 1:nt
     KitAMR.data_exchange!(ps4est, amr)
     KitAMR.check_for_convergence(amr)&&break
     KitAMR.check!(i,ps4est,amr)
-    isnan(maximum(amr.global_data.status.residual.residual))&&break
+    # isnan(maximum(amr.global_data.status.residual.residual))&&break
 end
 KitAMR.save_result(ps4est,amr)
 KitAMR.finalize!(ps4est,amr)

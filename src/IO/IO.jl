@@ -160,7 +160,7 @@ function write_vs_VTK(vs_data::AbstractVsData{2,2},amr::AMR{2,2},filename::Strin
     dx = (xmax - xmin) / Nx/2^AMR_VS_MAXLEVEL
     dy = (ymax - ymin) / Ny/2^AMR_VS_MAXLEVEL
     D = [dx,dy]
-    vertices = Matrix{Float64}(undef,2,8*length(vs_data.level))
+    vertices = Matrix{Float64}(undef,2,4*length(vs_data.level))
     midpoint = vs_data.midpoint
     level = vs_data.level
     dlevel = -(vs_data.level .- AMR_VS_MAXLEVEL)
@@ -169,10 +169,36 @@ function write_vs_VTK(vs_data::AbstractVsData{2,2},amr::AMR{2,2},filename::Strin
         for j in 1:4
             @. vertices[:,(i-1)*4+j] = midpoint[i,:]+RMT[2][j]*2^dlevel[i]*D/2
         end
-        cells[i] = MeshCell(VTKCellTypes.VTK_VOXEL,(1:4).+4*(i-1))
+        cells[i] = MeshCell(VTKCellTypes.VTK_PIXEL,(1:4).+4*(i-1))
     end
     vtk_grid(filename,vertices,cells;append=false) do vtk
         cell_datas = fieldvalues_fn(vs_data)
+        for i in eachindex(fieldnames)
+            vtk[fieldnames[i],VTKCellData()] = cell_datas[i]
+        end
+    end
+end
+function write_vs_VTK(df::AbstractMatrix,vs_data::AbstractVsData{2,2},amr::AMR{2,2},filename::String,fieldnames::Vector{String},fieldvalues_fn)
+    global_data = amr.global_data
+    xmin,xmax,ymin,ymax = global_data.config.quadrature
+    Nx,Ny = global_data.config.vs_trees_num
+    AMR_VS_MAXLEVEL = global_data.config.solver.AMR_VS_MAXLEVEL
+    dx = (xmax - xmin) / Nx/2^AMR_VS_MAXLEVEL
+    dy = (ymax - ymin) / Ny/2^AMR_VS_MAXLEVEL
+    D = [dx,dy]
+    vertices = Matrix{Float64}(undef,2,4*length(vs_data.level))
+    midpoint = vs_data.midpoint
+    level = vs_data.level
+    dlevel = -(vs_data.level .- AMR_VS_MAXLEVEL)
+    cells = Vector{MeshCell}(undef,length(level))
+    for i in eachindex(level)
+        for j in 1:4
+            @. vertices[:,(i-1)*4+j] = midpoint[i,:]+RMT[2][j]*2^dlevel[i]*D/2
+        end
+        cells[i] = MeshCell(VTKCellTypes.VTK_PIXEL,(1:4).+4*(i-1))
+    end
+    vtk_grid(filename,vertices,cells;append=false) do vtk
+        cell_datas = fieldvalues_fn(vs_data,df)
         for i in eachindex(fieldnames)
             vtk[fieldnames[i],VTKCellData()] = cell_datas[i]
         end
@@ -234,7 +260,7 @@ function neighbor_num(::InsideSolidData,ps4est::P_pxest_t,amr::AMR{DIM},quadid::
     end
     return neighbor_num
 end
-function save_result(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF}
+function save_result(ps4est::P_pxest_t,amr::AMR{DIM,NDF};dir_path="") where{DIM,NDF}
     fp = PointerWrapper(ps4est)
     ps_solution = Vector{PS_Solution}(undef,fp.local_num_quadrants[])
     neighbor_nums = Vector{Vector{Int}}(undef,fp.local_num_quadrants[])
@@ -253,7 +279,11 @@ function save_result(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF}
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
     result = Result(solution,MeshInfo(neighbor_nums))
     MPI.Barrier(MPI.COMM_WORLD)
-    dir_path = "./result"*Dates.format(now(), "yyyy-mm-dd_HH-MM")*"/"
+    if isempty(dir_path)
+        dir_path = "./result"*Dates.format(now(), "yyyy-mm-dd_HH-MM")*"/"
+    else
+        dir_path = "./"*dir_path*"/"
+    end
     !isdir(dir_path) && mkpath(dir_path)
     p4est_save_ext("p",ps4est,Cint(0),Cint(0))
     if rank==0
