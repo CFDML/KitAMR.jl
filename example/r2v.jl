@@ -9,6 +9,6 @@ KitAMR.result2vtk("v100","v100")
 KitAMR.result2vtk("result2025-03-06_14-33","test upwind solid corner")
 KitAMR.result2vtk("result2025-03-31_17-28","v28")#11600steps with 1TOLERANCE
 KitAMR.result2vtk("result2025-02-21_20-27","test adaptive temp")#7000steps with 100TOLERANCE
-KitAMR.result2vtk("result2025-02-24_20-05","./MixedBoundary/grid")
-KitAMR.result2vtk("result2025-04-15_16-40","test_avip")
-KitAMR.boundary_result2csv("result2025-04-15_16-40","avip")
+KitAMR.result2vtk("result2025-04-21_16-57","test_airfoil_dynamic")
+KitAMR.result2vtk("result2025-04-19_16-14","test_cylinder_vsrefine")
+KitAMR.boundary_result2csv("result2025-04-22_16-39","test_airfoil_vsadapt")   

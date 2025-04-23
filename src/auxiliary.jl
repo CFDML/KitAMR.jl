@@ -233,3 +233,11 @@ function find_intersections(s_midpoint, f_midpoint, closed_curve)
         throw("Horizontal or vertical line segment is expected!")
     end
 end
+function fieldvalues_fn(vs_data,aux_df)
+    NDF = typeof(vs_data).parameters[2]
+    return [aux_df[:,i] for i in 1:NDF]
+end
+function fieldvalues_fn(vs_data)
+    NDF = typeof(vs_data).parameters[2]
+    return [vs_data.df[:,i] for i in 1:NDF]
+end

@@ -46,7 +46,10 @@ function vs_merge!(sdf::AbstractMatrix,sdf_n::AbstractMatrix,level::Vector,level
         end
     end
 end
-function boundary_flag(boundary::Domain,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data) # Domain boundary flag
+function boundary_flag(::Domain,::AbstractVector,::AbstractVector,::Global_Data) # Domain boundary flag
+    return false
+end
+function boundary_flag(boundary::Domain{Maxwellian},midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data) # Domain boundary flag
     index = Int(floor((boundary.id-1)/2))+1
     abs(midpoint[index] - global_data.config.geometry[boundary.id]) < ds[index] && return true
 end
@@ -569,7 +572,7 @@ function adaptive!(ps4est::P_pxest_t,amr::AMR;ps_interval=10,vs_interval=80,part
     amr.global_data.status.residual.redundant_step>0&&(return nothing)
     res = maximum(amr.global_data.status.residual.residual)
     converge_ratio = res/TOLERANCE>100 ? 1 : Int(floor(100*TOLERANCE/res))
-    if amr.global_data.status.ps_adapt_step == ps_interval*converge_ratio
+    if amr.global_data.status.ps_adapt_step > ps_interval*converge_ratio
         if amr.global_data.config.solver.PS_DYNAMIC_AMR
             update_slope!(amr)
             update_gradmax!(amr)

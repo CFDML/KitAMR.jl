@@ -71,8 +71,6 @@ function iterate!(::Euler,amr::AMR{DIM}) where{DIM}
                 ps_data.flux .= 0.0
             end
             prim = get_prim(ps_data, global_data)
-            # @assert !any(x->isnan(x),prim) `prim NaN!`,ps_data.bound_enc,ps_data.midpoint,prim,ps_data.vs_data.df
-            # @assert !any(x->abs(x)>1e10,prim) `prim Too Large!`,ps_data.bound_enc,ps_data.midpoint,prim,ps_data.vs_data.df
             f = vs_data.df
             if 1/prim[end]<1e-3
                 @. f = max(f,0.)
@@ -84,19 +82,11 @@ function iterate!(::Euler,amr::AMR{DIM}) where{DIM}
                 τ = get_τ(prim, gas.μᵣ, gas.ω)
                 ps_data.qf .= qf = calc_qf(vs_data, prim)
                 F = discrete_maxwell(vs_data.midpoint, prim, global_data)
-                # @assert !any(x->isnan(x),F) `F NaN!`,ps_data.bound_enc,ps_data.midpoint,prim,F
-                # @assert !any(x->abs(x)>1e10,F) `F Too Large!`,ps_data.bound_enc,ps_data.midpoint,prim,F
                 F .+= shakhov_part(vs_data.midpoint, F, prim, qf, global_data)
-                # @assert !any(x->isnan(x),F) `F+ NaN!`,ps_data.bound_enc,ps_data.midpoint,prim,F
-                # @assert !any(x->abs(x)>1e10,F) `F+ Too Large!`,ps_data.bound_enc,ps_data.midpoint,prim,F
-                # @. f = abs((τ-Δt)/τ*f+Δt/τ*F+Δt/area*vs_data.flux)
                 @. f = (τ-Δt)/τ*f+Δt/τ*F+Δt/area*vs_data.flux
             end
             residual_check!(ps_data,prim,global_data)
             ps_data.prim .= prim
-            # for fi in f
-            #     fi<0. &&(fi=0.)
-            # end
             vs_data.flux .= 0.0
         end
     end
