@@ -102,6 +102,7 @@ function vs_refine!(trees::PS_Trees{DIM,NDF}, global_data::Global_Data{DIM,NDF})
             vs_data.flux = reshape(lnflux, vs_data.vs_num, NDF)
         end
     end
+    
 end
 function midpoint_refine_replace!(DIM::Integer,lnmidpoint::AbstractVector, midpoint_new::AbstractMatrix, vs_num::Int, index::Int)
     for i = 1:DIM

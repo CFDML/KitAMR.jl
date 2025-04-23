@@ -102,10 +102,9 @@ function save_boundary_result!(ib::AbstractBoundary,ps_data,solid_neighbor::Soli
     push!(boundary_results[ps_data.bound_enc].midpoints,aux_point)
     push!(boundary_results[ps_data.bound_enc].normal,n)
     push!(boundary_results[ps_data.bound_enc].ps_solutions,Boundary_PS_Solution(aux_prim,aux_qf,aux_p))
-    function fieldvalues_fn(vs_data,aux_df)
-        return [aux_df[:,1],aux_df[:,2]]
-    end
-    @suppress write_vs_VTK(aux_df,vs_data,amr,"./boundary_vs/"*string(ps_data.midpoint)*string(n),["h","b"],fieldvalues_fn)
+    dir_path = "./boundary_vs"
+    !isdir(dir_path) && mkpath(dir_path)
+    @suppress write_vs_VTK(aux_df,vs_data,amr,dir_path*"/"*string(ps_data.midpoint)*string(n),["h","b"],fieldvalues_fn)
 end
 function save_boundary_result!(ib::AbstractBoundary,ps_data::PS_Data{DIM,NDF},boundary_results::Vector{Boundary_Solution},amr::AMR{DIM,NDF}) where{DIM,NDF}
     solid_neighbors = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
@@ -327,6 +326,8 @@ function update_solid_cell!(::DVM,ps_data::PS_Data{2,NDF},fluid_cells::Vector,am
         fdf = f_vs_data.df;fsdf = f_vs_data.sdf;dx = ps_data.midpoint-fluid_cells[i].midpoint
         vs_extrapolate!(fdf,fsdf,f_vs_data.level,vs_data.df,vs_data.level,dx,weight_i,amr)
     end
+    ps_data.w = calc_w0(ps_data)
+    ps_data.prim = get_prim(ps_data,amr.global_data)
 end
 function update_solid_cell!(::UGKS,ps_data::PS_Data{2,NDF},fluid_cells::Vector,amr::AMR{2,NDF}) where{NDF}
     vs_data = ps_data.vs_data;vs_data.df.=0.;ps_data.w .= 0.
@@ -455,7 +456,7 @@ function cvc_gas_correction!(aux_df,solid_neighbor::SolidNeighbor{DIM,NDF}) wher
         cvc.gas_dfs[i,:] .= @views aux_df[cvc.indices[i],:]
     end
 end
-function cvc_density(aux_df,ib::AbstractCircle,vn,Θ,solid_neighbor)
+function cvc_density(aux_df,ib::AbstractBoundary,vn,Θ,solid_neighbor)
     vs_data = solid_neighbor.vs_data
     cvc = solid_neighbor.cvc
     n = solid_neighbor.normal
