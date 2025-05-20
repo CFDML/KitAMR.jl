@@ -82,7 +82,7 @@ function save_boundary_result!(ib::AbstractBoundary,ps_data,solid_neighbor::Soli
     Θ = heaviside.(vn)
     dir = get_dir(ID)
     ib_point = aux_point+0.5*(ps_data.midpoint-solid_cell.midpoint)
-    ib_df = ib_df =  @views vs_data.df+vs_data.sdf[:,:,dir]*(ib_point[dir]-ps_data.midpoint[dir])
+    ib_df =  @views vs_data.df+vs_data.sdf[:,:,dir]*(ib_point[dir]-ps_data.midpoint[dir])
     aux_df = zeros(vs_data.vs_num,NDF)
     vs_interpolate!(ib_df,vs_data.level,ib_point[dir],s_vs_data.df,
         s_vs_data.level,solid_cell.midpoint[dir],aux_df,aux_point[dir],amr)
