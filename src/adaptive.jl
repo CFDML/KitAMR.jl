@@ -587,7 +587,7 @@ function adaptive!(ps4est::P_pxest_t,amr::AMR;ps_interval=10,vs_interval=80,part
                 amr.global_data.status.vs_adapt_step=0
             end
         end
-        if amr.global_data.status.partition_step%partition_interval*converge_ratio==0
+        if amr.global_data.status.partition_step>partition_interval*converge_ratio
             if amr.global_data.config.solver.PS_DYNAMIC_AMR||amr.global_data.config.solver.VS_DYNAMIC_AMR
                 ps_partition!(ps4est, amr)
                 amr.global_data.status.partition_step = 0

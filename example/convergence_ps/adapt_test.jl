@@ -1,7 +1,7 @@
 using KitAMR,MPI
-include("./airfoil_udf.jl")
 MPI.Init()
-config = KitAMR.read_config("./example/airfoil/configure_airfoil.txt")
+
+config = KitAMR.read_config("./example/convergence_vs/configure_convergence_64_vsadapt.txt")
 ps4est,amr = KitAMR.init(config);
 KitAMR.listen_for_save!()
 max_sim_time = 20.

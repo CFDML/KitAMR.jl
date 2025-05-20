@@ -52,3 +52,9 @@ mutable struct CuttedVelocityCells
     solid_weights::Vector{Float64} # Range from 0 to 1, representing the percent of the solid part.
     # templates::Vector{VelocityTemplates}
 end
+mutable struct VS_Projection{DIM}
+    c2r_index::Matrix{Int} #
+    c2r_offset::Matrix{Int}
+    r2c_index::Matrix{Int}
+    r2c_offset::Matrix{Int}
+end

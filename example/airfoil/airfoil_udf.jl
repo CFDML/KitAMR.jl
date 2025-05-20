@@ -1,5 +1,5 @@
 function shock_wave_region(midpoint,ds,global_data,level)
-    if midpoint[1]>-0.4&&midpoint[1]<1.2&&midpoint[2]<0.4&&midpoint[2]>-0.4&&level<3
+    if midpoint[1]>-1.0&&midpoint[1]<3.0&&midpoint[2]<1.0&&midpoint[2]>-1.0&&level<4
         return true
     end
     return false

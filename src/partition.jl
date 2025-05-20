@@ -93,7 +93,11 @@ function get_receive_send(src_gfq::Vector, dest_gfq::Vector)
             end
         end
     end
+    singular = findall(x->x==0,receive_nums)
+    is_receives[singular] .= false
     receives = findall(is_receives)
+    singular = findall(x->x==0,send_nums)
+    is_sends[singular] .= false
     sends = findall(is_sends)
     receive_nums = receive_nums[is_receives]
     send_nums = send_nums[is_sends]
