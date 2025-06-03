@@ -256,6 +256,12 @@ function initialize_ghost(p4est::P_pxest_t,global_data::Global_Data)
     ghost_wrap = initialize_ghost_wrap(global_data,ghost_exchange)
     return Ghost(ghost_exchange,ghost_wrap)
 end
+function initialize_velocity_gradient!(amr::AMR)
+    faces = amr.field.faces
+    for i in eachindex(faces)
+        velocity_gradient_encode!(faces[i],amr.global_data)
+    end
+end
 function init(config::Dict)
     global_data = Global_Data(config)
     trees, ps4est = init_field!(global_data)
@@ -274,5 +280,6 @@ function init(config::Dict)
     initialize_solid_neighbor!(amr)
     data_exchange!(ps4est, amr)
     initialize_faces!(ps4est, amr)
+    initialize_velocity_gradient!(amr)
     return (ps4est, amr)
 end

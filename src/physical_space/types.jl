@@ -13,10 +13,12 @@ DoubleSizeNeighbor = Val{-1}
 mutable struct Neighbor{DIM,NDF}
     data::Vector{Vector{NeighborQuad{DIM,NDF}}}
     state::Vector{Int}
+    vg::Vector{Vector{VelocityGradient}}
     # c2r_temp::Vector{Vector{Matrix{Int}}} # Templates indices for velocity grids that are coarser than corresponding grids in neighbors.
     Neighbor(DIM,NDF) = (n = new{DIM,NDF}();
     n.data = Vector{Vector{NeighborQuad{DIM,NDF}}}(undef, 2*DIM);
     n.state = zeros(Int8, 2*DIM);
+    n.vg = [VelocityGradient[] for _ in 1:2*DIM];
     # n.c2r_temp = Vector{Vector{Matrix{Int}}}(undef,2*DIM);
     n)
 end

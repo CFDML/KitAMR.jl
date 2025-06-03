@@ -8,13 +8,12 @@ function vanleer(sL::Real, sR::Real)
     SR = abs(sR)
     (sign(sL) + sign(sR)) * SL * SR / (SL + SR + EPS)
 end
-function diff_L!(vs_data::AbstractVsData{DIM,NDF}, vs_data_n::AbstractVsData{DIM,NDF}, dsL::Float64, sL::AbstractMatrix) where{DIM,NDF}
-    index = 1
+function diff_L!(vs_data::AbstractVsData{DIM,NDF}, vs_data_n::AbstractVsData{DIM,NDF}, dsL::Float64, sL::AbstractMatrix, vg::VelocityGradient) where{DIM,NDF}
+    index = 1;vg_index = 1
     flag = 0.0
-    level = vs_data.level
-    level_n = vs_data_n.level
-    df = vs_data.df
-    dfn = vs_data_n.df
+    level = vs_data.level;level_n = vs_data_n.level
+    midpoint = vs_data.midpoint;midpoint_n = vs_data_n.midpoint
+    df = vs_data.df;dfn = vs_data_n.df
     for i = 1:vs_data.vs_num
         if level[i] == level_n[index]
             for j = 1:NDF
@@ -33,9 +32,11 @@ function diff_L!(vs_data::AbstractVsData{DIM,NDF}, vs_data_n::AbstractVsData{DIM
             end
             flag = 0.0
         else
-            for j = 1:NDF
-                sL[i, j] += (df[i, j] - dfn[index, j]) / dsL
-            end
+            # for j = 1:NDF
+            #     sL[i, j] += (df[i, j] - dfn[index, j]) / dsL
+            # end
+            sL[i,:] .+= @views (df[i,:]-(dfn[index,:]+velocity_interpolate(midpoint[i,:],midpoint_n,dfn,index,vg.vg_template[:,vg_index]))) / dsL
+            vg_index += 1
             flag += 1 / 2^(DIM * (level[i] - level_n[index]))
             if flag == 1.0
                 index += 1
@@ -44,13 +45,12 @@ function diff_L!(vs_data::AbstractVsData{DIM,NDF}, vs_data_n::AbstractVsData{DIM
         end
     end
 end
-function diff_R!(vs_data::AbstractVsData{DIM,NDF}, vs_data_n::AbstractVsData{DIM,NDF}, dsR::Float64, sR::AbstractMatrix) where{DIM,NDF}
-    index = 1
+function diff_R!(vs_data::AbstractVsData{DIM,NDF}, vs_data_n::AbstractVsData{DIM,NDF}, dsR::Float64, sR::AbstractMatrix, vg::VelocityGradient) where{DIM,NDF}
+    index = 1;vg_index = 1
     flag = 0.0
-    level = vs_data.level
-    level_n = vs_data_n.level
-    df = vs_data.df
-    dfn = vs_data_n.df
+    level = vs_data.level;level_n = vs_data_n.level
+    midpoint = vs_data.midpoint;midpoint_n = vs_data_n.midpoint
+    df = vs_data.df;dfn = vs_data_n.df
     for i = 1:vs_data.vs_num
         if level[i] == level_n[index]
             for j = 1:NDF
@@ -69,9 +69,11 @@ function diff_R!(vs_data::AbstractVsData{DIM,NDF}, vs_data_n::AbstractVsData{DIM
             end
             flag = 0.0
         else
-            for j = 1:NDF
-                sR[i, j] -= (df[i, j] - dfn[index, j]) / dsR
-            end
+            # for j = 1:NDF
+            #     sR[i, j] -= (df[i, j] - dfn[index, j]) / dsR
+            # end
+            sR[i,:] .-= @views (df[i,:]-(dfn[index,:]+velocity_interpolate(midpoint[i,:],midpoint_n,dfn,index,vg.vg_template[:,vg_index]))) / dsR
+            vg_index += 1
             flag += 1 / 2^(DIM * (level[i] - level_n[index]))
             if flag == 1.0
                 index += 1
@@ -84,6 +86,8 @@ function update_slope_inner_vs!(
     vs_data::AbstractVsData{DIM,NDF},
     L_data::AbstractVsData{DIM,NDF},
     R_data::AbstractVsData{DIM,NDF},
+    L_vg::VelocityGradient,
+    R_vg::VelocityGradient,
     dsL::Float64,
     dsR::Float64,
     dir::Int,
@@ -91,30 +95,32 @@ function update_slope_inner_vs!(
     vs_num = vs_data.vs_num
     sL = zeros(vs_num, NDF)
     sR = zeros(vs_num, NDF)
-    diff_L!(vs_data, L_data, dsL, sL)
-    diff_R!(vs_data, R_data, dsR, sR)
+    diff_L!(vs_data, L_data, dsL, sL, L_vg)
+    diff_R!(vs_data, R_data, dsR, sR, R_vg)
     vs_data.sdf[:, :, dir] .= vanleer(sL, sR)
 end
 function update_slope_Lbound_vs!(
     vs_data::AbstractVsData{DIM,NDF},
     R_data::AbstractVsData{DIM,NDF},
+    R_vg::VelocityGradient,
     dsR::Float64,
     dir::Int,
 ) where{DIM,NDF}
     vs_num = vs_data.vs_num
     sR = zeros(vs_num, NDF)
-    diff_R!(vs_data, R_data, dsR, sR)
+    diff_R!(vs_data, R_data, dsR, sR, R_vg)
     vs_data.sdf[:, :, dir] .= sR
 end
 function update_slope_Rbound_vs!(
     vs_data::AbstractVsData{DIM,NDF},
     L_data::AbstractVsData{DIM,NDF},
+    L_vg::VelocityGradient,
     dsL::Float64,
     dir::Int,
 ) where{DIM,NDF}
     vs_num = vs_data.vs_num
     sL = zeros(vs_num, NDF)
-    diff_L!(vs_data, L_data, dsL, sL)
+    diff_L!(vs_data, L_data, dsL, sL, L_vg)
     vs_data.sdf[:, :, dir] .= sL
 end
 function update_slope_inner!(
@@ -141,7 +147,7 @@ function update_slope_inner!(
         end
         ps_data.sw[:, dir] .= sw
         ds = ps_data.ds[dir]
-        update_slope_inner_vs!(ps_data.vs_data, Ldata[1].vs_data, Rdata[1].vs_data, ds, ds, dir)
+        update_slope_inner_vs!(ps_data.vs_data, Ldata[1].vs_data, Rdata[1].vs_data, ps_data.neighbor.vg[2*dir-1][1],ps_data.neighbor.vg[2*dir][1],ds, ds, dir)
     end
 end
 function update_slope_inner!(
@@ -161,7 +167,7 @@ function update_slope_inner!(
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     vs_data = ps_data.vs_data
-    update_slope_Lbound_vs!(vs_data, Rdata[1].vs_data, ds, dir)
+    update_slope_Lbound_vs!(vs_data, Rdata[1].vs_data, ps_data.neighbor.vg[2*dir][1], ds, dir)
     # faceid = 2*dir-1
     # domain = global_data.config.domain[faceid]
     # if isdefined(domain,:bc)
@@ -188,7 +194,7 @@ function update_slope_inner!(
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
     vs_data = ps_data.vs_data
-    update_slope_Rbound_vs!(vs_data, Ldata[1].vs_data, ds, dir)
+    update_slope_Rbound_vs!(vs_data, Ldata[1].vs_data, ps_data.neighbor.vg[2*dir-1][1], ds, dir)
     # faceid = 2*dir
     # domain = global_data.config.domain[faceid]
     # if isdefined(domain,:bc)
@@ -201,26 +207,28 @@ end
 function update_slope_Rbound_vs!(
     vs_data::AbstractVsData{DIM,NDF},
     L_datas::Vector,
+    L_vgs::Vector,
     dsL::Float64,
     dir::Int,
 ) where{DIM,NDF}
     sL = zeros(Float64, vs_data.vs_num, NDF)
     for j = 1:2^(DIM-1)
         L_data = L_datas[j].vs_data
-        diff_L!(vs_data, L_data, 0.75 * dsL, sL)
+        diff_L!(vs_data, L_data, 0.75 * dsL, sL, L_vgs[j])
     end
     vs_data.sdf[:, :, dir] .= sL / 2^(DIM - 1)
 end
 function update_slope_Lbound_vs!(
     vs_data::AbstractVsData{DIM,NDF},
     R_datas::Vector,
+    R_vgs::Vector,
     dsR::Float64,
     dir::Int,
 ) where{DIM,NDF}
     sR = zeros(Float64, vs_data.vs_num, NDF)
     for j = 1:2^(DIM-1)
         R_data = R_datas[j].vs_data
-        diff_R!(vs_data, R_data, 0.75 * dsR, sR)
+        diff_R!(vs_data, R_data, 0.75 * dsR, sR, R_vgs[j])
     end
     vs_data.sdf[:, :, dir] .= sR / 2^(DIM - 1)
 end
@@ -244,7 +252,7 @@ function update_slope_inner!(
     end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
-    update_slope_Rbound_vs!(ps_data.vs_data, Ldata, ds, dir)
+    update_slope_Rbound_vs!(ps_data.vs_data, Ldata, ps_data.neighbor.vg[2*dir-1], ds, dir)
 end
 function update_slope_inner!(
     ::Val{0},
@@ -266,7 +274,7 @@ function update_slope_inner!(
     end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
-    update_slope_Lbound_vs!(ps_data.vs_data, Rdata, ds, dir)
+    update_slope_Lbound_vs!(ps_data.vs_data, Rdata, ps_data.neighbor.vg[2*dir], ds, dir)
 end
 
 function update_slope_inner!(
@@ -285,7 +293,7 @@ function update_slope_inner!(
     end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
-    update_slope_Lbound_vs!(ps_data.vs_data, Rdata[1].vs_data, 1.5 * ds, dir)
+    update_slope_Lbound_vs!(ps_data.vs_data, Rdata[1].vs_data, ps_data.neighbor.vg[2*dir][1], 1.5 * ds, dir)
 end
 function update_slope_inner!(
     ::Val{-1},
@@ -303,12 +311,14 @@ function update_slope_inner!(
     end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
-    update_slope_Rbound_vs!(ps_data.vs_data, Ldata[1].vs_data, 1.5 * ds, dir)
+    update_slope_Rbound_vs!(ps_data.vs_data, Ldata[1].vs_data, ps_data.neighbor.vg[2*dir-1][1], 1.5 * ds, dir)
 end
 function update_slope_inner_vs!(
     vs_data::AbstractVsData{DIM,NDF},
     L_datas::Vector,
     R_datas::Vector,
+    L_vgs::Vector{VelocityGradient},
+    R_vgs::Vector{VelocityGradient},
     dsL::Float64,
     dsR::Float64,
     dir::Int,
@@ -319,11 +329,11 @@ function update_slope_inner_vs!(
     nR = length(R_datas)
     for j = 1:nL
         L_data = L_datas[j].vs_data
-        diff_L!(vs_data, L_data, dsL, sL)
+        diff_L!(vs_data, L_data, dsL, sL, L_vgs[j])
     end
     for j = 1:nR
         R_data = R_datas[j].vs_data
-        diff_R!(vs_data, R_data, dsR, sR)
+        diff_R!(vs_data, R_data, dsR, sR, R_vgs[j])
     end
     vs_data.sdf[:, :, dir] .= vanleer(sL / nL, sR / nR)
 end
@@ -350,7 +360,7 @@ function update_slope_inner!(
     end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
-    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ds, 0.75 * ds, dir)
+    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ps_data.neighbor.vg[2*dir-1], ps_data.neighbor.vg[2*dir], ds, 0.75 * ds, dir)
 end
 function update_slope_inner!(
     ::NeighborNum,
@@ -375,7 +385,7 @@ function update_slope_inner!(
     end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
-    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, ds, dir)
+    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ps_data.neighbor.vg[2*dir-1], ps_data.neighbor.vg[2*dir], 0.75 * ds, ds, dir)
 end
 function update_slope_inner!(
     ::NeighborNum,
@@ -402,7 +412,7 @@ function update_slope_inner!(
     end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
-    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, 0.75 * ds, dir)
+    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ps_data.neighbor.vg[2*dir-1], ps_data.neighbor.vg[2*dir], 0.75 * ds, 0.75 * ds, dir)
 end
 function update_slope_inner!(
     ::Val{1},
@@ -426,7 +436,7 @@ function update_slope_inner!(
         end
         ps_data.sw[:, dir] .= sw
         ds = ps_data.ds[dir]
-        update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ds, 1.5 * ds, dir)
+        update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ps_data.neighbor.vg[2*dir-1], ps_data.neighbor.vg[2*dir], ds, 1.5 * ds, dir)
     end
 end
 function update_slope_inner!(
@@ -451,7 +461,7 @@ function update_slope_inner!(
         end
         ps_data.sw[:, dir] .= sw
         ds = ps_data.ds[dir]
-        update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, ds, dir)
+        update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ps_data.neighbor.vg[2*dir-1], ps_data.neighbor.vg[2*dir], 1.5 * ds, ds, dir)
     end
 end
 function update_slope_inner!(
@@ -473,7 +483,7 @@ function update_slope_inner!(
     end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
-    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, 1.5 * ds, dir)
+    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ps_data.neighbor.vg[2*dir-1], ps_data.neighbor.vg[2*dir], 1.5 * ds, 1.5 * ds, dir)
 end
 function update_slope_inner!(
     ::NeighborNum,
@@ -498,7 +508,7 @@ function update_slope_inner!(
     end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
-    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, 1.5 * ds, dir)
+    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ps_data.neighbor.vg[2*dir-1], ps_data.neighbor.vg[2*dir], 0.75 * ds, 1.5 * ds, dir)
 end
 function update_slope_inner!(
     ::Val{-1},
@@ -523,7 +533,7 @@ function update_slope_inner!(
     end
     ps_data.sw[:, dir] .= sw
     ds = ps_data.ds[dir]
-    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, 0.75 * ds, dir)
+    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ps_data.neighbor.vg[2*dir-1], ps_data.neighbor.vg[2*dir], 1.5 * ds, 0.75 * ds, dir)
 end
 function update_slope!(amr::AMR{DIM,NDF}) where{DIM,NDF}
     trees = amr.field.trees

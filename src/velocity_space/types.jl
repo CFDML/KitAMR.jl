@@ -52,9 +52,8 @@ mutable struct CuttedVelocityCells
     solid_weights::Vector{Float64} # Range from 0 to 1, representing the percent of the solid part.
     # templates::Vector{VelocityTemplates}
 end
-mutable struct VS_Projection{DIM}
-    c2r_index::Matrix{Int} #
-    c2r_offset::Matrix{Int}
-    r2c_index::Matrix{Int}
-    r2c_offset::Matrix{Int}
+struct VelocityGradient
+    vg_template::Matrix{Int} # The complete templates indices for the update of the slope.
+    heavi_template::Matrix{Int} # The corresponding templates in the upwind-half-part for the update of the microflux.
 end
+const AbstractVelocityGradient = Union{VelocityGradient,Nothing}

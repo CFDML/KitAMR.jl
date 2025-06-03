@@ -1,5 +1,6 @@
 get_dir(faceid::Int) = div(faceid - 1, 2) + 1
 get_rot(faceid::Int) = (-1.0)^(faceid - 1)
+get_faceid(direction::Int,rot::Float64)=Int(2*direction - (rot==-1 ? 0 : 1))
 get_sound(prim::Vector{Cdouble}, γ::Real) = √(0.5 * γ * prim[end])
 heaviside(x::Real) = ifelse(x >= 0, one(x), zero(x))
 function get_prim(ps_data::PS_Data{2,NDF}, global_data::Global_Data{2,NDF}) where {NDF}

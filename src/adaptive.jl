@@ -598,6 +598,7 @@ function adaptive!(ps4est::P_pxest_t,amr::AMR;ps_interval=10,vs_interval=80,part
             update_neighbor!(ps4est, amr)
             update_solid!(amr)
             update_faces!(ps4est, amr)
+            update_velocity_gradient!(amr)
         end
         amr.global_data.status.ps_adapt_step = 0
     end

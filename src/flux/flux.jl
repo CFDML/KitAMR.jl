@@ -9,27 +9,39 @@ function flux!(face::DomainFace,amr::AMR)
     flux,micro_flux = calc_domain_flux(amr.global_data.config.solver.flux,here_vs,face,amr)
     update_domain_flux!(flux,micro_flux,face,here_vs.heavi)
 end
+function pick_vg(ps_data::PS_Data,faceid::Int,id::Int)
+    return ps_data.neighbor.vg[faceid][id]
+end
+function pick_vg(::Ghost_PS_Data,::Int,::Int)
+    return nothing
+end
+function pick_vg(::SolidNeighbor,::Int,::Int)
+    return nothing
+end
 function flux!(face::FullFace,amr::AMR)
+    faceid = get_faceid(face.direction,face.rot);faceid_n = get_faceid(face.direction,-face.rot)
     here_vs,there_vs = make_face_vs(face)
     flux,micro_flux = calc_flux(amr.global_data.config.solver.flux,here_vs,there_vs,face,amr)
-    update_flux!(flux,micro_flux,face,here_vs.heavi)
+    update_flux!(flux,micro_flux,here_vs,there_vs,face,here_vs.heavi,pick_vg(face.there_data,faceid_n,1),pick_vg(face.here_data,faceid,1))
 end
 function flux!(face::HangingFace{DIM,NDF},amr::AMR) where{DIM,NDF}
     rot,direction,midpoint,here_data,there_data = unpack(face)
+    faceid = get_faceid(direction,rot);faceid_n = get_faceid(direction,-rot)
     here_vs,there_vs = make_face_vs(face)
     for i in eachindex(there_vs)
         flux_data = Flux_Data{HangingFace{DIM,NDF}}(rot,direction,midpoint[i],here_data,there_data[i])
         flux,micro_flux = calc_flux(amr.global_data.config.solver.flux,here_vs,there_vs[i],flux_data,amr)
-        update_flux!(flux,micro_flux,flux_data,here_vs.heavi)
+        update_flux!(flux,micro_flux,here_vs,there_vs[i],flux_data,here_vs.heavi,pick_vg(there_data[i],faceid_n,1),pick_vg(here_data,faceid,i))
     end
 end
 function flux!(face::BackHangingFace{DIM,NDF},amr::AMR) where{DIM,NDF}
     rot,direction,midpoint,here_data,there_data = unpack(face)
+    faceid = get_faceid(direction,rot);faceid_n = get_faceid(direction,-rot)
     here_vs,there_vs = make_face_vs(face)
     for i in eachindex(here_vs)
         flux_data = Flux_Data{BackHangingFace{DIM,NDF}}(rot,direction,midpoint[i],here_data[i],there_data)
         flux,micro_flux = calc_flux(amr.global_data.config.solver.flux,here_vs[i],there_vs,flux_data,amr)
-        update_flux!(flux,micro_flux,flux_data,here_vs[i].heavi)
+        update_flux!(flux,micro_flux,here_vs[i],there_vs,flux_data,here_vs[i].heavi,pick_vg(there_data,faceid_n,i),pick_vg(here_data[i],faceid,1))
     end
 end
 function update_domain_flux!(flux::AbstractVector,micro_flux::Vector{Matrix{Float64}},face::DomainFace,heavi::Vector{Bool})
@@ -53,18 +65,18 @@ end
 function face_area(::T,here_data,direction,rot) where{T<:Union{Flux_Data{BackHangingFace{DIM,NDF}},FullFace{DIM,NDF}} where{DIM,NDF}}
     face_area(here_data,direction)*rot
 end
-function update_flux!(flux::AbstractVector,micro_flux::Vector{Matrix{Float64}},face::Union{FullFace,Flux_Data},heavi::Vector{Bool})
+function update_flux!(flux::AbstractVector,micro_flux::Vector{Matrix{Float64}},here_vs,there_vs,face::Union{FullFace,Flux_Data},heavi::Vector{Bool},here_vg,there_vg)
     rot,direction,_,here_data,there_data = unpack(face)
     area = face_area(face,here_data,direction,rot)
     here_micro,there_micro = micro_flux
     update_macro_flux!(flux*area,here_data,there_data)
-    update_micro_flux!(here_micro*area,there_micro*area,here_data,there_data,heavi)
+    update_micro_flux!(here_micro*area,there_micro*area,here_vs,there_vs,here_data,there_data,heavi,here_vg,there_vg)
 end
-function update_flux!(::Nothing,micro_flux::Vector{Matrix{Float64}},face::Union{FullFace,Flux_Data},heavi::Vector{Bool})
+function update_flux!(::Nothing,micro_flux::Vector{Matrix{Float64}},here_vs,there_vs,face::Union{FullFace,Flux_Data},heavi::Vector{Bool},here_vg,there_vg)
     rot,direction,_,here_data,there_data = unpack(face)
     area = face_area(face,here_data,direction,rot)
     here_micro,there_micro = micro_flux
-    update_micro_flux!(here_micro*area,there_micro*area,here_data,there_data,heavi)
+    update_micro_flux!(here_micro*area,there_micro*area,here_vs,there_vs,here_data,there_data,heavi,here_vg,there_vg)
 end
 function update_macro_flux!(flux::Vector,here_data::PS_Data,there_data::PS_Data)
     here_data.flux .+= flux
@@ -75,17 +87,18 @@ end
 function update_macro_flux!(flux::Vector,here_data::PS_Data,::AbstractGhostPsData)
     here_data.flux .+= flux
 end
-function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM},::SolidNeighbor{DIM},heavi::Vector{Bool}) where{DIM}
+function update_micro_flux!(here_micro,there_micro,::Face_VS_Data,::Face_VS_Data,here_data::PS_Data{DIM},::SolidNeighbor{DIM},heavi::Vector{Bool},::AbstractVelocityGradient,::AbstractVelocityGradient) where{DIM}
     vs_data = here_data.vs_data;flux = vs_data.flux
     @. flux[heavi,:]+= here_micro
     nheavi = [!x for x in heavi]
     @. flux[nheavi,:]+= there_micro
 end
-function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM,NDF},there_data::PS_Data,heavi::Vector{Bool}) where{DIM,NDF}
+function update_micro_flux!(here_micro,there_micro,here_vs::Face_VS_Data,there_vs::Face_VS_Data,here_data::PS_Data{DIM,NDF},there_data::PS_Data,heavi::Vector{Bool},here_vg::VelocityGradient,there_vg::VelocityGradient) where{DIM,NDF}
     vs_data = here_data.vs_data;nvs_data = there_data.vs_data
     level = vs_data.level;level_n = nvs_data.level
     flux = vs_data.flux;flux_n = nvs_data.flux
     index = j = index_n = 1;flag = 0.
+    vg_index = vg_index_n = 1
     @inbounds for i = 1:vs_data.vs_num
         if heavi[i]
             @simd for ii in 1:NDF
@@ -98,9 +111,11 @@ function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM,NDF},t
                 j += 1
             elseif level[i] < level_n[j]
                 while flag != 1.0
-                    @simd for ii in 1:NDF
-                        flux_n[j, ii] -= here_micro[index, ii]
-                    end
+                    flux_n[j,:] .-= @views here_micro[index, :]+velocity_interpolate(nvs_data.midpoint[j,:],here_vs.midpoint,here_micro,index,here_vg.heavi_template[:,vg_index])
+                    vg_index += 1
+                    # @simd for ii in 1:NDF
+                    #     flux_n[j, ii] -= here_micro[index, ii]
+                    # end
                     flag += 1 / 2^(DIM * (level_n[j] - level[i]))
                     j += 1
                 end
@@ -108,7 +123,7 @@ function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM,NDF},t
             else
                 @simd for ii in 1:NDF
                     flux_n[j, ii] -=
-                        (here_micro[index, ii]) / 2^(DIM * (level[i] - level_n[j]))
+                        (here_micro[index, ii]) / 2^(DIM * (level[i] - level_n[j])) # The average is equivalent to the piecewise bilinear interpolation.
                 end
                 flag += 1 / 2^(DIM * (level[i] - level_n[j]))
                 if flag == 1.0
@@ -139,9 +154,11 @@ function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM,NDF},t
                 end
                 flag = 0.0
             else
-                @simd for ii in 1:NDF
-                    flux[i, ii] +=  there_micro[index_n, ii]
-                end
+                # @simd for ii in 1:NDF
+                #     flux[i, ii] +=  there_micro[index_n, ii]
+                # end
+                flux[i,:] .+= @views there_micro[index_n, :]+velocity_interpolate(vs_data.midpoint[i,:],there_vs.midpoint,there_micro,index_n,there_vg.heavi_template[:,vg_index_n])
+                vg_index_n += 1
                 flag += 1 / 2^(DIM * (level[i] - level_n[j]))
                 if flag == 1.0
                     @simd for ii in 1:NDF
@@ -155,11 +172,12 @@ function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM,NDF},t
         end
     end
 end
-function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM,NDF},there_data::AbstractGhostPsData,heavi::Vector{Bool}) where{DIM,NDF}
+function update_micro_flux!(here_micro,there_micro,::Face_VS_Data,there_vs::Face_VS_Data,here_data::PS_Data{DIM,NDF},there_data::AbstractGhostPsData,heavi::Vector{Bool},here_vg::Nothing,there_vg::VelocityGradient) where{DIM,NDF}
     vs_data = here_data.vs_data;nvs_data = there_data.vs_data
     level = vs_data.level;level_n = nvs_data.level
     flux = vs_data.flux
     index = j = index_n = 1;flag = 0.
+    vg_index_n = 1
     @inbounds for i = 1:vs_data.vs_num
         if heavi[i]
             @simd for ii in 1:NDF
@@ -201,9 +219,11 @@ function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM,NDF},t
                 end
                 flag = 0.0
             else
-                for ii in 1:NDF
-                    flux[i, ii] += there_micro[index_n, ii]
-                end
+                # for ii in 1:NDF
+                #     flux[i, ii] += there_micro[index_n, ii]
+                # end
+                flux[i,:] .+= @views there_micro[index_n, :] + velocity_interpolate(vs_data.midpoint[i,:],there_vs.midpoint,there_micro,index_n,there_vg.heavi_template[:,vg_index_n])
+                vg_index_n += 1
                 flag += 1 / 2^(DIM * (level[i] - level_n[j]))
                 if flag == 1.0
                     j += 1
