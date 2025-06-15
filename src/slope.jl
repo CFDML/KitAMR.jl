@@ -126,11 +126,11 @@ function update_slope_inner!(
     Rdata::T2,
     dir::Integer,
 ) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
-    if Ldata[1].bound_enc<0
-        update_slope_inner!(Val(0),Val(1),ps_data,global_data,Ldata,Rdata,dir)
-    elseif Rdata[1].bound_enc<0
-        update_slope_inner!(Val(1),Val(0),ps_data,global_data,Ldata,Rdata,dir)
-    else
+    # if Ldata[1].bound_enc<0
+    #     update_slope_inner!(Val(0),Val(1),ps_data,global_data,Ldata,Rdata,dir)
+    # elseif Rdata[1].bound_enc<0
+    #     update_slope_inner!(Val(1),Val(0),ps_data,global_data,Ldata,Rdata,dir)
+    # else
         ds = ps_data.ds[dir]
         swL = (ps_data.w - Ldata[1].w) / (ds)
         swR = (Rdata[1].w - ps_data.w) / (ds)
@@ -142,7 +142,7 @@ function update_slope_inner!(
         ps_data.sw[:, dir] .= sw
         ds = ps_data.ds[dir]
         update_slope_inner_vs!(ps_data.vs_data, Ldata[1].vs_data, Rdata[1].vs_data, ds, ds, dir)
-    end
+    # end
 end
 function update_slope_inner!(
     ::Val{0},
@@ -413,9 +413,9 @@ function update_slope_inner!(
     Rdata::T2,
     dir::Integer,
 ) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
-    if Ldata[1].bound_enc<0
-        update_slope_inner!(Val(0),Val(-1),ps_data,global_data,Ldata,Rdata,dir)
-    else
+    # if Ldata[1].bound_enc<0
+    #     update_slope_inner!(Val(0),Val(-1),ps_data,global_data,Ldata,Rdata,dir)
+    # else
         ds = ps_data.ds[dir]
         swL = (ps_data.w - Ldata[1].w) / (1.5 * ds)
         swR = (Rdata[1].w - ps_data.w) / (1.5 * ds)
@@ -427,7 +427,7 @@ function update_slope_inner!(
         ps_data.sw[:, dir] .= sw
         ds = ps_data.ds[dir]
         update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ds, 1.5 * ds, dir)
-    end
+    # end
 end
 function update_slope_inner!(
     ::Val{-1},
@@ -438,9 +438,9 @@ function update_slope_inner!(
     Rdata::T2,
     dir::Integer,
 ) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
-    if Rdata[1].bound_enc<0
-        update_slope_inner!(Val(-1),Val(0),ps_data,global_data,Ldata,Rdata,dir)
-    else
+    # if Rdata[1].bound_enc<0
+    #     update_slope_inner!(Val(-1),Val(0),ps_data,global_data,Ldata,Rdata,dir)
+    # else
         ds = ps_data.ds[dir]
         swL = (ps_data.w - Ldata[1].w) / (1.5 * ds)
         swR = (Rdata[1].w - ps_data.w) / (1.5 * ds)
@@ -452,7 +452,7 @@ function update_slope_inner!(
         ps_data.sw[:, dir] .= sw
         ds = ps_data.ds[dir]
         update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, ds, dir)
-    end
+    # end
 end
 function update_slope_inner!(
     ::Val{-1},
