@@ -1,3 +1,6 @@
+include("CAIDVM.jl")
+include("DUGKS.jl")
+include("DVM.jl")
 function face_area(ps_data::AbstractPsData{2}, DIR::Integer)
     return ps_data.ds[FAT[1][DIR]]
 end
@@ -73,6 +76,9 @@ function update_macro_flux!(flux::Vector,here_data::PS_Data,there_data::PS_Data)
     end
 end
 function update_macro_flux!(flux::Vector,here_data::PS_Data,::AbstractGhostPsData)
+    here_data.flux .+= flux
+end
+function update_macro_flux!(flux::Vector,here_data::PS_Data,::SolidNeighbor)
     here_data.flux .+= flux
 end
 function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM},::SolidNeighbor{DIM},heavi::Vector{Bool}) where{DIM}

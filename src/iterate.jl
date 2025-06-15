@@ -5,12 +5,12 @@ function update_gradmax!(amr::AMR)
 end
 function iterate!(amr::AMR)
     time_marching = amr.global_data.config.solver.time_marching
-    stable_flag = amr.global_data.status.stable_flag
-    (!stable_flag[1]&&stable_flag[2])&&(amr.global_data.status.Δt*=TIME_STEP_CONTRACT_RATIO)
-    (stable_flag[1]&&!stable_flag[2])&&(amr.global_data.status.Δt/=TIME_STEP_CONTRACT_RATIO)
-    stable_flag[2] = stable_flag[1];stable_flag[1] = true
+    # stable_flag = amr.global_data.status.stable_flag
+    # (!stable_flag[1]&&stable_flag[2])&&(amr.global_data.status.Δt*=TIME_STEP_CONTRACT_RATIO)
+    # (stable_flag[1]&&!stable_flag[2])&&(amr.global_data.status.Δt/=TIME_STEP_CONTRACT_RATIO)
+    # stable_flag[2] = stable_flag[1];stable_flag[1] = true
     iterate!(time_marching,amr)
-    stable_check!(amr)
+    # stable_check!(amr)
     residual_comm!(amr.global_data)
     amr.global_data.status.ps_adapt_step += 1
     amr.global_data.status.vs_adapt_step += 1
@@ -52,11 +52,176 @@ function iterate!(::UGKS_Marching,amr::AMR)
         end
     end
 end
+# function iterate!(::CAIDVM_Marching,amr::AMR)
+#     global_data = amr.global_data
+#     gas = global_data.config.gas
+#     trees = amr.field.trees
+#     Δt = global_data.status.Δt
+#     global_data.status.Δt = global_data.status.Δt_ξ
+#     @inbounds for i in eachindex(trees.data)
+#         @inbounds for j in eachindex(trees.data[i])
+#             ps_data = trees.data[i][j]
+#             isa(ps_data,InsideSolidData) && continue
+#             ps_data.bound_enc<0 && continue
+#             vs_data = ps_data.vs_data
+#             area = reduce(*, ps_data.ds)
+#             ps_data.w .+= ps_data.flux .*Δt / area # Macroscopic update
+#             prim_c = get_prim(ps_data, global_data) # Conserved macroscopic variables
+#             f = vs_data.df
+#             if 1/prim_c[end]<1e-3
+#                 @. f = max(f,0.)
+#                 ps_data.w = calc_w0(ps_data)
+#                 prim_c = get_prim(ps_data,global_data)
+#                 @. f += Δt/area*vs_data.flux
+#                 # global_data.status.stable_flag[1]&&(global_data.status.stable_flag[1]=false)
+#                 global_data.status.Δt=TIME_STEP_CONTRACT_RATIO*global_data.status.Δt_ξ
+#             else
+#                 τ = get_τ(prim_c, gas.μᵣ, gas.ω)
+#                 f.+= Δt/area*vs_data.flux # Convection first
+#                 w = calc_w0(vs_data.midpoint,f,vs_data.weight,global_data)
+#                 prim = get_prim(w,global_data)
+#                 if 1/prim[end]<1e-3
+#                     @. f = max(f,0.)
+#                     ps_data.w = calc_w0(ps_data)
+#                     prim_c = get_prim(ps_data,global_data)
+#                     global_data.status.Δt=TIME_STEP_CONTRACT_RATIO*global_data.status.Δt_ξ
+#                 else
+#                     F_c = discrete_maxwell(vs_data.midpoint, prim_c, global_data)
+#                     F = discrete_maxwell(vs_data.midpoint, prim, global_data)
+#                     @. f += F_c-F # Conservation correction
+#                     ps_data.qf .= qf = calc_qf(vs_data, prim_c) # Heatflux after convection
+#                     F_c .+= shakhov_part(vs_data.midpoint, F_c, prim_c, qf, global_data)
+#                     # Collision process
+#                     f .*= (τ-Δt)/τ
+#                     @. f += Δt/τ*F_c
+#                     # global_data.status.Δt = min(global_data.status.Δt,global_data.config.solver.CFL*τ)
+#                 end
+#             end
+#             residual_check!(ps_data,prim_c,global_data)
+#             ps_data.prim .= prim_c
+#             ps_data.flux .= 0.0
+#             vs_data.flux .= 0.0
+#         end
+#     end
+#     Δt_comm!(global_data)
+# end
+
+# # Conserved Adaptive Implicit DVM (CAIDVM)
+# function iterate!(::CAIDVM_Marching,amr::AMR)
+#     global_data = amr.global_data
+#     gas = global_data.config.gas
+#     trees = amr.field.trees
+#     Δt = global_data.status.Δt
+#     global_data.status.Δt = global_data.status.Δt_ξ
+#     @inbounds for i in eachindex(trees.data)
+#         @inbounds for j in eachindex(trees.data[i])
+#             ps_data = trees.data[i][j]
+#             isa(ps_data,InsideSolidData) && continue
+#             ps_data.bound_enc<0 && continue
+#             vs_data = ps_data.vs_data
+#             area = reduce(*, ps_data.ds)
+#             ps_data.w .+= ps_data.flux .*Δt / area # Macroscopic update
+#             prim_c = get_prim(ps_data, global_data) # Conserved macroscopic variables
+#             f = vs_data.df
+#             if 1/prim_c[end]<1e-3
+#                 @. f = max(f,0.)
+#                 ps_data.w = calc_w0(ps_data)
+#                 prim_c = get_prim(ps_data,global_data)
+#                 @. f += Δt/area*vs_data.flux
+#                 # global_data.status.stable_flag[1]&&(global_data.status.stable_flag[1]=false)
+#                 global_data.status.Δt=TIME_STEP_CONTRACT_RATIO*global_data.config.gas.Kn*global_data.status.Δt_ξ
+#             else
+#                 τ = get_τ(prim_c, gas.μᵣ, gas.ω) # τ^{n+1}
+#                 f.+= Δt/area*vs_data.flux # Convection first
+#                 w = calc_w0(vs_data.midpoint,f,vs_data.weight,global_data)
+#                 prim = get_prim(w,global_data)
+#                 if 1/prim[end]<1e-3
+#                     @. f = max(f,0.)
+#                     ps_data.w = calc_w0(ps_data)
+#                     prim_c = get_prim(ps_data,global_data)
+#                     global_data.status.Δt=TIME_STEP_CONTRACT_RATIO*global_data.config.gas.Kn*global_data.status.Δt_ξ
+#                 else
+#                     F_c = discrete_maxwell(vs_data.midpoint, prim_c, global_data)
+#                     F = discrete_maxwell(vs_data.midpoint, prim, global_data)
+#                     @. f += F_c-F # Conservation correction
+#                     ps_data.qf .= qf = calc_qf(vs_data, prim_c) # Heatflux after convection
+#                     F_c .+= shakhov_part(vs_data.midpoint, F_c, prim_c, qf, global_data) # g^{S,n+1}
+#                     # Collision process
+#                     f .*= τ/(τ+Δt)
+#                     @. f += Δt/(τ+Δt)*F_c
+#                     # global_data.status.Δt = min(global_data.status.Δt,global_data.config.solver.CFL*τ)
+#                 end
+#             end
+#             residual_check!(ps_data,prim_c,global_data)
+#             ps_data.prim .= prim_c
+#             ps_data.flux .= 0.0
+#             vs_data.flux .= 0.0
+#         end
+#     end
+#     Δt_comm!(global_data)
+# end
+# Conserved Adaptive Implicit DVM (CAIDVM)
+function iterate!(::CAIDVM_Marching,amr::AMR)
+    global_data = amr.global_data
+    gas = global_data.config.gas
+    trees = amr.field.trees
+    Δt = global_data.status.Δt
+    global_data.status.Δt = global_data.status.Δt_ξ
+    @inbounds for i in eachindex(trees.data)
+        @inbounds for j in eachindex(trees.data[i])
+            ps_data = trees.data[i][j]
+            isa(ps_data,InsideSolidData) && continue
+            ps_data.bound_enc<0 && continue
+            vs_data = ps_data.vs_data
+            area = reduce(*, ps_data.ds)
+            ps_data.w .+= ps_data.flux .*Δt / area # Macroscopic update
+            prim_c = get_prim(ps_data, global_data) # Conserved macroscopic variables
+            f = vs_data.df
+            if 1/prim_c[end]<1e-3
+                f.+= Δt/area*vs_data.flux # Convection first
+                @. f = max(f,0.)
+                ps_data.w = calc_w0(ps_data)
+                prim = prim_c = get_prim(ps_data,global_data)
+                τ = global_data.config.gas.Kn
+                # global_data.status.stable_flag[1]&&(global_data.status.stable_flag[1]=false)
+                global_data.status.Δt=min(TIME_STEP_CONTRACT_RATIO,global_data.config.gas.Kn)*global_data.status.Δt_ξ
+            else
+                f.+= Δt/area*vs_data.flux # Convection first
+                w = calc_w0(vs_data.midpoint,f,vs_data.weight,global_data)
+                prim = get_prim(w,global_data)
+                if 1/prim[end]<1e-3
+                    @. f = max(f,0.)
+                    ps_data.w = calc_w0(ps_data)
+                    prim = prim_c = get_prim(ps_data,global_data)
+                    τ = global_data.config.gas.Kn
+                    global_data.status.Δt=min(TIME_STEP_CONTRACT_RATIO,global_data.config.gas.Kn)*global_data.status.Δt_ξ
+                else
+                    τ = get_τ(prim_c, gas.μᵣ, gas.ω) # τ^{n+1}
+                end
+            end
+            F_c = discrete_maxwell(vs_data.midpoint, prim_c, global_data)
+            F = discrete_maxwell(vs_data.midpoint, prim, global_data)
+            @. f += F_c-F # Conservation correction
+            ps_data.qf .= qf = calc_qf(vs_data, prim_c) # Heatflux after convection
+            F_c .+= shakhov_part(vs_data.midpoint, F_c, prim_c, qf, global_data) # g^{S,n+1}
+            # Collision process
+            f .*= τ/(τ+Δt)
+            @. f += Δt/(τ+Δt)*F_c
+
+            residual_check!(ps_data,prim_c,global_data)
+            ps_data.prim .= prim_c
+            ps_data.flux .= 0.0
+            vs_data.flux .= 0.0
+        end
+    end
+    Δt_comm!(global_data)
+end
 function iterate!(::Euler,amr::AMR{DIM}) where{DIM}
     global_data = amr.global_data
     gas = global_data.config.gas
     trees = amr.field.trees
     Δt = global_data.status.Δt
+    global_data.status.Δt = global_data.status.Δt_ξ
     @inbounds for i in eachindex(trees.data)
         @inbounds for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
@@ -77,7 +242,7 @@ function iterate!(::Euler,amr::AMR{DIM}) where{DIM}
                 ps_data.w = calc_w0(ps_data)
                 prim = get_prim(ps_data,global_data)
                 @. f += Δt/area*vs_data.flux
-                global_data.status.stable_flag[1]&&(global_data.status.stable_flag[1]=false)
+                global_data.status.Δt=TIME_STEP_CONTRACT_RATIO*global_data.status.Δt_ξ
             else
                 τ = get_τ(prim, gas.μᵣ, gas.ω)
                 ps_data.qf .= qf = calc_qf(vs_data, prim)
@@ -90,6 +255,7 @@ function iterate!(::Euler,amr::AMR{DIM}) where{DIM}
             vs_data.flux .= 0.0
         end
     end
+    Δt_comm!(global_data)
 end
 function residual_check!(ps_data::PS_Data,prim::Vector{Float64},global_data::Global_Data)
     Res = global_data.status.residual
@@ -114,4 +280,7 @@ end
 function check_for_convergence(amr::AMR)
     maximum(amr.global_data.status.residual.residual)<TOLERANCE&&(amr.global_data.status.residual.redundant_step+=1)
     return amr.global_data.status.residual.redundant_step>REDUNDANT_STEPS_NUM
+end
+function Δt_comm!(global_data::Global_Data)
+    global_data.status.Δt = MPI.Allreduce(global_data.status.Δt, (x,y)->min(x,y), MPI.COMM_WORLD)
 end

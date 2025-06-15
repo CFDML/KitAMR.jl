@@ -2,14 +2,16 @@ abstract type AbstractFluxType end
 abstract type AbstractDVMFluxType <: AbstractFluxType end
 struct UGKS<:AbstractDVMFluxType end
 struct DVM<:AbstractDVMFluxType end
+struct CAIDVM<:AbstractDVMFluxType end # Conserved DVM, which encures energy conserved flux.
 const MicroFlux = Union{DVM}
-const HybridFlux = Union{UGKS} # to add more...
+const HybridFlux = Union{UGKS,CAIDVM} # to add more...
 
 
 abstract type AbstractTimeMarchingType end
 struct Rungekuta{O} <: AbstractTimeMarchingType end
 struct Euler <:AbstractTimeMarchingType end
 struct UGKS_Marching<:AbstractTimeMarchingType end
+struct CAIDVM_Marching<:AbstractTimeMarchingType end
 
 const AbstractICType=Union{Vector{Float64},Function}
 
@@ -106,6 +108,7 @@ mutable struct Status
     max_vs_num::Int # maximum vs_num among ghost quadrants
     gradmax::Vector{Float64}
     Δt::Float64
+    Δt_ξ::Float64
     sim_time::Float64
     ps_adapt_step::Int
     vs_adapt_step::Int
@@ -125,7 +128,7 @@ function Status(config)
         (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
         2^config[:AMR_VS_MAXLEVEL] / 2 for i in 1:DIM]
     Δt = config[:CFL]*minimum(ds ./ U)
-    return Status(0,ones(DIM+2),Δt,0.,1,1,1,Residual(DIM),Ref(false),[true,true])
+    return Status(0,ones(DIM+2),Δt*TIME_STEP_CONTRACT_RATIO,Δt,0.,1,1,1,Residual(DIM),Ref(false),[true,true])
 end
 
 mutable struct Global_Data{DIM,NDF}

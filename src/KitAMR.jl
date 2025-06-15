@@ -46,8 +46,6 @@ include("partition.jl")
 include("slope.jl")
 # include("boundary/maxwellian.jl")
 include("flux/flux.jl")
-include("flux/DVM.jl")
-include("flux/UGKS.jl")
 include("iterate.jl")
 include("finalize.jl")
 
