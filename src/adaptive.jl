@@ -582,8 +582,9 @@ function adaptive!(ps4est::P_pxest_t,amr::AMR;ps_interval=10,vs_interval=80,part
         end
         if amr.global_data.status.vs_adapt_step > vs_interval*converge_ratio
             if amr.global_data.config.solver.VS_DYNAMIC_AMR
-                vs_refine!(amr)
-                vs_coarsen!(amr)
+                va_flags = vs_refine!(amr)
+                va_flags = vs_coarsen!(va_flags,amr)
+                vs_conserved_correction!(va_flags,amr)
                 amr.global_data.status.vs_adapt_step=0
             end
         end

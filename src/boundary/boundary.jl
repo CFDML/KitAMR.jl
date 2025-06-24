@@ -17,7 +17,7 @@ function calc_solid_cell_slope!(svdata::AbstractVsData{DIM,NDF},fvdata::VS_Data{
     flag = 0.0
     level = svdata.level
     sdf = @view(svdata.sdf[:,:,direction])
-    fsdf = @views fvdata.sdf[:,:,direction]
+    # fsdf = @views fvdata.sdf[:,:,direction]
     df = svdata.df
     level_n = fvdata.level
     df_n = fvdata.df
@@ -44,11 +44,11 @@ function calc_solid_cell_slope!(svdata::AbstractVsData{DIM,NDF},fvdata::VS_Data{
         end
     end
     sdf./=dx
-    @inbounds for i in axes(sdf,1)
-        for j in axes(sdf,2)
-            sdf[i,j] = vanleer(sdf[i,j],fsdf[i,j])
-        end
-    end
+    # @inbounds for i in axes(sdf,1)
+    #     for j in axes(sdf,2)
+    #         sdf[i,j] = vanleer(sdf[i,j],fsdf[i,j])
+    #     end
+    # end
 end
 function calc_w0(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{2,2})
     @views micro_to_macro_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],weight)
@@ -517,7 +517,7 @@ function update_solid_neighbor!(::Union{DVM,CAIDVM},ps_data::PS_Data{DIM,NDF},so
     vs_interpolate!(ib_df,vs_data.level,ib_point[dir],s_vs_data.df,
         s_vs_data.level,solid_cell.midpoint[dir],aux_df,aux_point[dir],amr)
     cvc_gas_correction!(aux_df,solid_neighbor)
-    aux_df .= max.(0.,aux_df)
+    # aux_df .= max.(0.,aux_df)
     ρw = cvc_density(aux_df,ib,vn,Θ,solid_neighbor)
     # ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
     aux_prim = IB_prim(ib,aux_point,ρw)

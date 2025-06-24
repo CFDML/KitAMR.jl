@@ -8,7 +8,7 @@ max_sim_time = 20.
 nt = max_sim_time/amr.global_data.status.Δt+1.0 |> floor |> Int
 for i in 1:nt
     KitAMR.adaptive!(ps4est,amr;partition_interval=160)
-    KitAMR.update_slope!(amr)
+    KitAMR.update_slope!(amr;buffer_steps=100,i)
     KitAMR.slope_exchange!(ps4est, amr) 
     KitAMR.update_solid_cell!(amr)
     KitAMR.data_exchange!(ps4est, amr)
