@@ -13,9 +13,11 @@ DoubleSizeNeighbor = Val{-1}
 mutable struct Neighbor{DIM,NDF}
     data::Vector{Vector{NeighborQuad{DIM,NDF}}}
     state::Vector{Int}
+    # c2r_temp::Vector{Vector{Matrix{Int}}} # Templates indices for velocity grids that are coarser than corresponding grids in neighbors.
     Neighbor(DIM,NDF) = (n = new{DIM,NDF}();
     n.data = Vector{Vector{NeighborQuad{DIM,NDF}}}(undef, 2*DIM);
     n.state = zeros(Int8, 2*DIM);
+    # n.c2r_temp = Vector{Vector{Matrix{Int}}}(undef,2*DIM);
     n)
 end
 mutable struct SolidNeighbor{DIM,NDF,ID} <:AbstractPsData{DIM,NDF}
@@ -24,6 +26,8 @@ mutable struct SolidNeighbor{DIM,NDF,ID} <:AbstractPsData{DIM,NDF}
     normal::Vector{Float64}
     solid_cell::AbstractPsData{DIM,NDF}
     midpoint::Vector{Float64}
+    w::Vector{Float64}
+    cvc::CuttedVelocityCells
     vs_data::VS_Data{DIM,NDF}
 end
 mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}

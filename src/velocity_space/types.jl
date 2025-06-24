@@ -37,3 +37,24 @@ end
 function Face_VS_Data(fvd::Face_VS_Data{DIM,NDF},df::AbstractMatrix) where{DIM,NDF}
     return Face_VS_Data{DIM,NDF}(fvd.heavi,fvd.weight,fvd.midpoint,fvd.vn,df,fvd.sdf)
 end
+struct VelocityTemplates
+    indices::Vector{Int} # Indices of the templates
+    Ainv::Matrix{Float64} # The inversion of the coefficient marix for bi-linear interpolation
+end
+mutable struct CuttedVelocityCells
+    indices::Vector{Int}
+    weight::Vector{Float64}
+    gas_dfs::Matrix{Float64}
+    solid_dfs::Matrix{Float64}
+    gas_midpoints::Matrix{Float64}
+    solid_midpoints::Matrix{Float64}
+    gas_weights::Vector{Float64}
+    solid_weights::Vector{Float64} # Range from 0 to 1, representing the percent of the solid part.
+    # templates::Vector{VelocityTemplates}
+end
+mutable struct VS_Projection{DIM}
+    c2r_index::Matrix{Int} #
+    c2r_offset::Matrix{Int}
+    r2c_index::Matrix{Int}
+    r2c_offset::Matrix{Int}
+end

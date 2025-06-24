@@ -2,14 +2,16 @@ abstract type AbstractFluxType end
 abstract type AbstractDVMFluxType <: AbstractFluxType end
 struct UGKS<:AbstractDVMFluxType end
 struct DVM<:AbstractDVMFluxType end
+struct CAIDVM<:AbstractDVMFluxType end # Conserved DVM, which encures energy conserved flux.
 const MicroFlux = Union{DVM}
-const HybridFlux = Union{UGKS} # to add more...
+const HybridFlux = Union{UGKS,CAIDVM} # to add more...
 
 
 abstract type AbstractTimeMarchingType end
 struct Rungekuta{O} <: AbstractTimeMarchingType end
 struct Euler <:AbstractTimeMarchingType end
 struct UGKS_Marching<:AbstractTimeMarchingType end
+struct CAIDVM_Marching<:AbstractTimeMarchingType end
 
 const AbstractICType=Union{Vector{Float64},Function}
 
@@ -45,11 +47,16 @@ struct Configure{DIM,NDF}
     IC::AbstractICType
     domain::Vector{Domain}
     IB::Vector{AbstractBoundary}
-    IB_sort::AbstractIBSortType
-    IB_interp::AbstractIBInterpolateType
     gas::Gas
     solver::Solver
     user_defined::UDF
+end
+function config_IB(ib::Circle,config::Dict)
+    ds = minimum([(config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i]/2^config[:AMR_PS_MAXLEVEL] for i in 1:config[:DIM]])
+    Circle(ib,ds)
+end
+function config_IB(ib::Vertices,config::Dict)
+    Vertices(ib,config)
 end
 function Configure(config::Dict)
     gas = Gas()
@@ -59,12 +66,9 @@ function Configure(config::Dict)
         end
     end
     gas.μᵣ = ref_vhs_vis(gas.Kn,gas.αᵣ,gas.ωᵣ)
-    IB = config[:IB]
+    IB = haskey(config,:IB) ? config[:IB] : []
     for i in eachindex(IB)
-        if isa(IB[i],Circle)&&!isdefined(IB[i],:search_radius)
-            ds = minimum([(config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i]/2^config[:AMR_PS_MAXLEVEL] for i in 1:config[:DIM]])
-            IB[i] = Circle(IB[i],ds)
-        end
+        IB[i] = config_IB(IB[i],config)
     end
     user_defined = UDF()
     for i in fieldnames(UDF)
@@ -75,8 +79,8 @@ function Configure(config::Dict)
         end
     end
     return Configure{config[:DIM],config[:NDF]}(config[:geometry],config[:trees_num],
-        config[:quadrature],config[:vs_trees_num],config[:IC],config[:domain],config[:IB],
-        config[:IB_sort],config[:IB_interp],gas,Solver(config),user_defined)
+        config[:quadrature],config[:vs_trees_num],config[:IC],config[:domain],IB,
+        gas,Solver(config),user_defined)
 end
 
 mutable struct Forest{DIM}
@@ -104,6 +108,7 @@ mutable struct Status
     max_vs_num::Int # maximum vs_num among ghost quadrants
     gradmax::Vector{Float64}
     Δt::Float64
+    Δt_ξ::Float64
     sim_time::Float64
     ps_adapt_step::Int
     vs_adapt_step::Int
@@ -123,7 +128,7 @@ function Status(config)
         (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
         2^config[:AMR_VS_MAXLEVEL] / 2 for i in 1:DIM]
     Δt = config[:CFL]*minimum(ds ./ U)
-    return Status(0,ones(DIM+2),Δt,0.,1,1,1,Residual(DIM),Ref(false),[true,true])
+    return Status(0,ones(DIM+2),Δt*TIME_STEP_CONTRACT_RATIO,Δt,0.,1,1,1,Residual(DIM),Ref(false),[true,true])
 end
 
 mutable struct Global_Data{DIM,NDF}
@@ -161,20 +166,9 @@ mutable struct Ghost
     ghost_wrap::Vector{AbstractGhostPsData}
 end
 
-mutable struct Boundary{DIM,NDF}
-    solid_cells::Vector{SolidCells{DIM,NDF}} # Element corresponds to one IB boundary
-    solid_numbers::Vector{Vector{Int}} # MPI_size{IB_Boundary_Number{}}, represents how many solid_cells for each IB_boundary on each rank (is necessary?)
-    image_points::Vector{Vector{Vector{Float64}}} # Image points of solid_cells sorted by quadid
-    aux_points::Vector{Vector{Vector{Float64}}} # Midpoints of aux_points sorted by quadid
-    IB_cells::Vector{IBCells} # Element corresponds to one IB boundary
-    IB_ranks::Vector{Vector{PS_Data{DIM,NDF}}} # Local IB nodes belonging to solidcells in different processors
-    # IB_ranks_table::Vector{Vector{Vector{PS_Data{DIM,NDF}}}} # Local IB nodes belonging to solidcells in different processors
-    IB_buffer::IBBuffer # Buffer for IB communication. Store pointers for memory free.
-end
 mutable struct Field{DIM,NDF}
     trees::PS_Trees{DIM,NDF}
     faces::Vector{AbstractFace}
-    # boundary::Boundary{DIM,NDF}
 end
 
 

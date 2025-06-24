@@ -160,7 +160,7 @@ function write_vs_VTK(vs_data::AbstractVsData{2,2},amr::AMR{2,2},filename::Strin
     dx = (xmax - xmin) / Nx/2^AMR_VS_MAXLEVEL
     dy = (ymax - ymin) / Ny/2^AMR_VS_MAXLEVEL
     D = [dx,dy]
-    vertices = Matrix{Float64}(undef,2,8*length(vs_data.level))
+    vertices = Matrix{Float64}(undef,2,4*length(vs_data.level))
     midpoint = vs_data.midpoint
     level = vs_data.level
     dlevel = -(vs_data.level .- AMR_VS_MAXLEVEL)
@@ -169,10 +169,36 @@ function write_vs_VTK(vs_data::AbstractVsData{2,2},amr::AMR{2,2},filename::Strin
         for j in 1:4
             @. vertices[:,(i-1)*4+j] = midpoint[i,:]+RMT[2][j]*2^dlevel[i]*D/2
         end
-        cells[i] = MeshCell(VTKCellTypes.VTK_VOXEL,(1:4).+4*(i-1))
+        cells[i] = MeshCell(VTKCellTypes.VTK_PIXEL,(1:4).+4*(i-1))
     end
     vtk_grid(filename,vertices,cells;append=false) do vtk
         cell_datas = fieldvalues_fn(vs_data)
+        for i in eachindex(fieldnames)
+            vtk[fieldnames[i],VTKCellData()] = cell_datas[i]
+        end
+    end
+end
+function write_vs_VTK(df::AbstractMatrix,vs_data::AbstractVsData{2,2},amr::AMR{2,2},filename::String,fieldnames::Vector{String},fieldvalues_fn)
+    global_data = amr.global_data
+    xmin,xmax,ymin,ymax = global_data.config.quadrature
+    Nx,Ny = global_data.config.vs_trees_num
+    AMR_VS_MAXLEVEL = global_data.config.solver.AMR_VS_MAXLEVEL
+    dx = (xmax - xmin) / Nx/2^AMR_VS_MAXLEVEL
+    dy = (ymax - ymin) / Ny/2^AMR_VS_MAXLEVEL
+    D = [dx,dy]
+    vertices = Matrix{Float64}(undef,2,4*length(vs_data.level))
+    midpoint = vs_data.midpoint
+    level = vs_data.level
+    dlevel = -(vs_data.level .- AMR_VS_MAXLEVEL)
+    cells = Vector{MeshCell}(undef,length(level))
+    for i in eachindex(level)
+        for j in 1:4
+            @. vertices[:,(i-1)*4+j] = midpoint[i,:]+RMT[2][j]*2^dlevel[i]*D/2
+        end
+        cells[i] = MeshCell(VTKCellTypes.VTK_PIXEL,(1:4).+4*(i-1))
+    end
+    vtk_grid(filename,vertices,cells;append=false) do vtk
+        cell_datas = fieldvalues_fn(vs_data,df)
         for i in eachindex(fieldnames)
             vtk[fieldnames[i],VTKCellData()] = cell_datas[i]
         end
@@ -234,7 +260,7 @@ function neighbor_num(::InsideSolidData,ps4est::P_pxest_t,amr::AMR{DIM},quadid::
     end
     return neighbor_num
 end
-function save_result(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF}
+function save_result(ps4est::P_pxest_t,amr::AMR{DIM,NDF};dir_path="") where{DIM,NDF}
     fp = PointerWrapper(ps4est)
     ps_solution = Vector{PS_Solution}(undef,fp.local_num_quadrants[])
     neighbor_nums = Vector{Vector{Int}}(undef,fp.local_num_quadrants[])
@@ -253,7 +279,11 @@ function save_result(ps4est::P_pxest_t,amr::AMR{DIM,NDF}) where{DIM,NDF}
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
     result = Result(solution,MeshInfo(neighbor_nums))
     MPI.Barrier(MPI.COMM_WORLD)
-    dir_path = "./result"*Dates.format(now(), "yyyy-mm-dd_HH-MM")*"/"
+    if isempty(dir_path)
+        dir_path = "./result"*Dates.format(now(), "yyyy-mm-dd_HH-MM")*"/"
+    else
+        dir_path = "./"*dir_path*"/"
+    end
     !isdir(dir_path) && mkpath(dir_path)
     p4est_save_ext("p",ps4est,Cint(0),Cint(0))
     if rank==0
@@ -284,7 +314,7 @@ end
 # end
 function save_boundary_result(dir_path::String,amr::AMR{DIM,NDF}) where{DIM,NDF}
     ibs = amr.global_data.config.IB
-    boundary_results = [Boundary_Solution(Vector{Float64}[],Boundary_PS_Solution[])]
+    boundary_results = [Boundary_Solution(Vector{Float64}[],Vector{Float64}[],Boundary_PS_Solution[])]
     for tree in amr.field.trees.data
         for ps_data in tree
             (isa(ps_data,InsideSolidData)||ps_data.bound_enc<=0)&&continue
@@ -299,6 +329,7 @@ function boundary_write_csv(csvname,results,config::ConfigureForSave{2})
     for i in eachindex(config.IB)
         df = DataFrame()
         df.x=[x[1] for x in results[i].midpoints];df.y=[x[2] for x in results[i].midpoints]
+        df.nx = [x[1] for x in results[i].normal];df.ny = [x[2] for x in results[i].normal]
         df.rho=[x.prim[1] for x in results[i].ps_solutions]
         df.u=[x.prim[2] for x in results[i].ps_solutions]
         df.v=[x.prim[3] for x in results[i].ps_solutions]
@@ -323,6 +354,7 @@ function boundary_result2csv(dirname::String,csvname::String)
                 result = results[j]
                 append!(result.ps_solutions,r.ps_solutions)
                 append!(result.midpoints,r.midpoints)
+                append!(result.normal,r.normal)
             end
         end
     end
@@ -440,7 +472,8 @@ function result2vtk(dirname::String,vtkname::String)
             # vtk["u"] = [ps_solution.prim[2] for ps_solution in result.solution.ps_solutions]
             # vtk["v"] = [ps_solution.prim[3] for ps_solution in result.solution.ps_solutions]
             vtk["velocity"] = ([ps_solution.prim[2] for ps_solution in result.solution.ps_solutions],
-                [ps_solution.prim[3] for ps_solution in result.solution.ps_solutions])
+                [ps_solution.prim[3] for ps_solution in result.solution.ps_solutions],
+                [0. for _ in result.solution.ps_solutions])
             vtk["T"] = [1/ps_solution.prim[end] for ps_solution in result.solution.ps_solutions]
             # vtk["qfx"] = [ps_solution.qf[1] for ps_solution in result.solution.ps_solutions]
             # vtk["qfy"] = [ps_solution.qf[2] for ps_solution in result.solution.ps_solutions]

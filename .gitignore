@@ -10,3 +10,5 @@ result20*
 *.vtp
 LocalPreference.toml
 *.csv
+*.nsys-rep
+boundary_vs

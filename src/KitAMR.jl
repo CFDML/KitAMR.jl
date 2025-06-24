@@ -8,7 +8,9 @@ using Parameters
 using SpecialFunctions
 using StaticArrays
 # using PythonCall
+using Suppressor
 using WriteVTK
+using Documenter
 using Reexport
 using CSV
 using DataFrames
@@ -44,8 +46,6 @@ include("partition.jl")
 include("slope.jl")
 # include("boundary/maxwellian.jl")
 include("flux/flux.jl")
-include("flux/DVM.jl")
-include("flux/UGKS.jl")
 include("iterate.jl")
 include("finalize.jl")
 

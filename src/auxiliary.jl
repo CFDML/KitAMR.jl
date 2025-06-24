@@ -72,7 +72,7 @@ function cut_rect(n::Vector{Float64},vertices::Vector{Vector{Float64}}) # The sp
 #         |     |     |
 #     1(2)|-----2-----|3(4) x
     =#
-    points = Vector{Float64}[];indices = Int[];i = 1
+    points = Vector{Float64}[];indices = Int[];i = 0
     xmin,xmax,ymin,ymax = vertices[1][1],vertices[2][1],vertices[1][2],vertices[3][2]
     y = -n[1]/n[2]*xmin
     if y<ymax&&y>ymin
@@ -98,26 +98,146 @@ function cut_rect(n::Vector{Float64},vertices::Vector{Vector{Float64}}) # The sp
         push!(indices,6)
         i+=1
     end
-    clp = findall(x->dot(x,n)==0.,vertices)
-    if length(clp)+i==1
-        return false,0.
+    clp = findall(x->dot(x,n)==0.,vertices) # Number of vertices lying on the discontinuity
+    if length(clp)+i<2
+        return false,0.,0.,Float64[],Float64[]
     else
         append!(points,vertices)
-        append!(indices,CLP)
+        append!(indices,CLP) # CLP is defined in dim.jl
         sid = sortperm(indices)
         indices = indices[sid]
         points = points[sid]
         aid = findfirst(x->iseven(x)||in(x,CLP[clp]),indices)
         bid = findlast(x->iseven(x)||in(x,CLP[clp]),indices)
-        A = Matrix{Float64}(undef,2,bid-aid+1)
+        A = Matrix{Float64}(undef,2,bid-aid+1);B = Matrix{Float64}(undef,2,length(indices)-(bid-aid)+1)
         for i in aid:bid
             A[:,i-aid+1] .= points[i]
         end
+        for i in 0:length(indices)-(bid-aid)
+            index = bid+i>length(indices) ? (bid+i)%length(indices) : bid+i
+            B[:,i+1] .= points[index]
+        end
         l = points[bid]-points[aid]
         if n[1]*l[2]-n[2]*l[1]<0
-            return true,gaussian_area(A)/((xmax-xmin)*(ymax-ymin))
+            gas_weight = gaussian_area(A)
+            return true,gas_weight,((xmax-xmin)*(ymax-ymin))-gas_weight,vec(sum(A,dims=2))./size(A,2),vec(sum(B,dims=2))./size(B,2) # solid first
         else
-            return true,1-gaussian_area(A)/((xmax-xmin)*(ymax-ymin))
+            solid_weight = gaussian_area(A)
+            return true,((xmax-xmin)*(ymax-ymin))-solid_weight,solid_weight,vec(sum(B,dims=2))./size(B,2),vec(sum(A,dims=2))./size(A,2)
         end
     end
+end
+function ray_casting(point::Vector{Float64},vertices::Vector{Vector{Float64}})
+    n = length(vertices)
+    count = 0
+    for i in 1:n
+        j = (i % n) + 1
+        x_i, y_i = vertices[i]
+        x_j, y_j = vertices[j]
+        px, py = point
+        if (py > min(y_i, y_j)) && (py <= max(y_i, y_j))
+            if y_i == y_j 
+                continue
+            end
+            x_intersect = (py-y_i) * (x_j - x_i) / (y_j - y_i) + x_i
+            if x_intersect > px && (x_intersect <= max(x_i, x_j))
+                count +=1
+            end
+        end
+    end
+    return (count % 2) == 1
+end
+function calc_normal(p1,p2,s1,s2) # Calculate the unit normal vector of the vector (s2-s1), in the direction of (p2-p1).
+    n = [s2[2]-s1[2],s1[1]-s2[1]]
+    n /= norm(n)
+    if dot(n,p2-p1)<0
+        n = -n
+    end
+    return n
+end
+function find_horizontal_intersection(s_midpoint, f_midpoint, points)
+    n = length(points)
+    x_seg_min, x_seg_max = minmax(s_midpoint[1], f_midpoint[1])
+    y0 = s_midpoint[2]
+    for i in 1:n
+        p1 = points[i]
+        p2 = points[i%n + 1]
+        x1, y1 = p1
+        x2, y2 = p2
+        if (y1 ≤ y0 ≤ y2) || (y2 ≤ y0 ≤ y1)
+            t = (y0 - y1) / (y2 - y1)
+            if 0 < t < 1
+                x_intersect = x1 + t * (x2 - x1)
+                if x_seg_min ≤ x_intersect ≤ x_seg_max
+                    return [x_intersect, y0],calc_normal(s_midpoint, f_midpoint, p1, p2)
+                end
+            elseif t==1
+                x_intersect = x1 + t * (x2 - x1)
+                if x_seg_min ≤ x_intersect ≤ x_seg_max
+                    p3 = points[i%n+2]
+                    n1 = calc_normal(s_midpoint, f_midpoint, p1, p2)
+                    n2 = calc_normal(s_midpoint, f_midpoint, p2, p3)
+                    n0 = n1+n2;n0/=norm(n0)
+                    return [x_intersect, y0],n0
+                end
+            end
+        end
+    end
+    @show s_midpoint f_midpoint
+    throw("Intersect error!")
+    return Float64[],Float64[]
+end
+
+function find_vertical_intersection(s_midpoint, f_midpoint, points)
+    n = length(points)
+    y_seg_min, y_seg_max = minmax(s_midpoint[2], f_midpoint[2])
+    x0 = s_midpoint[1]
+    for i in 1:n
+        p1 = points[i]
+        p2 = points[i%n + 1]
+        x1, y1 = p1
+        x2, y2 = p2
+        if (x1 ≤ x0 ≤ x2) || (x2 ≤ x0 ≤ x1)
+            t = (x0 - x1) / (x2 - x1)
+            if 0 < t < 1
+                y_intersect = y1 + t * (y2 - y1)
+                if y_seg_min ≤ y_intersect ≤ y_seg_max
+                    return [x0, y_intersect],calc_normal(s_midpoint, f_midpoint, p1, p2)
+                end
+            elseif t==1
+                y_intersect = y1 + t * (y2 - y1)
+                if y_seg_min ≤ y_intersect ≤ y_seg_max
+                    p3 = points[i%n+2]
+                    n1 = calc_normal(s_midpoint, f_midpoint, p1, p2)
+                    n2 = calc_normal(s_midpoint, f_midpoint, p2, p3)
+                    n0 = n1+n2;n0/=norm(n0)
+                    return [x0, y_intersect],n0
+                end
+            end
+        end
+    end
+    @show s_midpoint f_midpoint
+    throw("Intersect error!")
+    return Float64[],Float64[]
+end
+
+function find_intersections(s_midpoint, f_midpoint, closed_curve)
+    x1, y1 = s_midpoint
+    x2, y2 = f_midpoint
+    if abs(y1-y2)<EPS
+        return find_horizontal_intersection(s_midpoint, f_midpoint, closed_curve)
+    elseif abs(x1-x2)<EPS
+        return find_vertical_intersection(s_midpoint, f_midpoint, closed_curve)
+    else
+        @show s_midpoint f_midpoint
+        throw("Horizontal or vertical line segment is expected!")
+    end
+end
+function fieldvalues_fn(vs_data,aux_df)
+    NDF = typeof(vs_data).parameters[2]
+    return [aux_df[:,i] for i in 1:NDF]
+end
+function fieldvalues_fn(vs_data)
+    NDF = typeof(vs_data).parameters[2]
+    return [vs_data.df[:,i] for i in 1:NDF]
 end

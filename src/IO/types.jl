@@ -6,8 +6,6 @@ struct ConfigureForSave{DIM,NDF}
     IC::AbstractICType
     domain::Vector{Domain}
     IB::Vector{AbstractBoundary}
-    IB_sort::AbstractIBSortType
-    IB_interp::AbstractIBInterpolateType
     gas::Gas
     solver::Solver
 end
@@ -15,7 +13,7 @@ function ConfigureForSave(config::Configure{DIM,NDF}) where{DIM,NDF}
     return ConfigureForSave{DIM,NDF}(
         config.geometry,config.trees_num,config.quadrature,
         config.vs_trees_num,config.IC,config.domain,
-        config.IB,config.IB_sort,config.IB_interp,config.gas,
+        config.IB,config.gas,
         config.solver
     )
 end
@@ -67,5 +65,6 @@ struct Result
 end
 struct Boundary_Solution
     midpoints::Vector{Vector{Float64}}
+    normal::Vector{Vector{Float64}}
     ps_solutions::Vector{Boundary_PS_Solution}
 end

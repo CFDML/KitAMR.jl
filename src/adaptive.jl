@@ -46,25 +46,12 @@ function vs_merge!(sdf::AbstractMatrix,sdf_n::AbstractMatrix,level::Vector,level
         end
     end
 end
-function boundary_flag(boundary::Domain,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data) # Domain boundary flag
+function boundary_flag(::Domain,::AbstractVector,::AbstractVector,::Global_Data) # Domain boundary flag
+    return false
+end
+function boundary_flag(boundary::Domain{Maxwellian},midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data) # Domain boundary flag
     index = Int(floor((boundary.id-1)/2))+1
     abs(midpoint[index] - global_data.config.geometry[boundary.id]) < ds[index] && return true
-end
-function boundary_flag(boundary::Circle,midpoint::AbstractVector,ds::AbstractVector,::Global_Data) # Circle type IB boundary flag
-    flag = 0
-    for i = 1:4
-        flag += norm(midpoint.+ds.*NMT[2][i].-boundary.center)>boundary.radius ? 1 : -1 # any neighbor cross boundary?
-    end
-    abs(flag)==4 && return false
-    return true
-end
-function boundary_flag(boundary::Sphere,midpoint::AbstractVector,ds::AbstractVector,::Global_Data) # Circle type IB boundary flag
-    flag = 0
-    for i = 1:6
-        flag += norm(midpoint.+ds.*NMT[3][i].-boundary.center)>boundary.radius ? 1 : -1 # any neighbor cross boundary?
-    end
-    abs(flag)==6 && return false
-    return true
 end
 function domain_flag(global_data::Global_Data,midpoint::AbstractVector,ds::AbstractVector) # domain flag for physical space dynamic adaptive
     domains = global_data.config.domain
@@ -81,17 +68,28 @@ function boundary_flag(midpoint::AbstractVector,ds::AbstractVector,global_data::
     end
     return solid_cell_flag(boundary,midpoint,ds,global_data)
 end
-function both_sides_boundary_flag(
-    midpoint::Vector{Float64},ds::Vector{Float64},
-    global_data::Global_Data{DIM},
-) where{DIM}
+# function both_sides_boundary_flag(
+#     midpoint::Vector{Float64},ds::Vector{Float64},
+#     global_data::Global_Data{DIM},
+# ) where{DIM}
+#     domain = global_data.config.domain
+#     boundary = global_data.config.IB
+#     for i in eachindex(domain)
+#         boundary_flag(domain[i],midpoint,ds,global_data) && return true
+#     end
+#     for i in eachindex(boundary)
+#         boundary_flag(boundary[i],midpoint,ds,global_data) && return true
+#     end
+#     return false
+# end
+function pre_ps_refine_flag(midpoint,ds,global_data::Global_Data{DIM}) where{DIM}
     domain = global_data.config.domain
     boundary = global_data.config.IB
     for i in eachindex(domain)
         boundary_flag(domain[i],midpoint,ds,global_data) && return true
     end
     for i in eachindex(boundary)
-        boundary_flag(boundary[i],midpoint,ds,global_data) && return true
+        pre_ps_refine_flag(boundary[i],midpoint,ds,global_data) && return true
     end
     return false
 end
@@ -137,6 +135,7 @@ function ps_refine_flag(
     if ps_data.bound_enc!=0||domain_flag(global_data,ps_data.midpoint,ps_data.ds)
         return Cint(1)
     end
+    global_data.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,global_data,qp.level[]) && return Cint(1)
     agrad = [maximum(abs.(ps_data.sw[i,:])) for i in 1:DIM+2]
     rgrad = maximum(agrad ./ (global_data.status.gradmax.+EPS))
     if rgrad > 2.0^(DIM+qp.level[] - global_data.config.solver.AMR_PS_MAXLEVEL) * ADAPT_COEFFI_PS
@@ -344,7 +343,7 @@ function pre_ps_coarsen_flag(forest::Ptr{p4est_t},which_tree,quadrants)
         for i = 1:2^DIM
             qp = PointerWrapper(quadrants_wrap[i])
             ds,midpoint = quad_to_cell(fp,which_tree,qp)
-            (global_data.config.user_defined.static_ps_refine_flag(midpoint,ds,global_data,qp.level[])||
+            (global_data.config.user_defined.static_ps_refine_flag(midpoint,ds,global_data,qp.level[])&&!solid_flag(midpoint,global_data)||
                 IB_flag(global_data.config.IB,aux_points,midpoint,ds)||
                 boundary_flag(midpoint,ds,global_data))&&return Cint(0)
         end
@@ -386,6 +385,7 @@ function ps_coarsen_flag(ps_datas::Vector{PS_Data}, levels::Vector{Int}, amr::AM
     for i = 1:2^DIM
         ps_data = ps_datas[i]
         (ps_data.bound_enc!=0||domain_flag(global_data,ps_data.midpoint,ps_data.ds)) && return Cint(0)
+        global_data.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,global_data,levels[i]-1) && return Cint(0)
         agrad = [maximum(abs.(ps_data.sw[i,:])) for i in 1:DIM+2]
         rgrad = maximum(agrad ./ (global_data.status.gradmax.+EPS))
         if rgrad > 2.0^(DIM+levels[i] - global_data.config.solver.AMR_PS_MAXLEVEL) * ADAPT_COEFFI_PS
@@ -525,7 +525,7 @@ function pre_ps_refine_flag(forest::P_pxest_t, which_tree, quadrant)
         qp = PointerWrapper(quadrant)
         global_data = unsafe_pointer_to_objref(pointer(fp.user_pointer))
         ds, midpoint = quad_to_cell(fp, which_tree, qp)
-        if global_data.config.user_defined.static_ps_refine_flag(midpoint,ds,global_data,qp.level[])||both_sides_boundary_flag(midpoint, ds, global_data)
+        if global_data.config.user_defined.static_ps_refine_flag(midpoint,ds,global_data,qp.level[])||pre_ps_refine_flag(midpoint, ds, global_data)
             return Cint(1)
         else
             return Cint(0)
@@ -572,7 +572,7 @@ function adaptive!(ps4est::P_pxest_t,amr::AMR;ps_interval=10,vs_interval=80,part
     amr.global_data.status.residual.redundant_step>0&&(return nothing)
     res = maximum(amr.global_data.status.residual.residual)
     converge_ratio = res/TOLERANCE>100 ? 1 : Int(floor(100*TOLERANCE/res))
-    if amr.global_data.status.ps_adapt_step == ps_interval*converge_ratio
+    if amr.global_data.status.ps_adapt_step > ps_interval*converge_ratio
         if amr.global_data.config.solver.PS_DYNAMIC_AMR
             update_slope!(amr)
             update_gradmax!(amr)
@@ -580,22 +580,20 @@ function adaptive!(ps4est::P_pxest_t,amr::AMR;ps_interval=10,vs_interval=80,part
             ps_coarsen!(ps4est)
             ps_balance!(ps4est)
         end
-        if amr.global_data.status.vs_adapt_step == vs_interval*converge_ratio
+        if amr.global_data.status.vs_adapt_step > vs_interval*converge_ratio
             if amr.global_data.config.solver.VS_DYNAMIC_AMR
-                vs_refine!(amr)
-                vs_coarsen!(amr)
+                va_flags = vs_refine!(amr)
+                va_flags = vs_coarsen!(va_flags,amr)
+                vs_conserved_correction!(va_flags,amr)
                 amr.global_data.status.vs_adapt_step=0
             end
         end
-        # if amr.global_data.status.partition_step%partition_interval==0
-        #     if amr.global_data.config.solver.PS_DYNAMIC_AMR||amr.global_data.config.solver.VS_DYNAMIC_AMR
-        #         # IB_quadid_update!(ps4est,amr)
-        #         ps_partition!(ps4est, amr)
-        #         # IB_partition!(ps4est,amr)
-        #         amr.global_data.status.partition_step = 0
-        #     end
-        # end
-        # amr.global_data.status.vs_adapt_step==0&&amr.global_data.status.partition_step!=0&&IB_structure_update!(amr)
+        if amr.global_data.status.partition_step>partition_interval*converge_ratio
+            if amr.global_data.config.solver.PS_DYNAMIC_AMR||amr.global_data.config.solver.VS_DYNAMIC_AMR
+                ps_partition!(ps4est, amr)
+                amr.global_data.status.partition_step = 0
+            end
+        end
         if amr.global_data.config.solver.PS_DYNAMIC_AMR||amr.global_data.status.vs_adapt_step==0||amr.global_data.status.partition_step == 0
             update_ghost!(ps4est, amr)
             update_neighbor!(ps4est, amr)
