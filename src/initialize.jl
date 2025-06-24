@@ -246,6 +246,7 @@ function init_field!(global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
             P4est_PS_Data,
             pointer_from_objref(global_data),
         )
+        global_data.forest.p4est = ps4est
         pre_refine!(ps4est,global_data)
         trees = init_ps!(ps4est,global_data)
         return trees, ps4est
@@ -261,7 +262,6 @@ function init(config::Dict)
     trees, ps4est = init_field!(global_data)
     ghost_ps = AMR_ghost_new(ps4est)
     mesh_ps = AMR_mesh_new(ps4est, ghost_ps)
-    global_data.forest.p4est = ps4est
     global_data.forest.ghost = ghost_ps
     global_data.forest.mesh = mesh_ps
     ghost = initialize_ghost(ps4est, global_data)

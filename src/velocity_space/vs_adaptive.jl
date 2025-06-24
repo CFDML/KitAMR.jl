@@ -4,14 +4,18 @@ include("criteria.jl")
 function vs_refine!(amr::AMR)
     trees = amr.field.trees
     global_data = amr.global_data
-    vs_refine!(trees, global_data)
+    fp = PointerWrapper(global_data.forest.p4est)
+    va_flags = zeros(Bool,fp.local_num_quadrants[])
+    vs_refine!(trees, va_flags, global_data)
 end
-function vs_refine!(trees::PS_Trees{DIM,NDF}, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+function vs_refine!(trees::PS_Trees{DIM,NDF}, va_flags::Vector{Bool}, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     ds = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
     global_data.config.vs_trees_num[i] for i in 1:DIM]
     # Δ = norm(ds)
+    id = 0
     for i in eachindex(trees.data)
         for j in eachindex(trees.data[i])
+            id += 1
             ps_data = trees.data[i][j]
             isa(ps_data,InsideSolidData) && continue
             # ps_data.bound_enc<0 && continue # solid_cell
@@ -56,6 +60,7 @@ function vs_refine!(trees::PS_Trees{DIM,NDF}, global_data::Global_Data{DIM,NDF})
                         sdf_refine_replace!(DIM,NDF,lnsdf)
                         flux_refine_replace!(DIM,NDF,lnflux)
                         index += 2^DIM - 1
+                        !va_flags[id]&&(va_flags[id] = true)
                     end
                     index += 1
                 end
@@ -92,6 +97,7 @@ function vs_refine!(trees::PS_Trees{DIM,NDF}, global_data::Global_Data{DIM,NDF})
                         sdf_refine_replace!(DIM,NDF,lnsdf)
                         flux_refine_replace!(DIM,NDF,lnflux)
                         index += 2^DIM - 1
+                        !va_flags[id]&&(va_flags[id] = true)
                     end
                     index += 1
                 end
@@ -102,7 +108,7 @@ function vs_refine!(trees::PS_Trees{DIM,NDF}, global_data::Global_Data{DIM,NDF})
             vs_data.flux = reshape(lnflux, vs_data.vs_num, NDF)
         end
     end
-    
+    return va_flags
 end
 function midpoint_refine_replace!(DIM::Integer,lnmidpoint::AbstractVector, midpoint_new::AbstractMatrix, vs_num::Int, index::Int)
     for i = 1:DIM
@@ -191,15 +197,17 @@ function make_b(DIM::Integer,midpoint::AbstractVector, midpoint_new::AbstractMat
     b
 end
 
-function vs_coarsen!(amr::AMR{DIM,NDF})where{DIM,NDF}
+function vs_coarsen!(va_flags::Vector{Bool},amr::AMR{DIM,NDF})where{DIM,NDF}
     trees = amr.field.trees
     global_data = amr.global_data
     ds = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
     global_data.config.vs_trees_num[i] for i in 1:DIM]
     # Δ = norm(ds)
+    id = 0
     flag = zeros(global_data.config.solver.AMR_VS_MAXLEVEL)
     for i in eachindex(trees.data)
         for j in eachindex(trees.data[i])
+            id += 1
             ps_data = trees.data[i][j]
             isa(ps_data,InsideSolidData) && continue
             # ps_data.bound_enc<0 && continue # solid_cell
@@ -253,6 +261,7 @@ function vs_coarsen!(amr::AMR{DIM,NDF})where{DIM,NDF}
                                 df_coarsen_replace!(DIM,NDF,lndf, df_new, vs_data.vs_num, index)
                                 sdf_coarsen_replace!(DIM,NDF,lnsdf)
                                 flux_coarsen_replace!(DIM,NDF,lnflux)
+                                !va_flags[id]&&(va_flags[id] = true)
                             else
                                 index += 2^DIM - 1
                             end
@@ -311,6 +320,7 @@ function vs_coarsen!(amr::AMR{DIM,NDF})where{DIM,NDF}
                                 df_coarsen_replace!(DIM,NDF,lndf, df_new, vs_data.vs_num, index)
                                 sdf_coarsen_replace!(DIM,NDF,lnsdf)
                                 flux_coarsen_replace!(DIM,NDF,lnflux)
+                                !va_flags[id]&&(va_flags[id] = true)
                             else
                                 index += 2^DIM - 1
                             end
@@ -334,6 +344,7 @@ function vs_coarsen!(amr::AMR{DIM,NDF})where{DIM,NDF}
             vs_data.df = reshape(lndf, vs_data.vs_num, NDF)
         end
     end
+    return va_flags
 end
 
 function midpoint_coarsen(DIM::Integer,midpoint::AbstractVector, level::Int8, ds::AbstractVector)
@@ -393,8 +404,10 @@ function flux_coarsen_replace!(DIM::Integer,NDF::Integer,lnflux::AbstractVector)
 end
 
 function pre_vs_refine!(trees::PS_Trees{DIM,NDF}, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+    fp = PointerWrapper(global_data.forest.p4est)
+    va_flags = zeros(Bool,fp.local_num_quadrants[])
     for _ = 1:global_data.config.solver.AMR_VS_MAXLEVEL
-        vs_refine!(trees, global_data)
+        vs_refine!(trees, va_flags, global_data)
     end
 end
 # function update_solid_vs!(amr::AMR)
@@ -410,3 +423,23 @@ end
 #         end
 #     end
 # end
+function vs_conserved_correction!(va_flags::Vector{Bool},amr)
+    trees = amr.field.trees
+    global_data = amr.global_data
+    id = 0
+    @inbounds for i in eachindex(trees.data)
+        for j in eachindex(trees.data[i])
+            id+=1;!va_flags[id]&&continue
+            ps_data = trees.data[i][j]
+            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0)&&continue
+            vs_data = ps_data.vs_data
+            F_c = discrete_maxwell(vs_data.midpoint, ps_data.prim, global_data)
+            w = calc_w0(ps_data)
+            prim = get_prim(w,global_data)
+            if prim[end]>1e-3
+                F = discrete_maxwell(vs_data.midpoint, prim, global_data)
+                vs_data.df .+= F_c-F
+            end
+        end
+    end
+end
