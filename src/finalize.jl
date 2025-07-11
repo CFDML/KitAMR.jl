@@ -1,11 +1,12 @@
 function finalize_ghost!(ghost_exchange::Ghost_Exchange)
-    sc_free(-1, ghost_exchange.ghost_datas)
-    sc_free(-1, ghost_exchange.ghost_slopes)
-    sc_free(-1, ghost_exchange.ghost_structures)
+    id = P4est.package_id()
+    sc_free(id, ghost_exchange.ghost_datas)
+    sc_free(id, ghost_exchange.ghost_slopes)
+    sc_free(id, ghost_exchange.ghost_structures)
     for i in eachindex(ghost_exchange.mirror_data_pointers)
-        sc_free(-1, ghost_exchange.mirror_data_pointers[i])
-        sc_free(-1, ghost_exchange.mirror_slope_pointers[i])
-        sc_free(-1, ghost_exchange.mirror_structure_pointers[i])
+        sc_free(id, ghost_exchange.mirror_data_pointers[i])
+        sc_free(id, ghost_exchange.mirror_slope_pointers[i])
+        sc_free(id, ghost_exchange.mirror_structure_pointers[i])
     end
 end
 function finalize_p4est!(ps4est::Ptr{p4est_t}, amr::AMR)

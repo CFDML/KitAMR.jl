@@ -79,14 +79,14 @@ function cvc_correction_pressure!(aux_p,solid_neighbor,::Global_Data{2})
     aux_p .+= @views pressure_2D(cvc.gas_midpoints[:,1],cvc.gas_midpoints[:,2],cvc.gas_dfs[:,1],cvc.gas_weights)
     aux_p .+= @views pressure_2D(cvc.solid_midpoints[:,1],cvc.solid_midpoints[:,2],cvc.solid_dfs[:,1],cvc.solid_weights)
 end
-function save_boundary_result!(ib::AbstractBoundary,ps_data,solid_neighbor::SolidNeighbor{DIM,NDF,ID},boundary_results,amr::AMR{DIM,NDF}) where{DIM,NDF,ID}
+function save_boundary_result!(ib::AbstractBoundary,ps_data,solid_neighbor::SolidNeighbor{DIM,NDF},boundary_results,amr::AMR{DIM,NDF}) where{DIM,NDF}
     global_data = amr.global_data
     vs_data = ps_data.vs_data
     solid_cell = solid_neighbor.solid_cell;s_vs_data = solid_cell.vs_data
     aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
     vn = @views [dot(v,n) for v in eachrow(ps_data.vs_data.midpoint)]
     Θ = heaviside.(vn)
-    dir = get_dir(ID)
+    dir = get_dir(solid_neighbor.faceid)
     ib_point = aux_point+0.5*(ps_data.midpoint-solid_cell.midpoint)
     ib_df =  @views vs_data.df+vs_data.sdf[:,:,dir]*(ib_point[dir]-ps_data.midpoint[dir])
     aux_df = zeros(vs_data.vs_num,NDF)
@@ -377,7 +377,7 @@ function initialize_solid_neighbor!(amr::AMR)
     end
 end
 function initialize_cutted_velocity_cell(n::Vector{Float64},vs_data::VS_Data{2},amr::AMR{2,NDF}) where{NDF}
-    any(x->abs(x)<1e-6,n)&&return CuttedVelocityCell(Int[],Vector{Float64}[],Vector{Float64}[],Float64[],VelocityTemplates[])
+    any(x->abs(x)<1e-6,n)&&(return CuttedVelocityCells(Int[],Float64[],Matrix{Float64}(undef,0,0),Matrix{Float64}(undef,0,0),Matrix{Float64}(undef,0,0),Matrix{Float64}(undef,0,0),Float64[],Float64[]))
     global_data = amr.global_data
     du = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
         global_data.config.vs_trees_num[i] for i in 1:2]
@@ -413,22 +413,21 @@ function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF})
         ps_data.bound_enc=-solid_cell.bound_enc
         ib = amr.global_data.config.IB[-solid_cell.bound_enc]
         aux_point,normal = calc_intersect(ps_data.midpoint,solid_cell.midpoint,ib)
-        ic = get_bc(ib.bc)
         svsdata = VS_Data{DIM,NDF}(
             vs_data.vs_num,
             vs_data.level,
             vs_data.weight,
             vs_data.midpoint,
-            # discrete_maxwell(vs_data.midpoint,ic,amr.global_data),
             zeros(vs_data.vs_num,NDF),
             zeros(vs_data.vs_num,NDF,DIM),
             Matrix{Float64}(undef,0,0)
         )
-        cvc = initialize_cutted_velocity_cell(normal,svsdata,amr)
-        ps_data.neighbor.data[i][1] = SolidNeighbor{DIM,NDF,i}(
-            solid_cell.bound_enc,aux_point,normal,solid_cell,solid_cell.midpoint,zeros(DIM+2),cvc,svsdata
+        cvc = initialize_cutted_velocity_cell(normal,svsdata,amr) # heavy overhead
+        ps_data.neighbor.data[i][1] = SolidNeighbor{DIM,NDF}(
+            solid_cell.bound_enc,i,aux_point,normal,solid_cell,solid_cell.midpoint,zeros(DIM+2),cvc,svsdata
         )
     end
+    return nothing
 end
 function reinit_ib_vs!(amr::AMR)
     trees = amr.field.trees.data
@@ -501,11 +500,11 @@ function cvc_correction!(aux_df,aux_prim,vn,solid_neighbor,amr)
         @views @. aux_df[cvc.indices[i],:] = (cvc.gas_weights[i]*cvc.gas_dfs[i,:]+cvc.solid_weights[i]*cvc.solid_dfs[i,:])/(cvc.gas_weights[i]+cvc.solid_weights[i])
     end
 end
-function update_solid_neighbor!(::Union{DVM,CAIDVM},ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidNeighbor{DIM,NDF,ID},amr::AMR) where{DIM,NDF,ID}
+function update_solid_neighbor!(::Union{DVM,CAIDVM},ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidNeighbor{DIM,NDF},amr::AMR) where{DIM,NDF}
     ib = amr.global_data.config.IB[ps_data.bound_enc]
     vs_data = ps_data.vs_data
     aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
-    dir = get_dir(ID)
+    dir = get_dir(solid_neighbor.faceid)
     solid_cell = solid_neighbor.solid_cell;s_vs_data = solid_cell.vs_data
     dxL = 0.5*ps_data.ds[dir]
     dxR = norm(solid_cell.midpoint-aux_point)
@@ -529,11 +528,11 @@ function update_solid_neighbor!(::Union{DVM,CAIDVM},ps_data::PS_Data{DIM,NDF},so
     cvc_correction!(aux_df,aux_prim,vn,solid_neighbor,amr)
     @. solid_neighbor.vs_data.df = aux_df+(aux_df-ib_df)/dxL*dxR
 end
-function update_solid_neighbor!(::UGKS,ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidNeighbor{DIM,NDF,ID},amr::AMR) where{DIM,NDF,ID}
+function update_solid_neighbor!(::UGKS,ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidNeighbor{DIM,NDF},amr::AMR) where{DIM,NDF}
     ib = amr.global_data.config.IB[ps_data.bound_enc]
     vs_data = ps_data.vs_data
     aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
-    dir = get_dir(ID)
+    dir = get_dir(solid_neighbor.faceid)
     solid_cell = solid_neighbor.solid_cell;s_vs_data = solid_cell.vs_data
     dxL = 0.5*ps_data.ds[dir]
     dxR = norm(solid_cell.midpoint-aux_point)
@@ -573,3 +572,14 @@ end
 function update_solid!(amr::AMR{DIM,NDF}) where{DIM,NDF}
     initialize_solid_neighbor!(amr)
 end
+function reinit_solid_neighbor!(amr::AMR)
+    for tree in amr.field.trees.data
+        for ps_data in tree
+            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<=0)&&continue
+            reinit_solid_neighbor!(ps_data,amr)
+        end
+    end
+end
+# function update_solid!(amr::AMR{DIM,NDF}) where{DIM,NDF}
+#     reinit_solid_neighbor!(amr)
+# end

@@ -54,7 +54,7 @@ function write_VTK(ps4est::Ptr{p4est_t},filename::String,fieldnames::Vector{Stri
     pas = Vector{Vector{Cdouble}}(undef,length(fieldnames))
     pscs = Vector{Ptr{sc_array_t}}(undef,length(fieldnames))
     for i in eachindex(fieldnames)
-        ps[i] = sc_malloc(-1,num_quads*8)
+        ps[i] = sc_malloc(P4est.package_id(),num_quads*8)
         pas[i] = unsafe_wrap(Vector{Cdouble},Ptr{Cdouble}(ps[i]),num_quads)
         pscs[i] = sc_array_new_data(ps[i],8,num_quads)
     end
@@ -89,8 +89,8 @@ function write_VTK(ps4est::Ptr{p4est_t},filename::String,fieldnames::Vector{Stri
     cont = p4est_vtk_write_cell_dataf(cont,1,1,1,0,length(fieldnames),0,pairs...,cont)
     p4est_vtk_write_footer(cont)
     for i in eachindex(fieldnames)
-        sc_free(-1,Ptr{Nothing}(p_names[i]))
-        sc_free(-1,ps[i])
+        sc_free(P4est.package_id(),Ptr{Nothing}(p_names[i]))
+        sc_free(P4est.package_id(),ps[i])
     end
 end
 function write_VTK(ps4est::Ptr{p8est_t},filename::String,fieldnames::Vector{String},fieldvalues_fn)
@@ -105,7 +105,7 @@ function write_VTK(ps4est::Ptr{p8est_t},filename::String,fieldnames::Vector{Stri
     pas = Vector{Vector{Cdouble}}(undef,length(fieldnames))
     pscs = Vector{Ptr{sc_array_t}}(undef,length(fieldnames))
     for i in eachindex(fieldnames)
-        ps[i] = sc_malloc(-1,num_quads*8)
+        ps[i] = sc_malloc(P4est.package_id(),num_quads*8)
         pas[i] = unsafe_wrap(Vector{Cdouble},Ptr{Cdouble}(ps[i]),num_quads)
         pscs[i] = sc_array_new_data(ps[i],8,num_quads)
     end
@@ -141,8 +141,8 @@ function write_VTK(ps4est::Ptr{p8est_t},filename::String,fieldnames::Vector{Stri
     cont = p8est_vtk_write_cell_dataf(cont,1,1,1,0,length(fieldnames),0,pairs...,cont)
     p8est_vtk_write_footer(cont)
     for i in eachindex(fieldnames)
-        sc_free(-1,Ptr{Nothing}(p_names[i]))
-        sc_free(-1,ps[i])
+        sc_free(P4est.package_id(),Ptr{Nothing}(p_names[i]))
+        sc_free(P4est.package_id(),ps[i])
     end
 end
 

@@ -20,8 +20,9 @@ mutable struct Neighbor{DIM,NDF}
     # n.c2r_temp = Vector{Vector{Matrix{Int}}}(undef,2*DIM);
     n)
 end
-mutable struct SolidNeighbor{DIM,NDF,ID} <:AbstractPsData{DIM,NDF}
+mutable struct SolidNeighbor{DIM,NDF} <:AbstractPsData{DIM,NDF}
     bound_enc::Int
+    faceid::Int
     aux_point::Vector{Float64}
     normal::Vector{Float64}
     solid_cell::AbstractPsData{DIM,NDF}

@@ -572,35 +572,30 @@ function adaptive!(ps4est::P_pxest_t,amr::AMR;ps_interval=10,vs_interval=80,part
     amr.global_data.status.residual.redundant_step>0&&(return nothing)
     res = maximum(amr.global_data.status.residual.residual)
     converge_ratio = res/TOLERANCE>100 ? 1 : Int(floor(100*TOLERANCE/res))
-    if amr.global_data.status.ps_adapt_step > ps_interval*converge_ratio
-        if amr.global_data.config.solver.PS_DYNAMIC_AMR
-            update_slope!(amr)
-            update_gradmax!(amr)
-            ps_refine!(ps4est,amr)
-            ps_coarsen!(ps4est)
-            ps_balance!(ps4est)
-        end
-        if amr.global_data.status.vs_adapt_step > vs_interval*converge_ratio
-            if amr.global_data.config.solver.VS_DYNAMIC_AMR
-                va_flags = vs_refine!(amr)
-                va_flags = vs_coarsen!(va_flags,amr)
-                vs_conserved_correction!(va_flags,amr)
-                amr.global_data.status.vs_adapt_step=0
-            end
-        end
-        if amr.global_data.status.partition_step>partition_interval*converge_ratio
-            if amr.global_data.config.solver.PS_DYNAMIC_AMR||amr.global_data.config.solver.VS_DYNAMIC_AMR
-                ps_partition!(ps4est, amr)
-                amr.global_data.status.partition_step = 0
-            end
-        end
-        if amr.global_data.config.solver.PS_DYNAMIC_AMR||amr.global_data.status.vs_adapt_step==0||amr.global_data.status.partition_step == 0
-            update_ghost!(ps4est, amr)
-            update_neighbor!(ps4est, amr)
-            update_solid!(amr)
-            update_faces!(ps4est, amr)
-        end
-        amr.global_data.status.ps_adapt_step = 0
+    flag = false
+    if amr.global_data.config.solver.PS_DYNAMIC_AMR&&amr.global_data.status.ps_adapt_step > ps_interval*converge_ratio
+        update_slope!(amr)
+        update_gradmax!(amr)
+        ps_refine!(ps4est,amr)
+        ps_coarsen!(ps4est)
+        ps_balance!(ps4est)
+        flag = true;amr.global_data.status.ps_adapt_step = 0
+    end
+    if amr.global_data.config.solver.VS_DYNAMIC_AMR&&amr.global_data.status.vs_adapt_step > vs_interval*converge_ratio
+        va_flags = vs_refine!(amr)
+        va_flags = vs_coarsen!(va_flags,amr)
+        vs_conserved_correction!(va_flags,amr)
+        flag = true;amr.global_data.status.vs_adapt_step=0
+    end
+    if (amr.global_data.config.solver.PS_DYNAMIC_AMR||amr.global_data.config.solver.VS_DYNAMIC_AMR)&&amr.global_data.status.partition_step>partition_interval*converge_ratio
+        ps_partition!(ps4est, amr)
+        flag = true;amr.global_data.status.partition_step = 0
+    end
+    if flag
+        update_ghost!(ps4est, amr)
+        update_neighbor!(ps4est, amr)
+        update_solid!(amr)
+        update_faces!(ps4est, amr)
     end
     return nothing
 end

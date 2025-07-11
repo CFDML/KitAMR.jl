@@ -51,7 +51,7 @@ function get_mirror_data(ps4est, global_data::Global_Data{DIM,NDF}) where{DIM,ND
             pq = pw_mirror_quadrant(pp,gp,i)
             dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
-            p = Ptr{Cdouble}(sc_malloc(-1, (3 * DIM + 4 + NDF * vs_num) * sizeof(Cdouble)))
+            p = Ptr{Cdouble}(sc_malloc(P4est.package_id(), (3 * DIM + 4 + NDF * vs_num) * sizeof(Cdouble)))
             ap = Base.unsafe_wrap(Vector{Cdouble}, p, 3 * DIM + 4 + NDF * vs_num)
             offset = 0
             if isa(ps_data,InsideSolidData)
@@ -89,7 +89,7 @@ function get_mirror_slope(ps4est, global_data::Global_Data{DIM,NDF}) where{DIM,N
             pq = pw_mirror_quadrant(pp,gp,i)
             dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
-            p = Ptr{Cdouble}(sc_malloc(-1, (vs_num * DIM * NDF+DIM*(DIM+2)) * sizeof(Cdouble)))
+            p = Ptr{Cdouble}(sc_malloc(P4est.package_id(), (vs_num * DIM * NDF+DIM*(DIM+2)) * sizeof(Cdouble)))
             ap = Base.unsafe_wrap(Vector{Cdouble}, p, vs_num * DIM * NDF+DIM*(DIM+2))
             get_mirror_slope_inner!(ps_data, ap)
             mirror_slope_pointers[i] = p
@@ -119,7 +119,7 @@ function get_mirror_structure(ps4est, global_data::Global_Data{DIM,NDF}) where{D
             pq = pw_mirror_quadrant(pp,gp,i)
             dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
-            p = Ptr{Cdouble}(sc_malloc(-1, vs_num * (DIM + 2) * sizeof(Cdouble)))
+            p = Ptr{Cdouble}(sc_malloc(P4est.package_id(), vs_num * (DIM + 2) * sizeof(Cdouble)))
             ap = Base.unsafe_wrap(Vector{Cdouble}, p, vs_num * (DIM + 2))
             weight_temp = @view(ap[1:vs_num])
             level_temp = @view(ap[vs_num+1:vs_num*2])
@@ -173,10 +173,10 @@ function update_mirror_slope!(ps4est, amr::AMR{DIM,NDF}) where{DIM,NDF}
     end
 end
 function ghost_data_alloc(N::Int, ghost::P_pxest_ghost_t)
-    Ptr{Cdouble}(sc_malloc(-1, sizeof(Cdouble) * N * PointerWrapper(ghost).ghosts.elem_count[]))
+    Ptr{Cdouble}(sc_malloc(P4est.package_id(), sizeof(Cdouble) * N * PointerWrapper(ghost).ghosts.elem_count[]))
 end
 function ghost_data_alloc(::Type{T},N::Int, ghost::P_pxest_ghost_t) where{T}
-    Ptr{T}(sc_malloc(-1, sizeof(Cdouble) * N * PointerWrapper(ghost).ghosts.elem_count[]))
+    Ptr{T}(sc_malloc(P4est.package_id(), sizeof(Cdouble) * N * PointerWrapper(ghost).ghosts.elem_count[]))
 end
 function amr_exchange(
     p4est::Ptr{p4est_t},
