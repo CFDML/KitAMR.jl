@@ -23,11 +23,14 @@ end
 mutable struct SolidNeighbor{DIM,NDF} <:AbstractPsData{DIM,NDF}
     bound_enc::Int
     faceid::Int
+    av_id::Int # corner neighbor id for corner ghost cells' average.
     aux_point::Vector{Float64}
     normal::Vector{Float64}
     solid_cell::AbstractPsData{DIM,NDF}
     midpoint::Vector{Float64}
+    ds::Vector{Float64}
     w::Vector{Float64}
+    sw::Matrix{Float64}
     cvc::CuttedVelocityCells
     vs_data::VS_Data{DIM,NDF}
 end
@@ -96,6 +99,8 @@ mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
 end
 
 mutable struct Ghost_PS_Data{DIM,NDF}<:AbstractGhostPsData{DIM,NDF}
+    owner_rank::Int
+    quadid::Int # Not continuous! Only provide an order among ghost_datas from the same owner rank.
     bound_enc::Int
     ds::Vector{Cdouble}
     midpoint::Vector{Cdouble}

@@ -20,6 +20,8 @@ function iterate!(::UGKS_Marching,amr::AMR)
     global_data = amr.global_data
     gas = global_data.config.gas
     trees = amr.field.trees
+    Δt = global_data.status.Δt
+    global_data.status.Δt = global_data.status.Δt_ξ
     @inbounds for i in eachindex(trees.data)
         @inbounds for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
@@ -32,7 +34,17 @@ function iterate!(::UGKS_Marching,amr::AMR)
             ps_data.w .+= ps_data.flux ./ area
             ps_data.flux .= 0.0
             ps_data.prim .= prim = get_prim(ps_data, global_data)
-            τ = get_τ(prim, gas.μᵣ, gas.ω)
+            f = vs_data.df
+            if 1/prim[end]<1e-6
+                @. f = max(f,0.)
+                ps_data.w = calc_w0(ps_data)
+                prim = get_prim(ps_data,global_data)
+                τ = global_data.config.gas.Kn
+                global_data.status.Δt=min(TIME_STEP_CONTRACT_RATIO,global_data.config.gas.Kn)*global_data.status.Δt_ξ
+            else
+                τ = get_τ(prim, gas.μᵣ, gas.ω)
+            end
+            residual_check!(ps_data,prim_,global_data)
             ps_data.qf .= qf = calc_qf(vs_data, prim_)
             F_ = discrete_maxwell(vs_data.midpoint, prim_, global_data)
             F = discrete_maxwell(vs_data.midpoint, prim, global_data)
@@ -41,11 +53,11 @@ function iterate!(::UGKS_Marching,amr::AMR)
             F⁺ = shakhov_part(vs_data.midpoint, F, prim, qf, global_data)
             F .+= F⁺
             f = vs_data.df
-            Δt = global_data.status.Δt
             @inbounds @. f = abs((f + 0.5 * Δt * (F / τ + (F_ - f) / τ_)) / (1.0 + 0.5 * Δt / τ) + vs_data.flux / area / (1.0 + 0.5 * Δt / τ))
             vs_data.flux .= 0.0
         end
     end
+    Δt_comm!(global_data)
 end
 # Conserved Adaptive Implicit DVM (CAIDVM)
 function iterate!(::CAIDVM_Marching,amr::AMR)

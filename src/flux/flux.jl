@@ -1,6 +1,7 @@
 include("CAIDVM.jl")
 include("DUGKS.jl")
 include("DVM.jl")
+include("UGKS.jl")
 function face_area(ps_data::AbstractPsData{2}, DIR::Integer)
     return ps_data.ds[FAT[1][DIR]]
 end

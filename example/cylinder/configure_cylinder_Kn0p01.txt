@@ -23,13 +23,14 @@
 # AMR_VS_MAXLEVEL: maximum level of velocity space refinement
 DIM = 2
 NDF = 2
-AMR_PS_MAXLEVEL = 10
-AMR_VS_MAXLEVEL = 3
+AMR_PS_MAXLEVEL = 7
+AMR_VS_MAXLEVEL = 0
 PS_DYNAMIC_AMR = false
+VS_DYNAMIC_AMR = false
 geometry = [-16.,16.,-16.,16.]
 trees_num = [25,25]
-quadrature = [-10.,20.,-10.,10.]
-vs_trees_num = [30,20]
+quadrature = [-5.,10.,-6.,6.]
+vs_trees_num = [60,48]
 IC = [1.,5.0*sqrt(5/6),0.,1.]
 domain = [Domain(SuperSonicInflow,1,[1.,5.0*sqrt(5/6),0.,1.]),Domain(UniformOutflow,2),Domain(UniformOutflow,3),Domain(UniformOutflow,4)]
 IB = [Circle(Maxwellian,[0.,0.],1.,true,4.0,[1.,0.,0.,1.])]
