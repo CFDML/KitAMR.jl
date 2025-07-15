@@ -127,3 +127,24 @@ mutable struct IBBuffer
     ghost_nodes::Vector{Vector}
     IBBuffer() = new()
 end
+mutable struct Corner_Target_Neighbor_Transport
+    mirror_datas::Vector{Vector{Float64}} # rank{collect_dfs}
+    mirror_ps_datas::Vector{SolidNeighbor}
+    ranks_mirror_ids::Vector{Vector{Int}} # rank{mirror_ps_datas' id}
+    ghost_datas::Vector{Vector{Float64}}
+    ghost_ps_datas::Vector{Ghost_PS_Data}
+    ranks_ghost_ids::Vector{Vector{Int}} # rank{ghost_datas' id}
+    Corner_Target_Neighbor_Transport() = (n = new();
+        n.mirror_ps_datas = SolidNeighbor[];
+        n.ranks_mirror_ids = [Int[] for _ in 1:MPI.Comm_size(MPI.COMM_WORLD)];
+        n.ghost_ps_datas = Ghost_PS_Data[];
+        n.ranks_ghost_ids = [Int[] for _ in 1:MPI.Comm_size(MPI.COMM_WORLD)];
+        n.mirror_datas = Vector{Vector{Float64}}(undef,MPI.Comm_size(MPI.COMM_WORLD));
+        n.ghost_datas = Vector{Vector{Float64}}(undef,MPI.Comm_size(MPI.COMM_WORLD));
+        n
+    )
+end
+mutable struct ImmersedBoundary
+    ctnt::Corner_Target_Neighbor_Transport
+    ImmersedBoundary() = new()
+end

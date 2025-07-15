@@ -169,6 +169,7 @@ end
 mutable struct Field{DIM,NDF}
     trees::PS_Trees{DIM,NDF}
     faces::Vector{AbstractFace}
+    immersed_boundary::ImmersedBoundary
 end
 
 

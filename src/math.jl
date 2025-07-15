@@ -152,6 +152,20 @@ function calc_qf(vs_data::AbstractVsData{3,1}, prim::AbstractVector)
         vs_data.weight,
     )
 end
+function calc_w0(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{2,2})
+    @views micro_to_macro_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],weight)
+end
+function calc_qf(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,prim::AbstractVector,::Global_Data{2,2})
+    @views heat_flux_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],prim,weight)
+end
+# function calc_boundary_qf(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,fprim::AbstractVector,sprim::AbstractVector,Θ::AbstractVector,::Global_Data{2,2})
+#     fweight = @. weight*(1.0-Θ)
+#     sweight = @. weight*Θ
+#     @views heat_flux_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],fprim,fweight)+heat_flux_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],sprim,sweight)
+# end
+function calc_pressure(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{2})
+    @views pressure_2D(midpoint[:,1],midpoint[:,2],df[:,1],weight)
+end
 function calc_ρw(
     there_midpoint::AbstractMatrix,
     here_df::AbstractMatrix,
@@ -305,7 +319,6 @@ function moment_u(prim0::AbstractVector, ::Global_Data{3,1}, ROT::Real, DIR::Int
     ROT < 0 && return (MU, MV, MW, Mu_L, Mu_R)
     return (MU, MV, MW, Mu_R, Mu_L)
 end
-
 function calc_A(
     prim::AbstractVector,
     aL,
@@ -322,8 +335,8 @@ function calc_A(
         Mau_L = moment_au_2D2F(aL, Mu_L, Mv, Mξ, 1, 0)
         Mau_R = moment_au_2D2F(aR, Mu_R, Mv, Mξ, 1, 0)
     else
-        Mau_L = moment_au_2D2F(aL, Mu, Mu_L, Mξ, 0, 1)
-        Mau_R = moment_au_2D2F(aR, Mu, Mu_R, Mξ, 0, 1)
+        Mau_L = moment_au_2D2F(aL, Mv, Mu_L, Mξ, 0, 1)
+        Mau_R = moment_au_2D2F(aR, Mv, Mu_R, Mξ, 0, 1)
     end
     @inbounds sw = -prim[1] * (Mau_L + Mau_R)
     micro_slope(sw, prim, global_data)
@@ -354,6 +367,12 @@ function calc_A(
     micro_slope(sw, prim, global_data)
 end
 
+function calc_flux_f0_2D2F(prim,Mt,Mu,Mv,Mξ,a,A)
+    Mau_0 = moment_uv_2D2F(Mu, Mv, Mξ, 1, 0, 0)
+    Mau2 = moment_au_2D2F(a, Mu, Mv, Mξ, 2, 0)
+    Mau_T = moment_au_2D2F(A, Mu, Mv, Mξ, 1, 0)
+    @inbounds prim[1] * (Mt[1] * Mau_0 + Mt[2] * Mau2 + Mt[3] * Mau_T)
+end
 function calc_flux_g0_2D2F(prim, Mt, Mu, Mv, Mξ, Mu_L, Mu_R, aL, aR, A, dir)
     if dir == 1
         Mau_0 = moment_uv_2D2F(Mu, Mv, Mξ, 1, 0, 0)
@@ -443,7 +462,52 @@ function calc_flux_f0_3D1F(u::AbstractVector{T}, v, w, f, sf, weight, F⁺, vn, 
 end
 
 
+function calc_unified_ft(midpoint::AbstractMatrix,df::AbstractMatrix,sdf::AbstractMatrix,F::AbstractMatrix,F⁺::AbstractMatrix,ax,at,Mξ,Mt,dir,::Global_Data{2,2})
+    f = similar(df);vn = @views midpoint[:,dir]
+    u = @views midpoint[:,1];v = @views midpoint[:,2];h = @views df[:,1];b = @views df[:,2]
+    sh = @views sdf[:,1]; sb = @views sdf[:,2]
+    H0 = @views F[:,1]; B0 = @views F[:,2]; H⁺ = @views F⁺[:,1]; B⁺ = @views F⁺[:,2]
+    @inbounds begin
+        @. f[:, 1] =
+            Mt[1] * (H0 + H⁺) +
+            Mt[2] *
+            vn *
+            (
+                ax[1] * H0 +
+                ax[2] * u * H0 +
+                ax[3] * v * H0 +
+                0.5 * ax[4] * ((u^2 + v^2) * H0 + B0)
+            )+
+            Mt[3] *
+            (
+                at[1] * H0 +
+                at[2] * u * H0 +
+                at[3] * v * H0 +
+                0.5 * at[4] * ((u^2 + v^2) * H0 + B0)
+            ) +
+            Mt[4] * h - Mt[5] * vn * sh
+        @. f[:, 2] =
+            Mt[1] *  (B0 + B⁺) +
+            Mt[2] *
+            vn *
+            (
+                ax[1] * B0 +
+                ax[2] * u * B0 +
+                ax[3] * v * B0 +
+                0.5 * ax[4] * ((u^2 + v^2) * B0 + Mξ[3] * H0)
+            ) +
+            Mt[3] *
+            (
+                at[1] * B0 +
+                at[2] * u * B0 +
+                at[3] * v * B0 +
+                0.5 * at[4] * ((u^2 + v^2) * B0 + Mξ[3] * H0)
+            ) +
+            Mt[4] * b - Mt[5] * vn * sb
+    end
+    return f
 
+end
 function calc_micro_flux_2D2F(
     u::AbstractVector{T},
     v::AbstractVector,

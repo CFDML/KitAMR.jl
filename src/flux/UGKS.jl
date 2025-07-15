@@ -150,6 +150,7 @@ function calc_flux_f0(hvd::Face_VS_Data{2,2},tvd,here_F::AbstractMatrix,there_F,
         tvd.weight,there_F[:,1],there_F[:,2],tvd.vn,Mt
     )
 end
+
 function calc_micro_flux_2D2F(
     u::AbstractVector{T},
     v::AbstractVector,
@@ -256,21 +257,28 @@ function calc_flux(::UGKS,here_vs,there_vs,flux_data::Union{FullFace,Flux_Data},
     Here_vs = Face_VS_Data(here_vs,df);There_vs = Face_VS_Data(there_vs,ndf)
     w0 = calc_w0(Here_vs,There_vs)
     prim0 = get_prim(w0, global_data)
-    qf0 = calc_qf(Here_vs,There_vs,prim0)
-    wL = @. here_data.w+dx[FAT[1][direction]]*here_data.sw[:,FAT[1][direction]]
-    wR = @. there_data.w+ndx[FAT[1][direction]]*there_data.sw[:,FAT[1][direction]]
-    aL, aR = calc_a(w0, prim0, wL, wR, here_data.ds[direction], there_data.ds[direction], global_data, rot)
-    Mu, Mv, Mξ, Mu_L, Mu_R = moment_u(prim0, global_data, rot, direction)
-    A = calc_A(prim0, aL, aR, Mu, Mv, Mξ, Mu_L, Mu_R, global_data, direction)
-    τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
-    Mt = time_int(τ0, Δt)
-    fw = calc_flux_g0_2D2F(prim0, Mt, Mu, Mv, Mξ, Mu_L, Mu_R, aL, aR, A, direction)
-    here_F = discrete_maxwell(Here_vs.midpoint, prim0, global_data)
-    there_F = discrete_maxwell(There_vs.midpoint, prim0, global_data)
-    here_F⁺ = shakhov_part(Here_vs.midpoint, here_F, prim0, qf0, global_data)
-    there_F⁺ = shakhov_part(There_vs.midpoint, there_F, prim0, qf0, global_data)
-    fw += calc_flux_f0(Here_vs, There_vs, here_F⁺, there_F⁺, Mt, direction)
-    here_micro = calc_micro_flux(Here_vs, here_F, here_F⁺, aL, A, Mξ, Mt, direction)
-    there_micro = calc_micro_flux(There_vs, there_F, there_F⁺, aR, A, Mξ, Mt, direction)
+    if 1/prim0[end]>1e-6
+        qf0 = calc_qf(Here_vs,There_vs,prim0)
+        wL = @. here_data.w+dx[FAT[1][direction]]*here_data.sw[:,FAT[1][direction]]
+        wR = @. there_data.w+ndx[FAT[1][direction]]*there_data.sw[:,FAT[1][direction]]
+        aL, aR = calc_a(w0, prim0, wL, wR, here_data.ds[direction], there_data.ds[direction], global_data, rot)
+        Mu, Mv, Mξ, Mu_L, Mu_R = moment_u(prim0, global_data, rot, direction)
+        A = calc_A(prim0, aL, aR, Mu, Mv, Mξ, Mu_L, Mu_R, global_data, direction)
+        τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
+        Mt = time_int(τ0, Δt)
+        fw = calc_flux_g0_2D2F(prim0, Mt, Mu, Mv, Mξ, Mu_L, Mu_R, aL, aR, A, direction)
+        here_F = discrete_maxwell(Here_vs.midpoint, prim0, global_data)
+        there_F = discrete_maxwell(There_vs.midpoint, prim0, global_data)
+        here_F⁺ = shakhov_part(Here_vs.midpoint, here_F, prim0, qf0, global_data)
+        there_F⁺ = shakhov_part(There_vs.midpoint, there_F, prim0, qf0, global_data)
+        fw += calc_flux_f0(Here_vs, There_vs, here_F⁺, there_F⁺, Mt, direction)
+        here_micro = calc_micro_flux(Here_vs, here_F, here_F⁺, aL, A, Mξ, Mt, direction)
+        there_micro = calc_micro_flux(There_vs, there_F, there_F⁺, aR, A, Mξ, Mt, direction)
+    else
+        fw, microflux = calc_flux(CAIDVM(),here_vs,there_vs,flux_data,amr)
+        here_micro,there_micro = microflux
+        here_micro *= global_data.status.Δt;there_micro *= global_data.status.Δt
+        fw *= global_data.status.Δt
+    end
     return fw,[here_micro,there_micro]
 end
