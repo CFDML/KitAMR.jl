@@ -23,7 +23,7 @@
 # AMR_VS_MAXLEVEL: maximum level of velocity space refinement
 DIM = 2
 NDF = 2
-AMR_PS_MAXLEVEL = 7
+AMR_PS_MAXLEVEL = 9
 AMR_VS_MAXLEVEL = 0
 PS_DYNAMIC_AMR = false
 VS_DYNAMIC_AMR = false

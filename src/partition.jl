@@ -13,8 +13,11 @@ function partition_weight(p4est::P_pxest_t,which_tree,quadrant::P_pxest_quadrant
     dp = PointerWrapper(P4est_PS_Data,qp.p.user_data[])
     ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
     isa(ps_data,InsideSolidData)&&return Cint(0)
-    ps_data.bound_enc<0&&return Cint(0)
     ps_data.bound_enc>0&&return Cint(2*ps_data.vs_data.vs_num)
+    if ps_data.bound_enc>0
+        sn = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
+        return Cint((1.5*length(sn)+1)*ps_data.vs_data.vs_num)
+    end
     return Cint(ps_data.vs_data.vs_num)
 end
 function partition!(p4est::Ptr{p4est_t})
