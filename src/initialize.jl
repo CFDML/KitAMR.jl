@@ -273,7 +273,7 @@ function init(config::Dict)
     initialize_neighbor_data!(ps4est, amr)
     initialize_solid_neighbor!(amr)
     reinit_ib_vs!(amr) # Avoid singularity caused by sharp gradient.
-    initialize_corner_target_neighbor!(ps4est,amr)
+    # initialize_corner_target_neighbor!(ps4est,amr)
     data_exchange!(ps4est, amr)
     initialize_faces!(ps4est, amr)
     return (ps4est, amr)
