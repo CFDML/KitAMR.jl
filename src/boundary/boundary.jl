@@ -94,37 +94,37 @@ function save_boundary_result!(ib::AbstractBoundary,ps_data,solid_neighbor::Soli
     # end
     # cvc_correction!(aux_df,aux_prim,vn,solid_neighbor,amr)
     F = aux_prim[1]*M
-    if 1/prim0[end]>1e-6
-        gas = global_data.config.gas
-        τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
-        qf0 = calc_qf(vs_data.midpoint,aux_df,vs_data.weight,prim0,global_data)
-        F⁺ = shakhov_part(vs_data.midpoint,F,aux_prim,qf0,global_data)
-        Mt = time_int(τ0, global_data.status.Δt)
-        sdf = similar(vs_data.sdf)
-        sdf[:,:,dir] .= (s_vs_data.df-vs_data.df)/(solid_cell.midpoint[dir]-ps_data.midpoint[dir])
-        sdf[:,:,dir%DIM+1] .= @views vs_data.sdf[:,:,dir%DIM+1]
-        ddf = [@views dot(sdf[i,j,:],vs_data.midpoint[i,:]) for i in axes(sdf,1),j in axes(sdf,2)]
-        # rhs = (global_data.status.Δt-Mt[1])/√(π*aux_prim[end])*0.5*aux_prim[1]+sum(vs_data.weight.*(Mt[1]*@view(F⁺[:,1])+Mt[4]*@view(aux_df[:,1])-Mt[5]*@view(ddf[:,1])).*vn.*(1.0.-Θ))
-        rhs = aux_prim[1]*(global_data.status.Δt*Mu_R+Mt[1]*Mu_L)+sum(vs_data.weight.*(Mt[1]*@view(F⁺[:,1])+Mt[4]*@view(aux_df[:,1])-Mt[5]*@view(ddf[:,1])).*vn.*(1.0.-Θ))
-        lhs = aux_prim[1]*(-0.5*global_data.status.Δt^2*Mu_R-Mt[3]*Mu_L)
-        # lhs = (-0.5*global_data.status.Δt^2+Mt[3])*0.5*aux_prim[1]/√(π*aux_prim[end])
-        A = rhs/lhs
-        aux_df = (Mt[1]*(F+F⁺)+Mt[3]*A*F+Mt[4]*aux_df-Mt[5]*ddf)/global_data.status.Δt
-        cvc_gas_correction!(aux_df,solid_neighbor)
-        for i in 1:vs_data.vs_num
-            if Θ[i]==1.
-                aux_df[i,:] .= (1+0.5*global_data.status.Δt*A).*F[i,:]
-            end
-        end
-        cvc_correction!(aux_df,F,A,solid_neighbor,amr)
-    else
+    # if 1/prim0[end]>1e-6
+    #     gas = global_data.config.gas
+    #     τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
+    #     qf0 = calc_qf(vs_data.midpoint,aux_df,vs_data.weight,prim0,global_data)
+    #     F⁺ = shakhov_part(vs_data.midpoint,F,aux_prim,qf0,global_data)
+    #     Mt = time_int(τ0, global_data.status.Δt)
+    #     sdf = similar(vs_data.sdf)
+    #     sdf[:,:,dir] .= (s_vs_data.df-vs_data.df)/(solid_cell.midpoint[dir]-ps_data.midpoint[dir])
+    #     sdf[:,:,dir%DIM+1] .= @views vs_data.sdf[:,:,dir%DIM+1]
+    #     ddf = [@views dot(sdf[i,j,:],vs_data.midpoint[i,:]) for i in axes(sdf,1),j in axes(sdf,2)]
+    #     # rhs = (global_data.status.Δt-Mt[1])/√(π*aux_prim[end])*0.5*aux_prim[1]+sum(vs_data.weight.*(Mt[1]*@view(F⁺[:,1])+Mt[4]*@view(aux_df[:,1])-Mt[5]*@view(ddf[:,1])).*vn.*(1.0.-Θ))
+    #     rhs = aux_prim[1]*(global_data.status.Δt*Mu_R+Mt[1]*Mu_L)+sum(vs_data.weight.*(Mt[1]*@view(F⁺[:,1])+Mt[4]*@view(aux_df[:,1])-Mt[5]*@view(ddf[:,1])).*vn.*(1.0.-Θ))
+    #     lhs = aux_prim[1]*(-0.5*global_data.status.Δt^2*Mu_R-Mt[3]*Mu_L)
+    #     # lhs = (-0.5*global_data.status.Δt^2+Mt[3])*0.5*aux_prim[1]/√(π*aux_prim[end])
+    #     A = rhs/lhs
+    #     aux_df = (Mt[1]*(F+F⁺)+Mt[3]*A*F+Mt[4]*aux_df-Mt[5]*ddf)/global_data.status.Δt
+    #     cvc_gas_correction!(aux_df,solid_neighbor)
+    #     for i in 1:vs_data.vs_num
+    #         if Θ[i]==1.
+    #             aux_df[i,:] .= (1+0.5*global_data.status.Δt*A).*F[i,:]
+    #         end
+    #     end
+    #     cvc_correction!(aux_df,F,A,solid_neighbor,amr)
+    # else
         for i in 1:vs_data.vs_num
             if Θ[i]==1.
                 aux_df[i,:] .= F[i,:]
             end
         end
         cvc_correction!(aux_df,F,solid_neighbor,amr)
-    end
+    # end
     # s_prim = IB_prim(ib,aux_point,ρw)
     # for i in 1:vs_data.vs_num
     #     if Θ[i]==1.
@@ -635,8 +635,8 @@ function update_solid_neighbor!(::AbstractFluxType,ps_data::PS_Data{DIM,NDF},sol
     ρw = cvc_density(aux_df,vn,Θ,solid_neighbor,Mu_R)
     # ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
     aux_prim = IB_prim(ib,aux_point,ρw)
-    w0 = calc_w0(vs_data.midpoint,aux_df,vs_data.weight,global_data)
-    prim0 = get_prim(w0,global_data)
+    # w0 = calc_w0(vs_data.midpoint,aux_df,vs_data.weight,global_data)
+    # prim0 = get_prim(w0,global_data)
     # for i in 1:vs_data.vs_num
     #     if Θ[i]==1.
     #         aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),aux_prim,amr.global_data)
@@ -644,37 +644,37 @@ function update_solid_neighbor!(::AbstractFluxType,ps_data::PS_Data{DIM,NDF},sol
     # end
     # cvc_correction!(aux_df,aux_prim,vn,solid_neighbor,amr)
     F = aux_prim[1]*M
-    if 1/prim0[end]>1e-6
-        gas = global_data.config.gas
-        τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
-        qf0 = calc_qf(vs_data.midpoint,aux_df,vs_data.weight,prim0,global_data)
-        F⁺ = shakhov_part(vs_data.midpoint,F,aux_prim,qf0,global_data)
-        Mt = time_int(τ0, global_data.status.Δt)
-        sdf = similar(vs_data.sdf)
-        sdf[:,:,dir] .= (s_vs_data.df-vs_data.df)/(solid_cell.midpoint[dir]-ps_data.midpoint[dir])
-        sdf[:,:,dir%DIM+1] .= @views vs_data.sdf[:,:,dir%DIM+1]
-        ddf = [@views dot(sdf[i,j,:],vs_data.midpoint[i,:]) for i in axes(sdf,1),j in axes(sdf,2)]
-        # rhs = (global_data.status.Δt-Mt[1])/√(π*aux_prim[end])*0.5*aux_prim[1]+sum(vs_data.weight.*(Mt[1]*@view(F⁺[:,1])+Mt[4]*@view(aux_df[:,1])-Mt[5]*@view(ddf[:,1])).*vn.*(1.0.-Θ))
-        rhs = aux_prim[1]*(global_data.status.Δt*Mu_R+Mt[1]*Mu_L)+sum(vs_data.weight.*(Mt[1]*@view(F⁺[:,1])+Mt[4]*@view(aux_df[:,1])-Mt[5]*@view(ddf[:,1])).*vn.*(1.0.-Θ))
-        lhs = aux_prim[1]*(-0.5*global_data.status.Δt^2*Mu_R-Mt[3]*Mu_L)
-        # lhs = (-0.5*global_data.status.Δt^2+Mt[3])*0.5*aux_prim[1]/√(π*aux_prim[end])
-        A = rhs/lhs
-        aux_df = (Mt[1]*(F+F⁺)+Mt[3]*A*F+Mt[4]*aux_df-Mt[5]*ddf)/global_data.status.Δt
-        cvc_gas_correction!(aux_df,solid_neighbor)
-        for i in 1:vs_data.vs_num
-            if Θ[i]==1.
-                aux_df[i,:] .= (1+0.5*global_data.status.Δt*A).*F[i,:]
-            end
-        end
-        cvc_correction!(aux_df,F,A,solid_neighbor,amr)
-    else
+    # if 1/prim0[end]>1e-6
+    #     gas = global_data.config.gas
+    #     τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
+    #     qf0 = calc_qf(vs_data.midpoint,aux_df,vs_data.weight,prim0,global_data)
+    #     F⁺ = shakhov_part(vs_data.midpoint,F,aux_prim,qf0,global_data)
+    #     Mt = time_int(τ0, global_data.status.Δt)
+    #     sdf = similar(vs_data.sdf)
+    #     sdf[:,:,dir] .= (s_vs_data.df-vs_data.df)/(solid_cell.midpoint[dir]-ps_data.midpoint[dir])
+    #     sdf[:,:,dir%DIM+1] .= @views vs_data.sdf[:,:,dir%DIM+1]
+    #     ddf = [@views dot(sdf[i,j,:],vs_data.midpoint[i,:]) for i in axes(sdf,1),j in axes(sdf,2)]
+    #     # rhs = (global_data.status.Δt-Mt[1])/√(π*aux_prim[end])*0.5*aux_prim[1]+sum(vs_data.weight.*(Mt[1]*@view(F⁺[:,1])+Mt[4]*@view(aux_df[:,1])-Mt[5]*@view(ddf[:,1])).*vn.*(1.0.-Θ))
+    #     rhs = aux_prim[1]*(global_data.status.Δt*Mu_R+Mt[1]*Mu_L)+sum(vs_data.weight.*(Mt[1]*@view(F⁺[:,1])+Mt[4]*@view(aux_df[:,1])-Mt[5]*@view(ddf[:,1])).*vn.*(1.0.-Θ))
+    #     lhs = aux_prim[1]*(-0.5*global_data.status.Δt^2*Mu_R-Mt[3]*Mu_L)
+    #     # lhs = (-0.5*global_data.status.Δt^2+Mt[3])*0.5*aux_prim[1]/√(π*aux_prim[end])
+    #     A = rhs/lhs
+    #     aux_df = (Mt[1]*(F+F⁺)+Mt[3]*A*F+Mt[4]*aux_df-Mt[5]*ddf)/global_data.status.Δt
+    #     cvc_gas_correction!(aux_df,solid_neighbor)
+    #     for i in 1:vs_data.vs_num
+    #         if Θ[i]==1.
+    #             aux_df[i,:] .= (1+0.5*global_data.status.Δt*A).*F[i,:]
+    #         end
+    #     end
+    #     cvc_correction!(aux_df,F,A,solid_neighbor,amr)
+    # else
         for i in 1:vs_data.vs_num
             if Θ[i]==1.
                 aux_df[i,:] .= F[i,:]
             end
         end
         cvc_correction!(aux_df,F,solid_neighbor,amr)
-    end
+    # end
     @. solid_neighbor.vs_data.df = aux_df+(aux_df-ib_df)/dxL*dxR
     solid_neighbor.w = calc_w0(vs_data.midpoint,solid_neighbor.vs_data.df,vs_data.weight,global_data)
     solid_neighbor.sw[:,dir] .= (solid_neighbor.w-ps_data.w)./(solid_neighbor.midpoint[dir]-ps_data.midpoint[dir])
@@ -739,18 +739,38 @@ function average_corner_solid_neighbor!(ps_data::PS_Data{DIM,NDF}) where{DIM,NDF
         end
     end
 end
+function update_target_cells_slope!(amr::AMR{DIM,NDF}) where{DIM,NDF}
+    for tree in amr.field.trees.data
+        for ps_data in tree
+            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<=0)&&continue
+            faceid = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
+            for id in faceid
+                dir = cld(id,DIM)
+                vs_data = ps_data.vs_data
+                sn_data = ps_data.neighbor.data[id][1]
+                sn_df = sn_data.vs_data.df
+                sL = @views vs_data.sdf[:,:,dir]
+                sR = @. (sn_df-vs_data.df)/(sn_data.midpoint[dir]-ps_data.midpoint[dir])
+                vs_data.sdf[:,:,dir] .= vanleer(sL,sR)
+            end
+        end
+    end
+end
 function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF}) where{DIM,NDF}
     solid_neighbors = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
     for i in solid_neighbors
         update_solid_neighbor!(amr.global_data.config.solver.flux,ps_data,ps_data.neighbor.data[i][1],amr)
     end
 end
-function update_solid_neighbor!(amr::AMR{DIM,NDF}) where{DIM,NDF}
+function update_solid_neighbor!(amr::AMR{DIM,NDF};buffer_steps::Int=0,i::Int = typemax(Int64)) where{DIM,NDF}
     for tree in amr.field.trees.data
         for ps_data in tree
             (isa(ps_data,InsideSolidData)||ps_data.bound_enc<=0)&&continue
             update_solid_neighbor!(ps_data,amr)
         end
+    end
+    if i > buffer_steps
+        update_target_cells_slope!(amr)
     end
     # corner_target_neighbor_exchange!(amr)
     # for tree in amr.field.trees.data

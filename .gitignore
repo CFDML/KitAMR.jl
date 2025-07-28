@@ -11,3 +11,4 @@ boundary_vs
 *.vtp
 *.csv
 *.nsys-rep
+result_*

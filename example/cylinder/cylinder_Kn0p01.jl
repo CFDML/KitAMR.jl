@@ -18,7 +18,7 @@ for i in 1:nt
     KitAMR.slope_exchange!(ps4est, amr) 
     KitAMR.update_solid_cell!(amr)
     KitAMR.data_exchange!(ps4est, amr)
-    KitAMR.update_solid_neighbor!(amr)
+    KitAMR.update_solid_neighbor!(amr;buffer_steps=100,i)
     KitAMR.flux!(amr) 
     KitAMR.iterate!(amr) 
     KitAMR.data_exchange!(ps4est, amr)

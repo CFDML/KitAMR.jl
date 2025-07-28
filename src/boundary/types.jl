@@ -9,7 +9,7 @@ abstract type AxisSymmetric <: AbstractBoundaryType end
 abstract type Period <: AbstractBoundaryType end
 const AbstractBCType = Union{Vector,Function}
 
-
+# Domain boundary
 struct Domain{T<:AbstractBoundaryType} <: AbstractBoundary
     id::Int
     bc::AbstractBCType
@@ -23,6 +23,8 @@ struct DomainFace{DIM,NDF,T}<:BoundaryFace
     domain::Domain{T}
     ps_data::PS_Data{DIM,NDF}
 end
+
+# Immersed boundary
 struct Circle{T<:AbstractBoundaryType} <: AbstractBoundary
     center::Vector
     radius::Real
