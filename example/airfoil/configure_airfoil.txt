@@ -23,12 +23,12 @@
 # AMR_VS_MAXLEVEL: maximum level of velocity space refinement
 DIM = 2
 NDF = 2
-AMR_PS_MAXLEVEL = 6
+AMR_PS_MAXLEVEL = 7
 AMR_VS_MAXLEVEL = 0
 PS_DYNAMIC_AMR = false
 VS_DYNAMIC_AMR = false
 geometry = [-3.,7.,-7.,7.]
-trees_num = [46,66]
+trees_num = [23,33]
 quadrature = [-4.,8.,-6.,6.]
 vs_trees_num = [60,60]
 IC = [1.,2.0*sqrt(5/6),0.,1.]
@@ -36,7 +36,7 @@ domain = [Domain(SuperSonicInflow,1,[1.,2.0*sqrt(5/6),0.,1.]),Domain(Interpolate
 IB = [Vertices(Maxwellian,"./example/airfoil/naca0012.csv",true,4.5,[1.,0.,0.,161/290])]
 flux = DVM()
 time_marching = Euler()
-CFL = 0.4
+CFL = 0.5
 K = 1.
 Kn = 0.026
 ω = 0.81
