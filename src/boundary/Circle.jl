@@ -52,3 +52,14 @@ function calc_intersect(f_midpoint,s_midpoint,circle::Circle)
     end
     return ap,n
 end
+function calc_intersect(f_midpoint,s_midpoint,circle::Sphere)
+    c = circle.center;r = circle.radius
+    dir = findfirst(x->x>EPS,abs.(f_midpoint-s_midpoint))
+    r_midpoint = f_midpoint-c
+    x = r_midpoint[dir%3+1]; y =r_midpoint[(dir+1)%3+1]
+    ap = copy(f_midpoint);n = copy(f_midpoint)
+    rz = sqrt(r^2-x^2-y^2)
+    dz = abs((rz-r_midpoint[dir])/(s_midpoint[dir]-f_midpoint[dir])) < 1 ? rz-r_midpoint[dir] : -rz-r_midpoint[dir]
+    ap[dir] = dz+f_midpoint[dir];n[dir] = dz+r_midpoint[dir];n/=r
+    return ap,n
+end

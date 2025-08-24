@@ -34,3 +34,13 @@ function micro_slope_3D(sw::AbstractVector{T}, prim::AbstractVector, K::Real) wh
         0.5 * (prim[2]^2 + prim[3]^2 + prim[4]^2 + 0.5 * (K + 3.0) / prim[5]) * a[5]
     return a
 end
+function pressure_3D(u::AbstractVector{T},v,w,h,weight) where{T}
+    p = Vector{T}(undef,6)
+    p[1] = sum(@. u^2*h*weight) # p11
+    p[2] = sum(@. u*v*h*weight) # p12
+    p[3] = sum(@.u*w*h*weight)  # p13
+    p[4] = sum(@. v^2*h*weight) # p22
+    p[5] = sum(@. v*w*h*weight) # p23
+    p[6] = sum(@. w^2*h*weight) # p33
+    return p
+end

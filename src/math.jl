@@ -116,16 +116,16 @@ end
 
 function shakhov_part(
     midpoint::AbstractMatrix,
-    F::AbstractVector,
+    F::AbstractMatrix,
     prim::AbstractVector,
     qf::AbstractVector,
     global_data::Global_Data{3,1},
 )
-    shakhov_part_3D1F(
-        @view(midpoint[:, 1]),
-        @view(midpoint[:, 2]),
-        @view(midpoint[:, 3]),
-        F,
+    @views shakhov_part_3D1F(
+        midpoint[:, 1],
+        midpoint[:, 2],
+        midpoint[:, 3],
+        F[:,1],
         prim,
         qf,
         global_data.config.gas.Pr,
@@ -155,8 +155,14 @@ end
 function calc_w0(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{2,2})
     @views micro_to_macro_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],weight)
 end
+function calc_w0(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{3,1})
+    @views micro_to_macro_3D1F(midpoint[:,1],midpoint[:,2],midpoint[:,3],df[:,1],weight)
+end
 function calc_qf(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,prim::AbstractVector,::Global_Data{2,2})
     @views heat_flux_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],prim,weight)
+end
+function calc_qf(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,prim::AbstractVector,::Global_Data{3,1})
+    @views heat_flux_2D2F(midpoint[:,1],midpoint[:,2],midpoint[:,3],df[:,1],prim,weight)
 end
 # function calc_boundary_qf(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,fprim::AbstractVector,sprim::AbstractVector,Θ::AbstractVector,::Global_Data{2,2})
 #     fweight = @. weight*(1.0-Θ)
@@ -165,6 +171,9 @@ end
 # end
 function calc_pressure(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{2})
     @views pressure_2D(midpoint[:,1],midpoint[:,2],df[:,1],weight)
+end
+function calc_pressure(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{3})
+    @views pressure_3D(midpoint[:,1],midpoint[:,2],midpoint[:,3],df[:,1],weight)
 end
 function calc_ρw(
     there_midpoint::AbstractMatrix,
@@ -180,6 +189,22 @@ function calc_ρw(
     @inbounds @views SG =
         prim[4] / π *
         sum(@. there_weight * there_vn * exp(-prim[4] * ((there_midpoint[:,1] - prim[2])^2 + (there_midpoint[:,2] - prim[3])^2)))
+    return -SF / SG
+end
+function calc_ρw(
+    there_midpoint::AbstractMatrix,
+    here_df::AbstractMatrix,
+    prim,
+    here_vn::AbstractVector,
+    there_vn::AbstractVector,
+    here_weight,
+    there_weight,
+    ::AMR{3,1}
+)
+    @inbounds @views SF = sum(@. here_weight * here_vn * here_df[:,1])
+    @inbounds @views SG =
+        (prim[5] / π)^(3/2) *
+        sum(@. there_weight * there_vn * exp(-prim[5] * ((there_midpoint[:,1] - prim[2])^2 + (there_midpoint[:,2] - prim[3])^2+(there_midpoint[:,3] - prim[4])^2)))
     return -SF / SG
 end
 function calc_ρw(
@@ -247,6 +272,16 @@ function calc_w0(ps_data::AbstractPsData{2,2})
 					      @view(vs_data.df[:,1]),
 					      @view(vs_data.df[:,2]),
 					      vs_data.weight
+				      )
+end
+function calc_w0(ps_data::AbstractPsData{3,1})
+	vs_data = ps_data.vs_data
+	@inbounds @views micro_to_macro_3D1F(
+				        vs_data.midpoint[:,1],
+                        vs_data.midpoint[:,2],
+                        vs_data.midpoint[:,3],
+                        vs_data.df[:,1],
+                        vs_data.weight
 				      )
 end
 
@@ -648,6 +683,9 @@ end
 
 function micro_to_macro(df::AbstractMatrix,midpoint::AbstractMatrix,weight::AbstractVector,::AbstractVsData{2,2})
     @inbounds @views micro_to_macro_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],weight)
+end
+function micro_to_macro(df::AbstractMatrix,midpoint::AbstractMatrix,weight::AbstractVector,::AbstractVsData{3,1})
+    @inbounds @views micro_to_macro_3D1F(midpoint[:,1],midpoint[:,2],midpoint[:,3],df[:,1],weight)
 end
 
 function calc_w_intensity(ps_data::PS_Data{2,2})

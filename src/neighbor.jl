@@ -174,6 +174,18 @@ function initialize_neighbor_data!(ip::PointerWrapper{p8est_iter_volume_info_t},
             i - 1,
         )
     end
+    if ps_data.bound_enc<0
+        for i in 6:25 # Corners are indexed with z-order, as well.
+            data,state = access_neighbor(
+                pointer(ip.p4est),
+                local_quadid(ip),
+                amr.global_data,
+                amr.ghost.ghost_wrap,
+                i,
+            )
+            push!(ps_data.neighbor.data,data);push!(ps_data.neighbor.state,state)
+        end
+    end
     return nothing
 end
 function initialize_neighbor_data!(info, data)
@@ -242,6 +254,29 @@ function update_neighbor_kernel!(ip::PointerWrapper{p8est_iter_volume_info_t}, d
             i - 1,
         )
     end
+    if length(ps_data.neighbor.data) > 6
+        for i in 6:25 #6~17: edge, 18~25: corner
+            ps_data.neighbor.data[i+1],ps_data.neighbor.state[i+1] = access_neighbor(
+                pointer(ip.p4est),
+                local_quadid(ip),
+                amr.global_data,
+                amr.ghost.ghost_wrap,
+                i,
+            )
+        end
+    elseif ps_data.bound_enc<0
+        for i in 6:25
+            data,state = access_neighbor(
+                pointer(ip.p4est),
+                local_quadid(ip),
+                amr.global_data,
+                amr.ghost.ghost_wrap,
+                i,
+            )
+            push!(ps_data.neighbor.data,data);push!(ps_data.neighbor.state,state)
+        end
+    end
+    return nothing
 end
 function update_neighbor_kernel!(info, data)
     AMR_volume_iterate(info, data, P4est_PS_Data, update_neighbor_kernel!)
@@ -267,6 +302,6 @@ function update_neighbor!(p4est::Ptr{p8est_t}, amr::AMR)
     global_data = amr.global_data
     p8est_mesh_destroy(global_data.forest.mesh)
     global_data.forest.mesh =
-        p8est_mesh_new_ext(p4est, global_data.forest.ghost, 1, 1, P8EST_CONNECT_FACE)
+        p8est_mesh_new_ext(p4est, global_data.forest.ghost, 1, 1, P8EST_CONNECT_FULL)
     update_neighbor_kernel!(p4est, amr)
 end

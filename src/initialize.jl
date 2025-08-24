@@ -1,4 +1,4 @@
-
+# 2D
 function initialize_faces!(ps4est::Ptr{p4est_t},amr::AMR)
     global_data = amr.global_data
     p_data = pointer_from_objref(amr)
@@ -29,7 +29,17 @@ function initialize_faces!(ps4est::Ptr{p4est_t},amr::AMR)
         end
     end
 end
-function initialize_domain_face!(side::PointerWrapper{p4est_iter_face_side_t},amr::AMR{DIM,NDF}) where{DIM,NDF}
+
+function solid_full_face_check(base_quad,faceid)
+    neighbor = base_quad.neighbor.data[faceid][1]
+    (!isa(neighbor,PS_Data)||neighbor.bound_enc<0) && return true
+    return false
+end
+function solid_hanging_face_check(base_quad,faceid)
+    ids = findall(x->(isa(x,PS_Data)&&x.bound_enc>=0),base_quad.neighbor.data[faceid])
+    return ids
+end
+function initialize_domain_face!(side::PW_pxest_iter_face_side_t,amr::AMR{DIM,NDF}) where{DIM,NDF}
     faces = amr.field.faces
     base_quad = 
         unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data,
@@ -44,16 +54,7 @@ function initialize_domain_face!(side::PointerWrapper{p4est_iter_face_side_t},am
     push!(faces,DomainFace{DIM,NDF,typeof(domain).parameters[1]}(rot,direction,midpoint,domain,base_quad))
     return nothing
 end
-function solid_full_face_check(base_quad,faceid)
-    neighbor = base_quad.neighbor.data[faceid][1]
-    (!isa(neighbor,PS_Data)||neighbor.bound_enc<0) && return true
-    return false
-end
-function solid_hanging_face_check(base_quad,faceid)
-    ids = findall(x->(isa(x,PS_Data)&&x.bound_enc>=0),base_quad.neighbor.data[faceid])
-    return ids
-end
-function initialize_full_face!(side::PointerWrapper{p4est_iter_face_side_t},amr::AMR{DIM,NDF}) where{DIM,NDF}
+function initialize_full_face!(side::PW_pxest_iter_face_side_t,amr::AMR{DIM,NDF}) where{DIM,NDF}
     faces = amr.field.faces
     base_quad =
         unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data,
@@ -69,10 +70,16 @@ function initialize_full_face!(side::PointerWrapper{p4est_iter_face_side_t},amr:
     rot = get_rot(faceid)
     midpoint = copy(base_quad.midpoint)
     midpoint[direction] -= 0.5*rot*base_quad.ds[direction]
-    push!(faces,FullFace{DIM,NDF}(rot,direction,midpoint,base_quad,base_quad.neighbor.data[faceid][1]))
+    global_data = amr.global_data
+    if midpoint[direction] == global_data.config.geometry[2*direction-1]||midpoint[direction] == global_data.config.geometry[2*direction]
+        there_midpoint = copy(midpoint);there_midpoint[direction] -= 0.5*rot*base_quad.ds[direction]
+        push!(faces,FullFace{DIM,NDF}(rot,direction,midpoint,base_quad,periodic_ghost_cell(there_midpoint,base_quad.neighbor.data[faceid][1])))
+    else
+        push!(faces,FullFace{DIM,NDF}(rot,direction,midpoint,base_quad,base_quad.neighbor.data[faceid][1]))
+    end
     return nothing
 end
-function initialize_hanging_face!(side::PointerWrapper{p4est_iter_face_side_t},amr::AMR{DIM,NDF}) where{DIM,NDF}
+function initialize_hanging_face!(side::PW_pxest_iter_face_side_t,amr::AMR{DIM,NDF}) where{DIM,NDF}
     faces = amr.field.faces
     base_quad =
         unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data,
@@ -100,7 +107,16 @@ function initialize_hanging_face!(side::PointerWrapper{p4est_iter_face_side_t},a
     for i in eachindex(neighbor)
         midpoint[i][direction] += 0.5*rot*neighbor[i].ds[direction]
     end
-    push!(faces,HangingFace{DIM,NDF}(rot,direction,midpoint,base_quad,neighbor))
+    global_data = amr.global_data
+    if  midpoint[1][direction] == global_data.config.geometry[2*direction-1]||midpoint[1][direction] == global_data.config.geometry[2*direction]
+        periodic_midpoints = [copy(x) for x in midpoint]
+        for i in eachindex(periodic_midpoints)
+            periodic_midpoints[i][direction] .+= 0.5*rot*neighbor[i].ds[direction]
+        end
+        push!(faces,HangingFace{DIM,NDF}(rot,direction,midpoint,base_quad,periodic_ghost_cell(periodic_midpoints,neighbor)))
+    else
+        push!(faces,HangingFace{DIM,NDF}(rot,direction,midpoint,base_quad,neighbor))
+    end
     return nothing
 end
 function initialize_back_hanging_face!(side::PointerWrapper{p4est_iter_face_side_t},amr::AMR{DIM,NDF}) where{DIM,NDF}
@@ -124,6 +140,72 @@ function initialize_back_hanging_face!(side::PointerWrapper{p4est_iter_face_side
     direction = get_dir(faceid)
     rot = get_rot(faceid)
     midpoint = [copy(x.midpoint) for x in here_data]
+    for i in eachindex(midpoint)
+        midpoint[i][direction] -= 0.5*rot*here_data[i].ds[direction]
+    end
+    global_data = amr.global_data
+    if midpoint[1][direction] == global_data.config.geometry[2*direction-1]||midpoint[1][direction] == global_data.config.geometry[2*direction]
+        there_midpoint = copy(first(here_data).neighbor.data[faceid][1].midpoint)
+        there_midpoint[direction] = midpoint[1][direction] -= 0.5*rot*here_data[i].ds[direction]
+        push!(faces,BackHangingFace{DIM,NDF}(rot,direction,midpoint,here_data,periodic_ghost_cell(there_midpoint,base_quad.neighbor.data[faceid][1])))
+    else
+        push!(faces,BackHangingFace{DIM,NDF}(rot,direction,midpoint,here_data,first(here_data).neighbor.data[faceid][1]))
+    end
+    return nothing
+end
+
+# 3D
+function initialize_faces!(ps4est::Ptr{p8est_t},amr::AMR)
+    global_data = amr.global_data
+    p_data = pointer_from_objref(amr)
+    GC.@preserve amr AMR_face_iterate(ps4est;user_data = p_data,ghost = global_data.forest.ghost) do ip,data
+        amr = unsafe_pointer_to_objref(data)
+        if ip.sides.elem_count[]==1
+            initialize_domain_face!(iPointerWrapper(ip.sides,p8est_iter_face_side_t,0),amr)
+        else
+            Aside = iPointerWrapper(ip.sides,p8est_iter_face_side_t,0)
+            Bside = iPointerWrapper(ip.sides,p8est_iter_face_side_t,1)
+            if Aside.is_hanging[]==0
+                if Aside.is.full.is_ghost[]==0
+                    if Bside.is_hanging[]==0
+                        initialize_full_face!(Aside,amr)
+                    else
+                        initialize_hanging_face!(Aside,amr)
+                    end
+                elseif Bside.is_hanging[]==0
+                    initialize_full_face!(Bside,amr)
+                else
+                    initialize_back_hanging_face!(Bside,amr)
+                end
+            elseif Bside.is.full.is_ghost[]==0
+                initialize_hanging_face!(Bside,amr)
+            else
+                initialize_back_hanging_face!(Aside,amr)
+            end
+        end
+    end
+end
+function initialize_back_hanging_face!(side::PointerWrapper{p8est_iter_face_side_t},amr::AMR{DIM,NDF}) where{DIM,NDF}
+    faces = amr.field.faces
+    is_ghost = Base.unsafe_wrap(
+        Vector{Int8},
+        Ptr{Int8}(pointer(side.is.hanging.is_ghost)),
+        2^(DIM - 1),
+    )
+    ids = findall(x->x==0,is_ghost).-1
+    faceid = side.face[]+1
+    here_data = Vector{PS_Data{DIM,NDF}}()
+    for i in ids
+        qp = PointerWrapper(iPointerWrapper(side.is.hanging.quad, Ptr{p8est_quadrant_t}, i)[])
+        base_quad =
+            unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
+        (!isa(base_quad,PS_Data)||base_quad.bound_enc<0) && continue
+        push!(here_data,base_quad)
+    end
+    isempty(here_data)&&return nothing
+    direction = get_dir(faceid)
+    rot = get_rot(faceid)
+    midpoint = [copy(x.midpoint) for x in here_data]
         for i in eachindex(midpoint)
             midpoint[i][direction] -= 0.5*rot*here_data[i].ds[direction]
         end
@@ -131,6 +213,12 @@ function initialize_back_hanging_face!(side::PointerWrapper{p4est_iter_face_side
     return nothing
 end
 
+function initial_prim(ic::Uniform;kwargs...)
+    return ic.ic
+end
+function initial_prim(ic::PCoordFn;midpoint::AbstractVector{Float64},kwargs...)
+    return ic.PCIC_fn(midpoint)
+end
 function init_solid_midpoints_kernel(ip, data, dp)
     global_data, solid_midpoints = unsafe_pointer_to_objref(data)
     boundaries = global_data.config.IB
@@ -171,7 +259,7 @@ function init_ps_p4est_kernel(ip, data, dp)
         ps_data.quadid = global_quadid(ip)
         ps_data.ds .= ds
         ps_data.midpoint .= midpoint
-        ps_data.prim .= ic
+        ps_data.prim .= initial_prim(ic;midpoint = ps_data.midpoint)
         ps_data.w .= get_conserved(ps_data, global_data)
         ps_data.vs_data = init_VS(ps_data.prim, global_data)
         for i in eachindex(solid_cell_flags)
@@ -239,7 +327,8 @@ function init_ps!(ps4est::P_pxest_t,global_data::Global_Data{DIM,NDF}) where{DIM
 end
 function init_field!(global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     GC.@preserve global_data begin
-        connectivity_ps = Cartesian_connectivity(global_data.config.trees_num..., global_data.config.geometry...)
+        # connectivity_ps = Cartesian_connectivity(global_data.config.trees_num..., global_data.config.geometry...)
+        connectivity_ps = set_connectivity(global_data)
         ps4est = AMR_4est_new(
             MPI.COMM_WORLD,
             connectivity_ps.pointer,
@@ -272,9 +361,12 @@ function init(config::Dict)
     PointerWrapper(ps4est).user_pointer = pointer_from_objref(amr)
     initialize_neighbor_data!(ps4est, amr)
     initialize_solid_neighbor!(amr)
-    reinit_ib_vs!(amr) # Avoid singularity caused by sharp gradient.
+    # reinit_ib_vs!(amr) # Avoid singularity caused by sharp gradient.
+    ps_partition!(ps4est, amr)
+    update_ghost!(ps4est, amr)
+    update_neighbor!(ps4est, amr)
+    update_solid!(amr)
     # initialize_corner_target_neighbor!(ps4est,amr)
-    data_exchange!(ps4est, amr)
     initialize_faces!(ps4est, amr)
     return (ps4est, amr)
 end

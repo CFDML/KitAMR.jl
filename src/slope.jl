@@ -15,7 +15,7 @@ function diff_L!(vs_data::AbstractVsData{DIM,NDF}, vs_data_n::AbstractVsData{DIM
     level_n = vs_data_n.level
     df = vs_data.df
     dfn = vs_data_n.df
-    for i = 1:vs_data.vs_num
+    @inbounds for i = 1:vs_data.vs_num
         if level[i] == level_n[index]
             for j = 1:NDF
                 sL[i, j] += (df[i, j] - dfn[index, j]) / dsL
@@ -51,7 +51,7 @@ function diff_R!(vs_data::AbstractVsData{DIM,NDF}, vs_data_n::AbstractVsData{DIM
     level_n = vs_data_n.level
     df = vs_data.df
     dfn = vs_data_n.df
-    for i = 1:vs_data.vs_num
+    @inbounds for i = 1:vs_data.vs_num
         if level[i] == level_n[index]
             for j = 1:NDF
                 sR[i, j] -= (df[i, j] - dfn[index, j]) / dsR
@@ -141,6 +141,17 @@ function update_limited_slope_inner!(
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata[1].vs_data, Rdata[1].vs_data, ds, ds, dir)
 end
+function downwind_order_reduce!(ps_data::PS_Data{DIM},sn::SolidNeighbor,dir::Int,rot::Float64) where{DIM}
+    normal = sn.normal
+    sdf = @views ps_data.vs_data.sdf[:,:,dir]
+    midpoint = ps_data.vs_data.midpoint
+    for i in axes(midpoint,1)
+        v = @views midpoint[i,:]
+        if dot(v,normal)<0&&v[dir]*rot>0
+            sdf[i,:].=0.
+        end
+    end
+end
 function update_slope_inner!(
     ::Val{1},
     ::Val{1},
@@ -152,8 +163,10 @@ function update_slope_inner!(
 ) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     if Ldata[1].bound_enc<0
         update_slope_inner!(Val(0),Val(1),ps_data,global_data,Ldata,Rdata,dir)
+        downwind_order_reduce!(ps_data,Ldata[1],dir,1.0)
     elseif Rdata[1].bound_enc<0
         update_slope_inner!(Val(1),Val(0),ps_data,global_data,Ldata,Rdata,dir)
+        downwind_order_reduce!(ps_data,Rdata[1],dir,-1.0)
     else
         ds = ps_data.ds[dir]
         swL = (ps_data.w - Ldata[1].w) / (ds)

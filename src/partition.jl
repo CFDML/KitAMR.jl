@@ -13,10 +13,10 @@ function partition_weight(p4est::P_pxest_t,which_tree,quadrant::P_pxest_quadrant
     dp = PointerWrapper(P4est_PS_Data,qp.p.user_data[])
     ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
     isa(ps_data,InsideSolidData)&&return Cint(0)
-    ps_data.bound_enc>0&&return Cint(2*ps_data.vs_data.vs_num)
+    # ps_data.bound_enc>0&&return Cint(2*ps_data.vs_data.vs_num)
     if ps_data.bound_enc>0
         sn = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
-        return Cint((0.5*length(sn)+1)*ps_data.vs_data.vs_num)
+        return Cint((length(sn)+1)*ps_data.vs_data.vs_num)
     end
     return Cint(ps_data.vs_data.vs_num)
 end
@@ -45,7 +45,8 @@ function partition!(p4est::Ptr{p8est_t})
     src_gfq = copy(gfq)
     src_flt = pp.first_local_tree[]
     src_llt = pp.last_local_tree[]
-    p8est_partition(p4est, 0, C_NULL)
+    p8est_partition(p4est, 0, @cfunction(partition_weight,Cint,(Ptr{p8est_t},p4est_topidx_t,Ptr{p8est_quadrant_t})))
+    # p8est_partition(p4est, 0, C_NULL)
     # dest_gfq = Base.unsafe_wrap(Vector{Int},pointer(pp.global_first_quadrant),MPI.Comm_size(MPI.COMM_WORLD)+1)
     return src_gfq, gfq, src_flt, src_llt
 end
@@ -262,6 +263,7 @@ function pre_transfer(
     receives::Vector{Int},
     receive_nums::Vector{Int},
 )
+    reqs = Vector{MPI.Request}(undef, 0)
     for i in eachindex(sends)
         sreq = MPI.Isend(
             s_vs_numss[i],
@@ -269,7 +271,7 @@ function pre_transfer(
             dest = sends[i] - 1,
             tag = COMM_NUMS_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
         )
-        MPI.Wait(sreq)
+        push!(reqs,sreq)
     end
     r_vs_numss = Vector{Vector{Int}}(undef, length(receives))
     for i in eachindex(receives)
@@ -280,9 +282,10 @@ function pre_transfer(
             source = receives[i] - 1,
             tag = COMM_NUMS_TAG + receives[i] - 1,
         )
-        MPI.Wait(rreq)
+        push!(reqs,rreq)
         r_vs_numss[i] = r_vs_nums
     end
+    MPI.Waitall(reqs)
     return r_vs_numss
 end
 function transfer(
@@ -371,7 +374,7 @@ function transfer(
         push!(reqs, rreq)
         push!(r_datas, r_data)
     end
-    MPI.Waitall!(reqs)
+    MPI.Waitall(reqs)
     up_index = [x < MPI.Comm_rank(MPI.COMM_WORLD) + 1 for x in receives]
     down_index = [x > MPI.Comm_rank(MPI.COMM_WORLD) + 1 for x in receives]
     up_vs_numss = r_vs_numss[up_index]
@@ -421,7 +424,7 @@ function unpack_data(vs_nums, data, amr::AMR{DIM,NDF}) where{DIM,NDF}
                 zeros(vs_num, NDF, DIM),
                 zeros(vs_num, NDF),
             )
-            transfer_ps_datas[i] = PS_Data(DIM,NDF,encs,w, vs_data)
+            transfer_ps_datas[i] = PS_Data(DIM,NDF;bound_enc=encs[1],solid_cell_index=encs[2:SOLID_CELL_ID_NUM+1],w, vs_data)
         end
         offset += vs_num
     end
