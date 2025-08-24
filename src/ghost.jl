@@ -152,6 +152,28 @@ function update_mirror_data!(ps4est, amr::AMR{DIM,NDF}) where{DIM,NDF}
         end
     end
 end
+function update_solid_mirror_data!(ps4est,amr::AMR{DIM,NDF}) where{DIM,NDF}
+    GC.@preserve ps4est amr begin
+        mirror_data_pointers = amr.ghost.ghost_exchange.mirror_data_pointers
+        vs_num = amr.global_data.status.max_vs_num
+        gp = PointerWrapper(amr.global_data.forest.ghost)
+        pp = PointerWrapper(ps4est)
+        for i in eachindex(mirror_data_pointers)
+            pq = pw_mirror_quadrant(pp,gp,i)
+            dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
+            ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+            (isa(ps_data,InsideSolidData)||ps_data.bound_enc>=0)&&continue
+            ap = Base.unsafe_wrap(
+                Vector{Cdouble},
+                mirror_data_pointers[i],
+                3 * DIM + 4 + NDF * vs_num,
+            )
+			ap[DIM*2+1:DIM*3+2] = ps_data.w
+            vs_temp = @view(ap[3*DIM+4+1:end])
+            get_mirror_data_inner!(ps_data, vs_temp)
+        end
+    end
+end
 function update_mirror_slope!(ps4est, amr::AMR{DIM,NDF}) where{DIM,NDF}
     GC.@preserve ps4est amr begin
         mirror_slope_pointers = amr.ghost.ghost_exchange.mirror_slope_pointers
@@ -251,6 +273,18 @@ end
 function data_exchange!(p4est::P_pxest_t, amr::AMR{DIM,NDF}) where{DIM,NDF}
     MPI.Comm_size(MPI.COMM_WORLD) == 1 && return nothing
     update_mirror_data!(p4est, amr)
+    amr_exchange!(
+        p4est,
+        amr.global_data.forest.ghost,
+        amr.ghost.ghost_exchange.ghost_datas,
+        amr.ghost.ghost_exchange.mirror_data_pointers,
+        size_Ghost_Data(amr.global_data.status.max_vs_num,DIM,NDF),
+    )
+end
+function solid_exchange!(p4est::P_pxest_t, amr::AMR{DIM,NDF}) where{DIM,NDF}
+    MPI.Comm_size(MPI.COMM_WORLD) == 1 && return nothing
+    isempty(amr.global_data.config.IB) && return nothing
+    update_solid_mirror_data!(p4est, amr)
     amr_exchange!(
         p4est,
         amr.global_data.forest.ghost,
@@ -375,7 +409,7 @@ function update_ghost!(p4est::Ptr{p8est_t}, amr::AMR)
     global_data = amr.global_data
     finalize_ghost!(ghost_exchange)
     p8est_ghost_destroy(global_data.forest.ghost)
-    global_data.forest.ghost = p8est_ghost_new(p4est, P8EST_CONNECT_FACE)
+    global_data.forest.ghost = p8est_ghost_new(p4est, P8EST_CONNECT_FULL)
     amr.ghost.ghost_exchange = initialize_ghost_exchange(p4est, global_data)
     amr.ghost.ghost_wrap = initialize_ghost_wrap(global_data, amr.ghost.ghost_exchange)
 end

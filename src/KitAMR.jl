@@ -14,6 +14,7 @@ using Documenter
 using Reexport
 using CSV
 using DataFrames
+using Statistics
 
 include("../lib/P4est/src/P4est.jl")
 @reexport using .P4est

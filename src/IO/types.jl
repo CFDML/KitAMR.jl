@@ -3,19 +3,42 @@ struct ConfigureForSave{DIM,NDF}
     trees_num::Vector{Int64}
     quadrature::Vector{Float64}
     vs_trees_num::Vector{Int64}
-    IC::AbstractICType
+    IC::AbstractInitCondType
     domain::Vector{Domain}
     IB::Vector{AbstractBoundary}
     gas::Gas
     solver::Solver
+    user_defined::UDF
+end
+struct StatusForSave
+    max_vs_num::Int
+    gradmax::Vector{Float64}
+    Δt::Float64
+    Δt_ξ::Float64
+    sim_time::Float64
+    ps_adapt_step::Int
+    vs_adapt_step::Int
+    partition_step::Int
 end
 function ConfigureForSave(config::Configure{DIM,NDF}) where{DIM,NDF}
     return ConfigureForSave{DIM,NDF}(
         config.geometry,config.trees_num,config.quadrature,
         config.vs_trees_num,config.IC,config.domain,
         config.IB,config.gas,
-        config.solver
+        config.solver,
+        config.user_defined
     )
+end
+function StatusForSave(status::Status)
+    return StatusForSave(status.max_vs_num,status.gradmax,status.Δt,
+        status.Δt_ξ,status.sim_time,status.ps_adapt_step,
+        status.vs_adapt_step,status.partition_step
+    )
+end
+function Status(status::StatusForSave)
+    return Status(status.max_vs_num,status.gradmax,status.Δt,
+        status.Δt_ξ,status.sim_time,status.ps_adapt_step,
+        status.vs_adapt_step,status.partition_step,Residual(DIM),Ref(false))
 end
 struct SolverSet
     config::ConfigureForSave

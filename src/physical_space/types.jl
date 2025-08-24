@@ -13,16 +13,14 @@ DoubleSizeNeighbor = Val{-1}
 mutable struct Neighbor{DIM,NDF}
     data::Vector{Vector{NeighborQuad{DIM,NDF}}}
     state::Vector{Int}
-    # c2r_temp::Vector{Vector{Matrix{Int}}} # Templates indices for velocity grids that are coarser than corresponding grids in neighbors.
     Neighbor(DIM,NDF) = (n = new{DIM,NDF}();
     n.data = Vector{Vector{NeighborQuad{DIM,NDF}}}(undef, 2*DIM);
     n.state = zeros(Int8, 2*DIM);
-    # n.c2r_temp = Vector{Vector{Matrix{Int}}}(undef,2*DIM);
     n)
 end
 mutable struct SolidNeighbor{DIM,NDF} <:AbstractPsData{DIM,NDF}
     bound_enc::Int
-    faceid::Int
+    faceid::Int # The faceid through which the neighbor is the solidneighbor.
     av_id::Int # corner neighbor id for corner ghost cells' average.
     aux_point::Vector{Float64}
     normal::Vector{Float64}
@@ -43,61 +41,34 @@ mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
     qf::Vector{Float64}
     w::Vector{Float64}
     sw::Matrix{Float64} # DIM + 2 x DIM
-    # ssw::Array{Float64}
     prim::Vector{Float64}
     flux::Vector{Float64}
     vs_data::VS_Data{DIM,NDF}
     neighbor::Neighbor{DIM,NDF}
-    PS_Data(DIM,NDF) = (n = new{DIM,NDF}();
-    n.quadid = 0;
-    n.bound_enc = 0;
-    n.solid_cell_index = zeros(SOLID_CELL_ID_NUM);
-    n.ds = zeros(DIM);
-    n.midpoint = zeros(DIM);
-    n.qf = zeros(DIM);
-    n.w = zeros(DIM+2);
-    n.sw = zeros(DIM+2, DIM);
-    n.prim = zeros(DIM+2);
-    n.flux = zeros(DIM+2);
-    n.neighbor = Neighbor(DIM,NDF);
-    n)
-    PS_Data(DIM,NDF,ds, midpoint, w, sw, vs_data) = (n = new{DIM,NDF}();
-    n.quadid = 0;
-    n.bound_enc = 0;
-    n.solid_cell_index = zeros(SOLID_CELL_ID_NUM);
-    n.ds = ds;
-    n.midpoint = midpoint;
-    n.w = w;
-    n.sw = sw;
-    n.flux = zeros(DIM+2);
-    n.vs_data = vs_data;
-    n)
-    PS_Data(DIM,NDF,w, vs_data) = (n = new{DIM,NDF}();
-    n.quadid = 0;
-    n.bound_enc = 0;
-    n.solid_cell_index = zeros(SOLID_CELL_ID_NUM);
-    n.w = w;
-    n.neighbor = Neighbor(DIM,NDF);
-    n.sw = zeros(DIM+2, DIM);
-    n.qf = zeros(DIM);
-    n.prim = zeros(DIM+2);
-    n.flux = zeros(DIM+2);
-    n.vs_data = vs_data;
-    n)
-    PS_Data(DIM,NDF,encs::Vector{Int},w, vs_data) = (n = new{DIM,NDF}();
-    n.quadid = 0;
-    n.bound_enc = encs[1];
-    n.solid_cell_index = encs[2:SOLID_CELL_ID_NUM+1];
-    n.w = w;
-    n.neighbor = Neighbor(DIM,NDF);
-    n.sw = zeros(DIM+2, DIM);
-    n.qf = zeros(DIM);
-    n.prim = zeros(DIM+2);
-    n.flux = zeros(DIM+2);
-    n.vs_data = vs_data;
-    n)
+    PS_Data(DIM,NDF;kwargs...)=(n = new{DIM,NDF}();
+        n.quadid = haskey(kwargs,:quadid) ? kwargs[:quadid] : 0;
+        n.bound_enc = haskey(kwargs,:bound_enc) ? kwargs[:bound_enc] : 0;
+        n.solid_cell_index = haskey(kwargs,:solid_cell_index) ? kwargs[:solid_cell_index] : zeros(SOLID_CELL_ID_NUM);
+        n.ds = haskey(kwargs,:ds) ? kwargs[:ds] : zeros(DIM);
+        n.midpoint = haskey(kwargs,:midpoint) ? kwargs[:midpoint] : zeros(DIM);
+        n.qf = haskey(kwargs,:qf) ? kwargs[:qf] : zeros(DIM);
+        n.w = haskey(kwargs,:w) ? kwargs[:w] : zeros(DIM+2);
+        n.sw = haskey(kwargs,:sw) ? kwargs[:sw] : zeros(DIM+2, DIM);
+        n.prim = haskey(kwargs,:prim) ? kwargs[:prim] : zeros(DIM+2);
+        n.flux = haskey(kwargs,:flux) ? kwargs[:flux] : zeros(DIM+2);
+        if haskey(kwargs,:vs_data)
+           n.vs_data = kwargs[:vs_data]
+        end;
+        n.neighbor = haskey(kwargs,:neighbor) ? kwargs[:neighbor] : Neighbor(DIM,NDF);
+        n
+    )
+    PS_Data(ps_data::PS_Data{DIM,NDF};kwargs...) where{DIM,NDF}=(n = new{DIM,NDF}();
+        for field in fieldnames(PS_Data{DIM,NDF})
+            setfield!(n,field,haskey(kwargs,field) ? kwargs[field] : getfield(ps_data,field))
+        end;
+        n
+    )
 end
-
 mutable struct Ghost_PS_Data{DIM,NDF}<:AbstractGhostPsData{DIM,NDF}
     owner_rank::Int
     quadid::Int # Not continuous! Only provide an order among ghost_datas from the same owner rank.
@@ -108,29 +79,13 @@ mutable struct Ghost_PS_Data{DIM,NDF}<:AbstractGhostPsData{DIM,NDF}
     sw::Matrix{Cdouble}
     vs_data::Ghost_VS_Data{DIM,NDF}
 end
-# mutable struct SingularSolidNeighbor{DIM,NDF,ID} <: AbstractPsData{DIM,NDF}
-#     aux_point::Vector{Float64}
-#     normal::Vector{Float64}
-#     ghost_ps_data::Ghost_PS_Data{DIM,NDF}
-# end
 mutable struct GhostInsideSolidData{DIM,NDF} <: AbstractGhostPsData{DIM,NDF} end
 
 abstract type AbstractFace end
 abstract type InnerFace <: AbstractFace end
 abstract type BoundaryFace <: AbstractFace end
-# abstract type AbstractInsideSolidData{DIM,NDF} <: AbstractPsData{DIM,NDF} end
-# HangingQuads = Union{Vector{AbstractPsData{DIM,NDF}}, Nothing} where{DIM,NDF}
-# struct MissingHangingQuad{DIM,NDF} <: AbstractPsData{DIM,NDF} end
 mutable struct InsideSolidData{DIM,NDF} <: AbstractPsData{DIM,NDF} end
 AbstractInsideSolidData = Union{InsideSolidData,GhostInsideSolidData}
-# struct Face{FT<:AbstractFaceType,T<:HangingQuads}
-#     data::PS_Data
-#     faceid::Integer
-#     hanging_data::T # Is a vector when full is ghost, whose length for 2D = 1 and for 3D = 3.
-# end
-# function Face(::Type{FT},data::PS_Data,faceid::Integer,hanging_data::T) where{FT<:AbstractFaceType,T<:HangingQuads}
-#     return Face{FT,T}(data,faceid,hanging_data)
-# end
 struct FullFace{DIM,NDF}<:InnerFace
     rot::Float64
     direction::Int

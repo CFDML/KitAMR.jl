@@ -436,7 +436,7 @@ function vs_conserved_correction!(va_flags::Vector{Bool},amr)
             F_c = discrete_maxwell(vs_data.midpoint, ps_data.prim, global_data)
             w = calc_w0(ps_data)
             prim = get_prim(w,global_data)
-            if prim[end]>1e-3
+            if 1/prim[end]>1e-3
                 F = discrete_maxwell(vs_data.midpoint, prim, global_data)
                 vs_data.df .+= F_c-F
             end

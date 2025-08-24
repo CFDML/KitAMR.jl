@@ -19,13 +19,6 @@ mutable struct Ghost_VS_Data{DIM,NDF} <: AbstractVsData{DIM,NDF}
     sdf::Array{Float64,3} # vs_num x NDF x DIM
 end
 
-# mutable struct Face_VS_Data{DIM,NDF} <: AbstractVsData{DIM,NDF}
-#     weight::AbstractVector
-#     midpoint::AbstractMatrix
-#     vn::AbstractVector
-#     df::AbstractMatrix
-#     sdf::AbstractMatrix
-# end
 struct Face_VS_Data{DIM,NDF} # different sides of the face combining the face-velocity-space
     heavi::Vector{Bool}
     weight::AbstractVector{Float64}
@@ -46,8 +39,8 @@ mutable struct CuttedVelocityCells
     weight::Vector{Float64}
     gas_dfs::Matrix{Float64}
     solid_dfs::Matrix{Float64}
-    gas_midpoints::Matrix{Float64}
-    solid_midpoints::Matrix{Float64}
+    # gas_midpoints::Matrix{Float64}
+    # solid_midpoints::Matrix{Float64}
     gas_weights::Vector{Float64}
     solid_weights::Vector{Float64} # Range from 0 to 1, representing the percent of the solid part.
     # templates::Vector{VelocityTemplates}

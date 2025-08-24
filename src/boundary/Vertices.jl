@@ -19,10 +19,6 @@ function solid_flag(boundary::Vertices,midpoint::AbstractVector) # Does midpoint
     inbox = (boundary.box[1][1]<midpoint[1]&&boundary.box[2][1]>midpoint[1]&&boundary.box[1][2]<midpoint[2]&&boundary.box[2][2]>midpoint[2])
     return xor(!(inbox&&ray_casting(midpoint,boundary.vertices)),boundary.solid)
 end
-function IB_flag(boundary::Vertices,aux_point::AbstractVector,midpoint::AbstractVector,::AbstractVector)
-    r = boundary.refine_radius
-    norm(midpoint-aux_point)<r
-end
 function IB_prim(circle::Vertices,aux_point::AbstractVector,ρw::Real)
     IB_prim(circle.bc,aux_point,ρw)
 end

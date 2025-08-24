@@ -94,36 +94,30 @@ function pre_ps_refine_flag(midpoint,ds,global_data::Global_Data{DIM}) where{DIM
     return false
 end
 function ps_copy(data::PS_Data{DIM,NDF}) where{DIM,NDF}
-    p = PS_Data(DIM,NDF,
-        copy(data.ds),
-        copy(data.midpoint),
-        copy(data.w),
-        copy(data.sw),
-        deepcopy(data.vs_data),
+    p = PS_Data(DIM,NDF;
+        ds=copy(data.ds),
+        midpoint=copy(data.midpoint),
+        w=copy(data.w),
+        sw=copy(data.sw),
+        vs_data=deepcopy(data.vs_data),
+        prim = copy(data.prim),
     )
-    p.neighbor = Neighbor(DIM,NDF)
-    p.prim = copy(data.prim)
-    p.qf = Vector{Float64}(undef, DIM)
-    p.flux = zeros(DIM + 2)
     return p
 end
 function ps_merge(Odatas::Vector,index::Int,global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     data = Odatas[index]
     vs_data = data.vs_data;vs_num = vs_data.vs_num
-    p = PS_Data(DIM,NDF,
-        data.ds *2.0,
-        data.midpoint - 0.5 * data.ds .* RMT[DIM][index],
-        [sum([x.w[i] for x in Odatas]) for i in 1:DIM+2]./2^DIM,
-        [sum([x.sw[i,j] for x in Odatas]) for i in 1:DIM+2,j in 1:DIM]./2^DIM,
-        VS_Data{DIM,NDF}(vs_num,copy(vs_data.level),copy(vs_data.weight),copy(vs_data.midpoint),
+    p = PS_Data(DIM,NDF;
+        ds = data.ds *2.0,
+        midpoint = data.midpoint - 0.5 * data.ds .* RMT[DIM][index],
+        w = [sum([x.w[i] for x in Odatas]) for i in 1:DIM+2]./2^DIM,
+        prim = get_prim(p.w,global_data),
+        sw = [sum([x.sw[i,j] for x in Odatas]) for i in 1:DIM+2,j in 1:DIM]./2^DIM,
+        vs_data = VS_Data{DIM,NDF}(vs_num,copy(vs_data.level),copy(vs_data.weight),copy(vs_data.midpoint),
             zeros(vs_num,NDF),zeros(vs_num,NDF,DIM),zeros(vs_num,NDF))
     )
-    p.neighbor = Neighbor(DIM,NDF)
     p.neighbor.state[1] = BALANCE_FLAG
     p.neighbor.data[1] = Odatas
-    p.prim = get_prim(p.w,global_data)
-    p.qf = Vector{Float64}(undef, DIM)
-    p.flux = zeros(DIM + 2)
     return p
 end
 function ps_refine_flag(
@@ -302,7 +296,7 @@ function pre_IB_refine_flag(forest::P_pxest_t, which_tree, quadrant)
         qp = PointerWrapper(quadrant)
         global_data,aux_points = unsafe_pointer_to_objref(pointer(fp.user_pointer))
         ds,midpoint = quad_to_cell(fp,which_tree,qp)
-        IB_flag(global_data.config.IB,aux_points,midpoint,ds) && return Cint(1)
+        IB_flag(aux_points,midpoint,ds,qp.level[],global_data) && return Cint(1)
     end
     return Cint(0)
 end
@@ -344,7 +338,7 @@ function pre_ps_coarsen_flag(forest::Ptr{p4est_t},which_tree,quadrants)
             qp = PointerWrapper(quadrants_wrap[i])
             ds,midpoint = quad_to_cell(fp,which_tree,qp)
             (global_data.config.user_defined.static_ps_refine_flag(midpoint,ds,global_data,qp.level[])&&!solid_flag(midpoint,global_data)||
-                IB_flag(global_data.config.IB,aux_points,midpoint,ds)||
+                IB_flag(aux_points,midpoint,ds,qp.level[],global_data)||
                 boundary_flag(midpoint,ds,global_data))&&return Cint(0)
         end
         return Cint(1)
@@ -354,12 +348,14 @@ function pre_ps_coarsen_flag(forest::Ptr{p8est_t},which_tree,quadrants)
     GC.@preserve forest which_tree quadrants begin
         DIM = 3
         fp = PointerWrapper(forest)
-        quadrants_wrap = unsafe_wrap(Vector{Ptr{p4est_quadrant_t}}, quadrants, 2^DIM)
+        quadrants_wrap = unsafe_wrap(Vector{Ptr{p8est_quadrant_t}}, quadrants, 2^DIM)
         global_data,aux_points = unsafe_pointer_to_objref(pointer(fp.user_pointer))
         for i = 1:2^DIM
             qp = PointerWrapper(quadrants_wrap[i])
             ds,midpoint = quad_to_cell(fp,which_tree,qp)
-            (IB_flag(global_data.config.IB,aux_points,midpoint,ds)||boundary_flag(midpoint,ds,global_data))&&return Cint(0)
+            (global_data.config.user_defined.static_ps_refine_flag(midpoint,ds,global_data,qp.level[])&&!solid_flag(midpoint,global_data)||
+                IB_flag(aux_points,midpoint,ds,qp.level[],global_data)||
+                boundary_flag(midpoint,ds,global_data))&&return Cint(0)
         end
         return Cint(1)
     end
@@ -373,6 +369,20 @@ function pre_ps_coarsen!(p4est::Ptr{p4est_t}; recursive = 0)
             pre_ps_coarsen_flag,
             Cint,
             (Ptr{p4est_t}, p4est_topidx_t, Ptr{Ptr{p4est_quadrant_t}})
+        ),
+        C_NULL,
+        C_NULL,
+    )
+end
+function pre_ps_coarsen!(p4est::Ptr{p8est_t}; recursive = 0)
+    p8est_coarsen_ext(
+        p4est,
+        recursive,
+        0,
+        @cfunction(
+            pre_ps_coarsen_flag,
+            Cint,
+            (Ptr{p8est_t}, p4est_topidx_t, Ptr{Ptr{p8est_quadrant_t}})
         ),
         C_NULL,
         C_NULL,
@@ -503,7 +513,7 @@ end
 function ps_balance!(p4est::Ptr{p8est_t})
     p8est_balance_ext(
         p4est,
-        P8EST_CONNECT_FACE,
+        P8EST_CONNECT_FULL,
         C_NULL,
         @cfunction(
             p4est_replace,
@@ -546,6 +556,7 @@ function pre_ps_refine!(p4est::Ptr{p4est_t},global_data::Global_Data)
         C_NULL,
     )
 end
+
 function pre_ps_refine!(p4est::Ptr{p8est_t},global_data::Global_Data)
     p8est_refine_ext(
         p4est,
@@ -565,7 +576,7 @@ function pre_ps_balance!(p4est::Ptr{p4est_t})
     p4est_balance_ext(p4est, P4EST_CONNECT_FULL, C_NULL, C_NULL)
 end
 function pre_ps_balance!(p4est::Ptr{p8est_t})
-    p8est_balance_ext(p4est, P8EST_CONNECT_FACE, C_NULL, C_NULL)
+    p8est_balance_ext(p4est, P8EST_CONNECT_FULL, C_NULL, C_NULL)
 end
 
 function adaptive!(ps4est::P_pxest_t,amr::AMR;ps_interval=10,vs_interval=80,partition_interval=40)

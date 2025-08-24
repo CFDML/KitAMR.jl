@@ -1,3 +1,12 @@
+abstract type AbstractInitCondType end
+struct Uniform<:AbstractInitCondType 
+    ic::AbstractVector
+end
+struct PCoordFn<:AbstractInitCondType # A function that accepts physical coordinates and returns initial primary variable at the position.
+    PCIC_fn::Function
+end
+
+
 abstract type AbstractFluxType end
 abstract type AbstractDVMFluxType <: AbstractFluxType end
 struct UGKS<:AbstractDVMFluxType end
@@ -13,7 +22,6 @@ struct Euler <:AbstractTimeMarchingType end
 struct UGKS_Marching<:AbstractTimeMarchingType end
 struct CAIDVM_Marching<:AbstractTimeMarchingType end
 
-const AbstractICType=Union{Vector{Float64},Function}
 
 struct Solver
     CFL::Float64
@@ -44,7 +52,7 @@ struct Configure{DIM,NDF}
     trees_num::Vector{Int64}
     quadrature::Vector{Float64}
     vs_trees_num::Vector{Int64}
-    IC::AbstractICType
+    IC::AbstractInitCondType
     domain::Vector{Domain}
     IB::Vector{AbstractBoundary}
     gas::Gas
@@ -54,6 +62,10 @@ end
 function config_IB(ib::Circle,config::Dict)
     ds = minimum([(config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i]/2^config[:AMR_PS_MAXLEVEL] for i in 1:config[:DIM]])
     Circle(ib,ds)
+end
+function config_IB(ib::Sphere,config::Dict)
+    ds = minimum([(config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i]/2^config[:AMR_PS_MAXLEVEL] for i in 1:config[:DIM]])
+    Sphere(ib,ds)
 end
 function config_IB(ib::Vertices,config::Dict)
     Vertices(ib,config)
@@ -115,7 +127,6 @@ mutable struct Status
     partition_step::Int
     residual::Residual
     save_flag::Base.RefValue{Bool}
-    stable_flag::Vector{Bool}
 end
 function Status(config)
     DIM = config[:DIM]
@@ -128,7 +139,7 @@ function Status(config)
         (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
         2^config[:AMR_VS_MAXLEVEL] / 2 for i in 1:DIM]
     Δt = config[:CFL]*minimum(ds ./ U)
-    return Status(0,ones(DIM+2),Δt*TIME_STEP_CONTRACT_RATIO,Δt,0.,1,1,1,Residual(DIM),Ref(false),[true,true])
+    return Status(0,ones(DIM+2),Δt*TIME_STEP_CONTRACT_RATIO,Δt,0.,1,1,1,Residual(DIM),Ref(false))
 end
 
 mutable struct Global_Data{DIM,NDF}

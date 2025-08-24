@@ -124,6 +124,16 @@ function calc_w0(here_vs::Face_VS_Data{2,2},there_vs::Face_VS_Data)
         there_vs.df[:,1],there_vs.df[:,2],there_vs.weight
     )
 end
+function calc_w0(here_vs::Face_VS_Data{3,1},there_vs::Face_VS_Data)
+    @inbounds @views micro_to_macro_3D1F(
+        here_vs.midpoint[:,1],here_vs.midpoint[:,2],
+        here_vs.df[:,1],here_vs.df[:,2],here_vs.weight
+    ) +
+    micro_to_macro_3D1F(
+        there_vs.midpoint[:,1],there_vs.midpoint[:,2],
+        there_vs.df[:,1],there_vs.df[:,2],there_vs.weight
+    )
+end
 function calc_qf(here_vs::Face_VS_Data{2,2},there_vs::Face_VS_Data,prim::AbstractVector)
     @inbounds @views heat_flux_2D2F(
         here_vs.midpoint[:,1],here_vs.midpoint[:,2],

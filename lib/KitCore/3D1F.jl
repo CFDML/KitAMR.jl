@@ -4,7 +4,7 @@ function discrete_maxwell_3D1F(
     w::AbstractVector,
     prim::AbstractVector,
 ) where {T}
-    M = Vector{T}(undef, length(u))
+    M = Matrix{T}(undef, length(u),1)
     @inbounds @. M =
         prim[1] *
         (prim[5] / π)^(3 / 2) *
@@ -30,7 +30,7 @@ function shakhov_part_3D1F(
     qf::AbstractVector,
     Pr::Real,
 ) where {T}
-    M⁺ = Vector{T}(undef, length(u))
+    M⁺ = Matrix{T}(undef, length(u),1)
     @inbounds @. M⁺ =
         0.8 * (1 - Pr) * prim[5]^2 / prim[1] *
         ((u - prim[2]) * qf[1] + (v - prim[3]) * qf[2] + (w - prim[4]) * qf[3]) *
