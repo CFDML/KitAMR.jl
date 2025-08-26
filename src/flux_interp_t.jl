@@ -247,7 +247,7 @@ function calc_flux!(::Val{0}, ::Val{2}, face::Face, DVM_data::DVM_Data, faceid::
     rot = get_rot(faceid) # Left: -1, Right: 1
     gas = DVM_data.global_data.gas
     vs_data = ps_data.vs_data
-    for i = 1:2^(DIM-1)
+    for i = 1:(2^(DIM-1))
         nps_data = ps_data.neighbor.data[faceid][i]
         vs_data_n = nps_data.vs_data
         ds = nps_data.ds[dir]

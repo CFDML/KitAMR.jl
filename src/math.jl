@@ -55,7 +55,7 @@ function discrete_maxwell_2DF_2D(midpoint::AM, prim::AV, K::Real)
         (prim[4] / π) *
         exp.(
             -prim[4] *
-            ((@view(midpoint[:, 1]) - prim[2])^2 + (@view(midpoint[:, 2]) - prim[3])^2)
+            ((@view(midpoint[:, 1]) - prim[2])^2 + (@view(midpoint[:, 2]) - prim[3])^2),
         )
     @. DF[:, 2] = @view(DF[:, 1]) * K / (2.0 * prim[4])
     DF
@@ -131,7 +131,8 @@ function reconstruct_vs(
 )
     df0 = Array{Float64}(undef, size(df_n))
     @. df0[1:offset] = @views df_n[1:offset] - 0.5 * rot * dsL * sdf_n[1:offset]
-    @. df0[offset+1:end] = @views df_n[offset+1:end] + 0.5 * rot * dsR * sdf_n[offset+1:end]
+    @. df0[(offset+1):end] =
+        @views df_n[(offset+1):end] + 0.5 * rot * dsR * sdf_n[(offset+1):end]
     df0
 end
 function reconstruct_vs(
@@ -149,8 +150,8 @@ function reconstruct_vs(
     b0 = Vector{Float64}(undef, l)
     @. h0[1:offset] = @views h[1:offset] - 0.5 * rot * dsL * sh[1:offset]
     @. b0[1:offset] = @views b[1:offset] - 0.5 * rot * dsL * sb[1:offset]
-    @. h0[offset+1:end] = @views h[offset+1:end] + 0.5 * rot * dsR * sh[offset+1:end]
-    @. b0[offset+1:end] = @views b[offset+1:end] + 0.5 * rot * dsR * sb[offset+1:end]
+    @. h0[(offset+1):end] = @views h[(offset+1):end] + 0.5 * rot * dsR * sh[(offset+1):end]
+    @. b0[(offset+1):end] = @views b[(offset+1):end] + 0.5 * rot * dsR * sb[(offset+1):end]
     (h0, b0)
 end
 function calc_w0_2DF_2D(df0::AM, midpoint::AM, weight::AV)
@@ -237,7 +238,7 @@ function moment_u_2D(prim::AV, n::Int, m::Int, K::Float64, rot::Float64, dir::In
         Mu_R[1] = 0.5 * erfc(-rot * √(prim[4]) * prim[2])
         Mu_R[2] =
             prim[2] * Mu_R[1] + rot * 0.5 * exp(-prim[4] * prim[2]^2) / (√(π * prim[4]))
-        for i = 1:n-1
+        for i = 1:(n-1)
             Mu_L[i+2] = prim[2] * Mu_L[i+1] + 0.5 * i / prim[4] * Mu_L[i]
             Mu_R[i+2] = prim[2] * Mu_R[i+1] + 0.5 * i / prim[4] * Mu_R[i]
         end
@@ -245,7 +246,7 @@ function moment_u_2D(prim::AV, n::Int, m::Int, K::Float64, rot::Float64, dir::In
         Mv = Array{Float64}(undef, m + 1)
         Mv[1] = one(prim[3])
         Mv[2] = prim[3]
-        for i = 1:m-1
+        for i = 1:(m-1)
             Mv[i+2] = prim[3] * Mv[i+1] + 0.5 * i * Mv[i] / prim[4]
         end
     else
@@ -259,14 +260,14 @@ function moment_u_2D(prim::AV, n::Int, m::Int, K::Float64, rot::Float64, dir::In
         Mu_R[1] = 0.5 * erfc(-rot * √(prim[4]) * prim[3])
         Mu_R[2] =
             prim[3] * Mu_R[1] + rot * 0.5 * exp(-prim[4] * prim[3]^2) / (√(π * prim[4]))
-        for i = 1:n-1
+        for i = 1:(n-1)
             Mu_L[i+2] = prim[3] * Mu_L[i+1] + 0.5 * i / prim[4] * Mu_L[i]
             Mu_R[i+2] = prim[3] * Mu_R[i+1] + 0.5 * i / prim[4] * Mu_R[i]
         end
         Mv = @. Mu_L + Mu_R
         Mu[1] = one(prim[2])
         Mu[2] = prim[2]
-        for i = 1:m-1
+        for i = 1:(m-1)
             Mu[i+2] = prim[2] * Mu[i+1] + 0.5 * i * Mu[i] / prim[4]
         end
     end
@@ -378,7 +379,7 @@ function calc_fhb(
 )
     Θ = Array{Float64}(undef, length(H0))
     Θ[1:offset] .= 1.0
-    Θ[offset+1:end] .= 0.0
+    Θ[(offset+1):end] .= 0.0
     Fh = @. Mt[1] * vn * (H0 + H_plus) +
        Mt[2] *
        vn^2 *
@@ -457,26 +458,26 @@ function moment_u_O1(prim::AV, n::Int, m::Int, K::Float64, rot::Float64, dir::In
         Mu = Array{Float64}(undef, n + 1)
         Mu[1] = one(prim[2])
         Mu[2] = prim[2]
-        for i = 1:n-1
+        for i = 1:(n-1)
             Mu[i+2] = prim[2] * Mu[i+1] + 0.5 * i * Mu[i] / prim[4]
         end
         Mv = Array{Float64}(undef, m + 1)
         Mv[1] = one(prim[3])
         Mv[2] = prim[3]
-        for i = 1:m-1
+        for i = 1:(m-1)
             Mv[i+2] = prim[3] * Mv[i+1] + 0.5 * i * Mv[i] / prim[4]
         end
     else
         Mv = Array{Float64}(undef, n + 1)
         Mv[1] = one(prim[3])
         Mv[2] = prim[3]
-        for i = 1:n-1
+        for i = 1:(n-1)
             Mv[i+2] = prim[3] * Mv[i+1] + 0.5 * i * Mv[i] / prim[4]
         end
         Mu = Array{Float64}(undef, m + 1)
         Mu[1] = one(prim[2])
         Mu[2] = prim[2]
-        for i = 1:m-1
+        for i = 1:(m-1)
             Mu[i+2] = prim[2] * Mu[i+1] + 0.5 * i * Mu[i] / prim[4]
         end
     end
@@ -513,7 +514,7 @@ function calc_fhb_O1(
 )
     Θ = Array{Float64}(undef, length(H0))
     Θ[1:offset] .= 1.0
-    Θ[offset+1:end] .= 0.0
+    Θ[(offset+1):end] .= 0.0
     Fh = @. Mt[1] * vn * (H0 + H_plus) + Mt[4] * vn * h
     Fb = @. Mt[1] * vn * (B0 + B_plus) + Mt[4] * vn * b
     (Fh .* ds, Fb .* ds)

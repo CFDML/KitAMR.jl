@@ -70,7 +70,7 @@ end
 function initialize_neighbor_data!(ip::PointerWrapper{p4est_iter_volume_info_t}, data, dp)
     DVM_data = unsafe_pointer_to_objref(data)
     ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
-    for i = 1:2*DIM
+    for i = 1:(2*DIM)
         ps_data.neighbor.data[i], ps_data.neighbor.state[i] = access_neighbor(
             pointer(ip.p4est),
             global_quadid(ip),
@@ -98,7 +98,7 @@ face_micro_nums: 1->4时记1，只需在state=-1时+0.25即可
 function update_neighbor_kernel!(ip::PointerWrapper{p4est_iter_volume_info_t}, data, dp)
     DVM_data = unsafe_pointer_to_objref(data)
     ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
-    for i = 1:2*DIM
+    for i = 1:(2*DIM)
         ps_data.neighbor.data[i], ps_data.neighbor.state[i] = access_neighbor(
             pointer(ip.p4est),
             global_quadid(ip),

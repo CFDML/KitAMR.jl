@@ -2,8 +2,8 @@ function Cartesian_connectivity(Nx, Ny, xmin, xmax, ymin, ymax)
     vertices_C = Array{NTuple{2,Float64}}(undef, Nx + 1, Ny + 1)
     dx = (xmax - xmin) / Nx
     dy = (ymax - ymin) / Ny
-    for j = 1:Ny+1
-        for i = 1:Nx+1
+    for j = 1:(Ny+1)
+        for i = 1:(Nx+1)
             vertices_C[i, j] = (xmin + (i - 1) * dx, ymin + (j - 1) * dy)
         end
     end

@@ -25,7 +25,7 @@ function get_receive_send(src_gfq::Vector, dest_gfq::Vector)
     r2 =
         MPI.Comm_rank(MPI.COMM_WORLD) == MPI.Comm_size(MPI.COMM_WORLD) - 1 ?
         MPI.Comm_size(MPI.COMM_WORLD) - 1 : findfirst(x -> x > llq, src_gfq) - 2
-    is_receives[r1+1:r2+1] .= true
+    is_receives[(r1+1):(r2+1)] .= true
     is_receives[MPI.Comm_rank(MPI.COMM_WORLD)+1] = false
     if r1 == r2
         receive_nums[r1+1] = llq - lfq + 1
@@ -45,7 +45,7 @@ function get_receive_send(src_gfq::Vector, dest_gfq::Vector)
     s2 =
         MPI.Comm_rank(MPI.COMM_WORLD) == MPI.Comm_size(MPI.COMM_WORLD) - 1 ?
         MPI.Comm_size(MPI.COMM_WORLD) - 1 : findfirst(x -> x > llq, dest_gfq) - 2
-    is_sends[s1+1:s2+1] .= true
+    is_sends[(s1+1):(s2+1)] .= true
     is_sends[MPI.Comm_rank(MPI.COMM_WORLD)+1] = false
     if s1 == s2
         send_nums[s1+1] = llq - lfq + 1
@@ -369,11 +369,11 @@ function unpack_data(vs_nums, data, DVM_data::DVM_Data)
     offset = 0
     for i in eachindex(vs_nums)
         vs_num = vs_nums[i]
-        w = data.w[(DIM+2)*(i-1)+1:(DIM+2)*i]
-        vs_levels = data.vs_levels[offset+1:offset+vs_num]
+        w = data.w[((DIM+2)*(i-1)+1):((DIM+2)*i)]
+        vs_levels = data.vs_levels[(offset+1):(offset+vs_num)]
         vs_midpoints =
-            reshape(data.vs_midpoints[DIM*offset+1:DIM*(offset+vs_num)], vs_num, DIM)
-        vs_df = reshape(data.vs_df[NDF*offset+1:NDF*(offset+vs_num)], vs_num, NDF)
+            reshape(data.vs_midpoints[(DIM*offset+1):(DIM*(offset+vs_num))], vs_num, DIM)
+        vs_df = reshape(data.vs_df[(NDF*offset+1):(NDF*(offset+vs_num))], vs_num, NDF)
         vs_weight = @. tree_weight / 2^(DIM * vs_levels)
         vs_data = VS_Data(
             vs_num,
@@ -465,17 +465,17 @@ function insert_trees!(p4est::Ptr{p4est_t}, DVM_data::DVM_Data, ti_data::Transfe
     # tree_offset = DVM_data.trees.offset
     if !isempty(trees)
         if pp.first_local_tree[] < ti_data.old_flt
-            for i = 1:ti_data.old_flt-pp.first_local_tree[]
+            for i = 1:(ti_data.old_flt-pp.first_local_tree[])
                 pushfirst!(trees, Vector{PS_Data}(undef, 0))
             end
         end
         if pp.last_local_tree[] > ti_data.old_llt
-            for i = 1:pp.last_local_tree[]-ti_data.old_llt
+            for i = 1:(pp.last_local_tree[]-ti_data.old_llt)
                 push!(trees, Vector{PS_Data}(undef, 0))
             end
         end
     else
-        for _ = 1:pp.last_local_tree[]-pp.first_local_tree[]+1
+        for _ = 1:(pp.last_local_tree[]-pp.first_local_tree[]+1)
             push!(trees, Vector{PS_Data}(undef, 0))
         end
     end
