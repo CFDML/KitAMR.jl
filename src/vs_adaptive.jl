@@ -14,7 +14,7 @@ function vs_refine!(trees::Trees, global_data::Global_Data)
         for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
             vs_data = ps_data.vs_data
-            U = ps_data.prim[2:1+DIM]
+            U = ps_data.prim[2:(1+DIM)]
             lnmidpoint = reshape(vs_data.midpoint, :)
             lndf = reshape(vs_data.df, :)
             lnsdf = reshape(vs_data.sdf, :)
@@ -61,27 +61,27 @@ end
 function midpoint_refine_replace!(lnmidpoint::AV, midpoint_new::AM, vs_num::Int, index::Int)
     for i = 1:DIM
         deleteat!(lnmidpoint, (i - 1) * (vs_num) + index)
-        for j = 2^DIM:-1:1
+        for j = (2^DIM):-1:1
             insert!(lnmidpoint, (i - 1) * (vs_num) + index, midpoint_new[j, i])
         end
     end
 end
 function weight_refine_replace!(weight::AV, index::Int)
     weight_new = popat!(weight, index) / 2^DIM
-    for _ = 1:2^DIM
+    for _ = 1:(2^DIM)
         insert!(weight, index, weight_new)
     end
 end
 function level_refine_replace!(level::AV, index::Int)
     level_new = popat!(level, index) + 1
-    for _ = 1:2^DIM
+    for _ = 1:(2^DIM)
         insert!(level, index, level_new)
     end
 end
 function df_refine_replace!(lndf::AV, df_new::AM, vs_num::Int, index::Int)
     for i = 1:NDF
         deleteat!(lndf, (i - 1) * (vs_num) + index)
-        for j = 2^DIM:-1:1
+        for j = (2^DIM):-1:1
             insert!(lndf, (i - 1) * (vs_num) + index, df_new[j, i])
         end
     end
@@ -99,7 +99,7 @@ end
 function midpoint_refine(midpoint::AV, level::Int, ds::AV)
     midpoint_new = Matrix{Float64}(undef, 2^DIM, DIM)
     ds_new = ds / 2^(level + 1)
-    for i = 1:2^DIM
+    for i = 1:(2^DIM)
         midpoint_new[i, :] .= @. midpoint + 0.5 * ds_new * rmt[i]
     end
     return midpoint_new
@@ -131,7 +131,7 @@ end
 function make_A(midpoint_new::AM)
     A = Matrix{Float64}(undef, 2^DIM - 1, 2^DIM - 1)
     A[1:DIM, :] .= transpose(@view(midpoint_new[2:end, :]))
-    for i = 1:2^DIM-1
+    for i = 1:(2^DIM-1)
         A[end, i] = sum(@view(midpoint_new[i+1, :]) .^ 2)
     end
     for i = 1:DIM
@@ -161,7 +161,7 @@ function vs_coarsen!(DVM_data::DVM_Data)
         for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
             vs_data = ps_data.vs_data
-            U = ps_data.prim[2:1+DIM]
+            U = ps_data.prim[2:(1+DIM)]
             lnmidpoint = reshape(vs_data.midpoint, :)
             lndf = reshape(vs_data.df, :)
             lnsdf = reshape(vs_data.sdf, :)
@@ -175,22 +175,25 @@ function vs_coarsen!(DVM_data::DVM_Data)
                 if first_level > 0
                     @inbounds for i = 1:DIM
                         midpoint_index[:, i] .=
-                            (i-1)*(vs_data.vs_num)+index:(i-1)*(vs_data.vs_num)+index+2^DIM-1
+                            ((i-1)*(vs_data.vs_num)+index):((i-1)*(vs_data.vs_num)+index+2^DIM-1)
                     end
                     @inbounds for i = 1:NDF
                         df_index[:, i] .=
-                            (i-1)*(vs_data.vs_num)+index:(i-1)*(vs_data.vs_num)+index+2^DIM-1
+                            ((i-1)*(vs_data.vs_num)+index):((i-1)*(vs_data.vs_num)+index+2^DIM-1)
                     end
                     midpoint = @view(lnmidpoint[midpoint_index])
                     df = @view(lndf[df_index])
                     if flag[first_level] % 1 == 0 &&
-                       !any(x -> x > first_level, @view(vs_data.level[index+1:index+2^DIM]))
+                       !any(
+                        x -> x > first_level,
+                        @view(vs_data.level[(index+1):(index+2^DIM)])
+                    )
                         if vs_coarsen_flag(
                             ps_data.w,
                             U,
                             midpoint,
                             df,
-                            @view(vs_data.weight[index:index+2^DIM-1])
+                            @view(vs_data.weight[index:(index+2^DIM-1)])
                         )
                             midpoint_new =
                                 midpoint_coarsen(@view(midpoint[1, :]), first_level, ds)
@@ -211,7 +214,7 @@ function vs_coarsen!(DVM_data::DVM_Data)
                             index += 2^DIM - 1
                         end
                         if first_level > 1
-                            for i = 1:first_level-1
+                            for i = 1:(first_level-1)
                                 flag[i] += 1 / 2^(DIM * (first_level - i))
                             end
                         end
@@ -231,7 +234,7 @@ function vs_coarsen!(DVM_data::DVM_Data)
     end
 end
 function vs_coarsen_flag(w::AV, U::AV, midpoint::AM, df::AM, weight::AV)
-    for i = 1:2^DIM
+    for i = 1:(2^DIM)
         !vs_coarsen_flag(w, U, @view(midpoint[i, :]), @view(df[i, :]), weight[i]) &&
             return false
     end
@@ -247,20 +250,20 @@ function midpoint_coarsen(midpoint::AV, level::Int, ds::AV)
 end
 function df_coarsen(df::AM)
     df_new = zeros(NDF)
-    for i = 1:2^DIM
+    for i = 1:(2^DIM)
         df_new += @view(df[i, :])
     end
     df_new /= 2^DIM
     return df_new
 end
 function level_coarsen_replace!(level::AV, index::Int)
-    for _ = 1:2^DIM-1
+    for _ = 1:(2^DIM-1)
         deleteat!(level, index)
     end
     level[index] -= 1
 end
 function weight_coarsen_replace!(weight::AV, index::Int)
-    for _ = 1:2^DIM-1
+    for _ = 1:(2^DIM-1)
         deleteat!(weight, index)
     end
     weight[index] *= 2^DIM
@@ -272,7 +275,7 @@ function midpoint_coarsen_replace!(
     index::Int,
 )
     for i = 1:DIM
-        for _ = 1:2^DIM-1
+        for _ = 1:(2^DIM-1)
             deleteat!(lnmidpoint, (i - 1) * (vs_num) + index)
         end
         lnmidpoint[(i-1)*(vs_num)+index] = midpoint_new[i]
@@ -280,17 +283,17 @@ function midpoint_coarsen_replace!(
 end
 function df_coarsen_replace!(lndf::AV, df_new::AV, vs_num::Int, index::Int)
     for i = 1:DIM
-        for _ = 1:2^DIM-1
+        for _ = 1:(2^DIM-1)
             deleteat!(lndf, (i - 1) * (vs_num) + index)
         end
         lndf[(i-1)*(vs_num)+index] = df_new[i]
     end
 end
 function sdf_coarsen_replace!(lnsdf::AV)
-    deleteat!(lnsdf, 1:(2^DIM-1)*NDF*DIM)
+    deleteat!(lnsdf, 1:((2^DIM-1)*NDF*DIM))
 end
 function flux_coarsen_replace!(lnflux::AV)
-    deleteat!(lnflux, 1:(2^DIM-1)*NDF)
+    deleteat!(lnflux, 1:((2^DIM-1)*NDF))
 end
 
 function pre_vs_refine!(trees::Trees, global_data::Global_Data)

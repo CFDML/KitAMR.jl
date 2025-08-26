@@ -77,8 +77,8 @@ function reshape_solutions(
     itp = scipy[].interpolate.CloughTocher2DInterpolator(midpoints, z)
     dx = (xmax - xmin) / Nx / 2^DVM_PS_MAXLEVEL
     dy = (ymax - ymin) / Ny / 2^DVM_PS_MAXLEVEL
-    X = collect(xmin+EPS+dx/2:dx:xmax-EPS-dx/2)
-    Y = collect(ymin+EPS+dy/2:dy:ymax-EPS-dy/2)
+    X = collect((xmin+EPS+dx/2):dx:(xmax-EPS-dx/2))
+    Y = collect((ymin+EPS+dy/2):dy:(ymax-EPS-dy/2))
     pyZ = np[].zeros((length(X), length(Y)))
     for i in eachindex(X)
         for j in eachindex(Y)
@@ -96,10 +96,16 @@ function collect_mesh(DVM_data::DVM_Data)
     return meshes
 end
 function mesh_plot(x::AV, y::AV, ax::Axis)
-    for i = 1:Int(length(x) / 2)
+    for i = 1:Int(length(x)/2)
         # x1 = x[2*i-1];x2 = x[2*i]
         # y1 = y[2*i-1];y2 = y[2*i]
-        lines!(ax, @view(x[2*i-1:2*i]), @view(y[2*i-1:2*i]), color = :red, linewidth = 0.5)
+        lines!(
+            ax,
+            @view(x[(2*i-1):(2*i)]),
+            @view(y[(2*i-1):(2*i)]),
+            color = :red,
+            linewidth = 0.5,
+        )
     end
 end
 function communicate_mesh(mesh_points::T, num_faces) where {T}
@@ -272,7 +278,7 @@ end
 
 function read_results(name::String, comm_size::Int)
     results = JLD2.load_object(name * "_0.jld")
-    for i = 1:comm_size-1
+    for i = 1:(comm_size-1)
         append!(results, JLD2.load_object(name * "_" * string(i) * ".jld"))
     end
     return results
@@ -457,7 +463,7 @@ function read_result_at_index!(
     fields = Vector{Field}(undef, 0)
     mesh_x = Vector{Float64}(undef, 0)
     mesh_y = Vector{Float64}(undef, 0)
-    for j = 0:mpi_size-1
+    for j = 0:(mpi_size-1)
         PS_results = JLD2.load_object(
             "./result/PS_result/" * string(index) * "/" * string(j) * ".jld",
         )
@@ -498,8 +504,8 @@ function reshape_solutions_vs(midpoint::AM, df::AM, global_data::Global_Data)
     itp = scipy[].interpolate.CloughTocher2DInterpolator(midpoint, PyArray(z))
     dx = (xmax - xmin) / Nx / 2^DVM_VS_MAXLEVEL
     dy = (ymax - ymin) / Ny / 2^DVM_VS_MAXLEVEL
-    X = collect(xmin+EPS+dx/2:dx:xmax-EPS-dx/2)
-    Y = collect(ymin+EPS+dy/2:dy:ymax-EPS-dy/2)
+    X = collect((xmin+EPS+dx/2):dx:(xmax-EPS-dx/2))
+    Y = collect((ymin+EPS+dy/2):dy:(ymax-EPS-dy/2))
     pyZ = np[].zeros((length(X), length(Y)))
     for i in eachindex(X)
         for j in eachindex(Y)
@@ -514,7 +520,7 @@ function read_vs_result(global_data::Global_Data, nframes::Int, mpi_size::Int)
     mesh_ys = Vector{Vector{Float64}}(undef, 0)
     hs = Vector{Matrix{Float64}}(undef, 0)
     x, y, _ = read_vs_result_at_index!(0, global_data, mesh_xs, mesh_ys, hs, mpi_size)
-    for i = 1:nframes-1
+    for i = 1:(nframes-1)
         read_vs_result_at_index!(i, global_data, mesh_xs, mesh_ys, hs, mpi_size)
     end
     return x, y, mesh_xs, mesh_ys, hs
@@ -561,7 +567,7 @@ function vsresult2animation()
         mesh_y = mesh_ys[$index+1]
         mesh_plot(mesh_x, mesh_y, ax)
     end
-    index_iter = 0:nframes-1
+    index_iter = 0:(nframes-1)
 
     record(f, "VS_field.mp4", index_iter; framerate = framerate) do i
         index[] = i
@@ -586,7 +592,7 @@ function mat_3d()
     mesh_v = Vector{Float64}(undef, 0)
     mesh_x = Vector{Float64}(undef, 0)
     dir_path = "./result/VS_result/end"
-    for i = 0:mpi_size-1
+    for i = 0:(mpi_size-1)
         vs_results = JLD2.load_object(dir_path * "/" * string(i) * ".jld")
         isempty(vs_results) && continue
         for j in eachindex(vs_results)
@@ -600,13 +606,13 @@ function mat_3d()
     Nx, _ = global_data.trees_num
     xmin, xmax, _, _ = global_data.geometry
     dx = (xmax - xmin) / Nx / 2^DVM_PS_MAXLEVEL
-    gridX = collect(xmin+dx/2:dx:xmax-dx/2)
+    gridX = collect((xmin+dx/2):dx:(xmax-dx/2))
     Nu, Nv = global_data.vs_trees_num
     umin, umax, vmin, vmax = global_data.quadrature
     du = (umax - umin) / Nu / 2^DVM_VS_MAXLEVEL
     dv = (vmax - vmin) / Nv / 2^DVM_VS_MAXLEVEL
-    gridU = collect(umin+du/2:du:umax-du/2)
-    gridV = collect(vmin+dv/2:dv:vmax-dv/2)
+    gridU = collect((umin+du/2):du:(umax-du/2))
+    gridV = collect((vmin+dv/2):dv:(vmax-dv/2))
     file = matopen("mat_3d.mat", "w")
     write(file, "u", u)
     write(file, "v", v)

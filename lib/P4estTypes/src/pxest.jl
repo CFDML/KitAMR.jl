@@ -213,6 +213,7 @@ and `X=8` indicates an octant; quadrant is used both as the general
 term and the term for the 2D object).
 
 # Fields
+
 $(DocStringExtensions.FIELDS)
 """
 struct QuadrantWrapper{X,P}
@@ -308,6 +309,7 @@ end
 Stores the quadrants in a tree of a Pxest{X}.
 
 # Fields
+
 $(DocStringExtensions.FIELDS)
 """
 struct Tree{X,P,Q} <: AbstractArray{QuadrantWrapper,1}
@@ -357,19 +359,21 @@ So, each rank will only have access to the quadrants it owns.) Second, using
 forest via callback functions.
 
 # Fields
+
 $(DocStringExtensions.FIELDS)
 
 # See also
-- [`pxest`](@ref): a function that constructs a `Pxest` from a [`Connectivity`](@ref).
-- [`iterateforest`](@ref): a function to iterate over the volumes, faces, edges, and
-  corners of the forest.
-- [`refine!`](@ref): refine the quadrants of the forest.
-- [`coarsen!`](@ref): coarsen the quadrants of the forest.
-- [`balance!`](@ref): two-to-one balance the quadrants of the forest.
-- [`partition!`](@ref): partition the quadrants of the forest.
-- [`ghostlayer`](@ref): get the ghost layer of quadrants for the forest.
-- [`lnodes`](@ref): get a global node numbering.
-- [`P4estTypes.savevtk`](@ref): save a VTK representation of the forest.
+
+  - [`pxest`](@ref): a function that constructs a `Pxest` from a [`Connectivity`](@ref).
+  - [`iterateforest`](@ref): a function to iterate over the volumes, faces, edges, and
+    corners of the forest.
+  - [`refine!`](@ref): refine the quadrants of the forest.
+  - [`coarsen!`](@ref): coarsen the quadrants of the forest.
+  - [`balance!`](@ref): two-to-one balance the quadrants of the forest.
+  - [`partition!`](@ref): partition the quadrants of the forest.
+  - [`ghostlayer`](@ref): get the ghost layer of quadrants for the forest.
+  - [`lnodes`](@ref): get a global node numbering.
+  - [`P4estTypes.savevtk`](@ref): save a VTK representation of the forest.
 """
 mutable struct Pxest{X,P,C} <: AbstractArray{Tree,1}
     """The pointer (of type `P`) can be a pointer to either a

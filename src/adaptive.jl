@@ -75,7 +75,7 @@ function replace_PS(::Val{1}, out_quad, in_quads, which_tree, DVM_data::DVM_Data
     )
     index = findfirst(x -> x === Odata, datas)
     deleteat!(datas, index)
-    for i = 1:2^DIM
+    for i = 1:(2^DIM)
         pw_in_quad = PointerWrapper(in_quads[i])
         dp = PointerWrapper(P4est_PS_Data, pw_in_quad.p.user_data[])
         ps_data = PS_copy(Odata)
@@ -96,7 +96,7 @@ function replace_PS(::Val{2^DIM}, out_quad, in_quads, which_tree, DVM_data::DVM_
     pw_in_quad = PointerWrapper(in_quads[1])
     dp = PointerWrapper(P4est_PS_Data, pw_in_quad.p.user_data[])
     Odatas = Vector{PS_Data}(undef, 2^DIM)
-    for i = 1:2^DIM
+    for i = 1:(2^DIM)
         pw_out_quad = PointerWrapper(out_quad[i])
         Odatas[i] = unsafe_pointer_to_objref(
             pointer(PointerWrapper(P4est_PS_Data, pw_out_quad.p.user_data[]).ps_data),
@@ -114,7 +114,7 @@ function replace_PS(::Val{2^DIM}, out_quad, in_quads, which_tree, DVM_data::DVM_
     end
     ps_data.ds .*= 2.0
     index = findfirst(x -> x === Odatas[1], datas)
-    deleteat!(datas, index:index+2^DIM-1)
+    deleteat!(datas, index:(index+2^DIM-1))
     insert!(datas, index, ps_data)
     dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
 end
@@ -159,7 +159,7 @@ end
 function coarsen_flag_PS(ps_datas::Vector{PS_Data}, levels::Vector{Int}, DVM_data::DVM_Data)
     global_data = DVM_data.global_data
     flag = Cint(1)
-    for i = 1:2^DIM
+    for i = 1:(2^DIM)
         if boundary_flag(DVM_data, ps_datas[i])
             return Cint(0)
         end
@@ -181,7 +181,7 @@ function p4est_coarsen_flag(forest::Ptr{p4est_t}, which_tree, quadrants)
         quadrants_wrap = unsafe_wrap(Vector{Ptr{p4est_quadrant_t}}, quadrants, 2^DIM)
         levels = Vector{Int}(undef, 2^DIM)
         ps_datas = Vector{PS_Data}(undef, 2^DIM)
-        for i = 1:2^DIM
+        for i = 1:(2^DIM)
             qp = PointerWrapper(quadrants_wrap[i])
             dp = PointerWrapper(P4est_PS_Data, qp.p.user_data[])
             levels[i] = qp.level[]

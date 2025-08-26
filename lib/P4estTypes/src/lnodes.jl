@@ -4,10 +4,12 @@
 Stores a parallel numbering of Lobatto nodes for a `Pxest{X}`.
 
 # Fields
+
 $(DocStringExtensions.FIELDS)
 
 # See also
-- [`lnodes`](@ref): a function used to construct `LNodes`
+
+  - [`lnodes`](@ref): a function used to construct `LNodes`
 """
 mutable struct LNodes{X,P}
     """The pointer (of type `P`) can be a pointer to either a

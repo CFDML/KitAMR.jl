@@ -184,7 +184,7 @@ function update_slope_Rbound_vs!(
     dir::Int,
 )
     sL = zeros(Float64, vs_data.vs_num, NDF)
-    for j = 1:2^(DIM-1)
+    for j = 1:(2^(DIM-1))
         L_data = L_datas[j].vs_data
         diff_L!(vs_data, L_data, 0.75 * dsL, sL)
     end
@@ -197,7 +197,7 @@ function update_slope_Lbound_vs!(
     dir::Int,
 )
     sR = zeros(Float64, vs_data.vs_num, NDF)
-    for j = 1:2^(DIM-1)
+    for j = 1:(2^(DIM-1))
         R_data = R_datas[j].vs_data
         diff_R!(vs_data, R_data, 0.75 * dsR, sR)
     end
@@ -213,7 +213,7 @@ function update_slope_inner!(
     dir::Integer,
 ) where {T1<:AbstractPsData,T2<:Array}
     sw = zeros(Float64, DIM + 2)
-    for i = 1:2^(DIM-1)
+    for i = 1:(2^(DIM-1))
         sw .+= (ps_data.w - Ldata[i].w)
     end
     sw ./= 2^(DIM - 1) * 0.75 * ps_data.ds[dir]
@@ -232,7 +232,7 @@ function update_slope_inner!(
     dir::Integer,
 ) where {T1<:AbstractPsData,T2<:Array}
     sw = zeros(Float64, DIM + 2)
-    for i = 1:2^(DIM-1)
+    for i = 1:(2^(DIM-1))
         sw .+= (Rdata[i].w - ps_data.w)
     end
     sw ./= 2^(DIM - 1) * 0.75 * ps_data.ds[dir]
@@ -304,7 +304,7 @@ function update_slope_inner!(
     dir::Integer,
 ) where {T1<:AbstractPsData,T2<:Array}
     wR = zeros(DIM + 2)
-    for i = 1:2^(DIM-1)
+    for i = 1:(2^(DIM-1))
         wR += Rdata[i].w
     end
     # sw = (wR./2^(DIM-1)-Ldata[1].w)./(1.75*ps_data.ds[dir])
@@ -327,7 +327,7 @@ function update_slope_inner!(
     dir::Integer,
 ) where {T1<:AbstractPsData,T2<:Array}
     wL = zeros(DIM + 2)
-    for i = 1:2^(DIM-1)
+    for i = 1:(2^(DIM-1))
         wL += Ldata[i].w
     end
     # sw = (Rdata[1].w-wL./2^(DIM-1))./(1.75*ps_data.ds[dir])
@@ -351,7 +351,7 @@ function update_slope_inner!(
 ) where {T1<:AbstractPsData,T2<:Array}
     wL = zeros(DIM + 2)
     wR = zeros(DIM + 2)
-    for i = 1:2^(DIM-1)
+    for i = 1:(2^(DIM-1))
         wL += Ldata[i].w
         wR += Rdata[i].w
     end
@@ -432,7 +432,7 @@ function update_slope_inner!(
     dir::Integer,
 ) where {T1<:AbstractPsData,T2<:Array}
     wL = zeros(DIM + 2)
-    for i = 1:2^(DIM-1)
+    for i = 1:(2^(DIM-1))
         wL += Ldata[i].w
     end
     # sw = (Rdata[1].w-wL/2^(DIM-1))./(2.25*ps_data.ds[dir])
@@ -455,7 +455,7 @@ function update_slope_inner!(
     dir::Integer,
 ) where {T1<:AbstractPsData,T2<:Array}
     wR = zeros(DIM + 2)
-    for i = 1:2^(DIM-1)
+    for i = 1:(2^(DIM-1))
         wR += Rdata[i].w
     end
     ds = ps_data.ds[dir]
