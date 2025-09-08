@@ -147,7 +147,7 @@ function initialize_neighbor_data!(ip::PointerWrapper{p4est_iter_volume_info_t},
             i - 1,
         )
     end
-    if ps_data.bound_enc<0
+    if ps_data.bound_enc>0
         for i in 4:7 # Corners are indexed with z-order, as well.
             data,state = access_neighbor(
                 pointer(ip.p4est),
@@ -174,7 +174,7 @@ function initialize_neighbor_data!(ip::PointerWrapper{p8est_iter_volume_info_t},
             i - 1,
         )
     end
-    if ps_data.bound_enc<0
+    if ps_data.bound_enc>0
         for i in 6:25 # Corners are indexed with z-order, as well.
             data,state = access_neighbor(
                 pointer(ip.p4est),
@@ -227,7 +227,7 @@ function update_neighbor_kernel!(ip::PointerWrapper{p4est_iter_volume_info_t}, d
                 i,
             )
         end
-    elseif ps_data.bound_enc<0
+    elseif ps_data.bound_enc>0
         for i in 4:7
             data,state = access_neighbor(
                 pointer(ip.p4est),
@@ -264,7 +264,7 @@ function update_neighbor_kernel!(ip::PointerWrapper{p8est_iter_volume_info_t}, d
                 i,
             )
         end
-    elseif ps_data.bound_enc<0
+    elseif ps_data.bound_enc>0
         for i in 6:25
             data,state = access_neighbor(
                 pointer(ip.p4est),

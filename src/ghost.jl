@@ -344,9 +344,10 @@ function initialize_ghost_wrap(global_data::Global_Data{DIM,NDF}, ghost_exchange
         Array{AbstractGhostPsData}(undef, PointerWrapper(global_data.forest.ghost).ghosts.elem_count[])
     global_vs_num = global_data.status.max_vs_num
     for i in eachindex(ghost_wrap)
-        pq = iPointerWrapper(PointerWrapper(global_data.forest.ghost).ghosts, p4est_quadrant_t, i - 1)
-        owner_rank = pq.p.piggy1.owner_rank[]
+        pq = DIM==2 ? iPointerWrapper(PointerWrapper(global_data.forest.ghost).ghosts, p4est_quadrant_t, i - 1) : iPointerWrapper(PointerWrapper(global_data.forest.ghost).ghosts, p8est_quadrant_t, i - 1)
+        # owner_rank = pq.p.piggy1.owner_rank[] # Wrong! Why?
         which_tree = pq.p.piggy3.which_tree[];local_num = pq.p.piggy3.local_num[]
+        owner_rank = DIM==2 ? p4est_quadrant_find_owner(global_data.forest.p4est,which_tree,-1,pointer(pq)) : p8est_quadrant_find_owner(global_data.forest.p4est,which_tree,-1,pointer(pq))
         quadid = which_tree*2^(DIM*global_data.config.solver.AMR_PS_MAXLEVEL)+local_num
         p = ghost_data_ptr(
             size_Ghost_Data(global_vs_num,DIM,NDF),

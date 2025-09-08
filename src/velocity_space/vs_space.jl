@@ -25,3 +25,37 @@ end
 function init_VS(vs_data::VS_Data)
     return deepcopy(vs_data)
 end
+function vs_project!(df::AbstractMatrix,level::AbstractVector,tdf::AbstractVector,tlevel::AbstractVector,vs_data::AbstractVsData{DIM,NDF}) where{DIM,NDF}
+    tdf = reshape(tdf,:,NDF)
+    vs_project!(df,level,tdf,tlevel,vs_data)
+end
+function vs_project!(df::AbstractMatrix,level::AbstractVector,tdf::AbstractMatrix,tlevel::AbstractVector,::AbstractVsData{DIM,NDF}) where{DIM,NDF}
+    index = 1;flag = 0.
+    @inbounds for i in axes(tdf,1)
+        if tlevel[i]==level[index]
+            for j in 1:NDF
+                tdf[i,j] = df[index,j]
+            end
+            index += 1
+        elseif tlevel[i] < level[index]
+            tdf[i,:] .= 0.
+            while flag != 1.0
+                for j in 1:NDF
+                    tdf[i,j] += df[index,j]/2^(DIM*(level[index]-tlevel[i]))
+                end
+                flag += 1/2^(DIM*(level[index]-tlevel[i]))
+                index += 1
+            end
+            flag = 0.
+        else
+            for j in 1:NDF
+                tdf[i,j] = df[index,j]
+            end
+            flag += 1/2^(DIM*(tlevel[i]-level[index]))
+            if flag == 1.
+                index += 1
+                flag = 0.
+            end
+        end
+    end
+end

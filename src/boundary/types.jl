@@ -146,7 +146,51 @@ mutable struct Corner_Target_Neighbor_Transport
         n
     )
 end
+mutable struct Upwind2nd_Transport
+    mirror_datas::Vector{Vector{Float64}} # rank{collect_dfs}
+    mirror_ps_datas::Vector{AbstractPsData}
+    target_ps_datas::Vector{Ghost_PS_Data}
+    ranks_mirror_ids::Vector{Vector{Int}} # rank{mirror_ps_datas' id}
+    ghost_datas::Vector{Vector{Float64}}
+    ghost_ps_datas::Vector{Ghost_PS_Data}
+    solid_neighbors::Vector{SolidNeighbor}
+    ranks_sn_ids::Vector{Vector{Int}} # rank{ghost_datas' id}
+    ghost_ids::Vector{Vector{Int}}
+    local_upwind2nd::Vector{AbstractPsData}
+    local_solid_neighbor::Vector{SolidNeighbor}
+    Upwind2nd_Transport() = (n = new();
+        n.mirror_ps_datas = AbstractPsData[];
+        n.ranks_mirror_ids = [Int[] for _ in 1:MPI.Comm_size(MPI.COMM_WORLD)];
+        n.target_ps_datas = Ghost_PS_Data[]; # For mirror part.
+        n.ghost_ps_datas = Ghost_PS_Data[]; # For ghost part, the upwind1st.
+        n.solid_neighbors = SolidNeighbor[];
+        n.ranks_sn_ids = [Int[] for _ in 1:MPI.Comm_size(MPI.COMM_WORLD)];
+        n.mirror_datas = Vector{Vector{Float64}}(undef,MPI.Comm_size(MPI.COMM_WORLD));
+        n.ghost_datas = Vector{Vector{Float64}}(undef,MPI.Comm_size(MPI.COMM_WORLD));
+        n.ghost_ids = [Int[] for _ in 1:MPI.Comm_size(MPI.COMM_WORLD)];
+        n.local_upwind2nd = AbstractPsData[];
+        n.local_solid_neighbor = SolidNeighbor[];
+        n
+    )
+end
+mutable struct Pre_Upwind2nd_Transport
+    mirror_datas::Vector{Vector{Bool}} # rank{collect_dfs}
+    ghost_datas::Vector{Vector{Bool}}
+    ghost_ids::Vector{Vector{Int}}
+    ranks_ghost_ids::Vector{Vector{Int}} # rank{ghost_datas' id}
+    Pre_Upwind2nd_Transport() = (n = new();
+        n.ranks_ghost_ids = [Int[] for _ in 1:MPI.Comm_size(MPI.COMM_WORLD)];
+        n.mirror_datas = Vector{Vector{Bool}}(undef,MPI.Comm_size(MPI.COMM_WORLD));
+        for i in eachindex(n.mirror_datas)
+            n.mirror_datas[i] = Bool[]
+        end;
+        n.ghost_datas = Vector{Vector{Bool}}(undef,MPI.Comm_size(MPI.COMM_WORLD));
+        n.ghost_ids = [Int[] for _ in 1:MPI.Comm_size(MPI.COMM_WORLD)];
+        n
+    )
+end
 mutable struct ImmersedBoundary
-    ctnt::Corner_Target_Neighbor_Transport
+    # ctnt::Corner_Target_Neighbor_Transport
+    ut::Upwind2nd_Transport
     ImmersedBoundary() = new()
 end

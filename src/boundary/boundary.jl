@@ -13,7 +13,7 @@ function IB_prim(bc::AbstractVector,::AbstractVector,ρw::Real)
     prim[1] = ρw
     return prim
 end
-function calc_solid_cell_slope!(svdata::AbstractVsData{DIM,NDF},fvdata::VS_Data{DIM,NDF},smid::Vector{Float64},fmid::Vector{Float64},direction::Integer) where{DIM,NDF}
+function calc_solid_cell_slope!(svdata::AbstractVsData{DIM,NDF},fvdata::AbstractVsData{DIM,NDF},smid::Vector{Float64},fmid::Vector{Float64},direction::Integer) where{DIM,NDF}
     j = 1
     flag = 0.0
     level = svdata.level
@@ -46,47 +46,143 @@ function calc_solid_cell_slope!(svdata::AbstractVsData{DIM,NDF},fvdata::VS_Data{
     end
     sdf./=dx
 end
-function save_boundary_result!(ib::AbstractBoundary,ps_data,solid_neighbor::SolidNeighbor{DIM,NDF},boundary_results,amr::AMR{DIM,NDF}) where{DIM,NDF}
-    global_data = amr.global_data
-    vs_data = ps_data.vs_data
-    solid_cell = solid_neighbor.solid_cell;s_vs_data = solid_cell.vs_data
-    aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
-    vn = @views [dot(v,n) for v in eachrow(ps_data.vs_data.midpoint)]
-    Θ = heaviside.(vn)
-    dir = get_dir(solid_neighbor.faceid)
-    ib_point = aux_point+0.5*(ps_data.midpoint-solid_cell.midpoint)
-    ib_df =  @views vs_data.df+vs_data.sdf[:,:,dir]*(ib_point[dir]-ps_data.midpoint[dir])
-    aux_df = zeros(vs_data.vs_num,NDF)
-    vs_interpolate!(ib_df,vs_data.level,ib_point[dir],s_vs_data.df,
-        s_vs_data.level,solid_cell.midpoint[dir],aux_df,aux_point[dir],amr)
-    for i in eachindex(Θ)
-        if Θ==0&&vs_data.midpoint[i,dir]*rot>0
-            @views aux_df[i,:].=vs_data.df[i,:]
-            @views ib_df[i,:].=vs_data.df[i,:]
-            # vs_data.sdf[i,:,dir].= 0.
+
+function update_ghost_target_cells_slope!(ps_data::Ghost_PS_Data{DIM,NDF},nps_data::PS_Data{DIM,NDF},dir::Int) where{DIM,NDF}
+    df = ps_data.vs_data.df; sdf = @views ps_data.vs_data.sdf[:,:,dir]
+    ndf = nps_data.vs_data.df;nsdf = @views nps_data.vs_data.sdf[:,:,dir]
+    dx = ps_data.midpoint[dir]-nps_data.midpoint[dir]
+    level = ps_data.vs_data.level; level_n = nps_data.vs_data.level
+    index = 1;flag = 0.
+    @inbounds for i in axes(df,1)
+        if level[i]==level_n[index]
+            for j in axes(df,2)
+                sdf[i,j] = 2.0*(df[i,j]-ndf[index,j])/dx-nsdf[index,j]
+            end
+            index += 1
+        elseif level[i]<level_n[index]
+            sdf[i,:] .= 0.
+            while flag != 1.0
+                for j in axes(df,2)
+                    sdf[i,j] += (2.0*(df[i,j]-ndf[index,j])/dx-nsdf[index,j])/2^(DIM * (level_n[index] - level[i]))
+                end
+                flag += 1 / 2^(DIM * (level_n[index] - level[i]))
+                index += 1
+            end 
+            flag = 0.
+        else
+            for j in axes(df,2)
+                sdf[i,j] = 2.0*(df[i,j]-ndf[index,j])/dx-nsdf[index,j]
+            end
+            flag += 1 / 2^(DIM * (level[i] - level_n[index]))
+            if flag == 1.0
+                index += 1
+                flag = 0.0
+            end
         end
     end
+end
+# function save_boundary_result!(ib::AbstractBoundary,ps_data,solid_neighbor::SolidNeighbor{DIM,NDF},boundary_results,amr::AMR{DIM,NDF}) where{DIM,NDF}
+#     global_data = amr.global_data;ib = global_data.config.IB[ps_data.bound_enc]
+#     vs_data = ps_data.vs_data
+#     aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
+#     faceid = solid_neighbor.faceid;opp = faceid%2==0 ? faceid-1 : faceid+1
+#     dir = get_dir(faceid)
+#     # rot = get_rot(faceid)
+#     # solid_cell = solid_neighbor.solid_cell;s_vs_data = solid_cell.vs_data
+#     # dxL = 0.5*ps_data.ds[dir]
+#     # dxR = norm(solid_neighbor.midpoint-aux_point)
+#     vn = @views [dot(v,n) for v in eachrow(ps_data.vs_data.midpoint)]
+#     aux_df = zeros(vs_data.vs_num,NDF)
+#     # ib_point = aux_point+0.5*(ps_data.midpoint-solid_neighbor.midpoint)
+#     # ib_df =  @views vs_data.df+vs_data.sdf[:,:,dir]*(ib_point[dir]-ps_data.midpoint[dir])
+#     Θ = heaviside.(vn)
+#     # vs_interpolate!(ib_df,vs_data.level,ib_point[dir],solid_neighbor.ex_df,
+#         # vs_data.level,solid_neighbor.midpoint[dir],aux_df,aux_point[dir],amr)
+#     upwind1st = ps_data.neighbor.data[opp][1]
+#     upwind2nd_extrapolate!(ps_data,solid_neighbor,upwind1st,aux_df,Θ,faceid)
+#     # ib_df = vs_data.df+(2*aux_point[dir]-solid_neighbor.midpoint[dir]-ps_data.midpoint[dir])*(@views vs_data.sdf[:,:,dir])
+#     cvc_gas_correction!(aux_df,solid_neighbor)
+#     aux_prim = get_bc(ib.bc);aux_prim[1] = 1.
+#     M = discrete_maxwell(vs_data.midpoint,aux_prim,global_data)
+#     Mu_L,Mu_R = @views cvc_Mu(M[:,1],vn,Θ,solid_neighbor)
+#     ρw = cvc_density(aux_df,vn,Θ,solid_neighbor,Mu_R)
+#     aux_prim = IB_prim(ib,aux_point,ρw)
+#     F = aux_prim[1]*M
+#     for i in 1:vs_data.vs_num
+#         if Θ[i]==1.
+#             aux_df[i,:] .= @views F[i,:]
+#         end
+#     end
+#     cvc_correction!(aux_df,F,solid_neighbor,amr)
+
+#     #= AP Maxwell Prototype
+#     # end
+#     # s_prim = IB_prim(ib,aux_point,ρw)
+#     # for i in 1:vs_data.vs_num
+#     #     if Θ[i]==1.
+#     #         aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),s_prim,amr.global_data)
+#     #     end
+#     # end
+#     # cvc_correction!(aux_df,s_prim,vn,solid_neighbor,amr)
+#     =#
+#     aux_w = calc_w0(vs_data.midpoint,aux_df,vs_data.weight,global_data)
+#     aux_prim = get_prim(aux_w,global_data)
+#     aux_qf = calc_qf(vs_data.midpoint,aux_df,vs_data.weight,aux_prim,global_data)
+#     aux_p = calc_pressure(vs_data.midpoint,aux_df,vs_data.weight,global_data)
+#     push!(boundary_results[ps_data.bound_enc].midpoints,aux_point)
+#     push!(boundary_results[ps_data.bound_enc].normal,n)
+#     push!(boundary_results[ps_data.bound_enc].ps_solutions,Boundary_PS_Solution(aux_prim,aux_qf,aux_p))
+#     dir_path = "./boundary_vs"
+#     !isdir(dir_path) && mkpath(dir_path)
+#     if NDF==2
+#         @suppress write_vs_VTK(aux_df,vs_data,amr,dir_path*"/"*string(ps_data.midpoint)*string(n),["h","b"],fieldvalues_fn)
+#     elseif NDF==3
+#         @suppress write_vs_VTK(aux_df,vs_data,amr,dir_path*"/"*string(ps_data.midpoint)*string(n),["df"],fieldvalues_fn)
+#     end
+# end
+function save_boundary_result!(ib::AbstractBoundary,ps_data,solid_neighbor::SolidNeighbor{DIM,NDF},boundary_results,amr::AMR{DIM,NDF}) where{DIM,NDF}
+    global_data = amr.global_data;ib = global_data.config.IB[ps_data.bound_enc]
+    vs_data = ps_data.vs_data
+    aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
+    faceid = solid_neighbor.faceid
+    dir = get_dir(faceid)
+    # rot = get_rot(faceid)
+    # solid_cell = solid_neighbor.solid_cell;s_vs_data = solid_cell.vs_data
+    dxL = 0.5*ps_data.ds[dir]
+    dxR = norm(solid_neighbor.midpoint-aux_point)
+    vn = @views [dot(v,n) for v in eachrow(ps_data.vs_data.midpoint)]
+    aux_df = zeros(vs_data.vs_num,NDF)
+    ib_point = aux_point+0.5*(ps_data.midpoint-solid_neighbor.midpoint)
+    ib_df =  @views vs_data.df+vs_data.sdf[:,:,dir]*(ib_point[dir]-ps_data.midpoint[dir])
+    Θ = heaviside.(vn)
+    vs_interpolate!(ib_df,vs_data.level,ib_point[dir],solid_neighbor.ex_df,
+        vs_data.level,solid_neighbor.midpoint[dir],aux_df,aux_point[dir],amr)
+    
+    # vs_implicit_interpolate!(ib_df,vs_data.level,ib_point[dir],s_vs_data.df,
+    #     s_vs_data.level,solid_cell.midpoint[dir],aux_df,aux_point[dir],vn,amr)
+    # stability_correction!(aux_df,ps_data,ps_data.neighbor.data[Int(faceid+off)][1],dxL,dxR,dir,global_data)
+    # for i in eachindex(Θ)
+    #     if Θ==0&&vs_data.midpoint[i,dir]*rot>0
+    #         @views aux_df[i,:].=vs_data.df[i,:]
+    #         # vs_data.sdf[i,:,dir].= 0.
+    #     end
+    # end
     cvc_gas_correction!(aux_df,solid_neighbor)
     aux_prim = get_bc(ib.bc);aux_prim[1] = 1.
     M = discrete_maxwell(vs_data.midpoint,aux_prim,global_data)
     Mu_L,Mu_R = @views cvc_Mu(M[:,1],vn,Θ,solid_neighbor)
     ρw = cvc_density(aux_df,vn,Θ,solid_neighbor,Mu_R)
-    #= Non-CVC
     # ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
-    =#
     aux_prim = IB_prim(ib,aux_point,ρw)
-    w0 = calc_w0(vs_data.midpoint,aux_df,vs_data.weight,global_data)
-    #= AP Maxwell Prototype
-    prim0 = get_prim(w0,global_data)
+    # w0 = calc_w0(vs_data.midpoint,aux_df,vs_data.weight,global_data)
+    # prim0 = get_prim(w0,global_data)
     # for i in 1:vs_data.vs_num
     #     if Θ[i]==1.
     #         aux_df[i,:] .= discrete_maxwell(@view(vs_data.midpoint[i,:]),aux_prim,amr.global_data)
     #     end
     # end
     # cvc_correction!(aux_df,aux_prim,vn,solid_neighbor,amr)
-    =#
     F = aux_prim[1]*M
-    #= AP Maxwell Prototype
     # if 1/prim0[end]>1e-6
     #     gas = global_data.config.gas
     #     τ0 = get_τ(prim0, gas.μᵣ, gas.ω)
@@ -111,7 +207,6 @@ function save_boundary_result!(ib::AbstractBoundary,ps_data,solid_neighbor::Soli
     #     end
     #     cvc_correction!(aux_df,F,A,solid_neighbor,amr)
     # else
-    =#
         for i in 1:vs_data.vs_num
             if Θ[i]==1.
                 aux_df[i,:] .= F[i,:]
@@ -375,6 +470,57 @@ function update_solid_cell!(::Union{DVM,CAIDVM,UGKS},ps_data::PS_Data{DIM,NDF},f
     ps_data.w = calc_w0(ps_data)
     ps_data.prim = get_prim(ps_data,amr.global_data)
 end
+function update_ex_df!(::Union{DVM,CAIDVM,UGKS},ps_data::PS_Data{DIM,NDF},sn::SolidNeighbor{DIM,NDF},amr::AMR{DIM,NDF}) where{DIM,NDF}
+    vs_data = ps_data.vs_data
+    corner_neighbors = [x[1] for x in ps_data.neighbor.data]
+    fluid_dirs = findall(x->!(isa(x,AbstractInsideSolidData)||x.bound_enc<0)&&dot(x.midpoint-ps_data.midpoint,sn.midpoint-ps_data.midpoint)>-EPS,corner_neighbors)
+    # fluid_dirs = findall(x->!(isa(x,AbstractInsideSolidData)||x.bound_enc<0),corner_neighbors)
+    sn.ex_df.=0.;weights = Matrix{Float64}(undef,vs_data.vs_num,length(fluid_dirs)+1)
+    for i in eachindex(fluid_dirs)
+        fluid_cell = corner_neighbors[fluid_dirs[i]]
+        l = ps_data.midpoint-fluid_cell.midpoint;l/=norm(l)
+        weights[:,i] .= [max(0.,dot(u,l)/norm(u))^2 for u in eachrow(vs_data.midpoint)]
+    end
+    l = sn.midpoint-ps_data.midpoint;l/=norm(l)
+    weights[:,end] .= [max(0.,dot(u,l)/norm(u))^2 for u in eachrow(vs_data.midpoint)]
+
+
+    weight_i = Vector{Float64}(undef,vs_data.vs_num)
+    weight_sum = sum(weights,dims=2)
+    for i in eachindex(fluid_dirs)
+        fluid_cell = corner_neighbors[fluid_dirs[i]]
+        f_vs_data = fluid_cell.vs_data
+        for j in eachindex(weight_i)
+            weight_i[j] = weight_sum[j]==0. ? 1.0/(length(fluid_dirs)+1) : weights[j,i]/weight_sum[j]
+        end
+        fdf = f_vs_data.df;fsdf = f_vs_data.sdf;dx = sn.midpoint-fluid_cell.midpoint
+        # if amr.global_data.status.sim_time>4.0
+        #     error_index = findall(x->x==0.,fsdf);error_num = length(error_index)
+        #     @show error_num
+        # end
+        vs_extrapolate!(fdf,fsdf,f_vs_data.level,sn.ex_df,vs_data.level,dx,weight_i,amr)
+    end
+    f_vs_data = ps_data.vs_data
+    for j in eachindex(weight_i)
+        weight_i[j] = weight_sum[j]==0. ? 1.0/(length(fluid_dirs)+1) : weights[j,end]/weight_sum[j]
+    end
+    fdf = f_vs_data.df;fsdf = f_vs_data.sdf;dx = sn.midpoint-ps_data.midpoint
+    vs_extrapolate!(fdf,fsdf,f_vs_data.level,sn.ex_df,vs_data.level,dx,weight_i,amr)
+end
+function update_ex_df!(ps_data,amr::AMR{DIM,NDF}) where{DIM,NDF}
+    solid_dirs = findall(x->!isa(x[1],AbstractInsideSolidData)&&x[1].bound_enc<0,ps_data.neighbor.data[1:2*DIM])
+    for dir in solid_dirs
+        update_ex_df!(amr.global_data.config.solver.flux,ps_data,ps_data.neighbor.data[dir][1],amr)
+    end
+end
+function update_ex_df!(amr::AMR)
+    for tree in amr.field.trees.data
+        for ps_data in tree
+            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<=0)&&continue
+            update_ex_df!(ps_data,amr)
+        end
+    end
+end
 # function update_solid_cell!(::UGKS,ps_data::PS_Data{2,NDF},fluid_cells::Vector,amr::AMR{2,NDF}) where{NDF}
 #     vs_data = ps_data.vs_data;vs_data.df.=0.;ps_data.w .= 0.
 #     weights = Matrix{Float64}(undef,vs_data.vs_num,length(fluid_cells))
@@ -490,7 +636,7 @@ function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF})
         )
         cvc = initialize_cutted_velocity_cell(normal,svsdata,amr) # heavy overhead
         ps_data.neighbor.data[i][1] = SolidNeighbor{DIM,NDF}(
-            solid_cell.bound_enc,i,0,aux_point,normal,solid_cell,solid_cell.midpoint,solid_cell.ds,zeros(DIM+2),zeros(DIM+2,DIM),cvc,svsdata
+            solid_cell.bound_enc,i,aux_point,normal,solid_cell.midpoint,solid_cell.ds,zeros(DIM+2),zeros(DIM+2,DIM),zeros(vs_data.vs_num,NDF),zeros(vs_data.vs_num,NDF),cvc,svsdata
         )
     end
     return nothing
@@ -713,27 +859,27 @@ function update_solid_neighbor!(::AbstractFluxType,ps_data::PS_Data{DIM,NDF},sol
     aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
     faceid = solid_neighbor.faceid
     dir = get_dir(faceid)
-    rot = get_rot(faceid)
-    solid_cell = solid_neighbor.solid_cell;s_vs_data = solid_cell.vs_data
+    # rot = get_rot(faceid)
+    # solid_cell = solid_neighbor.solid_cell;s_vs_data = solid_cell.vs_data
     dxL = 0.5*ps_data.ds[dir]
-    dxR = norm(solid_cell.midpoint-aux_point)
+    dxR = norm(solid_neighbor.midpoint-aux_point)
     vn = @views [dot(v,n) for v in eachrow(ps_data.vs_data.midpoint)]
     aux_df = zeros(vs_data.vs_num,NDF)
-    ib_point = aux_point+0.5*(ps_data.midpoint-solid_cell.midpoint)
+    ib_point = aux_point+0.5*(ps_data.midpoint-solid_neighbor.midpoint)
     ib_df =  @views vs_data.df+vs_data.sdf[:,:,dir]*(ib_point[dir]-ps_data.midpoint[dir])
     Θ = heaviside.(vn)
-    vs_interpolate!(ib_df,vs_data.level,ib_point[dir],s_vs_data.df,
-        s_vs_data.level,solid_cell.midpoint[dir],aux_df,aux_point[dir],amr)
+    vs_interpolate!(ib_df,vs_data.level,ib_point[dir],solid_neighbor.ex_df,
+        vs_data.level,solid_neighbor.midpoint[dir],aux_df,aux_point[dir],amr)
     
     # vs_implicit_interpolate!(ib_df,vs_data.level,ib_point[dir],s_vs_data.df,
     #     s_vs_data.level,solid_cell.midpoint[dir],aux_df,aux_point[dir],vn,amr)
     # stability_correction!(aux_df,ps_data,ps_data.neighbor.data[Int(faceid+off)][1],dxL,dxR,dir,global_data)
-    for i in eachindex(Θ)
-        if Θ==0&&vs_data.midpoint[i,dir]*rot>0
-            @views aux_df[i,:].=vs_data.df[i,:]
-            # vs_data.sdf[i,:,dir].= 0.
-        end
-    end
+    # for i in eachindex(Θ)
+    #     if Θ==0&&vs_data.midpoint[i,dir]*rot>0
+    #         @views aux_df[i,:].=vs_data.df[i,:]
+    #         # vs_data.sdf[i,:,dir].= 0.
+    #     end
+    # end
     cvc_gas_correction!(aux_df,solid_neighbor)
     aux_prim = get_bc(ib.bc);aux_prim[1] = 1.
     M = discrete_maxwell(vs_data.midpoint,aux_prim,global_data)
@@ -818,19 +964,60 @@ function average_corner_solid_neighbor!(ps_data::PS_Data{DIM,NDF}) where{DIM,NDF
         end
     end
 end
-function update_target_cells_slope!(amr::AMR{DIM,NDF}) where{DIM,NDF}
-    for tree in amr.field.trees.data
-        for ps_data in tree
-            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<=0)&&continue
-            faceid = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
-            for id in faceid
-                dir = cld(id,2)
-                vs_data = ps_data.vs_data
-                sn_data = ps_data.neighbor.data[id][1]
-                sn_df = sn_data.vs_data.df
-                sL = @views vs_data.sdf[:,:,dir]
-                sR = @. (sn_df-vs_data.df)/(sn_data.midpoint[dir]-ps_data.midpoint[dir])
-                vs_data.sdf[:,:,dir] .= vanleer(sL,sR)
+# function update_target_cells_slope!(amr::AMR{DIM,NDF}) where{DIM,NDF}
+#     for tree in amr.field.trees.data
+#         for ps_data in tree
+#             (isa(ps_data,InsideSolidData)||ps_data.bound_enc<=0)&&continue
+#             faceid = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
+#             for id in faceid
+#                 dir = cld(id,2)
+#                 vs_data = ps_data.vs_data
+#                 sn_data = ps_data.neighbor.data[id][1]
+#                 sn_df = sn_data.vs_data.df
+#                 # sL = @views vs_data.sdf[:,:,dir]
+#                 sR = @. (sn_df-vs_data.df)/(sn_data.midpoint[dir]-ps_data.midpoint[dir])
+#                 # vs_data.sdf[:,:,dir] .= vanleer(sL,sR)
+#                 vs_data.sdf[:,:,dir] .= sR
+#             end
+#         end
+#     end
+# end
+function update_target_cells_slope!(ps_data::PS_Data{DIM,NDF},nps_data::AbstractPsData,Θ::Vector{Bool},faceid::Int) where{DIM,NDF}
+    dir = get_dir(faceid)
+    df = ps_data.vs_data.df; sdf = @views ps_data.vs_data.sdf[:,:,dir]
+    ndf = nps_data.vs_data.df;nsdf = @views nps_data.vs_data.sdf[:,:,dir]
+    dx = ps_data.midpoint[dir]-nps_data.midpoint[dir]
+    level = ps_data.vs_data.level; level_n = nps_data.vs_data.level
+    index = 1;flag = 0.
+    @inbounds for i in axes(df,1)
+        if level[i]==level_n[index]
+            for j in axes(df,2)
+                # s1 = (df[i,j]-ndf[index,j])/dx
+                # s2 = s1-nsdf[index,j]
+                # s = 2.0*(df[i,j]-ndf[index,j])/dx-nsdf[index,j]
+                # s = s1+s2
+                # sdf[i,j] = s1+0.5*(sign(s)+sign(nsdf[index,j]))*sign(s)*s2
+                sdf[i,j] = Θ[i] ? 2.0*(df[i,j]-ndf[index,j])/dx-nsdf[index,j] : (df[i,j]-ndf[index,j])/dx
+            end
+            index += 1
+        elseif level[i]<level_n[index]
+            sdf[i,:] .= 0.
+            while flag != 1.0
+                for j in axes(df,2)
+                    sdf[i,j] += (2.0*(df[i,j]-ndf[index,j])/dx-nsdf[index,j])/2^(DIM * (level_n[index] - level[i]))
+                end
+                flag += 1 / 2^(DIM * (level_n[index] - level[i]))
+                index += 1
+            end 
+            flag = 0.
+        else
+            for j in axes(df,2)
+                sdf[i,j] = 2.0*(df[i,j]-ndf[index,j])/dx-nsdf[index,j]
+            end
+            flag += 1 / 2^(DIM * (level[i] - level_n[index]))
+            if flag == 1.0
+                index += 1
+                flag = 0.0
             end
         end
     end
@@ -838,6 +1025,8 @@ end
 function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF}) where{DIM,NDF}
     solid_neighbors = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
     for i in solid_neighbors
+        # opp = i%2==0 ? i-1 : i+1
+        # update_target_cells_slope!(ps_data,ps_data.neighbor.data[opp][1],i)
         update_solid_neighbor!(amr.global_data.config.solver.flux,ps_data,ps_data.neighbor.data[i][1],amr)
     end
 end
@@ -849,7 +1038,7 @@ function update_solid_neighbor!(amr::AMR{DIM,NDF};buffer_steps::Int=0,i::Int = t
         end
     end
     # if i > buffer_steps
-    #     update_target_cells_slope!(amr)
+        # update_target_cells_slope!(amr)
     # end
     #= Corner target neighbor communication for better smoothness but improve little. Maybe an implicit iteration is a btter choice.
     # corner_target_neighbor_exchange!(amr)
@@ -863,6 +1052,7 @@ function update_solid_neighbor!(amr::AMR{DIM,NDF};buffer_steps::Int=0,i::Int = t
 end
 function update_solid!(amr::AMR{DIM,NDF}) where{DIM,NDF}
     initialize_solid_neighbor!(amr)
+    initialize_upwind2nd!(amr)
 end
 function reinit_solid_neighbor!(amr::AMR)
     for tree in amr.field.trees.data
@@ -981,4 +1171,295 @@ end
 function corner_target_neighbor_exchange!(amr::AMR)
     update_mirror_data!(amr.field.immersed_boundary.ctnt,amr)
     corner_target_neighbor_exchange!(amr.field.immersed_boundary.ctnt)
+end
+function initialize_pre_upwind2nd!(amr)
+
+end
+function initialize_upwind2nd!(amr::AMR{DIM,NDF}) where{DIM,NDF}
+    put = Pre_Upwind2nd_Transport()
+    ut = Upwind2nd_Transport()
+    for tree in amr.field.trees.data
+        for ps_data in tree
+            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0)&&continue
+            if ps_data.bound_enc>0
+                solid_dirs = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
+                ghost_dirs = findall(x->isa(x[1],Ghost_PS_Data),ps_data.neighbor.data[1:2*DIM])
+                for i in ghost_dirs
+                    opp = i%2==0 ? i-1 : i+1
+                    flag = isa(ps_data.neighbor.data[opp][1],SolidNeighbor)
+                    push!(put.mirror_datas[ps_data.neighbor.data[i][1].owner_rank+1],flag)
+                end
+                for i in solid_dirs
+                    opp = i%2==0 ? i-1 : i+1
+                    upwind1st = ps_data.neighbor.data[opp][1]
+                    solid_neighbor = ps_data.neighbor.data[i][1]
+                    if isa(upwind1st,AbstractGhostPsData)
+                        push!(ut.solid_neighbors,solid_neighbor) # The solid_neighbors requiring the upwind2nd df.
+                        push!(ut.ghost_ps_datas,upwind1st)
+                        push!(ut.ranks_sn_ids[upwind1st.owner_rank+1],length(ut.solid_neighbors))
+                        push!(ut.ghost_ids[upwind1st.owner_rank+1],upwind1st.ghost_id*DIM+get_dir(i))
+                    else
+                        upwind2nd = upwind1st.neighbor.data[opp][1]
+                        df2 = upwind2nd.vs_data.df
+                        level2 = upwind2nd.vs_data.level
+                        vs_project!(df2,level2,solid_neighbor.upwind2nd_df,solid_neighbor.vs_data.level,upwind2nd.vs_data)
+                    end
+                end
+            end
+                target_dirs = findall(x->!isa(x[1],Nothing)&&!isa(x[1],AbstractInsideSolidData)&&x[1].bound_enc>0,ps_data.neighbor.data[1:2*DIM])
+                for i in target_dirs
+                    opp = i%2==0 ? i-1 : i+1
+                    target_cell = ps_data.neighbor.data[i][1]
+                    upwind2nd = ps_data.neighbor.data[opp][1]
+                    if isa(target_cell,Ghost_PS_Data)
+                        push!(ut.mirror_ps_datas,upwind2nd) # The order of the mirror data is consistent with upwind1st's ghost_id.
+                        push!(ut.target_ps_datas,target_cell)
+                        push!(put.ghost_ids[target_cell.owner_rank+1],target_cell.ghost_id*DIM+get_dir(i))
+                        push!(put.ranks_ghost_ids[target_cell.owner_rank+1],length(ut.mirror_ps_datas))
+                    end
+                end
+            # end
+        end
+    end
+    for i in 1:MPI.Comm_size(MPI.COMM_WORLD)
+        if isempty(put.ranks_ghost_ids[i])
+            put.ghost_datas[i] = Bool[]
+        else
+            put.ghost_datas[i] = Vector{Bool}(undef,length(put.ranks_ghost_ids[i]))
+        end
+    end
+    data_exchange!(put.mirror_datas,put.ghost_datas)
+    for i in 1:MPI.Comm_size(MPI.COMM_WORLD)
+        isempty(put.ranks_ghost_ids[i])&&continue
+        ghost_ids = sortperm(put.ghost_ids[i])
+        for j in eachindex(ghost_ids)
+            if !put.ghost_datas[i][j]
+                put.ranks_ghost_ids[i][ghost_ids[j]] = 0
+            end
+        end
+        for j in eachindex(put.ranks_ghost_ids[i])
+            if put.ranks_ghost_ids[i][j]!=0
+                push!(ut.ranks_mirror_ids[i],put.ranks_ghost_ids[i][j])
+            end
+        end
+    end
+    for i in 1:MPI.Comm_size(MPI.COMM_WORLD)
+        if isempty(ut.ranks_mirror_ids[i])
+            ut.mirror_datas[i] = Float64[]    
+        else
+            ps_datas = ut.mirror_ps_datas[ut.ranks_mirror_ids[i]]
+            target_cells = ut.target_ps_datas[ut.ranks_mirror_ids[i]]
+            num = sum([x.vs_data.vs_num for x in target_cells])
+            ut.mirror_datas[i] = Vector{Float64}(undef,num*NDF)
+            index = 1
+            for j in eachindex(ps_datas)
+                v = ps_datas[j].vs_data
+                tv = target_cells[j].vs_data
+                tdf = @views ut.mirror_datas[i][index:index+NDF*tv.vs_num-1]
+                vs_project!(v.df,v.level,tdf,tv.level,v)
+                index += NDF*tv.vs_num
+            end
+        end
+        if isempty(ut.ranks_sn_ids[i])
+            ut.ghost_datas[i] = Float64[]
+        else
+            solid_neighbors = ut.solid_neighbors[ut.ranks_sn_ids[i]]
+            num = sum([x.vs_data.vs_num for x in solid_neighbors])
+            ghost_id = sortperm(ut.ghost_ids[i])
+            ut.ghost_datas[i] = Vector{Float64}(undef,num*NDF)
+            index = 1
+            for j in ghost_id
+                sn = solid_neighbors[j]
+                v = sn.vs_data
+                sn.upwind2nd_df=reshape(@view(ut.ghost_datas[i][index:index+NDF*v.vs_num-1]),:,NDF)
+                index += NDF*v.vs_num
+            end
+        end
+    end
+    amr.field.immersed_boundary.ut = ut
+end
+function update_mirror_data!(ut::Upwind2nd_Transport,::AMR{DIM,NDF}) where{DIM,NDF}
+    for i in 1:MPI.Comm_size(MPI.COMM_WORLD)
+        if !isempty(ut.ranks_mirror_ids[i])
+            ps_datas = ut.mirror_ps_datas[ut.ranks_mirror_ids[i]]
+            target_cells = ut.target_ps_datas[ut.ranks_mirror_ids[i]]
+            index = 1
+            for j in eachindex(ps_datas)
+                v = ps_datas[j].vs_data
+                tv = target_cells[j].vs_data
+                tdf = @views ut.mirror_datas[i][index:index+NDF*tv.vs_num-1]
+                vs_project!(v.df,v.level,tdf,tv.level,v)
+                index += NDF*tv.vs_num
+            end
+        end
+    end
+end
+function data_exchange!(ut::Upwind2nd_Transport)
+    mirror_datas = ut.mirror_datas
+    ghost_datas = ut.ghost_datas
+    current_rank = MPI.Comm_rank(MPI.COMM_WORLD)
+    reqs = Vector{MPI.Request}(undef, 0)
+    for i in eachindex(mirror_datas)
+        isempty(mirror_datas[i])&&continue
+        sreq = MPI.Isend(mirror_datas[i],MPI.COMM_WORLD;dest = i-1,tag = COMM_DATA_TAG+current_rank)
+        push!(reqs,sreq)
+    end
+    for i in eachindex(ghost_datas)
+        isempty(ghost_datas[i])&&continue
+        rreq = MPI.Irecv!(ghost_datas[i],MPI.COMM_WORLD;source = i-1,tag = COMM_DATA_TAG+i-1)
+        push!(reqs,rreq)
+    end
+    MPI.Waitall(reqs)
+end
+function data_exchange!(mirror_datas::Vector{T},ghost_datas::Vector{T}) where{T<:AbstractArray}
+    current_rank = MPI.Comm_rank(MPI.COMM_WORLD)
+    reqs = Vector{MPI.Request}(undef, 0)
+    for i in eachindex(mirror_datas)
+        isempty(mirror_datas[i])&&continue
+        sreq = MPI.Isend(mirror_datas[i],MPI.COMM_WORLD;dest = i-1,tag = COMM_DATA_TAG+current_rank)
+        push!(reqs,sreq)
+    end
+    for i in eachindex(ghost_datas)
+        isempty(ghost_datas[i])&&continue
+        rreq = MPI.Irecv!(ghost_datas[i],MPI.COMM_WORLD;source = i-1,tag = COMM_DATA_TAG+i-1)
+        push!(reqs,rreq)
+    end
+    MPI.Waitall(reqs)
+end
+function update_upwind2nd!(amr)
+    update_local_upwind2nd!(amr.field.immersed_boundary.ut)
+    update_mirror_data!(amr.field.immersed_boundary.ut,amr)
+    data_exchange!(amr.field.immersed_boundary.ut)
+end
+function update_local_upwind2nd!(ut::Upwind2nd_Transport)
+    for i in eachindex(ut.local_upwind2nd)
+        upwind2nd = ut.local_upwind2nd[i]
+        solid_neighbor = ut.local_solid_neighbor[i]
+        df2 = upwind2nd.vs_data.df
+        level2 = upwind2nd.vs_data.level
+        vs_project!(df2,level2,solid_neighbor.upwind2nd_df,solid_neighbor.vs_data.level,upwind2nd.vs_data)
+    end
+end
+function update_solid_neighbor_2nd!(::AbstractFluxType,ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidNeighbor{DIM,NDF},amr::AMR) where{DIM,NDF}
+    global_data = amr.global_data;ib = global_data.config.IB[ps_data.bound_enc]
+    vs_data = ps_data.vs_data
+    aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
+    faceid = solid_neighbor.faceid;opp = faceid%2==0 ? faceid-1 : faceid+1
+    dir = get_dir(faceid);rot = get_rot(faceid)
+    vn = @views [dot(v,n) for v in eachrow(ps_data.vs_data.midpoint)]
+    aux_df = zeros(vs_data.vs_num,NDF)
+    Θ = heaviside.(vn)
+    upwind1st = ps_data.neighbor.data[opp][1]
+    # sL = vs_data.sdf[:,:,dir]
+    upwind2nd_extrapolate!(ps_data,solid_neighbor,upwind1st,aux_df,Θ,faceid)
+    # ib_df = vs_data.df+(2*aux_point[dir]-solid_neighbor.midpoint[dir]-ps_data.midpoint[dir])*(@views vs_data.sdf[:,:,dir])
+    dxL = 0.5*(solid_neighbor.midpoint[dir]-ps_data.midpoint[dir]);dxR = solid_neighbor.midpoint[dir]-aux_point[dir]
+    ib_df = vs_data.df+(aux_point[dir]-dxL-ps_data.midpoint[dir])*(@views vs_data.sdf[:,:,dir])
+    # ib_df = upwind1st.vs_data.df
+    cvc_gas_correction!(aux_df,solid_neighbor)
+    aux_prim = get_bc(ib.bc);aux_prim[1] = 1.
+    M = discrete_maxwell(vs_data.midpoint,aux_prim,global_data)
+    Mu_L,Mu_R = @views cvc_Mu(M[:,1],vn,Θ,solid_neighbor)
+    ρw = cvc_density(aux_df,vn,Θ,solid_neighbor,Mu_R)
+    aux_prim = IB_prim(ib,aux_point,ρw)
+    F = aux_prim[1]*M
+    for i in 1:vs_data.vs_num
+        if Θ[i]==1.
+            aux_df[i,:] .= @views F[i,:]
+        end
+    end
+    cvc_correction!(aux_df,F,solid_neighbor,amr)
+    # @. solid_neighbor.vs_data.df = 2.0*aux_df-ib_df
+    @. solid_neighbor.vs_data.df =aux_df+(aux_df-ib_df)/dxL*dxR
+    # @. solid_neighbor.vs_data.df = (aux_df+(aux_df-ib_df)/(aux_point[dir]-upwind1st.midpoint[dir])*
+    #     (solid_neighbor.midpoint[dir]-aux_point[dir]))*Θ+(1-Θ)*(vs_data.df+(@views vs_data.sdf[:,:,dir])*
+    #     (solid_neighbor.midpoint[dir]-ps_data.midpoint[dir]))
+    # @. vs_data.sdf[:,:,dir] = vanleer(sL,(solid_neighbor.vs_data.df-vs_data.df)/(solid_neighbor.midpoint[dir]-ps_data.midpoint[dir]))
+    # @. vs_data.sdf[:,:,dir] = (solid_neighbor.vs_data.df-vs_data.df)/(solid_neighbor.midpoint[dir]-ps_data.midpoint[dir])
+    for i in axes(vs_data.df,1)
+        if Θ[i]==1.0||vs_data.midpoint[dir]*rot>0.
+            @. vs_data.sdf[i,:,dir] = @views vanleer(vs_data.sdf[i,:,dir],(solid_neighbor.vs_data.df[i,:]-vs_data.df[i,:])/dxR)
+        end
+    end
+    solid_neighbor.w = calc_w0(vs_data.midpoint,solid_neighbor.vs_data.df,vs_data.weight,global_data)
+    solid_neighbor.sw[:,dir] .= (solid_neighbor.w-ps_data.w)./(solid_neighbor.midpoint[dir]-ps_data.midpoint[dir])
+end
+function update_solid_neighbor_2nd!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF}) where{DIM,NDF}
+    solid_neighbors = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
+    for i in solid_neighbors
+        update_solid_neighbor_2nd!(amr.global_data.config.solver.flux,ps_data,ps_data.neighbor.data[i][1],amr)
+    end
+end
+function update_solid_neighbor_2nd!(amr::AMR{DIM,NDF}) where{DIM,NDF}
+    update_upwind2nd!(amr)
+    for tree in amr.field.trees.data
+        for ps_data in tree
+            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<=0)&&continue
+            update_solid_neighbor_2nd!(ps_data,amr)
+        end
+    end
+end
+function upwind2nd_extrapolate!(ps_data::PS_Data{DIM,NDF},solid_neighbor,upwind1st,aux_df,Θ,faceid) where{DIM,NDF}
+    dir = get_dir(faceid);rot = get_rot(faceid)
+    vs_data = ps_data.vs_data;vn = @views vs_data.midpoint[:,dir]
+    df = vs_data.df;level = vs_data.level;sdf = @views vs_data.sdf[:,:,dir]
+    vs_data1 = upwind1st.vs_data;df1 = vs_data1.df;sdf1 = @views vs_data1.sdf[:,:,dir]
+    level1 = vs_data1.level
+    df2 = solid_neighbor.upwind2nd_df
+    dx = ps_data.midpoint[dir]-upwind1st.midpoint[dir]
+    flag = 0.;index = 1
+    for i in axes(df,1)
+        if vn[i]*rot>0.0&&Θ[i]==0.
+            for j in axes(df,2)
+                sdf[i,j] = (solid_neighbor.ex_df[i,j]-df[i,j])/dx
+            end
+            if level[i]==level1[index]
+                index+=1
+            elseif level[i]<level1[index]
+                while flag != 1.0
+                    flag += 1/2^(DIM*(level1[index]-level[i]))
+                    index += 1
+                end
+                flag = 0.
+            else
+                flag += 1/2^(DIM*(level[i]-level1[index]))
+                if flag == 1.
+                    index += 1
+                    flag = 0.
+                end
+            end
+        else
+            if level[i]==level1[index]
+                for j in axes(df,2)
+                    sdf[i,j] = (df[i,j]-2.0*df1[index,j]+df2[i,j])/dx+sdf1[index,j]
+                    # s = (df[i,j]-2.0*df1[index,j]+df2[i,j])/dx+sdf1[index,j]
+                    # r = s/(sdf[i,j]+EPS)
+                    # ϕ = (r+abs(r))/(1+abs(r))
+                    # sdf[i,j] = sdf[i,j]+ϕ*(s-sdf[i,j])
+                    # sdf[i,j] = vanleer(s,sdf[i,j])
+                end
+                index += 1
+            elseif level[i]<level1[index]
+                sdf[i,:] .= @views (df[i,:]+df2[i,:])/dx
+                while flag != 1.0
+                    for j in axes(df,2)
+                        sdf[i,j] += (sdf1[index,j]-2.0/dx*df1[index,j])/2^(DIM*(level1[index]-level[i]))
+                    end
+                    flag += 1/2^(DIM*(level1[index]-level[i]))
+                    index+=1
+                end
+                flag = 0.
+            else
+                for j in axes(df,2)
+                    sdf[i,j] = (df[i,j]-2.0*df1[index,j]+df2[i,j])/dx+sdf1[index,j]
+                end
+                flag += 1/2^(DIM*(level[i]-level1[index]))
+                if flag == 1.
+                    index += 1
+                    flag = 0.
+                end
+            end
+        end
+    end
+    @. aux_df = df + (solid_neighbor.aux_point[dir]-ps_data.midpoint[dir])*sdf
 end

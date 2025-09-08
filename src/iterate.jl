@@ -110,6 +110,15 @@ function iterate!(::CAIDVM_Marching,amr::AMR;buffer_steps = 0, i = typemax(Int))
                 #     τ = global_data.config.gas.Kn
                 #     # global_data.status.Δt=min(TIME_STEP_CONTRACT_RATIO,global_data.config.gas.Kn)*global_data.status.Δt_ξ
                 # else
+                # try 
+                #     τ = get_τ(prim_c, gas.μᵣ, gas.ω) # τ^{n+1}
+                # catch
+                #     if ps_data.bound_enc>0
+                #         solid_dir = findfirst(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
+                #         sn = ps_data.neighbor.data[solid_dir][1]
+                #         @show sn.upwind2nd_df
+                #     end
+                # end
                     τ = get_τ(prim_c, gas.μᵣ, gas.ω) # τ^{n+1}
                 # end
             # end

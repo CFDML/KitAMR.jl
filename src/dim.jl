@@ -36,7 +36,7 @@ const pxest_iter_face_side_ts = [p4est_iter_face_side_t,p8est_iter_face_side_t]
 #     const rmt = [[-1, -1], [1, -1], [-1, 1], [1, 1]] # refine midpoint table
 #     const cft = [1, 2, 1, 3]
 #     const nft = [[1, 3], [2, 4], [1, 2], [3, 4]] # face neighbor inner-sided table, faceid{z-ordering}
-#     const AMR_CONNECT_FACE = P4EST_CONNECT_FACE
+#     const AMR_CONNECT_FACE = P4EST_CONNECT_FULL
 #     const AMR_ghost_new = p4est_ghost_new
 #     const AMR_mesh_new_ext = p4est_mesh_new_ext
 # end
@@ -64,7 +64,7 @@ const pxest_iter_face_side_ts = [p4est_iter_face_side_t,p8est_iter_face_side_t]
 #     # const moment_u = moment_u_3D
 #     # const micro_slope = micro_slope_3D
 #     const rmt3 = [[-1,-1,-1],[1,-1,-1],[-1,1,-1],[1,1,-1],[-1,-1,1],[1,-1,1],[-1,1,1],[1,1,1]]
-#     const AMR_CONNECT_FACE = P8EST_CONNECT_FACE
+#     const AMR_CONNECT_FACE = P8EST_CONNECT_FULL
 #     const AMR_ghost_new = p8est_ghost_new
 #     const AMR_mesh_new_ext = p8est_mesh_new_ext
 # end

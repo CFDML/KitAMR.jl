@@ -8,6 +8,21 @@ function vanleer(sL::Real, sR::Real)
     SR = abs(sR)
     (sign(sL) + sign(sR)) * SL * SR / (SL + SR + EPS)
 end
+function upwind_vanleer!(s::AbstractArray,sL::AbstractArray,sR::AbstractArray,Θ::AbstractArray) # Θ: is upwinding direction is SL? 
+    r = sL./(sR.+EPS); R = abs.(r)
+    ϕ = (r+R)./(R.+1.0)
+    for i in axes(s,1)
+        if Θ[i]
+            for j in axes(s,2)
+                s[i,j] = ϕ[i,j]*sL[i,j]
+            end
+        else
+            for j in axes(s,2)
+                s[i,j] = ϕ[i,j]*sR[i,j]
+            end
+        end
+    end
+end
 function diff_L!(vs_data::AbstractVsData{DIM,NDF}, vs_data_n::AbstractVsData{DIM,NDF}, dsL::Float64, sL::AbstractMatrix) where{DIM,NDF}
     index = 1
     flag = 0.0
@@ -93,7 +108,9 @@ function update_slope_inner_vs!(
     sR = zeros(vs_num, NDF)
     diff_L!(vs_data, L_data, dsL, sL)
     diff_R!(vs_data, R_data, dsR, sR)
-    vs_data.sdf[:, :, dir] .= vanleer(sL, sR)
+    # vs_data.sdf[:, :, dir] .= vanleer(sL, sR)
+    Θ = [x[dir]>0 for x in eachrow(vs_data.midpoint)]
+    @views upwind_vanleer!(vs_data.sdf[:,:,dir],sL,sR,Θ)
 end
 function update_slope_Lbound_vs!(
     vs_data::AbstractVsData{DIM,NDF},
@@ -163,11 +180,12 @@ function update_slope_inner!(
 ) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
     if Ldata[1].bound_enc<0
         update_slope_inner!(Val(0),Val(1),ps_data,global_data,Ldata,Rdata,dir)
-        downwind_order_reduce!(ps_data,Ldata[1],dir,1.0)
+        # downwind_order_reduce!(ps_data,Ldata[1],dir,1.0)
     elseif Rdata[1].bound_enc<0
         update_slope_inner!(Val(1),Val(0),ps_data,global_data,Ldata,Rdata,dir)
-        downwind_order_reduce!(ps_data,Rdata[1],dir,-1.0)
+        # downwind_order_reduce!(ps_data,Rdata[1],dir,-1.0)
     else
+    # if !(Ldata[1].bound_enc<0||Rdata[1].bound_enc<0)
         ds = ps_data.ds[dir]
         swL = (ps_data.w - Ldata[1].w) / (ds)
         swR = (Rdata[1].w - ps_data.w) / (ds)
@@ -346,7 +364,9 @@ function update_slope_inner_vs!(
         R_data = R_datas[j].vs_data
         diff_R!(vs_data, R_data, dsR, sR)
     end
-    vs_data.sdf[:, :, dir] .= vanleer(sL / nL, sR / nR)
+    # vs_data.sdf[:, :, dir] .= vanleer(sL / nL, sR / nR)
+    Θ = [x[dir]>0 for x in eachrow(vs_data.midpoint)]
+    @views upwind_vanleer!(vs_data.sdf[:,:,dir],sL/nL,sR/nR,Θ)
 end
 function update_slope_inner!(
     ::Val{1},
@@ -636,4 +656,18 @@ function update_slope!(amr::AMR{DIM,NDF};buffer_steps::Int=0,i::Int = typemax(In
             end
         end
     end
+    # slope_exchange!(amr.global_data.forest.p4est, amr) 
+    # for tree in amr.field.trees.data
+    #     for ps_data in tree
+    #         (isa(ps_data,InsideSolidData)||ps_data.bound_enc<=0)&&continue
+    #         solid_neighbors = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
+    #         for i in solid_neighbors
+    #             normal = ps_data.neighbor.data[i][1].normal
+    #             Θ = [dot(x,normal)<0 for x in eachrow(ps_data.vs_data.midpoint)]
+    #             opp = i%2==0 ? i-1 : i+1
+    #             update_target_cells_slope!(ps_data,ps_data.neighbor.data[opp][1],Θ,i)
+    #             # downwind_order_reduce!(ps_data,ps_data.neighbor.data[i][1],get_dir(i),get_rot(i))
+    #         end
+    #     end
+    # end
 end
