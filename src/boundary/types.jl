@@ -85,9 +85,6 @@ end
 mutable struct SolidCells{DIM,NDF}
     ps_datas::Vector{PS_Data{DIM,NDF}}
     quadids::Vector{Cint} # A better choice: store all quadid of SolidCells to avoid extensive comparing iteration. Are only needed to be updated before partition.
-    #=
-    quadids provide the information of solidcells on other processors. Only after this, the exchange of IB nodes can be executeable.
-    =#
 end
 function SolidCells(ps_datas::Vector{PS_Data{DIM,NDF}}) where{DIM,NDF}
     quadids = [x.quadid for x in ps_datas]
@@ -106,14 +103,14 @@ mutable struct GhostIBNode{DIM,NDF} # Maybe sdf?
     prim::Vector{Float64}
     vs_data::GhostIBVSData{DIM,NDF}
 end
-const AbstractIBNodes{DIM,NDF} = Union{PS_Data{DIM,NDF},GhostIBNode{DIM,NDF}}
-mutable struct IBCells{DIM,NDF}
-    IB_nodes::Vector{Vector{AbstractIBNodes{DIM,NDF}}} # SolidCells{IBNodes{}}
-    templates::Vector{Vector{Vector{Int}}} # Available templates indices
-end
-function IBCells(IB_nodes::Vector{Vector{AbstractIBNodes{DIM,NDF}}}) where{DIM,NDF}
-    return IBCells{DIM,NDF}(IB_nodes,Vector{Vector{Vector{Int}}}(undef,length(IB_nodes)))
-end
+AbstractIBNode{DIM,NDF} = Union{PS_Data{DIM,NDF},GhostIBNode{DIM,NDF}}
+# mutable struct IBCells{DIM,NDF}
+#     IB_nodes::Vector{Vector{AbstractIBNode{DIM,NDF}}} # SolidCells{IBNodes{}}
+#     templates::Vector{Vector{Vector{Int}}} # Available templates indices
+# end
+# function IBCells(IB_nodes::Vector{Vector{AbstractIBNode{DIM,NDF}}}) where{DIM,NDF}
+#     return IBCells{DIM,NDF}(IB_nodes,Vector{Vector{Vector{Int}}}(undef,length(IB_nodes)))
+# end
 mutable struct IBTransferData
     solid_cell_indices::Matrix{Int}
     midpoints::Matrix{Float64}
@@ -129,22 +126,28 @@ mutable struct IBBuffer
     ghost_nodes::Vector{Vector}
     IBBuffer() = new()
 end
-mutable struct Corner_Target_Neighbor_Transport
-    mirror_datas::Vector{Vector{Float64}} # rank{collect_dfs}
-    mirror_ps_datas::Vector{SolidNeighbor}
-    ranks_mirror_ids::Vector{Vector{Int}} # rank{mirror_ps_datas' id}
-    ghost_datas::Vector{Vector{Float64}}
-    ghost_ps_datas::Vector{Ghost_PS_Data}
-    ranks_ghost_ids::Vector{Vector{Int}} # rank{ghost_datas' id}
-    Corner_Target_Neighbor_Transport() = (n = new();
-        n.mirror_ps_datas = SolidNeighbor[];
-        n.ranks_mirror_ids = [Int[] for _ in 1:MPI.Comm_size(MPI.COMM_WORLD)];
-        n.ghost_ps_datas = Ghost_PS_Data[];
-        n.ranks_ghost_ids = [Int[] for _ in 1:MPI.Comm_size(MPI.COMM_WORLD)];
-        n.mirror_datas = Vector{Vector{Float64}}(undef,MPI.Comm_size(MPI.COMM_WORLD));
-        n.ghost_datas = Vector{Vector{Float64}}(undef,MPI.Comm_size(MPI.COMM_WORLD));
-        n
-    )
+mutable struct SolidNeighbor{DIM,NDF} <:AbstractPsData{DIM,NDF}
+    bound_enc::Int
+    faceid::Int # The faceid through which the neighbor is the solidneighbor.
+    aux_point::Vector{Float64}
+    normal::Vector{Float64}
+    solid_cell::AbstractPsData{DIM,NDF}
+    midpoint::Vector{Float64}
+    ds::Vector{Float64}
+    w::Vector{Float64}
+    sw::Matrix{Float64}
+    upwind2nd_df::AbstractMatrix{Float64}
+    cvc::CuttedVelocityCells
+    vs_data::VS_Data{DIM,NDF}
+end
+mutable struct TargetNeighbor{DIM,NDF} <:AbstractPsData{DIM,NDF}
+    faceid::Int
+    intersect_point::Vector{Float64}
+    normal::Vector{Float64}
+    downwind_dir::Vector{Float64} # dot(v,downwind_dir) provides the weight for extrapolate.
+    templates::Vector{AbstractIBNode{DIM,NDF}}
+    Ainv::Matrix{Float64}
+    target_cell::AbstractPsData{DIM,NDF}
 end
 mutable struct Upwind2nd_Transport
     mirror_datas::Vector{Vector{Float64}} # rank{collect_dfs}
@@ -190,7 +193,12 @@ mutable struct Pre_Upwind2nd_Transport
     )
 end
 mutable struct ImmersedBoundary
-    # ctnt::Corner_Target_Neighbor_Transport
+    solid_cells::Vector{SolidCells} # Element corresponds to one IB boundary
+    solid_numbers::Vector{Vector{Int}} # MPI_size{IB_Boundary_Number{}}, represents how many solid_cells for each IB_boundary on each rank (is necessary?)
+    solid_midpoints_global::Vector{Vector{Vector{Float64}}} # Midpoints of aux_points sorted by quadid
+    IB_nodes::Vector{Vector{Vector{AbstractIBNode}}} # Element corresponds to one IB boundary
+    IB_ranks::Vector{Vector{PS_Data}} # Local IB nodes belonging to solidcells in different processors
+    IB_buffer::IBBuffer # Buffer for IB communication. Store pointers for memory free.
     ut::Upwind2nd_Transport
     ImmersedBoundary() = new()
 end

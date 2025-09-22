@@ -236,16 +236,16 @@ function make_face_vs(face::FullFace{DIM,NDF}) where{DIM,NDF}
     rot,direction,_,here_data,there_data = unpack(face)
     vs_data = here_data.vs_data;nvs_data = there_data.vs_data
     here_mid = vs_data.midpoint;there_mid = nvs_data.midpoint
-    if there_data.bound_enc<0
-        faceid = there_data.faceid
-        opp = faceid%2==0 ? faceid-1 : faceid+1
-        # calc_solid_cell_slope!(nvs_data,here_data.neighbor.data[opp][1].vs_data,there_data.midpoint,here_data.midpoint,direction)
-        calc_solid_cell_slope!(nvs_data,vs_data,there_data.midpoint,here_data.midpoint,direction)
-        # heavi = [dot(there_data.normal,x)<=0. for x in eachrow(there_data.vs_data.midpoint)]
-        # nheavi = [!x for x in heavi]
-    # elseif there_data.bound_enc>0&&isa(there_data,Ghost_PS_Data)
-        # update_ghost_target_cells_slope!(there_data,here_data,direction)
-    end
+    # if there_data.bound_enc<0
+    #     faceid = there_data.faceid
+    #     opp = faceid%2==0 ? faceid-1 : faceid+1
+    #     # calc_solid_cell_slope!(nvs_data,here_data.neighbor.data[opp][1].vs_data,there_data.midpoint,here_data.midpoint,direction)
+    #     calc_solid_cell_slope!(nvs_data,vs_data,there_data.midpoint,here_data.midpoint,direction)
+    #     # heavi = [dot(there_data.normal,x)<=0. for x in eachrow(there_data.vs_data.midpoint)]
+    #     # nheavi = [!x for x in heavi]
+    # # elseif there_data.bound_enc>0&&isa(there_data,Ghost_PS_Data)
+    #     # update_ghost_target_cells_slope!(there_data,here_data,direction)
+    # end
         heavi = [x<=0. for x in rot.*@views here_mid[:,direction]]
         nheavi = [x>0. for x in rot.*@views there_mid[:,direction]]
     # end

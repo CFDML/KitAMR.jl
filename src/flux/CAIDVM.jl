@@ -96,6 +96,13 @@ function calc_flux(::CAIDVM,here_vs,there_vs,flux_data::Union{FullFace,Flux_Data
         here_micro = [df[i,j]*here_vn[i] for i in axes(df,1),j in axes(df,2)]
         there_micro = [ndf[i,j]*there_vn[i] for i in axes(ndf,1),j in axes(ndf,2)]
     end
+    ps_data = here_data
+    # if ps_data.midpoint[1]>0.105-EPS&&ps_data.midpoint[1]<0.105+EPS&&ps_data.midpoint[2]>0.995-EPS&&ps_data.midpoint[2]<0.995+EPS&&isa(there_data,SolidNeighbor)
+    #     @show `up` maximum(abs.(here_micro)) maximum(abs.(there_micro))
+    # end
+    # if ps_data.midpoint[1]>0.105-EPS&&ps_data.midpoint[1]<0.105+EPS&&ps_data.midpoint[2]>-0.995-EPS&&ps_data.midpoint[2]<-0.995+EPS&&isa(there_data,SolidNeighbor)
+    #     @show `down` maximum(abs.(here_micro)) maximum(abs.(there_micro))
+    # end
     here_weight = here_vs.weight;there_weight = there_vs.weight
     fw = micro_to_macro(here_micro,here_mid,here_weight,here_data.vs_data)+micro_to_macro(there_micro,there_mid,there_weight,here_data.vs_data)
     return fw,[here_micro,there_micro]

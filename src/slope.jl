@@ -15,10 +15,12 @@ function upwind_vanleer!(s::AbstractArray,sL::AbstractArray,sR::AbstractArray,Θ
         if Θ[i]
             for j in axes(s,2)
                 s[i,j] = ϕ[i,j]*sL[i,j]
+                # s[i,j] = sL[i,j]
             end
         else
             for j in axes(s,2)
                 s[i,j] = ϕ[i,j]*sR[i,j]
+                # s[i,j] = sR[i,j]
             end
         end
     end

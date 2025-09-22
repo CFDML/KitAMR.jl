@@ -1,6 +1,7 @@
 using KitAMR,MPI
+include("./cylinder_udf.jl")
 MPI.Init()
-config = KitAMR.read_config("./example/convergence_ps/configure_test_ps.txt")
+config = KitAMR.read_config("./example/cylinder/configure_cylinder.txt")
 ps4est,amr = KitAMR.init(config);
 KitAMR.listen_for_save!()
 max_sim_time = 20.
@@ -22,7 +23,5 @@ for i in 1:nt
 end
 KitAMR.save_result(ps4est,amr)
 KitAMR.finalize!(ps4est,amr)
-MPI.Barrier(MPI.COMM_WORLD)
-
 MPI.Finalize()
 

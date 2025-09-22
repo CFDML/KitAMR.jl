@@ -124,12 +124,13 @@ function up_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::Vec
             sends[send_index] > MPI.Comm_rank(MPI.COMM_WORLD) + 1 && break
             ps_data = trees[i][j]
             if isa(ps_data,InsideSolidData)
-                push!(encs,0)
+                push!(encs,0);push!(encs,0)
                 append!(encs,zeros(Int,SOLID_CELL_ID_NUM))
                 append!(ws,zeros(DIM+2))
                 s_vs_nums[index] = 0
             else
                 push!(encs,ps_data.bound_enc)
+                push!(encs,ps_data.ib_enc)
                 append!(encs,ps_data.solid_cell_index)
                 append!(ws, ps_data.w)
                 append!(vs_levels, ps_data.vs_data.level)
@@ -173,12 +174,13 @@ function down_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::V
             sends[send_index] < MPI.Comm_rank(MPI.COMM_WORLD) + 1 && break
             ps_data = trees[i][j]
             if isa(ps_data,InsideSolidData)
-                pushfirst!(encs,0)
+                pushfirst!(encs,0);pushfirst!(encs,0)
                 prepend!(encs,zeros(SOLID_CELL_ID_NUM))
                 prepend!(ws,zeros(DIM+2))
                 s_vs_nums[index] = 0
             else
                 prepend!(encs,ps_data.solid_cell_index)
+                pushfirst!(encs,ps_data.ib_enc)
                 pushfirst!(encs, ps_data.bound_enc)
                 prepend!(ws, ps_data.w)
                 prepend!(vs_levels, ps_data.vs_data.level)
@@ -408,7 +410,7 @@ function unpack_data(vs_nums, data, amr::AMR{DIM,NDF}) where{DIM,NDF}
         if vs_num==0
             transfer_ps_datas[i] = InsideSolidData{DIM,NDF}()
         else
-            encs = data.encs[(SOLID_CELL_ID_NUM+1)*(i-1)+1:(SOLID_CELL_ID_NUM+1)*i]
+            encs = data.encs[(SOLID_CELL_ID_NUM+2)*(i-1)+1:(SOLID_CELL_ID_NUM+2)*i]
             w = data.w[(DIM+2)*(i-1)+1:(DIM+2)*i]
             vs_levels = data.vs_levels[offset+1:offset+vs_num]
             vs_midpoints =
@@ -424,7 +426,7 @@ function unpack_data(vs_nums, data, amr::AMR{DIM,NDF}) where{DIM,NDF}
                 zeros(vs_num, NDF, DIM),
                 zeros(vs_num, NDF),
             )
-            transfer_ps_datas[i] = PS_Data(DIM,NDF;bound_enc=encs[1],solid_cell_index=encs[2:SOLID_CELL_ID_NUM+1],w, vs_data)
+            transfer_ps_datas[i] = PS_Data(DIM,NDF;bound_enc=encs[1],ib_enc = encs[2], solid_cell_index=encs[3:SOLID_CELL_ID_NUM+2],w, vs_data)
         end
         offset += vs_num
     end

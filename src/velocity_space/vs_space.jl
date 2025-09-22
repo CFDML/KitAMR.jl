@@ -25,6 +25,11 @@ end
 function init_VS(vs_data::VS_Data)
     return deepcopy(vs_data)
 end
+function vs_project(df::AbstractMatrix,level::AbstractVector,tlevel::AbstractVector,vs_data::AbstractVsData{DIM,NDF}) where{DIM,NDF}
+    tdf = Matrix{Float64}(undef,vs_data.vs_num,NDF)
+    vs_project!(df,level,tdf,tlevel,vs_data)
+    return tdf
+end
 function vs_project!(df::AbstractMatrix,level::AbstractVector,tdf::AbstractVector,tlevel::AbstractVector,vs_data::AbstractVsData{DIM,NDF}) where{DIM,NDF}
     tdf = reshape(tdf,:,NDF)
     vs_project!(df,level,tdf,tlevel,vs_data)

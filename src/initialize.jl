@@ -32,7 +32,7 @@ end
 
 function solid_full_face_check(base_quad,faceid)
     neighbor = base_quad.neighbor.data[faceid][1]
-    (!isa(neighbor,PS_Data)||neighbor.bound_enc<0) && return true
+    !(isa(neighbor,TargetNeighbor)&&isa(neighbor.target_cell,PS_Data)) && return true
     return false
 end
 function solid_hanging_face_check(base_quad,faceid)
@@ -63,7 +63,7 @@ function initialize_full_face!(side::PW_pxest_iter_face_side_t,amr::AMR{DIM,NDF}
     faceid = side.face[] + 1
     if base_quad.bound_enc<0
         solid_full_face_check(base_quad,faceid) && return nothing
-        base_quad = base_quad.neighbor.data[faceid][1]
+        base_quad = base_quad.neighbor.data[faceid][1].target_cell
 		faceid += faceid%2==0 ? -1 : 1
     end
     direction = get_dir(faceid)
@@ -289,7 +289,7 @@ function re_init_vs4est!(trees, global_data)
         end
     end
 end
-function init_aux_points(global_data::Global_Data,solid_midpoints::Vector)
+function init_boundary_points(global_data::Global_Data,solid_midpoints::Vector)
     calc_intersect_point(global_data.config.IB,solid_midpoints)
 end
 function pre_refine!(ps4est::P_pxest_t,global_data::Global_Data)
@@ -302,13 +302,14 @@ function pre_refine!(ps4est::P_pxest_t,global_data::Global_Data)
     data = [global_data, solid_midpoints]
     p_data = pointer_from_objref(data)
     GC.@preserve data AMR_4est_volume_iterate(ps4est, p_data, init_solid_midpoints)
-    solid_midpoints = broadcast_boundary_midpoints!(solid_midpoints,global_data)
+    solid_midpoints = broadcast_boundary_points!(solid_midpoints,global_data)
     data = [global_data,solid_midpoints]
     PointerWrapper(ps4est).user_pointer = pointer_from_objref(data)
     GC.@preserve data IB_pre_ps_refine!(ps4est,global_data)
     pre_ps_coarsen!(ps4est;recursive=1)
     pre_ps_balance!(ps4est)
     AMR_partition(ps4est)
+    return solid_midpoints
 end
 function init_ps!(ps4est::P_pxest_t,global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     fp = PointerWrapper(ps4est)
@@ -327,7 +328,6 @@ function init_ps!(ps4est::P_pxest_t,global_data::Global_Data{DIM,NDF}) where{DIM
 end
 function init_field!(global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     GC.@preserve global_data begin
-        # connectivity_ps = Cartesian_connectivity(global_data.config.trees_num..., global_data.config.geometry...)
         connectivity_ps = set_connectivity(global_data)
         ps4est = AMR_4est_new(
             MPI.COMM_WORLD,
@@ -336,9 +336,11 @@ function init_field!(global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
             pointer_from_objref(global_data),
         )
         global_data.forest.p4est = ps4est
-        pre_refine!(ps4est,global_data)
+        solid_midpoints = pre_refine!(ps4est,global_data)
         trees = init_ps!(ps4est,global_data)
-        return trees, ps4est
+        field = Field{DIM,NDF}(trees,Vector{AbstractFace}(undef,0),ImmersedBoundary())
+        field.immersed_boundary.solid_midpoints_global = solid_midpoints
+        return ps4est,field
     end
 end
 function initialize_ghost(p4est::P_pxest_t,global_data::Global_Data)
@@ -348,27 +350,16 @@ function initialize_ghost(p4est::P_pxest_t,global_data::Global_Data)
 end
 function init(config::Dict)
     global_data = Global_Data(config)
-    trees, ps4est = init_field!(global_data)
+    ps4est,field = init_field!(global_data)
     ghost_ps = AMR_ghost_new(ps4est)
     mesh_ps = AMR_mesh_new(ps4est, ghost_ps)
     global_data.forest.ghost = ghost_ps
     global_data.forest.mesh = mesh_ps
     ghost = initialize_ghost(ps4est, global_data)
-    field = Field{config[:DIM],config[:NDF]}(trees,Vector{AbstractFace}(undef,0),ImmersedBoundary())
-    amr = AMR(
-        global_data,ghost,field
-    )
+    amr = AMR(global_data,ghost,field)
     PointerWrapper(ps4est).user_pointer = pointer_from_objref(amr)
     initialize_neighbor_data!(ps4est, amr)
-    initialize_solid_neighbor!(amr)
-    # reinit_ib_vs!(amr) # Avoid singularity caused by sharp gradient.
-    ps_partition!(ps4est, amr)
-    update_ghost!(ps4est, amr)
-    update_neighbor!(ps4est, amr)
-    update_solid!(amr)
-    update_ex_df!(amr)
-    initialize_upwind2nd!(amr)
-    # initialize_corner_target_neighbor!(ps4est,amr)
+    initialize_immersed_boundary!(amr)
     initialize_faces!(ps4est, amr)
     return (ps4est, amr)
 end

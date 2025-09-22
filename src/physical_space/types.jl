@@ -18,25 +18,10 @@ mutable struct Neighbor{DIM,NDF}
     n.state = zeros(Int8, 2*DIM);
     n)
 end
-mutable struct SolidNeighbor{DIM,NDF} <:AbstractPsData{DIM,NDF}
-    bound_enc::Int
-    faceid::Int # The faceid through which the neighbor is the solidneighbor.
-    # av_id::Int # corner neighbor id for corner ghost cells' average.
-    aux_point::Vector{Float64}
-    normal::Vector{Float64}
-    # solid_cell::AbstractPsData{DIM,NDF}
-    midpoint::Vector{Float64}
-    ds::Vector{Float64}
-    w::Vector{Float64}
-    sw::Matrix{Float64}
-    ex_df::Matrix{Float64}
-    upwind2nd_df::AbstractMatrix{Float64}
-    cvc::CuttedVelocityCells
-    vs_data::VS_Data{DIM,NDF}
-end
 mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
     quadid::Cint # The unique identification of the ps_data, is currently used for SolidCells and IB nodes' partition. Only need to be updated before partition. Can be negative for SolidCells/IB nodes for the convenience of boundary_flag
     bound_enc::Int # 0:fluid_cell;>0:bound_enc th boundary's IB_cell;<0: bound_enc th boundary's solid_cell;
+    ib_enc::Int # 0: internal cell; >0: ib_enc'th immersed boundary's ib node
     solid_cell_index::Vector{Int}
     ds::Vector{Float64} # DIM
     midpoint::Vector{Float64}
@@ -50,6 +35,7 @@ mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
     PS_Data(DIM,NDF;kwargs...)=(n = new{DIM,NDF}();
         n.quadid = haskey(kwargs,:quadid) ? kwargs[:quadid] : 0;
         n.bound_enc = haskey(kwargs,:bound_enc) ? kwargs[:bound_enc] : 0;
+        n.ib_enc = haskey(kwargs,:ib_enc) ? kwargs[:ib_enc] : 0;
         n.solid_cell_index = haskey(kwargs,:solid_cell_index) ? kwargs[:solid_cell_index] : zeros(SOLID_CELL_ID_NUM);
         n.ds = haskey(kwargs,:ds) ? kwargs[:ds] : zeros(DIM);
         n.midpoint = haskey(kwargs,:midpoint) ? kwargs[:midpoint] : zeros(DIM);
