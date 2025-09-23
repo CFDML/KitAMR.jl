@@ -33,3 +33,16 @@ function select_linear_independent_rows(points)
     return index,permutedims(selected)
 end
 select_linear_independent_rows(sorted)
+
+using BenchmarkTools
+using StaticArrays
+A = ones(3)
+@btime for i in 1:1000
+    b = @SVector ones(3)
+    c = $A\b
+end
+b = Vector{Float64}(undef,3)
+@btime for i in 1000
+    $b .= 1.
+    c = $A\$b
+end

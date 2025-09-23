@@ -110,9 +110,9 @@ function update_slope_inner_vs!(
     sR = zeros(vs_num, NDF)
     diff_L!(vs_data, L_data, dsL, sL)
     diff_R!(vs_data, R_data, dsR, sR)
-    # vs_data.sdf[:, :, dir] .= vanleer(sL, sR)
-    Θ = [x[dir]>0 for x in eachrow(vs_data.midpoint)]
-    @views upwind_vanleer!(vs_data.sdf[:,:,dir],sL,sR,Θ)
+    vs_data.sdf[:, :, dir] .= vanleer(sL, sR)
+    # Θ = [x[dir]>0 for x in eachrow(vs_data.midpoint)]
+    # @views upwind_vanleer!(vs_data.sdf[:,:,dir],sL,sR,Θ)
 end
 function update_slope_Lbound_vs!(
     vs_data::AbstractVsData{DIM,NDF},
@@ -366,9 +366,9 @@ function update_slope_inner_vs!(
         R_data = R_datas[j].vs_data
         diff_R!(vs_data, R_data, dsR, sR)
     end
-    # vs_data.sdf[:, :, dir] .= vanleer(sL / nL, sR / nR)
-    Θ = [x[dir]>0 for x in eachrow(vs_data.midpoint)]
-    @views upwind_vanleer!(vs_data.sdf[:,:,dir],sL/nL,sR/nR,Θ)
+    vs_data.sdf[:, :, dir] .= vanleer(sL / nL, sR / nR)
+    # Θ = [x[dir]>0 for x in eachrow(vs_data.midpoint)]
+    # @views upwind_vanleer!(vs_data.sdf[:,:,dir],sL/nL,sR/nR,Θ)
 end
 function update_slope_inner!(
     ::Val{1},

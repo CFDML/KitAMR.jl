@@ -919,7 +919,7 @@ function initialize_templates(target_cell::AbstractPsData{2,NDF},ib_nodes::Vecto
         r = boundary_point-ib_nodes[i].midpoint
         w = dot(downwind_dir,r)
         if ib_nodes[i].midpoint==target_cell.midpoint
-            weights[i] = Inf
+            weights[i] = -Inf
         elseif  w>0
             weights[i] = w/norm(r)^2
         else
