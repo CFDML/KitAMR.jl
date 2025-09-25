@@ -68,6 +68,7 @@ function PS_Solution(::InsideSolidData{DIM,NDF}) where{DIM,NDF}
 end
 struct VS_Solution
     quadid::Int
+    ps_midpoint::Vector{Float64}
     midpoint::Matrix{Float64}
     level::Vector{Int8}
     df::Matrix{Float64}

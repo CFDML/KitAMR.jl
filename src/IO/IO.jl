@@ -260,6 +260,30 @@ function neighbor_num(::InsideSolidData,ps4est::P_pxest_t,amr::AMR{DIM},quadid::
     end
     return neighbor_num
 end
+function save_vs_result(amr::AMR{DIM,NDF};dir_path) where{DIM,NDF}
+    vs_solutions = VS_Solution[]
+    vs_path = dir_path*"vs_result_"*string(MPI.Comm_rank(MPI.COMM_WORLD))*".jld2"
+    for tree in amr.field.trees.data
+        for ps_data in tree
+            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0)&&continue
+            x,y = ps_data.midpoint
+            vs_data = ps_data.vs_data
+            if x>-1.04-EPS&&x<-0.09+EPS&&y>-EPS&&y<0.11+EPS
+                push!(vs_solutions,VS_Solution(ps_data.quadid,ps_data.midpoint,vs_data.midpoint,vs_data.level,vs_data.df))
+            end
+        end
+    end
+    save_object(vs_path,vs_solutions)
+end
+function load_vs_result(path)
+    solverset = load_object(path*"/solverset.jld2")
+    vs_result = VS_Solution[]
+    for i = 1:solverset.mpi_size
+        vr = load_object(path*"/vs_result_"*string(i-1)*".jld2")
+        append!(vs_result,vr)
+    end
+    return vs_result
+end
 function save_result(ps4est::Ptr{p4est_t},amr::AMR{DIM,NDF};dir_path="") where{DIM,NDF}
     fp = PointerWrapper(ps4est)
     ps_solution = Vector{PS_Solution}(undef,fp.local_num_quadrants[])
@@ -295,6 +319,7 @@ function save_result(ps4est::Ptr{p4est_t},amr::AMR{DIM,NDF};dir_path="") where{D
         save_object(dir_path * "solverset.jld2", solverset)
     end
     save_object(dir_path * "result_"*string(rank)*".jld2", result)
+    save_vs_result(amr;dir_path)
     save_boundary_result(dir_path,amr)
 end
 function save_result(ps4est::Ptr{p8est_t},amr::AMR{DIM,NDF};dir_path="") where{DIM,NDF}
