@@ -1,5 +1,3 @@
-abstract type AbstractPsData{DIM,NDF} end
-abstract type AbstractGhostPsData{DIM,NDF} <: AbstractPsData{DIM,NDF} end
 NeighborQuad{DIM,NDF} = Union{AbstractPsData{DIM,NDF}, Nothing}
 
 ChildNum = Union{Val{4},Val{8}}
@@ -81,9 +79,7 @@ mutable struct Ghost_PS_Data{DIM,NDF}<:AbstractGhostPsData{DIM,NDF}
 end
 mutable struct GhostInsideSolidData{DIM,NDF} <: AbstractGhostPsData{DIM,NDF} end
 
-abstract type AbstractFace end
-abstract type InnerFace <: AbstractFace end
-abstract type BoundaryFace <: AbstractFace end
+
 mutable struct InsideSolidData{DIM,NDF} <: AbstractPsData{DIM,NDF} end
 AbstractInsideSolidData = Union{InsideSolidData,GhostInsideSolidData}
 struct FullFace{DIM,NDF}<:InnerFace

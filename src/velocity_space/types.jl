@@ -1,5 +1,3 @@
-abstract type AbstractVsData{DIM,NDF} end
-
 mutable struct VS_Data{DIM,NDF} <: AbstractVsData{DIM,NDF}
     vs_num::Int
     level::Vector{Int8} # vs_num

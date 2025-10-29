@@ -1,7 +1,7 @@
 name = "KitAMR"
 uuid = "c7589248-7317-493e-9871-fc2fc0963dfd"
-authors = ["CFDML and contributors"]
 version = "0.1.0"
+authors = ["CFDML and contributors"]
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
@@ -44,7 +44,7 @@ DataFrames = "1.7.0"
 Dates = "1.11.0"
 DocStringExtensions = "0.9"
 Documenter = "1.8.0"
-JLD2 = "0.4"
+JLD2 = "0.6.2"
 LinearAlgebra = "<0.0.1, 1"
 MPI = "0.20"
 MPIPreferences = "0.1.3"

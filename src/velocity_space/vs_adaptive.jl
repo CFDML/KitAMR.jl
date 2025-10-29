@@ -8,6 +8,67 @@ function vs_refine!(amr::AMR)
     va_flags = zeros(Bool,fp.local_num_quadrants[])
     vs_refine!(trees, va_flags, global_data)
 end
+function pre_vs_refine!(trees::PS_Trees{DIM,NDF}, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+    ds = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
+        global_data.config.vs_trees_num[i] for i in 1:DIM]
+    vs_refine_udf = global_data.config.user_defined.vs_refine_flag
+    for _ = 1:global_data.config.solver.AMR_VS_MAXLEVEL
+        for i in eachindex(trees.data)
+            for j in eachindex(trees.data[i])
+                ps_data = trees.data[i][j]
+                isa(ps_data,InsideSolidData) && continue
+                vs_data = ps_data.vs_data
+                U = ps_data.prim[2:1+DIM]
+                lnmidpoint = reshape(vs_data.midpoint, :)
+                lndf = reshape(vs_data.df, :)
+                lnsdf = reshape(vs_data.sdf, :)
+                lnflux = reshape(vs_data.flux, :)
+                index = 1
+                midpoint_index = Vector{Int}(undef, DIM)
+                df_index = Vector{Int}(undef, NDF)
+                while index < vs_data.vs_num + 1
+                    @inbounds for i = 1:DIM
+                        midpoint_index[i] = (i - 1) * (vs_data.vs_num) + index
+                    end
+                    @inbounds for i = 1:NDF
+                        df_index[i] = (i - 1) * (vs_data.vs_num) + index
+                    end
+                    midpoint = @view(lnmidpoint[midpoint_index])
+                    df = @view(lndf[df_index])
+                    if vs_data.level[index] < global_data.config.solver.AMR_VS_MAXLEVEL &&
+                        (   vs_refine_udf==null_udf ? 
+                            (macro_estimate_refine_flag(ps_data.prim,U,midpoint,ds,vs_data.level[index])||
+                            contribution_refine_flag(ps_data.w, U, midpoint, df, vs_data.weight[index], global_data)) : 
+                            vs_refine_udf(midpoint;level = vs_data.level[index],du = ds./2^vs_data.level[index])
+                        )
+                        midpoint_new = midpoint_refine(DIM,midpoint, vs_data.level[index], ds)
+                        df_new = df_refine(DIM,midpoint, midpoint_new, df)
+                        vs_data.vs_num += 2^DIM - 1
+                        level_refine_replace!(DIM,vs_data.level, index)
+                        weight_refine_replace!(DIM,vs_data.weight, index)
+                        midpoint_refine_replace!(
+                            DIM,
+                            lnmidpoint,
+                            midpoint_new,
+                            vs_data.vs_num,
+                            index,
+                        )
+                        df_refine_replace!(DIM,NDF,lndf, df_new, vs_data.vs_num, index)
+                        sdf_refine_replace!(DIM,NDF,lnsdf)
+                        flux_refine_replace!(DIM,NDF,lnflux)
+                        index += 2^DIM - 1
+                    end
+                    index += 1
+                end
+                vs_data.midpoint = reshape(lnmidpoint, vs_data.vs_num, DIM)
+                vs_data.df = reshape(lndf, vs_data.vs_num, NDF)
+                vs_data.sdf = reshape(lnsdf, vs_data.vs_num, NDF, DIM)
+                vs_data.flux = reshape(lnflux, vs_data.vs_num, NDF)
+            end
+        end
+    end
+    return nothing
+end
 function vs_refine!(trees::PS_Trees{DIM,NDF}, va_flags::Vector{Bool}, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     ds = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
     global_data.config.vs_trees_num[i] for i in 1:DIM]
@@ -403,13 +464,13 @@ function flux_coarsen_replace!(DIM::Integer,NDF::Integer,lnflux::AbstractVector)
     deleteat!(lnflux, 1:(2^DIM-1)*NDF)
 end
 
-function pre_vs_refine!(trees::PS_Trees{DIM,NDF}, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
-    fp = PointerWrapper(global_data.forest.p4est)
-    va_flags = zeros(Bool,fp.local_num_quadrants[])
-    for _ = 1:global_data.config.solver.AMR_VS_MAXLEVEL
-        vs_refine!(trees, va_flags, global_data)
-    end
-end
+# function pre_vs_refine!(trees::PS_Trees{DIM,NDF}, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+#     fp = PointerWrapper(global_data.forest.p4est)
+#     va_flags = zeros(Bool,fp.local_num_quadrants[])
+#     for _ = 1:global_data.config.solver.AMR_VS_MAXLEVEL
+#         vs_refine!(trees, va_flags, global_data)
+#     end
+# end
 # function update_solid_vs!(amr::AMR)
 #     boundary = amr.field.boundary
 #     solid_cells = boundary.solid_cells

@@ -15,8 +15,8 @@ function partition_weight(p4est::P_pxest_t,which_tree,quadrant::P_pxest_quadrant
     isa(ps_data,InsideSolidData)&&return Cint(0)
     # ps_data.bound_enc>0&&return Cint(2*ps_data.vs_data.vs_num)
     if ps_data.bound_enc>0
-        sn = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
-        return Cint((length(sn)+1)*ps_data.vs_data.vs_num)
+        # sn = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
+        return Cint(2*ps_data.vs_data.vs_num)
     end
     return Cint(ps_data.vs_data.vs_num)
 end

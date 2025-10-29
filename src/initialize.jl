@@ -244,9 +244,13 @@ function init_ps_p4est_kernel(ip, data, dp)
     ds, midpoint = quad_to_cell(ip.p4est, ip.treeid[], ip.quad)
     flag = true # need to be initialized?
     solid_cell_flags = Vector{Bool}(undef,length(global_data.config.IB))
+    target_cell_flags = Vector{Bool}(undef,length(global_data.config.IB))
     for i in eachindex(boundaries)
-        inside = solid_flag(boundaries[i],midpoint)
-	    solid_cell_flags[i] = solid_cell_flag(boundaries[i],midpoint,ds,global_data,inside)&&ip.quad.level[]==global_data.config.solver.AMR_PS_MAXLEVEL
+        boundary = boundaries[i]
+        inside = solid_flag(boundary,midpoint)
+        bf = boundary_flag(boundary,midpoint,ds,global_data)
+	    solid_cell_flags[i] = (bf && xor(boundary.solid,!inside))&&ip.quad.level[]==global_data.config.solver.AMR_PS_MAXLEVEL
+        target_cell_flags[i] = (bf && !xor(boundary.solid,!inside))&&ip.quad.level[]==global_data.config.solver.AMR_PS_MAXLEVEL
         flag = flag&&(!inside||solid_cell_flags[i])
         !flag&&break
     end
@@ -266,6 +270,10 @@ function init_ps_p4est_kernel(ip, data, dp)
             if solid_cell_flags[i]
                 ps_data.bound_enc<0&&(@error `The solid cell is shared!`)
                 ps_data.bound_enc = -i
+            elseif target_cell_flags[i]
+                ps_data.bound_enc<0&&(@error `The solid cell is shared!`)
+                ps_data.bound_enc>0&&(@error `The target cell is shared!`)
+                ps_data.bound_enc = i
             end
         end
     else
@@ -305,8 +313,10 @@ function pre_refine!(ps4est::P_pxest_t,global_data::Global_Data)
     solid_midpoints = broadcast_boundary_midpoints!(solid_midpoints,global_data)
     data = [global_data,solid_midpoints]
     PointerWrapper(ps4est).user_pointer = pointer_from_objref(data)
-    GC.@preserve data IB_pre_ps_refine!(ps4est,global_data)
-    pre_ps_coarsen!(ps4est;recursive=1)
+    GC.@preserve data begin 
+        IB_pre_ps_refine!(ps4est,global_data)
+        pre_ps_coarsen!(ps4est;recursive=1)
+    end
     pre_ps_balance!(ps4est)
     AMR_partition(ps4est)
 end
@@ -349,24 +359,19 @@ end
 function init(config::Dict)
     global_data = Global_Data(config)
     trees, ps4est = init_field!(global_data)
+    field = Field{config[:DIM],config[:NDF]}(trees,Vector{AbstractFace}(undef,0),ImmersedBoundary())
+    amr = AMR(
+        global_data,field
+    )
+    PointerWrapper(ps4est).user_pointer = pointer_from_objref(amr)
+    ps_partition!(ps4est, amr)
     ghost_ps = AMR_ghost_new(ps4est)
     mesh_ps = AMR_mesh_new(ps4est, ghost_ps)
     global_data.forest.ghost = ghost_ps
     global_data.forest.mesh = mesh_ps
-    ghost = initialize_ghost(ps4est, global_data)
-    field = Field{config[:DIM],config[:NDF]}(trees,Vector{AbstractFace}(undef,0),ImmersedBoundary())
-    amr = AMR(
-        global_data,ghost,field
-    )
-    PointerWrapper(ps4est).user_pointer = pointer_from_objref(amr)
+    amr.ghost = initialize_ghost(ps4est, global_data)
     initialize_neighbor_data!(ps4est, amr)
     initialize_solid_neighbor!(amr)
-    # reinit_ib_vs!(amr) # Avoid singularity caused by sharp gradient.
-    ps_partition!(ps4est, amr)
-    update_ghost!(ps4est, amr)
-    update_neighbor!(ps4est, amr)
-    update_solid!(amr)
-    # initialize_corner_target_neighbor!(ps4est,amr)
     initialize_faces!(ps4est, amr)
     return (ps4est, amr)
 end

@@ -1,14 +1,3 @@
-abstract type AbstractBoundary end
-abstract type AbstractBoundaryType end
-abstract type Maxwellian<:AbstractBoundaryType end
-abstract type SuperSonicInflow <: AbstractBoundaryType end
-abstract type SuperSonicOutflow <: AbstractBoundaryType end
-abstract type UniformOutflow <: AbstractBoundaryType end
-abstract type InterpolatedOutflow <: AbstractBoundaryType end
-abstract type AxisSymmetric <: AbstractBoundaryType end
-abstract type Period <: AbstractBoundaryType end
-const AbstractBCType = Union{Vector,Function}
-
 # Domain boundary
 struct Domain{T<:AbstractBoundaryType} <: AbstractBoundary
     id::Int

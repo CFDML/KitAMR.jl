@@ -472,6 +472,7 @@ function AMR_volume_iterate(f::Function,forest::Ptr{p4est_t};ghost=C_NULL,user_d
             dp = PointerWrapper(data_type, ip.quad.p.user_data[])
             GC.@preserve ip dp f(ip, data, dp)
         end
+        return nothing
     end
     GC.@preserve forest ghost user_data iter_fn p4est_iterate(
         forest,

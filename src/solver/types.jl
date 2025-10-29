@@ -1,4 +1,3 @@
-abstract type AbstractInitCondType end
 struct Uniform<:AbstractInitCondType 
     ic::AbstractVector
 end
@@ -7,8 +6,6 @@ struct PCoordFn<:AbstractInitCondType # A function that accepts physical coordin
 end
 
 
-abstract type AbstractFluxType end
-abstract type AbstractDVMFluxType <: AbstractFluxType end
 struct UGKS<:AbstractDVMFluxType end
 struct DVM<:AbstractDVMFluxType end
 struct CAIDVM<:AbstractDVMFluxType end # Conserved DVM, which encures energy conserved flux.
@@ -16,7 +13,6 @@ const MicroFlux = Union{DVM}
 const HybridFlux = Union{UGKS,CAIDVM} # to add more...
 
 
-abstract type AbstractTimeMarchingType end
 struct Rungekuta{O} <: AbstractTimeMarchingType end
 struct Euler <:AbstractTimeMarchingType end
 struct UGKS_Marching<:AbstractTimeMarchingType end
@@ -26,27 +22,52 @@ struct CAIDVM_Marching<:AbstractTimeMarchingType end
 struct Solver
     CFL::Float64
     AMR_PS_MAXLEVEL::Int
+    AMR_DYNAMIC_PS_MAXLEVEL::Int
     AMR_VS_MAXLEVEL::Int
     flux::AbstractFluxType
     time_marching::AbstractTimeMarchingType
     PS_DYNAMIC_AMR::Bool
     VS_DYNAMIC_AMR::Bool
+    AMR_PS_SMOOTH::Bool
+    AMR_VS_SMOOTH::Bool
 end
 function Solver(config::Dict)
     return Solver(config[:CFL],config[:AMR_PS_MAXLEVEL],
+        haskey(config,:AMR_DYNAMIC_PS_MAXLEVEL) ? config[:AMR_DYNAMIC_PS_MAXLEVEL] : config[:AMR_PS_MAXLEVEL],
         config[:AMR_VS_MAXLEVEL],config[:flux],config[:time_marching],
         (haskey(config,:PS_DYNAMIC_AMR) ? config[:PS_DYNAMIC_AMR] : true),
-        (haskey(config,:VS_DYNAMIC_AMR) ? config[:VS_DYNAMIC_AMR] : true)
+        (haskey(config,:VS_DYNAMIC_AMR) ? config[:VS_DYNAMIC_AMR] : true),
+        (haskey(config,:AMR_PS_SMOOTH) ? config[:AMR_PS_SMOOTH] : true),
+        (haskey(config,:AMR_VS_SMOOTH) ? config[:AMR_VS_SMOOTH] : true)
         )
 end
 mutable struct UDF
     static_ps_refine_flag::Function
+    dynamic_ps_refine_flag::Function
     static_ps_coarsen_flag::Function
     vs_refine_flag::Function
     vs_coarsen_flag::Function 
     UDF()=new()
 end
-null_udf(args...) = false
+null_udf(args...;kwargs...) = false
+mutable struct Output
+    vtk_celltype::DataType
+    vs_vtk_celltype::DataType
+    anim_dt::Float64
+    vs_output_criterion::Function
+    anim_index::Int
+    Output(config::Dict) = (n = new(config[:DIM]==2 ? Triangle : Tetra,
+    config[:DIM]==2 ? Pixel : Voxel,
+    0.,null_udf,0
+    );
+        for i in fieldnames(Output)
+            if haskey(config,i)
+                setfield!(n,i,config[i])
+            end
+        end;
+    n
+    )
+end
 struct Configure{DIM,NDF}
     geometry::Vector{Float64}
     trees_num::Vector{Int64}
@@ -57,6 +78,7 @@ struct Configure{DIM,NDF}
     IB::Vector{AbstractBoundary}
     gas::Gas
     solver::Solver
+    output::Output
     user_defined::UDF
 end
 function config_IB(ib::Circle,config::Dict)
@@ -92,7 +114,7 @@ function Configure(config::Dict)
     end
     return Configure{config[:DIM],config[:NDF]}(config[:geometry],config[:trees_num],
         config[:quadrature],config[:vs_trees_num],config[:IC],config[:domain],IB,
-        gas,Solver(config),user_defined)
+        gas,Solver(config),Output(config),user_defined)
 end
 
 mutable struct Forest{DIM}
@@ -188,11 +210,12 @@ mutable struct AMR{DIM,NDF}
     global_data::Global_Data
     ghost::Ghost
     field::Field{DIM,NDF}
+    AMR(global_data::Global_Data{DIM,NDF},field) where{DIM,NDF} = (n = new{DIM,NDF}();
+        n.global_data = global_data;
+        n.field = field;
+        n
+    )
 end
-function AMR(global_data::Global_Data{DIM,NDF},ghost::Ghost,field::Field{DIM,NDF}) where{DIM,NDF}
-    return AMR{DIM,NDF}(global_data,ghost,field)
-end
-
 # partition
 
 struct Transfer_Data{DIM,NDF}

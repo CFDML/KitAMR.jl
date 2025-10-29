@@ -13,3 +13,6 @@ boundary_vs
 *.nsys-rep
 result_*
 *.pvtp
+animation
+*.json
+*.jld2
