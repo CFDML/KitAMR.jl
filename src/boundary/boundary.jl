@@ -411,7 +411,7 @@ end
 function initialize_solid_neighbor!(amr::AMR)
     for tree in amr.field.trees.data
         for ps_data in tree
-            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0)&&continue
+            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<=0)&&continue
             initialize_solid_neighbor!(ps_data,amr)
         end
     end
@@ -473,10 +473,10 @@ function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF})
     vs_data = ps_data.vs_data
     for i in solid_dirs
         solid_cell = ps_data.neighbor.data[i][1]
-        if ps_data.bound_enc!=0
-            ps_data.bound_enc!=-solid_cell.bound_enc&&throw(`Different immersed boundaries correspond to the same fluid cell!`)
-        end
-        ps_data.bound_enc=-solid_cell.bound_enc
+        # if ps_data.bound_enc!=0
+        #     ps_data.bound_enc!=-solid_cell.bound_enc&&throw(`Different immersed boundaries correspond to the same fluid cell!`)
+        # end
+        # ps_data.bound_enc=-solid_cell.bound_enc
         ib = amr.global_data.config.IB[-solid_cell.bound_enc]
         aux_point,normal = calc_intersect(ps_data.midpoint,solid_cell.midpoint,ib)
         svsdata = VS_Data{DIM,NDF}(

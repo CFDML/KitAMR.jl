@@ -146,6 +146,29 @@ function write_VTK(ps4est::Ptr{p8est_t},filename::String,fieldnames::Vector{Stri
     end
 end
 
+function vtk_data(vs_data::VS_Data{2,NDF},amr,::Type{T}) where{NDF,T<:Pixel}
+    global_data = amr.global_data
+    xmin,xmax,ymin,ymax = global_data.config.quadrature
+    Nx,Ny = global_data.config.vs_trees_num
+    AMR_VS_MAXLEVEL = global_data.config.solver.AMR_VS_MAXLEVEL
+    dx = (xmax - xmin) / Nx/2^AMR_VS_MAXLEVEL
+    dy = (ymax - ymin) / Ny/2^AMR_VS_MAXLEVEL
+    D = [dx,dy]
+    vertices = Matrix{Float64}(undef,2,4*length(vs_data.level))
+    midpoint = vs_data.midpoint
+    level = vs_data.level
+    dlevel = -(vs_data.level .- AMR_VS_MAXLEVEL)
+    cells = Vector{MeshCell}(undef,length(level))
+    solutions = vs_data.df;point_solutions = Matrix{Float64}(undef,4*vs_data.vs_num,NDF)
+    for i in eachindex(level)
+        for j in 1:4
+            @. vertices[:,(i-1)*4+j] = midpoint[i,:]+RMT[2][j]*2^dlevel[i]*D/2
+            @views @. point_solutions[4*(i-1)+j,:] = vs_data.df[i,:]
+        end
+        cells[i] = MeshCell(VTKCellTypes.VTK_PIXEL,(1:4).+4*(i-1))
+    end
+    return vertices,cells,point_solutions,solutions
+end
 #=
 example:
 function fieldvalues_fn(vs_data::VS_Data{3})
@@ -291,11 +314,19 @@ function save_result(ps4est::Ptr{p4est_t},amr::AMR{DIM,NDF};dir_path="") where{D
     trees = amr.field.trees.data
     config = amr.global_data.config
     index = 1
+    # tp1 = [-1.68603,0.05709202822871219];tp2 = [-1.64953,0.05709202822871219]
     for i in eachindex(trees)
         for j in eachindex(trees[i])
             ps_data = trees[i][j]
             ps_solution[index] = PS_Solution(ps_data)
             neighbor_nums[index] = neighbor_num(ps_data,ps4est,amr,index-1)
+            # isa(ps_data,InsideSolidData)&&continue
+            # midpoint = ps_data.midpoint;ds = ps_data.ds
+            # if midpoint[1]-0.5ds[1]<tp1[1]&&midpoint[1]+0.5ds[1]>tp1[1]&&midpoint[2]-0.5ds[2]<tp1[2]&&midpoint[2]+0.5ds[2]>tp1[2]
+            #     save_object("ps_data1.jld2",ps_copy(ps_data))
+            # elseif midpoint[1]-0.5ds[1]<tp2[1]&&midpoint[1]+0.5ds[1]>tp2[1]&&midpoint[2]-0.5ds[2]<tp2[2]&&midpoint[2]+0.5ds[2]>tp2[2]
+            #     save_object("ps_data2.jld2",ps_copy(ps_data))
+            # end
             index+=1
         end
     end
@@ -308,7 +339,11 @@ function save_result(ps4est::Ptr{p4est_t},amr::AMR{DIM,NDF};dir_path="") where{D
     else
         dir_path = "./"*dir_path*"/"
     end
-    !isdir(dir_path) && mkpath(dir_path)
+    if MPI.Comm_rank(MPI.COMM_WORLD)==0
+        !isdir(dir_path) && mkpath(dir_path)
+        !isdir(dir_path*"vtk/")&&mkpath(dir_path*"vtk/")
+    end
+    MPI.Barrier(MPI.COMM_WORLD)
     pro_path = pwd()
     cd(dir_path)
     p4est_save_ext("p",ps4est,Cint(0),Cint(0))
@@ -319,6 +354,7 @@ function save_result(ps4est::Ptr{p4est_t},amr::AMR{DIM,NDF};dir_path="") where{D
         save_object(dir_path * "solverset.jld2", solverset)
     end
     save_object(dir_path * "result_"*string(rank)*".jld2", result)
+    save_pvtu(dir_path*"vtk/field",ps4est,amr,amr.global_data.config.output.vtk_celltype)
     save_vs_result(amr;dir_path)
     save_boundary_result(dir_path,amr)
 end
@@ -333,7 +369,6 @@ function save_result(ps4est::Ptr{p8est_t},amr::AMR{DIM,NDF};dir_path="") where{D
         for j in eachindex(trees[i])
             ps_data = trees[i][j]
             ps_solution[index] = PS_Solution(ps_data)
-            # neighbor_nums[index] = neighbor_num(ps_data,ps4est,amr,index-1)
             index+=1
         end
     end
@@ -356,9 +391,147 @@ function save_result(ps4est::Ptr{p8est_t},amr::AMR{DIM,NDF};dir_path="") where{D
         solverset = SolverSet(ConfigureForSave(config),size)
         save_object(dir_path * "solverset.jld2", solverset)
     end
-    save_pvtu(dir_path*"vtk/field",ps4est,amr)
+    save_pvtu(dir_path*"vtk/field",ps4est,amr,amr.global_data.config.output.vtk_celltype)
     save_object(dir_path * "result_"*string(rank)*".jld2", result)
     save_boundary_result(dir_path,amr)
+end
+function save_pvtu(dir_path::String,p4est::Ptr{p4est_t},amr,celltype)
+    vertices,cells,point_solutions,solutions = pvtu_data(p4est,amr,celltype)
+    ranks = ones(Int,size(solutions,1))*MPI.Comm_rank(MPI.COMM_WORLD)
+    pvtk_grid(dir_path,vertices,cells;part = MPI.Comm_rank(MPI.COMM_WORLD)+1,nparts = MPI.Comm_size(MPI.COMM_WORLD)) do pvtk
+        pvtk["rho"] = @views solutions[:,1]
+        pvtk["velocity"] = @views (solutions[:,2],solutions[:,3])
+        pvtk["T"] = @views solutions[:,4]
+        pvtk["qf"] = (solutions[:,5],solutions[:,6])
+        pvtk["mpi_rank"] = ranks
+        pvtk["rho",VTKPointData()] = @views point_solutions[:,1]
+        pvtk["velocity",VTKPointData()] = @views (point_solutions[:,2],point_solutions[:,3])
+        pvtk["T",VTKPointData()] = @views point_solutions[:,4]
+        pvtk["qf",VTKPointData()] = (point_solutions[:,5],point_solutions[:,6])
+    end
+end
+function pvtu_data(p4est,amr,::Type{T}) where{T<:Triangle}
+    N = PointerWrapper(p4est).local_num_quadrants[]
+    tb = Vector{SVector{2,Float64}}(undef,4)
+    tb[1] = @SVector [-1.,-1.];tb[2] = @SVector [1.,-1.];tb[3] = @SVector [1.,1.];tb[4] = @SVector [-1.,1.]
+    ptb = Vector{SVector{3,Int}}(undef,4)# pixel-triangle vertices table
+    ptb[1] = @SVector [1,2,5];ptb[2] = @SVector [2,3,5];ptb[3] = @SVector [3,4,5];ptb[4] = @SVector [1,4,5]
+    vertices = Matrix{Float64}(undef,2,5*N)
+    cells = Vector{MeshCell}(undef,4*N)
+    levels = Vector{Int8}(undef,N)
+    index = 1
+    data = [index,vertices,cells,levels]
+    p_data = pointer_from_objref(data)
+    GC.@preserve data AMR_volume_iterate(p4est;user_data = p_data) do ip,data,dp
+        d = unsafe_pointer_to_objref(data);index,vertices,cells = d
+        ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+        if isa(ps_data,InsideSolidData)
+            ds, midpoint = quad_to_cell(ip.p4est,ip.treeid[],ip.quad)
+        else
+            ds = ps_data.ds
+            midpoint = ps_data.midpoint
+        end
+        for i in 1:4
+            @. vertices[:,(index-1)*5+i] = midpoint+tb[i]/2*ds
+        end
+        vertices[:,5*index] .= midpoint
+        for i in eachindex(ptb)
+            cells[4*(index-1)+i] = MeshCell(VTKCellTypes.VTK_TRIANGLE,ptb[i].+5*(index-1))
+        end
+        levels[index] = ip.quad.level[]
+        d[1]+=1
+    end
+    solutions = Matrix{Float64}(undef,4*N,6)
+    point_solutions = Matrix{Float64}(undef,5*N,6)
+    # bound_encs = Vector{Float64}(undef,N)
+    index = 1
+    for tree in amr.field.trees.data
+        for ps_data in tree
+            if isa(ps_data,InsideSolidData)||ps_data.bound_enc<0
+                solutions[4*(index-1)+1:4*index,:].=NaN
+                point_solutions[5*(index-1)+1:5*index,:] .= NaN
+            else
+                for i in 1:4
+                    solutions[4*(index-1)+i,1] = ps_data.prim[1]
+                    @views solutions[4*(index-1)+i,2:3] .= ps_data.prim[2:3]
+                    solutions[4*(index-1)+i,4] = 1.0/ps_data.prim[end]
+                    @views solutions[4*(index-1)+i,5:6] .= ps_data.qf
+                end
+                
+                vs_data = ps_data.vs_data
+                for i in 1:4
+                    df = vs_data.df
+                    sdf = vs_data.sdf
+                    dx = 0.5*ps_data.ds.*tb[i]
+                    @views point_df = df+[dot(sdf[i,j,:],dx) for i in axes(df,1), j in axes(df,2)]
+                    w = calc_w0(vs_data.midpoint,point_df,vs_data.weight,amr.global_data)
+                    prim = get_prim(w,amr.global_data)
+                    qf = calc_qf(vs_data.midpoint,point_df,vs_data.weight,prim,amr.global_data)
+                    point_solutions[5*(index-1)+i,1] = prim[1]
+                    @views point_solutions[5*(index-1)+i,2:3] .= prim[2:3]
+                    point_solutions[5*(index-1)+i,4] = 1.0/prim[end]
+                    @views point_solutions[5*(index-1)+i,5:6] .= qf
+                end
+                    point_solutions[5*index,1] = ps_data.prim[1]
+                    @views point_solutions[5*index,2:3] .= ps_data.prim[2:3]
+                    point_solutions[5*index,4] = 1.0/ps_data.prim[end]
+                    @views point_solutions[5*index,5:6] .= ps_data.qf
+            end
+            index += 1
+        end
+    end
+    return vertices,cells,point_solutions,solutions
+end
+function pvtu_data(p4est,amr,::Type{T}) where{T<:Pixel}
+    N = PointerWrapper(p4est).local_num_quadrants[]
+    tb = Vector{SVector{2,Float64}}(undef,4)
+    tb[1] = @SVector [-1.,-1.];tb[2] = @SVector [1.,-1.];tb[3] = @SVector [-1.,1.];tb[4] = @SVector [1.,1.]
+    vertices = Matrix{Float64}(undef,2,4*N)
+    cells = Vector{MeshCell}(undef,N)
+    levels = Vector{Int8}(undef,N)
+    index = 1
+    data = [index,vertices,cells,levels]
+    p_data = pointer_from_objref(data)
+    GC.@preserve data AMR_volume_iterate(p4est;user_data = p_data) do ip,data,dp
+        d = unsafe_pointer_to_objref(data);index,vertices,cells = d
+        ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+        if isa(ps_data,InsideSolidData)
+            ds, midpoint = quad_to_cell(ip.p4est,ip.treeid[],ip.quad)
+        else
+            ds = ps_data.ds
+            midpoint = ps_data.midpoint
+        end
+        for i in 1:4
+            @. vertices[:,(index-1)*4+i] = midpoint+tb[i]/2*ds
+        end
+        cells[index] = MeshCell(VTKCellTypes.VTK_PIXEL,(1:4).+4*(index-1))
+        levels[index] = ip.quad.level[]
+        d[1]+=1
+    end
+    solutions = Matrix{Float64}(undef,N,6)
+    point_solutions = Matrix{Float64}(undef,4*N,6)
+    index = 1
+    for tree in amr.field.trees.data
+        for ps_data in tree
+            if isa(ps_data,InsideSolidData)||ps_data.bound_enc<0
+                solutions[index,:].=NaN
+                point_solutions[4*(index-1)+1:4*index,:] .= NaN
+            else
+                solutions[index,1] = ps_data.prim[1]
+                @views solutions[index,2:3] .= ps_data.prim[2:3]
+                solutions[index,4] = 1.0/ps_data.prim[end]
+                @views solutions[index,5:6] .= ps_data.qf
+                for i in 1:4
+                    point_solutions[4*(index-1)+i,1] = ps_data.prim[1]
+                    @views point_solutions[4*(index-1)+i,2:3] .= ps_data.prim[2:3]
+                    point_solutions[4*(index-1)+i,4] = 1.0/ps_data.prim[end]
+                    @views point_solutions[4*(index-1)+i,5:6] .= ps_data.qf
+                end
+            end
+            index += 1
+        end
+    end
+    return vertices,cells,point_solutions,solutions
 end
 function save_pvtu(dir_path::String,p4est::Ptr{p8est_t},amr::AMR{3})
     N = PointerWrapper(p4est).local_num_quadrants[]
@@ -405,7 +578,6 @@ function save_pvtu(dir_path::String,p4est::Ptr{p8est_t},amr::AMR{3})
             index += 1
         end
     end
-
     ranks = ones(Int,N)*MPI.Comm_rank(MPI.COMM_WORLD)
     pvtk_grid(dir_path,vertices,cells;part = MPI.Comm_rank(MPI.COMM_WORLD)+1,nparts = MPI.Comm_size(MPI.COMM_WORLD)) do pvtk
         pvtk["rho"] = @views solutions[:,1]

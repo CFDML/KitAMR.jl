@@ -68,20 +68,6 @@ function boundary_flag(midpoint::AbstractVector,ds::AbstractVector,global_data::
     end
     return solid_cell_flag(boundary,midpoint,ds,global_data)
 end
-# function both_sides_boundary_flag(
-#     midpoint::Vector{Float64},ds::Vector{Float64},
-#     global_data::Global_Data{DIM},
-# ) where{DIM}
-#     domain = global_data.config.domain
-#     boundary = global_data.config.IB
-#     for i in eachindex(domain)
-#         boundary_flag(domain[i],midpoint,ds,global_data) && return true
-#     end
-#     for i in eachindex(boundary)
-#         boundary_flag(boundary[i],midpoint,ds,global_data) && return true
-#     end
-#     return false
-# end
 function pre_ps_refine_flag(midpoint,ds,global_data::Global_Data{DIM}) where{DIM}
     domain = global_data.config.domain
     boundary = global_data.config.IB
@@ -101,21 +87,25 @@ function ps_copy(data::PS_Data{DIM,NDF}) where{DIM,NDF}
         sw=copy(data.sw),
         vs_data=deepcopy(data.vs_data),
         prim = copy(data.prim),
+        flux = copy(data.flux),
+        # neighbor = data.neighbor
     )
     return p
 end
 function ps_merge(Odatas::Vector,index::Int,global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     data = Odatas[index]
     vs_data = data.vs_data;vs_num = vs_data.vs_num
+    w_new = [sum([x.w[i] for x in Odatas]) for i in 1:DIM+2]./2^DIM
     p = PS_Data(DIM,NDF;
-        ds = data.ds *2.0,
-        midpoint = data.midpoint - 0.5 * data.ds .* RMT[DIM][index],
-        w = [sum([x.w[i] for x in Odatas]) for i in 1:DIM+2]./2^DIM,
-        prim = get_prim(p.w,global_data),
-        sw = [sum([x.sw[i,j] for x in Odatas]) for i in 1:DIM+2,j in 1:DIM]./2^DIM,
-        vs_data = VS_Data{DIM,NDF}(vs_num,copy(vs_data.level),copy(vs_data.weight),copy(vs_data.midpoint),
-            zeros(vs_num,NDF),zeros(vs_num,NDF,DIM),zeros(vs_num,NDF))
-    )
+            ds = data.ds *2.0,
+            midpoint = data.midpoint - 0.5 * data.ds .* RMT[DIM][index],
+            w = w_new,
+            prim = get_prim(w_new,global_data),
+            sw = [sum([x.sw[i,j] for x in Odatas]) for i in 1:DIM+2,j in 1:DIM]./2^DIM,
+            flux = [sum([x.flux[i] for x in Odatas]) for i in 1:DIM+2]./2^DIM,
+            vs_data = VS_Data{DIM,NDF}(vs_num,copy(vs_data.level),copy(vs_data.weight),copy(vs_data.midpoint),
+                zeros(vs_num,NDF),zeros(vs_num,NDF,DIM),zeros(vs_num,NDF))
+        )
     p.neighbor.state[1] = BALANCE_FLAG
     p.neighbor.data[1] = Odatas
     return p
@@ -130,9 +120,10 @@ function ps_refine_flag(
         return Cint(1)
     end
     global_data.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,global_data,qp.level[]) && return Cint(1)
-    agrad = [maximum(abs.(ps_data.sw[i,:])) for i in 1:DIM+2]
+    agrad = ps_data.flux
     rgrad = maximum(agrad ./ (global_data.status.gradmax.+EPS))
-    if rgrad > 2.0^(DIM+qp.level[] - global_data.config.solver.AMR_PS_MAXLEVEL) * ADAPT_COEFFI_PS
+    !global_data.config.user_defined.dynamic_ps_refine_flag(;ps_data)&&return Cint(0)
+    if rgrad > 2.0^(2*(qp.level[] - global_data.config.solver.AMR_DYNAMIC_PS_MAXLEVEL)) * ADAPT_COEFFI_PS # 2 for second-order scheme
         flag = Cint(1)
     else
         flag = Cint(0)
@@ -179,8 +170,9 @@ function ps_replace(::Val{1}, out_quad, in_quads, which_tree, amr::AMR{DIM}) whe
             @. ps_data.midpoint += 0.5 * ps_data.ds * RMT[DIM][i]
             for j = 1:DIM
                 @. vs_data.df += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(vs_data.sdf[:, :, j])
-                @. ps_data.w += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(ps_data.sw[:, j])
             end
+            ps_data.w = calc_w0(ps_data)
+            ps_data.prim = get_prim(ps_data.w,amr.global_data)
             if i==1
                 ps_data.neighbor.state[2] = BALANCE_FLAG
                 ps_data.neighbor.data[2] = [Odata]
@@ -215,7 +207,6 @@ function ps_replace(::ChildNum, out_quad, in_quads, which_tree, amr::AMR{DIM,NDF
         for i in eachindex(Odatas)
             vs_data_n = Odatas[i].vs_data
             vs_merge!(vs_data.sdf,vs_data_n.sdf,vs_data.level,vs_data_n.level,amr)
-            # vs_merge!(vs_data.df,vs_data_n.df,vs_data.level,vs_data_n.level,ps_data.prim,vs_data.midpoint,vs_data_n.midpoint,amr)
             vs_merge!(vs_data.df,vs_data_n.df,vs_data.level,vs_data_n.level,amr)
         end
         vs_data.df./=2^DIM;vs_data.sdf./=2^DIM
@@ -242,7 +233,7 @@ function ps_refine!(p4est::Ptr{p4est_t},amr::AMR; recursive = 0)
     p4est_refine_ext(
         p4est,
         recursive,
-        amr.global_data.config.solver.AMR_PS_MAXLEVEL,
+        amr.global_data.config.solver.AMR_DYNAMIC_PS_MAXLEVEL,
         @cfunction(
             ps_refine_flag,
             Cint,
@@ -391,14 +382,15 @@ end
 
 function ps_coarsen_flag(ps_datas::Vector{PS_Data}, levels::Vector{Int}, amr::AMR{DIM,NDF}) where{DIM,NDF}
     global_data = amr.global_data
+    levels[1]>global_data.config.solver.AMR_DYNAMIC_PS_MAXLEVEL&&return Cint(0)
     flag = Cint(1)
     for i = 1:2^DIM
         ps_data = ps_datas[i]
         (ps_data.bound_enc!=0||domain_flag(global_data,ps_data.midpoint,ps_data.ds)) && return Cint(0)
         global_data.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,global_data,levels[i]-1) && return Cint(0)
-        agrad = [maximum(abs.(ps_data.sw[i,:])) for i in 1:DIM+2]
+        agrad = ps_data.flux
         rgrad = maximum(agrad ./ (global_data.status.gradmax.+EPS))
-        if rgrad > 2.0^(DIM+levels[i] - global_data.config.solver.AMR_PS_MAXLEVEL) * ADAPT_COEFFI_PS
+        if rgrad > 2.0^(2*(levels[i]-1 - global_data.config.solver.AMR_DYNAMIC_PS_MAXLEVEL)) * ADAPT_COEFFI_PS # 2 for second-order scheme
             flag = Cint(0)
             return flag
         end
@@ -579,17 +571,25 @@ function pre_ps_balance!(p4est::Ptr{p8est_t})
     p8est_balance_ext(p4est, P8EST_CONNECT_FULL, C_NULL, C_NULL)
 end
 
-function adaptive!(ps4est::P_pxest_t,amr::AMR;ps_interval=10,vs_interval=80,partition_interval=40)
+function adaptive!(ps4est::P_pxest_t,amr::AMR;ps_interval=40,vs_interval=80,partition_interval=40)
     amr.global_data.status.residual.redundant_step>0&&(return nothing)
     res = maximum(amr.global_data.status.residual.residual)
     converge_ratio = res/TOLERANCE>100 ? 1 : Int(floor(100*TOLERANCE/res))
     flag = false
     if amr.global_data.config.solver.PS_DYNAMIC_AMR&&amr.global_data.status.ps_adapt_step > ps_interval*converge_ratio
         update_slope!(amr)
+        amr.global_data.config.solver.AMR_PS_SMOOTH&&slope_exchange!(ps4est,amr)
         update_gradmax!(amr)
         ps_refine!(ps4est,amr)
         ps_coarsen!(ps4est)
         ps_balance!(ps4est)
+        for tree in amr.field.trees.data
+            for ps_data in tree
+                isa(ps_data,InsideSolidData)&&continue
+                ps_data.bound_enc!=0&&continue
+                ps_data.flux .= 0.
+            end
+        end
         flag = true;amr.global_data.status.ps_adapt_step = 0
     end
     if amr.global_data.config.solver.VS_DYNAMIC_AMR&&amr.global_data.status.vs_adapt_step > vs_interval*converge_ratio

@@ -166,7 +166,7 @@ function update_solid_mirror_data!(ps4est,amr::AMR{DIM,NDF}) where{DIM,NDF}
             ap = Base.unsafe_wrap(
                 Vector{Cdouble},
                 mirror_data_pointers[i],
-                3 * DIM + 4 + NDF * vs_num,
+                3 * DIM + 4 + NDF * vs_num, # ds(DIM), midpoint(DIM), w(DIM+2), vs_num(1), bound_enc(1)
             )
 			ap[DIM*2+1:DIM*3+2] = ps_data.w
             vs_temp = @view(ap[3*DIM+4+1:end])

@@ -1,5 +1,3 @@
-abstract type AbstractGas end
-
 @with_kw mutable struct Gas <: AbstractGas
     Kn::Float64 = 0.05
     Ma::Float64 = 0.0
