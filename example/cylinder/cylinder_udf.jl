@@ -1,6 +1,6 @@
 using LinearAlgebra
 function shock_wave_region(midpoint,ds,global_data,level)
-    if midpoint[1]>-5.0&&midpoint[1]<5.0&&midpoint[2]<5.0&&midpoint[2]>-5.0&&√sum(midpoint.^2)>1.0&&level<5
+    if midpoint[1]>-5.0&&midpoint[1]<5.0&&midpoint[2]<5.0&&midpoint[2]>-5.0&&√sum(midpoint.^2)>1.0&&level<4
         return true
     end
     return false

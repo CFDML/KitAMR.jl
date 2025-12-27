@@ -71,7 +71,7 @@ end
 struct Configure{DIM,NDF}
     geometry::Vector{Float64}
     trees_num::Vector{Int64}
-    quadrature::Vector{Float64}
+    quadrature::Union{AbstractQuadrature,Vector{Float64}}
     vs_trees_num::Vector{Int64}
     IC::AbstractInitCondType
     domain::Vector{Domain}
@@ -99,7 +99,9 @@ function Configure(config::Dict)
             setfield!(gas,i,config[i])
         end
     end
-    gas.μᵣ = ref_vhs_vis(gas.Kn,gas.αᵣ,gas.ωᵣ)
+    if !haskey(config,:μᵣ)
+        gas.μᵣ = ref_vhs_vis(gas.Kn,gas.αᵣ,gas.ωᵣ)
+    end
     IB = haskey(config,:IB) ? config[:IB] : []
     for i in eachindex(IB)
         IB[i] = config_IB(IB[i],config)
@@ -149,6 +151,7 @@ mutable struct Status
     partition_step::Int
     residual::Residual
     save_flag::Base.RefValue{Bool}
+    ib_ghost::Bool
 end
 function Status(config)
     DIM = config[:DIM]
@@ -157,11 +160,11 @@ function Status(config)
     vs_trees_num = config[:vs_trees_num]
     quadrature = config[:quadrature]
     ds = [(geometry[2*i]-geometry[2*i-1])/trees_num[i]/2^config[:AMR_PS_MAXLEVEL] for i in 1:DIM]
-    U = [max(quadrature[2*i],abs(quadrature[2*i-1])) -
+    U = isa(quadrature,Vector) ? [max(quadrature[2*i],abs(quadrature[2*i-1])) -
         (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
-        2^config[:AMR_VS_MAXLEVEL] / 2 for i in 1:DIM]
+        2^config[:AMR_VS_MAXLEVEL] / 2 for i in 1:DIM] : [maximum(abs.(quadrature.vcoords)) for _ in 1:DIM]
     Δt = config[:CFL]*minimum(ds ./ U)
-    return Status(0,ones(DIM+2),Δt*TIME_STEP_CONTRACT_RATIO,Δt,0.,1,1,1,Residual(DIM),Ref(false))
+    return Status(0,ones(DIM+2),Δt*TIME_STEP_CONTRACT_RATIO,Δt,0.,1,1,1,Residual(DIM),Ref(false),false)
 end
 
 mutable struct Global_Data{DIM,NDF}

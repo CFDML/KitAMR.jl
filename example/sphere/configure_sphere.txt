@@ -23,8 +23,8 @@
 # AMR_VS_MAXLEVEL: maximum level of velocity space refinement
 DIM = 3
 NDF = 1
-AMR_PS_MAXLEVEL = 4
-AMR_VS_MAXLEVEL = 3
+AMR_PS_MAXLEVEL = 5
+AMR_VS_MAXLEVEL = 2
 PS_DYNAMIC_AMR = false
 VS_DYNAMIC_AMR = false
 geometry = [-4.,4.,-4.,4.,-4.,4.]
@@ -40,5 +40,7 @@ CFL = 0.3
 K = 0.0
 Kn = 0.03
 ω = 0.75
+ωᵣ = 0.75
+μᵣ = 5.0*√π/16.0*0.03
 static_ps_refine_flag = Main.shock_wave_region
 static_vs_refine_flag = Main.vs_refine_region

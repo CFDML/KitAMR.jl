@@ -21,7 +21,7 @@ function solid_flag(boundary::AbstractCircle,midpoint::AbstractVector) # Does mi
     return xor(norm(midpoint.-boundary.center)>boundary.radius,boundary.solid)
 end
 function solid_cell_flag(boundary::AbstractCircle,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data,inside::Bool) # Ghost nodes, those are inside solid domain and immediately adjacent the boundary.
-    (boundary_flag(boundary,midpoint,ds,global_data) && xor(boundary.solid,!inside)) && return true
+    (boundary_flag(boundary,midpoint,ds,global_data) && inside) && return true
     return false
 end
 function calc_IB_ρw(aux_point::AbstractVector,bound::Circle,midpoint::AbstractMatrix,weight::AbstractVector,df::AbstractMatrix,vn::AbstractVector,Θ::AbstractVector)
@@ -38,16 +38,16 @@ function calc_intersect(f_midpoint,s_midpoint,circle::Circle)
     if abs(f_midpoint[1]-s_midpoint[1])<EPS
         t = acos((f_midpoint[1]-c[1])/r)
         if f_midpoint[2]>c[2]
-            ap = [r*cos(t),r*sin(t)];n=ap./r
+            ap = [r*cos(t),r*sin(t)];n=ap./(circle.solid ? r : -r)
         else
-            ap = [r*cos(t),-r*sin(t)];n = ap./r
+            ap = [r*cos(t),-r*sin(t)];n = ap./(circle.solid ? r : -r)
         end
     else
         t = asin((f_midpoint[2]-c[2])/r)
         if f_midpoint[1]>c[1]
-            ap = [r*cos(t),r*sin(t)];n = ap./r
+            ap = [r*cos(t),r*sin(t)];n = ap./ (circle.solid ? r : -r)
         else
-            ap = [-r*cos(t),r*sin(t)];n = ap./r
+            ap = [-r*cos(t),r*sin(t)];n = ap./ (circle.solid ? r : -r)
         end
     end
     return ap,n
@@ -60,6 +60,6 @@ function calc_intersect(f_midpoint,s_midpoint,circle::Sphere)
     ap = copy(f_midpoint);n = copy(f_midpoint)
     rz = sqrt(r^2-x^2-y^2)
     dz = abs((rz-r_midpoint[dir])/(s_midpoint[dir]-f_midpoint[dir])) < 1 ? rz-r_midpoint[dir] : -rz-r_midpoint[dir]
-    ap[dir] = dz+f_midpoint[dir];n[dir] = dz+r_midpoint[dir];n/=r
+    ap[dir] = dz+f_midpoint[dir];n[dir] = dz+r_midpoint[dir];n/=(circle.solid ? r : -r)
     return ap,n
 end

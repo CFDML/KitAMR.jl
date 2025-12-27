@@ -1,9 +1,10 @@
 # Domain boundary
 struct Domain{T<:AbstractBoundaryType} <: AbstractBoundary
     id::Int
+    refine::Bool
     bc::AbstractBCType
-    Domain(T,id) = new{T}(id)
-    Domain(T,id,bc) = new{T}(id,bc)
+    Domain(T,id;refine=false) = new{T}(id,refine)
+    Domain(T,id,bc;refine=false) = new{T}(id,refine,bc)
 end
 struct DomainFace{DIM,NDF,T}<:BoundaryFace
     rot::Float64
@@ -54,7 +55,7 @@ struct Vertices{DIM,T<:AbstractBoundaryType} <: AbstractBoundary
     refine_coeffi::Real
     bc::AbstractBCType
     box::Vector{Vector{Float64}} # [[xmin,ymin,zmin],[xmax,ymax,zmax]]
-    refine_radius::Real
+    search_radius::Real
     Vertices(::Type{T},file::String,solid,refine_coeffi,bc) where{T<:AbstractBoundaryType}= (
         s = CSV.read(file,DataFrame;header=true);
         DIM = length(names(s));

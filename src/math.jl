@@ -162,7 +162,7 @@ function calc_qf(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVec
     @views heat_flux_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],prim,weight)
 end
 function calc_qf(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,prim::AbstractVector,::Global_Data{3,1})
-    @views heat_flux_2D2F(midpoint[:,1],midpoint[:,2],midpoint[:,3],df[:,1],prim,weight)
+    @views heat_flux_3D1F(midpoint[:,1],midpoint[:,2],midpoint[:,3],df[:,1],prim,weight)
 end
 # function calc_boundary_qf(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,fprim::AbstractVector,sprim::AbstractVector,Θ::AbstractVector,::Global_Data{2,2})
 #     fweight = @. weight*(1.0-Θ)

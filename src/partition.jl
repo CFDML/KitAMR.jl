@@ -410,6 +410,7 @@ function unpack_data(vs_nums, data, amr::AMR{DIM,NDF}) where{DIM,NDF}
         else
             encs = data.encs[(SOLID_CELL_ID_NUM+1)*(i-1)+1:(SOLID_CELL_ID_NUM+1)*i]
             w = data.w[(DIM+2)*(i-1)+1:(DIM+2)*i]
+            prim = get_prim(w,amr.global_data)
             vs_levels = data.vs_levels[offset+1:offset+vs_num]
             vs_midpoints =
                 reshape(data.vs_midpoints[DIM*offset+1:DIM*(offset+vs_num)], vs_num, DIM)
@@ -424,7 +425,7 @@ function unpack_data(vs_nums, data, amr::AMR{DIM,NDF}) where{DIM,NDF}
                 zeros(vs_num, NDF, DIM),
                 zeros(vs_num, NDF),
             )
-            transfer_ps_datas[i] = PS_Data(DIM,NDF;bound_enc=encs[1],solid_cell_index=encs[2:SOLID_CELL_ID_NUM+1],w, vs_data)
+            transfer_ps_datas[i] = PS_Data(DIM,NDF;bound_enc=encs[1],solid_cell_index=encs[2:SOLID_CELL_ID_NUM+1],w, prim, vs_data)
         end
         offset += vs_num
     end

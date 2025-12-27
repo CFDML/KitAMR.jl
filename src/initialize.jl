@@ -223,15 +223,10 @@ function init_solid_midpoints_kernel(ip, data, dp)
     global_data, solid_midpoints = unsafe_pointer_to_objref(data)
     boundaries = global_data.config.IB
     ds, midpoint = quad_to_cell(ip.p4est, ip.treeid[], ip.quad)
-    solid_cell_flags = Vector{Bool}(undef,length(global_data.config.IB))
+    # solid_cell_flags = Vector{Bool}(undef,length(global_data.config.IB))
     for i in eachindex(boundaries)
         inside = solid_flag(boundaries[i],midpoint)
-        solid_cell_flags[i] = solid_cell_flag(boundaries[i],midpoint,ds,global_data,inside)
-    end
-    for i in eachindex(solid_cell_flags)
-        if solid_cell_flags[i]
-            push!(solid_midpoints[i],midpoint)
-        end
+        solid_cell_flag(boundaries[i],midpoint,ds,global_data,inside)&&push!(solid_midpoints[i],midpoint)
     end
 end
 function init_solid_midpoints(info, data)
@@ -249,8 +244,8 @@ function init_ps_p4est_kernel(ip, data, dp)
         boundary = boundaries[i]
         inside = solid_flag(boundary,midpoint)
         bf = boundary_flag(boundary,midpoint,ds,global_data)
-	    solid_cell_flags[i] = (bf && xor(boundary.solid,!inside))&&ip.quad.level[]==global_data.config.solver.AMR_PS_MAXLEVEL
-        target_cell_flags[i] = (bf && !xor(boundary.solid,!inside))&&ip.quad.level[]==global_data.config.solver.AMR_PS_MAXLEVEL
+	    solid_cell_flags[i] = (bf && inside)&&ip.quad.level[]==global_data.config.solver.AMR_PS_MAXLEVEL
+        target_cell_flags[i] = (bf && !inside)&&ip.quad.level[]==global_data.config.solver.AMR_PS_MAXLEVEL
         flag = flag&&(!inside||solid_cell_flags[i])
         !flag&&break
     end
@@ -265,7 +260,7 @@ function init_ps_p4est_kernel(ip, data, dp)
         ps_data.midpoint .= midpoint
         ps_data.prim .= initial_prim(ic;midpoint = ps_data.midpoint)
         ps_data.w .= get_conserved(ps_data, global_data)
-        ps_data.vs_data = init_VS(ps_data.prim, global_data)
+        ps_data.vs_data = init_vs(ps_data.prim, global_data)
         for i in eachindex(solid_cell_flags)
             if solid_cell_flags[i]
                 ps_data.bound_enc<0&&(@error `The solid cell is shared!`)
@@ -303,6 +298,7 @@ end
 function pre_refine!(ps4est::P_pxest_t,global_data::Global_Data)
     pre_ps_refine!(ps4est,global_data)
     pre_ps_balance!(ps4est)
+    # AMR_partition(ps4est)
     solid_midpoints = Vector{Vector{Vector{Float64}}}(undef,length(global_data.config.IB)) # boundaries{solidcells{midpoints{}}}
     for i in eachindex(solid_midpoints)
         solid_midpoints[i] = Vector{Float64}[]
@@ -317,8 +313,8 @@ function pre_refine!(ps4est::P_pxest_t,global_data::Global_Data)
         IB_pre_ps_refine!(ps4est,global_data)
         pre_ps_coarsen!(ps4est;recursive=1)
     end
-    pre_ps_balance!(ps4est)
     AMR_partition(ps4est)
+    pre_ps_balance!(ps4est)
 end
 function init_ps!(ps4est::P_pxest_t,global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     fp = PointerWrapper(ps4est)
@@ -373,5 +369,6 @@ function init(config::Dict)
     initialize_neighbor_data!(ps4est, amr)
     initialize_solid_neighbor!(amr)
     initialize_faces!(ps4est, amr)
+    # ib_ghost_check!(amr)
     return (ps4est, amr)
 end

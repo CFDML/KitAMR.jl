@@ -62,3 +62,5 @@ abstract type Period <: AbstractBoundaryType end
 const AbstractBCType = Union{Vector,Function}
 
 abstract type AbstractVsData{DIM,NDF} end
+
+abstract type AbstractQuadrature end

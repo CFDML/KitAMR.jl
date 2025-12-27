@@ -1,7 +1,7 @@
 struct ConfigureForSave{DIM,NDF}
     geometry::Vector{Float64}
     trees_num::Vector{Int64}
-    quadrature::Vector{Float64}
+    quadrature::Union{Vector{Float64},AbstractQuadrature}
     vs_trees_num::Vector{Int64}
     IC::AbstractInitCondType
     domain::Vector{Domain}
