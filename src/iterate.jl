@@ -189,25 +189,16 @@ function iterate!(::Euler,amr::AMR{DIM}) where{DIM}
             end
             prim = get_prim(ps_data, global_data)
             f = vs_data.df
-            if 1/prim[end]<1e-3
-                @. f = max(f,0.)
-                ps_data.w = calc_w0(ps_data)
-                prim = get_prim(ps_data,global_data)
-                @. f += Δt/area*vs_data.flux
-                global_data.status.Δt=TIME_STEP_CONTRACT_RATIO*global_data.status.Δt_ξ
-            else
-                τ = get_τ(prim, gas.μᵣ, gas.ω)
-                ps_data.qf .= qf = calc_qf(vs_data, prim)
-                F = discrete_maxwell(vs_data.midpoint, prim, global_data)
-                F .+= shakhov_part(vs_data.midpoint, F, prim, qf, global_data)
-                @. f = (τ-Δt)/τ*f+Δt/τ*F+Δt/area*vs_data.flux
-            end
+            τ = get_τ(prim, gas.μᵣ, gas.ω)
+            ps_data.qf .= qf = calc_qf(vs_data, prim)
+            F = discrete_maxwell(vs_data.midpoint, prim, global_data)
+            F .+= shakhov_part(vs_data.midpoint, F, prim, qf, global_data)
+            @. f = (τ-Δt)/τ*f+Δt/τ*F+Δt/area*vs_data.flux
             residual_check!(ps_data,prim,global_data)
             ps_data.prim .= prim
             vs_data.flux .= 0.0
         end
     end
-    Δt_comm!(global_data)
 end
 function residual_check!(ps_data::PS_Data,prim::Vector{Float64},global_data::Global_Data)
     Res = global_data.status.residual

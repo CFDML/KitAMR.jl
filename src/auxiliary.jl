@@ -239,7 +239,7 @@ function cut_rect(n::Vector{Float64},vertices::Vector{Vector{Float64}}) # The sp
         end
     end
 end
-function ray_casting(point::Vector{Float64},vertices::Vector{Vector{Float64}})
+function ray_casting(point::Vector{Float64},vertices::Vector{Vector{Float64}}) # Inside the closed curve?
     n = length(vertices)
     count = 0
     for i in 1:n
@@ -267,7 +267,7 @@ function calc_normal(p1,p2,s1,s2) # Calculate the unit normal vector of the vect
     end
     return n
 end
-function find_horizontal_intersection(s_midpoint, f_midpoint, points)
+function find_horizontal_intersection_2D(s_midpoint, f_midpoint, points)
     n = length(points)
     x_seg_min, x_seg_max = minmax(s_midpoint[1], f_midpoint[1])
     y0 = s_midpoint[2]
@@ -300,7 +300,40 @@ function find_horizontal_intersection(s_midpoint, f_midpoint, points)
     return Float64[],Float64[]
 end
 
-function find_vertical_intersection(s_midpoint, f_midpoint, points)
+function find_horizontal_intersection_3D(s_midpoint, f_midpoint, points)
+    n = length(points)
+    x_seg_min, x_seg_max = minmax(s_midpoint[1], f_midpoint[1])
+    y0 = s_midpoint[2]; z0 = s_midpoint[3]
+    for i in 1:n
+        p1 = points[i]
+        p2 = points[i%n + 1]
+        x1, y1, z1 = p1
+        x2, y2, z2 = p2
+        if ((y1 ≤ y0 ≤ y2) || (y2 ≤ y0 ≤ y1))&&((z1 ≤ z0 ≤ z2) || (z2 ≤ z0 ≤ z1))
+            t = (y0 - y1) / (y2 - y1)
+            if 0 < t < 1
+                x_intersect = x1 + t * (x2 - x1)
+                if x_seg_min ≤ x_intersect ≤ x_seg_max
+                    return [x_intersect, y0],calc_normal(s_midpoint, f_midpoint, p1, p2)
+                end
+            elseif t==1
+                x_intersect = x1 + t * (x2 - x1)
+                if x_seg_min ≤ x_intersect ≤ x_seg_max
+                    p3 = points[i%n+2]
+                    n1 = calc_normal(s_midpoint, f_midpoint, p1, p2)
+                    n2 = calc_normal(s_midpoint, f_midpoint, p2, p3)
+                    n0 = n1+n2;n0/=norm(n0)
+                    return [x_intersect, y0],n0
+                end
+            end
+        end
+    end
+    @show s_midpoint f_midpoint
+    throw("Intersect error!")
+    return Float64[],Float64[]
+end
+
+function find_vertical_intersection_2D(s_midpoint, f_midpoint, points)
     n = length(points)
     y_seg_min, y_seg_max = minmax(s_midpoint[2], f_midpoint[2])
     x0 = s_midpoint[1]
@@ -333,7 +366,40 @@ function find_vertical_intersection(s_midpoint, f_midpoint, points)
     return Float64[],Float64[]
 end
 
-function find_intersections(s_midpoint, f_midpoint, closed_curve)
+function find_transverse_intersection_3D(s_midpoint, f_midpoint, points)
+    n = length(points)
+    z_seg_min, z_seg_max = minmax(s_midpoint[3], f_midpoint[3])
+    x0 = s_midpoint[1]; y0 = 
+    for i in 1:n
+        p1 = points[i]
+        p2 = points[i%n + 1]
+        x1, y1 = p1
+        x2, y2 = p2
+        if (x1 ≤ x0 ≤ x2) || (x2 ≤ x0 ≤ x1)
+            t = (x0 - x1) / (x2 - x1)
+            if 0 < t < 1
+                y_intersect = y1 + t * (y2 - y1)
+                if y_seg_min ≤ y_intersect ≤ y_seg_max
+                    return [x0, y_intersect],calc_normal(s_midpoint, f_midpoint, p1, p2)
+                end
+            elseif t==1
+                y_intersect = y1 + t * (y2 - y1)
+                if y_seg_min ≤ y_intersect ≤ y_seg_max
+                    p3 = points[i%n+2]
+                    n1 = calc_normal(s_midpoint, f_midpoint, p1, p2)
+                    n2 = calc_normal(s_midpoint, f_midpoint, p2, p3)
+                    n0 = n1+n2;n0/=norm(n0)
+                    return [x0, y_intersect],n0
+                end
+            end
+        end
+    end
+    @show s_midpoint f_midpoint
+    throw("Intersect error!")
+    return Float64[],Float64[]
+end
+
+function find_intersections_2D(s_midpoint, f_midpoint, closed_curve)
     x1, y1 = s_midpoint
     x2, y2 = f_midpoint
     if abs(y1-y2)<EPS
@@ -343,6 +409,17 @@ function find_intersections(s_midpoint, f_midpoint, closed_curve)
     else
         @show s_midpoint f_midpoint
         throw("Horizontal or vertical line segment is expected!")
+    end
+end
+function find_intersections_3D(s_midpoint, f_midpoint, closed_curve)
+    x1, y1, z1 = s_midpoint
+    x2, y2, z2 = f_midpoint
+    if abs(y1-y2)<EPS && abs(z1-z2)<EPS
+        return find_horizontal_intersection(s_midpoint, f_midpoint, closed_curve)
+    elseif abs(x1-x2)<EPS && abs(z1-z2)<EPS
+        return find_vertical_intersection(s_midpoint, f_midpoint, closed_curve)
+    else
+        return find_transverse_intersection(s_midpoint,f_midpoint,closed_curve)
     end
 end
 function fieldvalues_fn(vs_data,aux_df)

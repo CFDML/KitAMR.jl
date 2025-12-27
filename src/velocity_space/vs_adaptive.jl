@@ -9,6 +9,7 @@ function vs_refine!(amr::AMR)
     vs_refine!(trees, va_flags, global_data)
 end
 function pre_vs_refine!(trees::PS_Trees{DIM,NDF}, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+    !isa(global_data.config.quadrature,Vector)&&return nothing
     ds = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
         global_data.config.vs_trees_num[i] for i in 1:DIM]
     vs_refine_udf = global_data.config.user_defined.vs_refine_flag
@@ -70,6 +71,7 @@ function pre_vs_refine!(trees::PS_Trees{DIM,NDF}, global_data::Global_Data{DIM,N
     return nothing
 end
 function vs_refine!(trees::PS_Trees{DIM,NDF}, va_flags::Vector{Bool}, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+    !isa(global_data.config.quadrature,Vector)&&return nothing
     ds = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
     global_data.config.vs_trees_num[i] for i in 1:DIM]
     # Δ = norm(ds)

@@ -41,5 +41,4 @@ K = 1.
 Kn = 0.1
 ω = 0.81
 static_ps_refine_flag = Main.shock_wave_region
-vs_output_criterion = Main.vs_output_flag
-anim_dt = 0.02
+vtk_celltype = Triangle

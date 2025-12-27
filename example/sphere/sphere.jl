@@ -3,6 +3,7 @@ include("./sphere_udf.jl")
 MPI.Init()
 config = KitAMR.read_config("./example/sphere/configure_sphere.txt")
 ps4est,amr = KitAMR.init(config);
+KitAMR.save_result(ps4est,amr)
 KitAMR.listen_for_save!()
 max_sim_time = 20.
 nt = max_sim_time/amr.global_data.status.Δt+1.0 |> floor |> Int

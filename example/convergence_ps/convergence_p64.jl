@@ -1,6 +1,6 @@
 using KitAMR,MPI
 MPI.Init()
-config = KitAMR.read_config("./example/convergence_ps/configure_convergence_p8.txt")
+config = KitAMR.read_config("./example/convergence_ps/configure_convergence_p64_Gauss.txt")
 ps4est,amr = KitAMR.init(config);
 KitAMR.listen_for_save!()
 max_sim_time = 20.
@@ -21,9 +21,6 @@ for i in 1:nt
 end
 KitAMR.save_result(ps4est,amr)
 KitAMR.finalize!(ps4est,amr)
-if MPI.Comm_rank(MPI.COMM_WORLD)==0
-    run(`mv p ./example/convergence_ps/p/p8`)
-end
 MPI.Barrier(MPI.COMM_WORLD)
 
 MPI.Finalize()

@@ -1,11 +1,11 @@
 DIM = 2
 NDF = 2
-AMR_PS_MAXLEVEL = 0
+AMR_PS_MAXLEVEL = 1
 AMR_VS_MAXLEVEL = 0
 PS_DYNAMIC_AMR = false
 VS_DYNAMIC_AMR = false
 geometry = [-0.5,0.5,-0.5,0.5]
-trees_num = [64,64]
+trees_num = [16,16]
 quadrature = [-4.,4.,-4.,4.]
 vs_trees_num = [40,40]
 IC = Uniform([1.,0.,0.,1.])
