@@ -104,53 +104,10 @@ function iterate!(::CAIDVM_Marching,amr::AMR;buffer_steps = 0, i = typemax(Int))
             ps_data.w .+= ps_data.flux .*Δt / area # Macroscopic update
             prim_c = get_prim(ps_data, global_data) # Conserved macroscopic variables
             f = vs_data.df
-            # if 1/prim_c[end]<1e-6
-            #     f.+= Δt/area*vs_data.flux # Convection first
-            #     @. f = max(f,0.)
-            #     ps_data.w = calc_w0(ps_data)
-            #     prim = prim_c = get_prim(ps_data,global_data)
-            #     τ = global_data.config.gas.Kn
-            #     # global_data.status.Δt=min(TIME_STEP_CONTRACT_RATIO,global_data.config.gas.Kn)*global_data.status.Δt_ξ
-            # else
-                f.+= Δt/area*vs_data.flux # Convection first
-                w = calc_w0(vs_data.midpoint,f,vs_data.weight,global_data)
-                prim = get_prim(w,global_data)
-                # if 1/prim[end]>5||1/prim[end]<0.
-                #     if ps_data.bound_enc>0
-                #         sdirs = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
-                #         down_id = []
-                #         for id in sdirs
-                #             sn = ps_data.neighbor.data[id][1]
-                #             normal = sn.normal
-                #             dir1 = get_dir(id);rot1 = get_rot(id)
-                #             append!(down_id,findall(x->dot(x,normal)<0&&x[dir1]*rot1>0,eachrow(vs_data.midpoint)))
-                #         end
-                #     end
-                #     df_i,minid = findmin(vs_data.df[:,1]);df_di,_ = findmin(@views vs_data.df[down_id,1]);
-                #     df_j,maxid = findmax(vs_data.df[:,1]);df_dj,_ = findmax(@views vs_data.df[down_id,1]);
-                #     @show vs_data.df down_id df_i df_di df_j df_dj vs_data.midpoint[minid,:] vs_data.midpoint[maxid,:] ps_data.midpoint
-                #     throw(`instale error!`)
-                # end
-                # if 1/prim[end]<1e-6
-                #     @. f = max(f,0.)
-                #     ps_data.w = calc_w0(ps_data)
-                #     prim = prim_c = get_prim(ps_data,global_data)
-                #     τ = global_data.config.gas.Kn
-                #     # global_data.status.Δt=min(TIME_STEP_CONTRACT_RATIO,global_data.config.gas.Kn)*global_data.status.Δt_ξ
-                # else
-                    τ = get_τ(prim_c, gas.μᵣ, gas.ω) # τ^{n+1}
-                # end
-            # end
-            # if any(x->(abs(x)>1e10),prim_c)
-            #     types = [typeof(x[1]) for x in ps_data.neighbor.data]
-            #     @show types f ps_data.w prim_c ps_data.bound_enc
-            #     throw(`iterate singular!`)
-            # end
-            # if prim_c[end]<0
-            #     types = [typeof(x[1]) for x in ps_data.neighbor.data]
-            #     midpoints = [ps_data.neighbor.data[i][1].midpoint[j] for i in 1:6,j in 1:3]
-            #     @show ps_data.bound_enc prim_c prim types ps_data.midpoint midpoints
-            # end
+            f.+= Δt/area*vs_data.flux # Convection first
+            w = calc_w0(vs_data.midpoint,f,vs_data.weight,global_data)
+            prim = get_prim(w,global_data)
+            τ = get_τ(prim_c, gas.μᵣ, gas.ω) # τ^{n+1}
             F_c = discrete_maxwell(vs_data.midpoint, prim_c, global_data)
             F = discrete_maxwell(vs_data.midpoint, prim, global_data)
             @. f += F_c-F # Conservation correction
@@ -163,10 +120,8 @@ function iterate!(::CAIDVM_Marching,amr::AMR;buffer_steps = 0, i = typemax(Int))
             ps_data.prim .= prim_c
             ps_data.flux .= 0.0
             vs_data.flux .= 0.0
-            # global_data.status.Δt=min(global_data.status.Δt,macro_cons_time_step(ps_data,global_data))
         end
     end
-    # Δt_comm!(global_data)
 end
 function iterate!(::Euler,amr::AMR{DIM}) where{DIM}
     global_data = amr.global_data
