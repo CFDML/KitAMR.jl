@@ -430,7 +430,8 @@ function fieldvalues_fn(vs_data)
     NDF = typeof(vs_data).parameters[2]
     return [vs_data.df[:,i] for i in 1:NDF]
 end
-function cut_cube_rotate(n::Vector{Float64})C = zeros(2,3)
+function cut_cube_rotate(n::Vector{Float64})
+    C = zeros(2,3)
     e1 = [1.,0.,0.]
     e1 = cross(n,e1);e1./=norm(e1)
     e2 = cross(n,e1);e2./=norm(e2)

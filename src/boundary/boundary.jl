@@ -396,7 +396,7 @@ function initialize_cutted_velocity_cell(n::Vector{Float64},vs_data::VS_Data{3},
         for j in axes(vertices,2)
             vertices[:,j] .= 0.5*ANTIVT[3][j].*ddu+midpoint
         end
-        flag,gas_weight,solid_weight = cut_cube(n,C,ddu,midpoint,vertices)
+        flag,gas_weight,solid_weight = cut_cube(n,C,midpoint,ddu,vertices)
         if flag
             push!(index,i);push!(solid_weights,solid_weight);push!(gas_weights,gas_weight)
         end
