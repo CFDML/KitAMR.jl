@@ -1,6 +1,7 @@
 include("Circle.jl")
 include("Vertices.jl")
 include("Period.jl")
+include("Triangles.jl")
 get_bc(bc::AbstractVector;kwargs...) = copy(bc)
 function get_bc(bc::Function;intersect_point,ib,kwargs...)
     bc(;intersect_point,ib)
@@ -348,13 +349,13 @@ end
 function initialize_solid_neighbor!(amr::AMR)
     for tree in amr.field.trees.data
         for ps_data in tree
-            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<=0)&&continue
+            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0)&&continue
             initialize_solid_neighbor!(ps_data,amr)
         end
     end
 end
 function initialize_cutted_velocity_cell(n::Vector{Float64},vs_data::VS_Data{2},amr::AMR{2,NDF}) where{NDF}
-    any(x->abs(x)<1e-6,n)&&(return CuttedVelocityCells(Int[],Float64[],Matrix{Float64}(undef,0,0),Matrix{Float64}(undef,0,0),Float64[],Float64[]))
+    any(x->abs(x)<1e-6,n)&&(return CuttedVelocityCells(Int[],copy(vs_data.weight),Matrix{Float64}(undef,0,0),Matrix{Float64}(undef,0,0),Float64[],Float64[]))
     global_data = amr.global_data
     du = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
         global_data.config.vs_trees_num[i] for i in 1:2]
@@ -377,10 +378,10 @@ function initialize_cutted_velocity_cell(n::Vector{Float64},vs_data::VS_Data{2},
     weight[index].=0.
     return CuttedVelocityCells(index,weight,gas_dfs,solid_dfs,gas_weights,solid_weights)
 end
-function initialize_cutted_velocity_cell(n::Vector{Float64},vs_data::VS_Data{3},amr::AMR{3,NDF}) where{NDF}
+function initialize_cutted_velocity_cell(n::AbstractVector,vs_data::VS_Data{3},amr::AMR{3,NDF}) where{NDF}
     l = findall(x->abs(x)<1e-6,n)
     length(l)>1 &&
-        (return CuttedVelocityCells(Int[],Float64[],Matrix{Float64}(undef,0,0),Matrix{Float64}(undef,0,0),Float64[],Float64[]))
+        (return CuttedVelocityCells(Int[],copy(vs_data.weight),Matrix{Float64}(undef,0,0),Matrix{Float64}(undef,0,0),Float64[],Float64[]))
     global_data = amr.global_data
     du = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
         global_data.config.vs_trees_num[i] for i in 1:3]
@@ -410,8 +411,9 @@ function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF})
     vs_data = ps_data.vs_data
     for i in solid_dirs
         solid_cell = ps_data.neighbor.data[i][1]
+        ps_data.bound_enc = -solid_cell.bound_enc
         ib = amr.global_data.config.IB[-solid_cell.bound_enc]
-        aux_point,normal = calc_intersect(ps_data.midpoint,solid_cell.midpoint,ib)
+        aux_point,normal = calc_intersect(ps_data.midpoint,solid_cell.midpoint,ps_data.ds,get_dir(i),ib)
         svsdata = VS_Data{DIM,NDF}(
             vs_data.vs_num,
             vs_data.level,
@@ -557,6 +559,7 @@ function update_solid_neighbor!(::AbstractFluxType,ps_data::PS_Data{DIM,NDF},sol
     M = discrete_maxwell(vs_data.midpoint,aux_prim,global_data)
     _,Mu_R = @views cvc_Mu(M[:,1],vn,Θ,solid_neighbor)
     ρw = cvc_density(aux_df,vn,Θ,solid_neighbor,Mu_R)
+    # ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
     aux_prim[1] = ρw
     M .*= aux_prim[1]
     for i in 1:vs_data.vs_num

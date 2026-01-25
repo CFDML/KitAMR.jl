@@ -44,9 +44,7 @@ end
 mutable struct UDF
     static_ps_refine_flag::Function
     dynamic_ps_refine_flag::Function
-    static_ps_coarsen_flag::Function
-    vs_refine_flag::Function
-    vs_coarsen_flag::Function 
+    static_vs_refine_flag::Function 
     UDF()=new()
 end
 null_udf(args...;kwargs...) = false
@@ -91,6 +89,9 @@ function config_IB(ib::Sphere,config::Dict)
 end
 function config_IB(ib::Vertices,config::Dict)
     Vertices(ib,config)
+end
+function config_IB(ib::Triangles,config::Dict)
+    Triangles(ib,config)
 end
 function Configure(config::Dict)
     gas = Gas()
@@ -248,5 +249,4 @@ mutable struct Transfer_Init
     up_index::Int
     up_insert_index::Int
     down_index::Int
-    amr::AMR
 end

@@ -107,6 +107,17 @@ function iterate!(::CAIDVM_Marching,amr::AMR;buffer_steps = 0, i = typemax(Int))
             f.+= Δt/area*vs_data.flux # Convection first
             w = calc_w0(vs_data.midpoint,f,vs_data.weight,global_data)
             prim = get_prim(w,global_data)
+            try
+                τ = get_τ(prim_c, gas.μᵣ, gas.ω) # τ^{n+1}
+            catch
+                @show ps_data.midpoint 
+                solid_dirs = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data[1:6])
+                for i in solid_dirs
+                    solid_neighbor = ps_data.neighbor.data[i][1]
+                    @show i solid_neighbor.aux_point solid_neighbor.normal solid_neighbor.midpoint
+                end
+                write_vs_VTK(vs_data.df,vs_data,amr,"./X38_singular_vs",["df"],fieldvalues_fn)
+            end
             τ = get_τ(prim_c, gas.μᵣ, gas.ω) # τ^{n+1}
             F_c = discrete_maxwell(vs_data.midpoint, prim_c, global_data)
             F = discrete_maxwell(vs_data.midpoint, prim, global_data)

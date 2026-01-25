@@ -434,12 +434,19 @@ function AMR_ghost_new(p4est::Ptr{p8est_t})
     GC.@preserve p4est p8est_ghost_new(p4est, P8EST_CONNECT_FULL)
 end
 
-function AMR_partition(p4est::Ptr{p4est_t})
-    p4est_partition(p4est, 0,C_NULL)
+function AMR_partition(p4est::Ptr{p4est_t},weight_fn::T=C_NULL) where{T<:Union{Ptr{Nothing},Base.CFunction}}
+    p4est_partition(p4est, 0, weight_fn)
 end
-function AMR_partition(p4est::Ptr{p8est_t})
-    p8est_partition(p4est, 0,C_NULL)
+function AMR_partition(weight_fn::Function,p4est::Ptr{p4est_t})
+    AMR_partition(p4est,@cfunction($weight_fn,Cint,(Ptr{p4est_t},p4est_topidx_t,Ptr{p4est_quadrant_t})))
 end
+function AMR_partition(p4est::Ptr{p8est_t},weight_fn::T=C_NULL) where{T<:Union{Ptr{Nothing},Base.CFunction}}
+    p8est_partition(p4est, 0, weight_fn)
+end
+function AMR_partition(weight_fn::Function,p4est::Ptr{p8est_t})
+    AMR_partition(p4est,@cfunction($weight_fn,Cint,(Ptr{p8est_t},p4est_topidx_t,Ptr{p8est_quadrant_t})))
+end
+
 
 function AMR_mesh_new(p4est::Ptr{p4est_t},ghost::Ptr{p4est_ghost_t})
     GC.@preserve p4est ghost p4est_mesh_new_ext(p4est,ghost,1,1,P4EST_CONNECT_FULL)

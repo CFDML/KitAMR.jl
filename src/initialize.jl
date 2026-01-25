@@ -217,7 +217,7 @@ function initial_prim(ic::Uniform;kwargs...)
     return ic.ic
 end
 function initial_prim(ic::PCoordFn;midpoint::AbstractVector{Float64},kwargs...)
-    return ic.PCIC_fn(midpoint)
+    return ic.PCIC_fn(midpoint;kwargs...)
 end
 function init_solid_midpoints_kernel(ip, data, dp)
     global_data, solid_midpoints = unsafe_pointer_to_objref(data)
@@ -249,7 +249,7 @@ function init_ps_p4est_kernel(ip, data, dp)
         flag = flag&&(!inside||solid_cell_flags[i])
         !flag&&break
     end
-    treeid = ip.treeid[] - trees.offset
+    treeid = ip.treeid[] - trees.offset # local treeid
     if flag
         ps_data = PS_Data(typeof(global_data).parameters...)
         push!(trees.data[treeid], ps_data)
@@ -295,7 +295,7 @@ end
 function init_aux_points(global_data::Global_Data,solid_midpoints::Vector)
     calc_intersect_point(global_data.config.IB,solid_midpoints)
 end
-function pre_refine!(ps4est::P_pxest_t,global_data::Global_Data)
+function pre_refine!(ps4est::Ptr{p4est_t},global_data::Global_Data)
     pre_ps_refine!(ps4est,global_data)
     pre_ps_balance!(ps4est)
     # AMR_partition(ps4est)
@@ -316,7 +316,35 @@ function pre_refine!(ps4est::P_pxest_t,global_data::Global_Data)
     AMR_partition(ps4est)
     pre_ps_balance!(ps4est)
 end
-function init_ps!(ps4est::P_pxest_t,global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+function pre_refine!(ps4est::Ptr{p8est_t},global_data::Global_Data)
+    user_defined_ps_refine!(ps4est,global_data)
+    AMR_partition(ps4est) do p4est,which_tree,quadrant
+        fp = PointerWrapper(p4est)
+        global_data = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        ibs = global_data.config.IB
+        qp = PointerWrapper(quadrant)
+        ds,midpoint = quad_to_cell(fp,which_tree,qp)
+        for ib in ibs
+            if pre_partition_box_flag(midpoint,ds,ib)
+                return Cint(1)
+            end
+        end
+        return Cint(0)
+    end
+    trees = initialize_MeshData!(ps4est,global_data)
+    data = [global_data,trees]
+    PointerWrapper(ps4est).user_pointer = pointer_from_objref(data)
+    GC.@preserve data begin
+        search_radius_refine!(ps4est,global_data)
+        cell_type_decision!(ps4est)
+        pre_ps_coarsen!(ps4est)
+        pre_ps_balance!(ps4est)
+        meshed_partition!(ps4est,trees)
+    end
+    PointerWrapper(ps4est).user_pointer = pointer_from_objref(global_data)
+    return trees
+end
+function init_ps!(ps4est::Ptr{p4est_t},global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     fp = PointerWrapper(ps4est)
     trees_data =
         Vector{Vector{AbstractPsData{DIM,NDF}}}(undef, fp.last_local_tree[] - fp.first_local_tree[] + 1)
@@ -327,6 +355,41 @@ function init_ps!(ps4est::P_pxest_t,global_data::Global_Data{DIM,NDF}) where{DIM
     data = [global_data,trees]
     p_data = pointer_from_objref(data)
     GC.@preserve data AMR_4est_volume_iterate(ps4est, p_data, init_ps_p4est)
+    pre_vs_refine!(trees, global_data)
+    re_init_vs4est!(trees, global_data)
+    return trees
+end
+function init_ps!(p4est::Ptr{p8est_t},global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+    fp = PointerWrapper(p4est)
+    trees_data = [AbstractPsData{DIM,NDF}[] for _ in 1:fp.last_local_tree[] - fp.first_local_tree[] + 1]
+    trees = PS_Trees{DIM,NDF}(trees_data, fp.first_local_tree[] - 1)
+    data = [global_data,trees]
+    p_data = pointer_from_objref(data)
+    GC.@preserve data AMR_volume_iterate(p4est;user_data = p_data) do ip,data,dp
+        global_data, trees = unsafe_pointer_to_objref(data)
+        ds, midpoint = quad_to_cell(ip.p4est, ip.treeid[], ip.quad)
+        mesh_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+        treeid = ip.treeid[] - trees.offset # local treeid
+        if !mesh_data.in_solid||mesh_data.is_ghost_cell
+            ps_data = PS_Data(typeof(global_data).parameters...)
+            push!(trees.data[treeid], ps_data)
+            dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
+            ic = global_data.config.IC
+            ps_data.quadid = global_quadid(ip)
+            ps_data.ds .= ds
+            ps_data.midpoint .= midpoint
+            ps_data.prim .= initial_prim(ic;midpoint = ps_data.midpoint,global_data)
+            ps_data.w .= get_conserved(ps_data, global_data)
+            ps_data.vs_data = init_vs(ps_data.prim, global_data)
+            if mesh_data.is_ghost_cell
+                ps_data.bound_enc = -mesh_data.in_search_radius
+            end
+        else
+            inside_quad = InsideSolidData{typeof(global_data).parameters...}()
+            dp[] = P4est_PS_Data(pointer_from_objref(inside_quad))
+            push!(trees.data[treeid],inside_quad)
+        end
+    end
     pre_vs_refine!(trees, global_data)
     re_init_vs4est!(trees, global_data)
     return trees
@@ -347,6 +410,23 @@ function init_field!(global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
         return trees, ps4est
     end
 end
+function init_field!(global_data::Global_Data{3,NDF}) where{NDF}
+    GC.@preserve global_data begin
+        connectivity_ps = set_connectivity(global_data)
+        ps4est = AMR_4est_new(
+            MPI.COMM_WORLD,
+            connectivity_ps.pointer,
+            P4est_PS_Data,
+            pointer_from_objref(global_data),
+        )
+        global_data.forest.p4est = ps4est
+        mesh_tree = pre_refine!(ps4est,global_data)
+        GC.@preserve mesh_tree begin
+            trees = init_ps!(ps4est,global_data)
+        end
+        return trees, ps4est
+    end
+end
 function initialize_ghost(p4est::P_pxest_t,global_data::Global_Data)
     ghost_exchange = initialize_ghost_exchange(p4est,global_data)
     ghost_wrap = initialize_ghost_wrap(global_data,ghost_exchange)
@@ -356,6 +436,7 @@ function init(config::Dict)
     global_data = Global_Data(config)
     trees, ps4est = init_field!(global_data)
     field = Field{config[:DIM],config[:NDF]}(trees,Vector{AbstractFace}(undef,0),ImmersedBoundary())
+    MPI.Barrier(MPI.COMM_WORLD)
     amr = AMR(
         global_data,field
     )
@@ -369,6 +450,5 @@ function init(config::Dict)
     initialize_neighbor_data!(ps4est, amr)
     initialize_solid_neighbor!(amr)
     initialize_faces!(ps4est, amr)
-    # ib_ghost_check!(amr)
     return (ps4est, amr)
 end

@@ -46,6 +46,130 @@ function vs_merge!(sdf::AbstractMatrix,sdf_n::AbstractMatrix,level::Vector,level
         end
     end
 end
+
+
+function user_defined_ps_refine_flag(forest::P_pxest_t,which_tree,quadrant)
+    GC.@preserve forest which_tree quadrant begin
+        fp = PointerWrapper(forest)
+        qp = PointerWrapper(quadrant)
+        global_data = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        refine_fn = global_data.config.user_defined.static_ps_refine_flag
+        ds, midpoint = quad_to_cell(fp, which_tree, qp)
+        if refine_fn(midpoint, ds, global_data, qp.level[])
+            return Cint(1)
+        else
+            return Cint(0)
+        end
+    end
+end
+function user_defined_ps_refine!(p4est::Ptr{p8est_t},global_data::Global_Data)
+    p8est_refine_ext(
+        p4est,
+        1,
+        global_data.config.solver.AMR_PS_MAXLEVEL,
+        @cfunction(
+            user_defined_ps_refine_flag,
+            Cint,
+            (Ptr{p8est_t}, p4est_topidx_t, Ptr{p8est_quadrant_t})
+        ),
+        C_NULL,
+        C_NULL,
+    )
+end
+
+function initialize_MeshData!(p4est::P_pxest_t,global_data::Global_Data)
+    fp = PointerWrapper(p4est)
+    trees = [MeshData[] for _ in 1:fp.last_local_tree[]-fp.first_local_tree[]+1]
+    p_data = pointer_from_objref(trees)
+    GC.@preserve trees AMR_volume_iterate(p4est;user_data = p_data) do ip,data,dp
+        treeid = ip.treeid[]-ip.p4est.first_local_tree[]+1
+        mesh_data = MeshData()
+        dp[] = P4est_PS_Data(pointer_from_objref(mesh_data))
+        trees = unsafe_pointer_to_objref(data)
+        push!(trees[treeid],mesh_data)
+    end   
+    return trees
+end
+
+function search_radius_refine_flag!(forest::P_pxest_t,which_tree,quadrant)
+    GC.@preserve forest which_tree quadrant begin
+        fp = PointerWrapper(forest)
+        global_data,_ = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        qp = PointerWrapper(quadrant)
+        dp = PointerWrapper(P4est_PS_Data,qp.p.user_data[])
+        mesh_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+        ibs = global_data.config.IB
+        ds, midpoint = quad_to_cell(fp, which_tree, qp)
+        for i in eachindex(ibs)
+            search_radius_refine_flag!(i,ibs[i],midpoint,ds,mesh_data) && return Cint(1)
+        end
+        return Cint(0)
+    end
+end
+function search_radius_refine_replace(forest::P_pxest_t,which_tree,num_out,out_quads::Ptr{T},num_in,in_quads) where{T}
+    GC.@preserve forest which_tree num_out out_quads num_in in_quads begin
+        fp = PointerWrapper(forest)
+        global_data,trees = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        out_quads_wrap = unsafe_wrap(Vector{T}, out_quads, num_out)
+        in_quads_wrap = unsafe_wrap(Vector{T}, in_quads, num_in)
+        search_radius_refine_replace(forest, out_quads_wrap, in_quads_wrap, which_tree, trees, global_data)
+        return nothing
+    end
+end
+function search_radius_refine!(p4est::Ptr{p8est_t},global_data::Global_Data)
+    p8est_refine_ext(
+        p4est,
+        1,
+        global_data.config.solver.AMR_PS_MAXLEVEL,
+        @cfunction(
+            search_radius_refine_flag!,
+            Cint,
+            (Ptr{p8est_t}, p4est_topidx_t, Ptr{p8est_quadrant_t})
+        ),
+        C_NULL,
+        @cfunction(
+            search_radius_refine_replace,
+            Cvoid,
+            (
+                Ptr{p8est_t},
+                p4est_topidx_t,
+                Cint,
+                Ptr{Ptr{p8est_quadrant_t}},
+                Cint,
+                Ptr{Ptr{p8est_quadrant_t}},
+            )
+        )
+    )
+end
+
+function search_radius_refine_replace(p4est, out_quads,in_quads,which_tree,trees,global_data)
+    fp = PointerWrapper(p4est)
+    out_qp = PointerWrapper(out_quads[1])
+    dp = PointerWrapper(P4est_PS_Data,out_qp.p.user_data[])
+    mesh_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+    ib = global_data.config.IB[mesh_data.in_search_radius]
+    treeid = which_tree - fp.first_local_tree[]+1
+    datas = trees[treeid]
+    index = findfirst(x->x===mesh_data,datas)
+    deleteat!(datas, index)
+    if out_qp.level[]==global_data.config.solver.AMR_PS_MAXLEVEL-1
+        for i in eachindex(in_quads)
+            qp = PointerWrapper(in_quads[i])
+            dp = PointerWrapper(P4est_PS_Data,qp.p.user_data[])
+            mesh_data_i = deepcopy(mesh_data)
+            dp[] = P4est_PS_Data(pointer_from_objref(mesh_data_i))
+            insert!(datas, index - 1 + i, mesh_data_i)
+        end
+    else
+        for i in eachindex(in_quads)
+            qp = PointerWrapper(in_quads[i])
+            dp = PointerWrapper(P4est_PS_Data,qp.p.user_data[])
+            mesh_data_i = MeshData()
+            dp[] = P4est_PS_Data(pointer_from_objref(mesh_data_i))
+            insert!(datas, index - 1 + i, mesh_data_i)
+        end
+    end
+end
 # function boundary_flag(::Domain,::AbstractVector,::AbstractVector,::Global_Data) # Domain boundary flag
 #     return false
 # end
@@ -120,10 +244,12 @@ function ps_refine_flag(
     if ps_data.bound_enc!=0||domain_flag(global_data,ps_data.midpoint,ps_data.ds)
         return Cint(1)
     end
+    qp.level[]>global_data.config.solver.AMR_DYNAMIC_PS_MAXLEVEL-1&&return Cint(0)
     global_data.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,global_data,qp.level[]) && return Cint(1)
     agrad = ps_data.flux
     rgrad = maximum(agrad ./ (global_data.status.gradmax.+EPS))
-    !global_data.config.user_defined.dynamic_ps_refine_flag(;ps_data)&&return Cint(0)
+    dflag = global_data.config.user_defined.dynamic_ps_refine_flag(;ps_data)
+    !dflag&&return Cint(0)
     if rgrad > 2.0^(2*(qp.level[] - global_data.config.solver.AMR_DYNAMIC_PS_MAXLEVEL)) * ADAPT_COEFFI_PS # 2 for second-order scheme
         flag = Cint(1)
     else
@@ -229,6 +355,54 @@ function p4est_replace(forest::T1, which_tree, num_out, out_quads::Ptr{T2}, num_
         return nothing
     end
 end
+function pre_ps_replace(forest::T1, which_tree, num_out, out_quads::Ptr{T2}, num_in, in_quads) where{T1<:P_pxest_t,T2<:P_pxest_quadrant_t}
+    GC.@preserve forest which_tree num_out out_quads num_in in_quads begin
+        fp = PointerWrapper(forest)
+        _,trees = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        out_quads_wrap = unsafe_wrap(Vector{T2}, out_quads, num_out)
+        in_quads_wrap = unsafe_wrap(Vector{T2}, in_quads, num_in)
+        pre_ps_replace(Val(Int(num_out)), forest, out_quads_wrap, in_quads_wrap, which_tree, trees)
+        return nothing
+    end
+end
+function pre_ps_replace(::Val{1}, p4est, out_quad, in_quads, which_tree, trees)# refine replace
+    fp = PointerWrapper(p4est)
+    treeid = Int(which_tree) - fp.first_local_tree[]+1
+    datas = trees[treeid]
+    pw_out_quad = PointerWrapper(out_quad[1])
+    Odata = unsafe_pointer_to_objref(
+        pointer(PointerWrapper(P4est_PS_Data, pw_out_quad.p.user_data[]).ps_data),
+    )
+    index = findfirst(x -> x === Odata, datas)
+    deleteat!(datas, index)
+    for i in eachindex(in_quads)
+        pw_in_quad = PointerWrapper(in_quads[i])
+        dp = PointerWrapper(P4est_PS_Data, pw_in_quad.p.user_data[])
+        mesh_data = deepcopy(Odata)
+        insert!(datas, index - 1 + i, mesh_data)
+        dp[] = P4est_PS_Data(pointer_from_objref(mesh_data))
+    end
+end
+function pre_ps_replace(::ChildNum, p4est, out_quad, in_quads, which_tree, trees::Vector{Vector{T}}) where{T} # coarsen replace, average or interpolate? Currently interpolation strategy is adopted. If my memory serves me right, problems came out with average most likely due to the iterative balance process.
+    fp = PointerWrapper(p4est)
+    treeid = Int(which_tree) - fp.first_local_tree[]+1
+    datas = trees[treeid]
+    pw_in_quad = PointerWrapper(in_quads[1])
+    dp = PointerWrapper(P4est_PS_Data, pw_in_quad.p.user_data[])
+    Odatas = Vector{T}(undef, length(out_quad))
+    for i in eachindex(out_quad)
+        pw_out_quad = PointerWrapper(out_quad[i])
+        Odatas[i] = unsafe_pointer_to_objref(
+            pointer(PointerWrapper(P4est_PS_Data, pw_out_quad.p.user_data[]).ps_data),
+        )
+    end
+    mesh_data = deepcopy(Odatas[1])
+    index = findfirst(x -> x === Odatas[1], datas)
+    deleteat!(datas, index:index+length(out_quad)-1)
+    insert!(datas, index, mesh_data)
+    dp[] = P4est_PS_Data(pointer_from_objref(mesh_data))
+end
+
 
 function ps_refine!(p4est::Ptr{p4est_t},amr::AMR; recursive = 0)
     p4est_refine_ext(
@@ -342,13 +516,14 @@ function pre_ps_coarsen_flag(forest::Ptr{p8est_t},which_tree,quadrants)
         DIM = 3
         fp = PointerWrapper(forest)
         quadrants_wrap = unsafe_wrap(Vector{Ptr{p8est_quadrant_t}}, quadrants, 2^DIM)
-        global_data,aux_points = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        global_data,_ = unsafe_pointer_to_objref(pointer(fp.user_pointer))
         for i = 1:2^DIM
             qp = PointerWrapper(quadrants_wrap[i])
+            dp = PointerWrapper(P4est_PS_Data,qp.p.user_data[])
+            mesh_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
             ds,midpoint = quad_to_cell(fp,which_tree,qp)
-            (global_data.config.user_defined.static_ps_refine_flag(midpoint,ds,global_data,qp.level[]-1)&&!solid_flag(midpoint,global_data)||
-                IB_flag(aux_points,midpoint,ds,qp.level[],global_data)||
-                boundary_flag(midpoint,ds,global_data))&&return Cint(0)
+            (global_data.config.user_defined.static_ps_refine_flag(midpoint,ds,global_data,qp.level[]-1)&&!mesh_data.in_solid
+                ||mesh_data.is_ghost_cell||(mesh_data.in_search_radius!=0&&!mesh_data.in_solid))&&return Cint(0)
         end
         return Cint(1)
     end
@@ -378,7 +553,18 @@ function pre_ps_coarsen!(p4est::Ptr{p8est_t}; recursive = 0)
             (Ptr{p8est_t}, p4est_topidx_t, Ptr{Ptr{p8est_quadrant_t}})
         ),
         C_NULL,
-        C_NULL,
+        @cfunction(
+            pre_ps_replace,
+            Cvoid,
+            (
+                Ptr{p8est_t},
+                p4est_topidx_t,
+                Cint,
+                Ptr{Ptr{p8est_quadrant_t}},
+                Cint,
+                Ptr{Ptr{p8est_quadrant_t}},
+            )
+        )
     )
 end
 
@@ -412,7 +598,7 @@ function ps_coarsen_flag(forest::Ptr{p4est_t}, which_tree, quadrants)
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
             isa(ps_data,InsideSolidData)&&return Cint(0)
             levels[i] = qp.level[]
-            ps_datas[i] = unsafe_pointer_to_objref(pointer(dp.ps_data))
+            ps_datas[i] = ps_data
         end
         amr = unsafe_pointer_to_objref(pointer(fp.user_pointer))
         ps_coarsen_flag(ps_datas, levels, amr)
@@ -428,8 +614,10 @@ function ps_coarsen_flag(forest::Ptr{p8est_t}, which_tree, quadrants)
         for i = 1:2^DIM
             qp = PointerWrapper(quadrants_wrap[i])
             dp = PointerWrapper(P4est_PS_Data, qp.p.user_data[])
+            ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+            isa(ps_data,InsideSolidData)&&return Cint(0)
             levels[i] = qp.level[]
-            ps_datas[i] = unsafe_pointer_to_objref(pointer(dp.ps_data))
+            ps_datas[i] = ps_data
         end
         amr = unsafe_pointer_to_objref(pointer(fp.user_pointer))
         ps_coarsen_flag(ps_datas, levels, amr)
@@ -569,7 +757,20 @@ function pre_ps_balance!(p4est::Ptr{p4est_t})
     p4est_balance_ext(p4est, P4EST_CONNECT_FULL, C_NULL, C_NULL)
 end
 function pre_ps_balance!(p4est::Ptr{p8est_t})
-    p8est_balance_ext(p4est, P8EST_CONNECT_FULL, C_NULL, C_NULL)
+    p8est_balance_ext(p4est, P8EST_CONNECT_FULL, C_NULL, 
+        @cfunction(
+            pre_ps_replace,
+            Cvoid,
+            (
+                Ptr{p8est_t},
+                p4est_topidx_t,
+                Cint,
+                Ptr{Ptr{p8est_quadrant_t}},
+                Cint,
+                Ptr{Ptr{p8est_quadrant_t}},
+            )
+        )
+    )
 end
 
 function adaptive!(ps4est::P_pxest_t,amr::AMR;ps_interval=40,vs_interval=80,partition_interval=40)

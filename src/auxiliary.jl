@@ -471,10 +471,10 @@ end
 function cut_cube(n::Vector{Float64},C::Matrix{Float64},midpoint::Vector{Float64},ddu::Vector{Float64},vertices::Matrix{Float64}) # 3.627 μs (215 allocations: 8.45 KiB). Acceptable?
     vltable = [[1,2],[3,4],[7,8],[5,6],[1,3],[2,4],[6,8],[5,7],[1,5],[2,6],[4,8],[3,7]] # vertices-edges table
     points = Vector{Vector{Float64}}(undef,6);index = 1
-    dirs = permutedims(vertices)*n
+    dirs = permutedims(vertices)*n # what if vertices[i]=0.?
     for i in eachindex(vltable)
         flag = dirs[vltable[i][1]]*dirs[vltable[i][2]] # flag==0: cut any end of the edge; flag<0: cut the edge; flag>0: not cut the edge
-        if abs(flag)<EPS
+        if abs(flag)<EPS^2
             if cld(i,4)==1 # avoid redundancy
                 if abs(dirs[vltable[i][1]])<EPS # end A intersects
                     points[index] = vertices[:,vltable[i][1]];index+=1

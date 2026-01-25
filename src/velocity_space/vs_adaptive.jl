@@ -12,7 +12,7 @@ function pre_vs_refine!(trees::PS_Trees{DIM,NDF}, global_data::Global_Data{DIM,N
     !isa(global_data.config.quadrature,Vector)&&return nothing
     ds = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
         global_data.config.vs_trees_num[i] for i in 1:DIM]
-    vs_refine_udf = global_data.config.user_defined.vs_refine_flag
+    vs_refine_udf = global_data.config.user_defined.static_vs_refine_flag
     for _ = 1:global_data.config.solver.AMR_VS_MAXLEVEL
         for i in eachindex(trees.data)
             for j in eachindex(trees.data[i])

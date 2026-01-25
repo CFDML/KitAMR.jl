@@ -28,9 +28,6 @@ end
 function calc_IB_ρw(aux_point::AbstractVector,bound::Vertices{3},midpoint::AbstractMatrix,weight::AbstractVector,df::AbstractMatrix,vn::AbstractVector,Θ::AbstractVector)
     calc_IB_ρw_3D(aux_point,bound.bc,midpoint,weight,df,vn,Θ)
 end
-function calc_intersect(f_midpoint,s_midpoint,boundary::Vertices{2})
+function calc_intersect(f_midpoint,s_midpoint,::Vector,::Int,boundary::Vertices{2})
     find_intersections_2D(s_midpoint,f_midpoint,boundary.vertices)
-end
-function calc_intersect(f_midpoint,s_midpoint,boundary::Vertices{3})
-    find_intersections_3D(s_midpoint,f_midpoint,boundary.vertices)
 end
