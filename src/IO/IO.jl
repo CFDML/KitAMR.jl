@@ -643,6 +643,11 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Tetra}
             if isa(ps_data,InsideSolidData)||ps_data.bound_enc<0
                 solutions[nc*(index-1)+1:nc*index,:].=NaN
                 point_solutions[nv*(index-1)+1:nv*index,:] .= NaN
+                # if !isa(ps_data,InsideSolidData)
+                #     for i in 1:nc
+                #         solutions[nc*(index-1)+i,5] = 2.
+                #     end
+                # end
             else
                 for i in 1:nc
                     solutions[nc*(index-1)+i,1] = ps_data.prim[1]

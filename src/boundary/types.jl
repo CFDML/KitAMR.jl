@@ -72,6 +72,50 @@ struct Vertices{DIM,T<:AbstractBoundaryType} <: AbstractBoundary
         new{DIM,T}(v.vertices,v.solid,v.refine_coeffi,v.bc,[v.box[1].-ds_max,v.box[2].+ds_max],v.refine_coeffi*ds)
     )
 end
+
+
+struct TriangleKDT
+    kdt::KDTree
+    mesh::Mesh
+    table::Vector{HyperRectangle{SVector{3,Float64}}}
+    triangle_recs::Vector{HyperRectangle{SVector{3,Float64}}} # Accessed by id of mesh.faces
+    triangle_edges::Vector{Vector{SVector{3,Float64}}} # Accessed by id of mesh.faces
+end
+function TriangleKDT(mesh::Mesh)
+    centers = zeros(3,length(mesh.faces))
+    for i in eachindex(mesh.faces)
+        vertices = mesh.position[mesh.faces[i]]
+        for j in 1:3
+            for k in 1:3
+                centers[j,i] += vertices[k][j]/3.0
+            end
+        end
+    end
+    kdt = KDTree(centers;leafsize = 24)
+    return TriangleKDT(kdt,mesh,triangle_box_table(kdt,mesh),triangle_recs(mesh),triangle_edges(mesh))
+end
+
+struct Triangles{T<:AbstractBoundaryType} <: AbstractBoundary
+    solid::Bool
+    bc::AbstractBCType
+    search_radius::Real
+    tkdt::TriangleKDT
+end
+function Triangles(::Type{T},file::String,solid,search_radius,bc) where{T<:AbstractBoundaryType}
+    mesh = load(file)
+    tkdt = TriangleKDT(mesh)
+    return Triangles{T}(solid,bc,search_radius,tkdt)
+end
+function Triangles(::Type{T},solid::Bool,search_radius,bc,tkdt::TriangleKDT,config) where{T<:AbstractBoundaryType}
+    ds = norm([(config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i]/2^config[:AMR_PS_MAXLEVEL] for i in 1:config[:DIM]])
+    return Triangles{T}(solid,bc,search_radius*ds,tkdt)
+end
+function Triangles(ib::Triangles{T},config) where{T}
+    return Triangles(T,ib.solid,ib.search_radius,ib.bc,ib.tkdt,config)
+end
+
+
+
 mutable struct SolidCells{DIM,NDF}
     ps_datas::Vector{PS_Data{DIM,NDF}}
     quadids::Vector{Cint} # A better choice: store all quadid of SolidCells to avoid extensive comparing iteration. Are only needed to be updated before partition.

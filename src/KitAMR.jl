@@ -16,6 +16,11 @@ using CSV
 using DataFrames
 using Statistics
 
+using FileIO,NearestNeighbors,AbstractTrees
+using GeometryBasics:Mesh
+using StructArrays
+
+
 include("../lib/P4est/src/P4est.jl")
 @reexport using .P4est
 include("../lib/P4estTypes/src/P4estTypes.jl")

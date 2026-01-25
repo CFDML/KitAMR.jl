@@ -113,3 +113,13 @@ struct Flux_Data{T<:InnerFace}
     here_data::AbstractPsData
     there_data::AbstractPsData
 end
+
+mutable struct MeshData
+    in_box::Int
+    in_solid::Bool
+    in_search_radius::Int # In i-th ib's search radius. If not, i is set to 0.
+    is_ghost_cell::Bool
+end
+function MeshData()
+    return MeshData(0,false,0,false)
+end

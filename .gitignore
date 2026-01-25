@@ -16,4 +16,4 @@ result_*
 animation
 *.json
 *.jld2
-test_cut_cube.jl
+test*

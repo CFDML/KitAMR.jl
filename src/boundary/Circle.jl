@@ -33,7 +33,7 @@ end
 function IB_prim(circle::AbstractCircle,aux_point::AbstractVector,ρw::Real)
     IB_prim(circle.bc,aux_point,ρw)
 end
-function calc_intersect(f_midpoint,s_midpoint,circle::Circle)
+function calc_intersect(f_midpoint,s_midpoint,::Vector,::Int,circle::Circle)
     c = circle.center;r = circle.radius
     if abs(f_midpoint[1]-s_midpoint[1])<EPS
         t = acos((f_midpoint[1]-c[1])/r)
@@ -52,7 +52,7 @@ function calc_intersect(f_midpoint,s_midpoint,circle::Circle)
     end
     return ap,n
 end
-function calc_intersect(f_midpoint,s_midpoint,circle::Sphere)
+function calc_intersect(f_midpoint,s_midpoint,::Vector,::Int,circle::Sphere)
     c = circle.center;r = circle.radius
     dir = findfirst(x->x>EPS,abs.(f_midpoint-s_midpoint))
     r_midpoint = f_midpoint-c
