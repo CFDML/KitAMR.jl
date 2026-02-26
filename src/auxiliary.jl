@@ -162,6 +162,9 @@ function check!(i,ps4est,amr)
             @show local_num_quadrants
             ref_vs_num = amr.global_data.status.max_vs_num
             @show ref_vs_num
+            Δt = amr.global_data.status.Δt
+            Δt_ξ = amr.global_data.status.Δt_ξ
+            @show Δt/Δt_ξ
         end
     end
     check_for_save!(ps4est,amr)
@@ -474,7 +477,7 @@ function cut_cube(n::Vector{Float64},C::Matrix{Float64},midpoint::Vector{Float64
     dirs = permutedims(vertices)*n # what if vertices[i]=0.?
     for i in eachindex(vltable)
         flag = dirs[vltable[i][1]]*dirs[vltable[i][2]] # flag==0: cut any end of the edge; flag<0: cut the edge; flag>0: not cut the edge
-        if abs(flag)<EPS^2
+        if abs(flag)<EPS
             if cld(i,4)==1 # avoid redundancy
                 if abs(dirs[vltable[i][1]])<EPS # end A intersects
                     points[index] = vertices[:,vltable[i][1]];index+=1

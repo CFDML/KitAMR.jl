@@ -1,7 +1,8 @@
 using LinearAlgebra
 function amr_region(;ps_data,kwargs...)
     midpoint = ps_data.midpoint
-    if midpoint[1]>-2.0&&midpoint[1]<3.0&&midpoint[2]<2.0&&midpoint[2]>-2.0&&midpoint[3]<2.0&&midpoint[3]>-2.0
+    L = 0.28
+    if midpoint[1]>-2.0*L&&midpoint[1]<3.0*L&&midpoint[2]<2.0*L&&midpoint[2]>-2.0*L&&midpoint[3]<2.0*L&&midpoint[3]>-2.0*L
         return true
     end
     return false
@@ -10,12 +11,14 @@ function X38_buffer_IC(midpoint::Vector{Float64};kwargs...)
     global_data = kwargs[:global_data]
     ib = global_data.config.IB[1]
     Ma = 8.
+    T0 = 1.0
     Tw = 300/56
     _,distance = KitAMR.nn(ib.tkdt.kdt,midpoint)
-    if distance > 1.0
-        return [1.0,Ma*√(5/6),0.,0.,1.0]
+    R = 1.0*0.28
+    if distance > R
+        return [1.0,Ma*√(5/6),0.,0.,1/T0]
     else
-        return [1.0,distance*Ma*√(5/6),0.,0.,1.0/(1.0+(1.0-distance)*(Tw-1.0))]
+        return [1.0,distance*Ma*√(5/6)/R,0.,0.,1.0/(T0+(R-distance)*(Tw-T0)/R)]
     end
 end
 function vs_refine_region(midpoint;kwargs...)

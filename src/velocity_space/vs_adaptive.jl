@@ -1,6 +1,5 @@
-# include("gaussian_weight.jl")
 include("criteria.jl")
-# include("solid_cells.jl")
+
 function vs_refine!(amr::AMR)
     trees = amr.field.trees
     global_data = amr.global_data
@@ -70,100 +69,74 @@ function pre_vs_refine!(trees::PS_Trees{DIM,NDF}, global_data::Global_Data{DIM,N
     end
     return nothing
 end
+function criterion_df(ps_data::AbstractPsData{DIM,NDF}) where{DIM,NDF}
+    vs_data = ps_data.vs_data;df = vs_data.df;sdf = vs_data.sdf
+    ds = ps_data.ds
+    cdf = similar(vs_data.df)
+    ddfi = zeros(DIM)
+    for j in axes(cdf,2)
+        for i in axes(cdf,1)
+            for k in 1:DIM
+                ddfi[k] = abs(sdf[i,j,k]*ds[k])
+            end
+            cdf[i,j] = df[i,j]+maximum(ddfi)
+        end
+    end
+    return cdf
+end
 function vs_refine!(trees::PS_Trees{DIM,NDF}, va_flags::Vector{Bool}, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     !isa(global_data.config.quadrature,Vector)&&return nothing
     ds = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
     global_data.config.vs_trees_num[i] for i in 1:DIM]
-    # Δ = norm(ds)
     id = 0
     for i in eachindex(trees.data)
         for j in eachindex(trees.data[i])
             id += 1
             ps_data = trees.data[i][j]
             isa(ps_data,InsideSolidData) && continue
-            # ps_data.bound_enc<0 && continue # solid_cell
+            cdf = criterion_df(ps_data)
             vs_data = ps_data.vs_data
             U = ps_data.prim[2:1+DIM]
             lnmidpoint = reshape(vs_data.midpoint, :)
             lndf = reshape(vs_data.df, :)
+            lncdf = reshape(cdf,:)
             lnsdf = reshape(vs_data.sdf, :)
             lnflux = reshape(vs_data.flux, :)
             index = 1
             midpoint_index = Vector{Int}(undef, DIM)
             df_index = Vector{Int}(undef, NDF)
-            # ps_data.bound_enc<0&&(n = ps_data.flux[1:DIM,1])
-            if ps_data.bound_enc<=0
-                while index < vs_data.vs_num + 1
-                    @inbounds for i = 1:DIM
-                        midpoint_index[i] = (i - 1) * (vs_data.vs_num) + index
-                    end
-                    @inbounds for i = 1:NDF
-                        df_index[i] = (i - 1) * (vs_data.vs_num) + index
-                    end
-                    midpoint = @view(lnmidpoint[midpoint_index])
-                    df = @view(lndf[df_index])
-                    if vs_data.level[index] < global_data.config.solver.AMR_VS_MAXLEVEL &&
-                    #    (ps_data.bound_enc<0&&discontinuity_flag(n,midpoint;Δ=Δ)||
-                    (macro_estimate_refine_flag(ps_data.prim,U,midpoint,ds,vs_data.level[index])||
-                        contribution_refine_flag(ps_data.w, U, midpoint, df, vs_data.weight[index], global_data))
-                        midpoint_new = midpoint_refine(DIM,midpoint, vs_data.level[index], ds)
-                        df_new = df_refine(DIM,midpoint, midpoint_new, df)
-                        # df_new = df_refine(df,midpoint_new,midpoint,U,ps_data.prim,ps_data)
-                        vs_data.vs_num += 2^DIM - 1
-                        level_refine_replace!(DIM,vs_data.level, index)
-                        weight_refine_replace!(DIM,vs_data.weight, index)
-                        midpoint_refine_replace!(
-                            DIM,
-                            lnmidpoint,
-                            midpoint_new,
-                            vs_data.vs_num,
-                            index,
-                        )
-                        df_refine_replace!(DIM,NDF,lndf, df_new, vs_data.vs_num, index)
-                        sdf_refine_replace!(DIM,NDF,lnsdf)
-                        flux_refine_replace!(DIM,NDF,lnflux)
-                        index += 2^DIM - 1
-                        !va_flags[id]&&(va_flags[id] = true)
-                    end
-                    index += 1
+            while index < vs_data.vs_num + 1
+                @inbounds for i = 1:DIM
+                    midpoint_index[i] = (i - 1) * (vs_data.vs_num) + index
                 end
-            else
-                ib = global_data.config.IB[ps_data.bound_enc]
-                bc = get_bc(ib.bc)
-                while index < vs_data.vs_num + 1
-                    @inbounds for i = 1:DIM
-                        midpoint_index[i] = (i - 1) * (vs_data.vs_num) + index
-                    end
-                    @inbounds for i = 1:NDF
-                        df_index[i] = (i - 1) * (vs_data.vs_num) + index
-                    end
-                    midpoint = @view(lnmidpoint[midpoint_index])
-                    df = @view(lndf[df_index])
-                    if vs_data.level[index] < global_data.config.solver.AMR_VS_MAXLEVEL &&
-                    #    (ps_data.bound_enc<0&&discontinuity_flag(n,midpoint;Δ=Δ)||
-                    (macro_estimate_IB_refine_flag(ps_data.prim,bc,U,midpoint,ds,vs_data.level[index])||
-                        contribution_refine_flag(ps_data.w, U, midpoint, df, vs_data.weight[index], global_data))
-                        midpoint_new = midpoint_refine(DIM,midpoint, vs_data.level[index], ds)
-                        df_new = df_refine(DIM,midpoint, midpoint_new, df)
-                        # df_new = df_refine(df,midpoint_new,midpoint,U,ps_data.prim,ps_data)
-                        vs_data.vs_num += 2^DIM - 1
-                        level_refine_replace!(DIM,vs_data.level, index)
-                        weight_refine_replace!(DIM,vs_data.weight, index)
-                        midpoint_refine_replace!(
-                            DIM,
-                            lnmidpoint,
-                            midpoint_new,
-                            vs_data.vs_num,
-                            index,
-                        )
-                        df_refine_replace!(DIM,NDF,lndf, df_new, vs_data.vs_num, index)
-                        sdf_refine_replace!(DIM,NDF,lnsdf)
-                        flux_refine_replace!(DIM,NDF,lnflux)
-                        index += 2^DIM - 1
-                        !va_flags[id]&&(va_flags[id] = true)
-                    end
-                    index += 1
+                @inbounds for i = 1:NDF
+                    df_index[i] = (i - 1) * (vs_data.vs_num) + index
                 end
+                midpoint = @view(lnmidpoint[midpoint_index])
+                df = @view(lndf[df_index]);cdf = @view(lncdf[df_index])
+                if vs_data.level[index] < global_data.config.solver.AMR_VS_MAXLEVEL &&
+                    contribution_refine_flag(ps_data.w, U, midpoint, cdf, vs_data.weight[index], global_data)
+                    midpoint_new = midpoint_refine(DIM,midpoint, vs_data.level[index], ds)
+                    df_new = df_refine(DIM,midpoint, midpoint_new, df)
+                    cdf_new = df_refine(DIM,midpoint,midpoint_new,df)
+                    vs_data.vs_num += 2^DIM - 1
+                    level_refine_replace!(DIM,vs_data.level, index)
+                    weight_refine_replace!(DIM,vs_data.weight, index)
+                    midpoint_refine_replace!(
+                        DIM,
+                        lnmidpoint,
+                        midpoint_new,
+                        vs_data.vs_num,
+                        index,
+                    )
+                    df_refine_replace!(DIM,NDF,lndf, df_new, vs_data.vs_num, index)
+                    df_refine_replace!(DIM,NDF,lncdf,cdf_new,vs_data.vs_num,index)
+                    sdf_refine_replace!(DIM,NDF,lnsdf)
+                    flux_refine_replace!(DIM,NDF,lnflux)
+                    index += 2^DIM - 1
+                    !va_flags[id]&&(va_flags[id] = true)
+                end
+                index += 1
             end
             vs_data.midpoint = reshape(lnmidpoint, vs_data.vs_num, DIM)
             vs_data.df = reshape(lndf, vs_data.vs_num, NDF)
@@ -224,21 +197,6 @@ function refine_moment_conserve(DIM::Integer,midpoint::AbstractVector, midpoint_
     α
 end
 
-# function refine_moment_conserve(midpoint::AbstractVector,midpoint_new::AbstractMatrix)
-#     model = Model(optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 0))
-#     @variable(model, α[1:2^DIM-1])
-#     A = make_A(midpoint_new)
-#     b = make_b(midpoint,midpoint_new)
-#     @objective(model, Min, sum((A * α - b).^2))
-#     @constraints(model,begin
-#         α .>= 0
-#         sum(α)<=1.    
-#     end)
-#     optimize!(model)
-#     α = value.(α)
-#     pushfirst!(α,1-sum(α))
-#     α
-# end
 
 function make_A(DIM::Integer,midpoint_new::AbstractMatrix)
     A = Matrix{Float64}(undef, 2^DIM - 1, 2^DIM - 1)
@@ -265,7 +223,6 @@ function vs_coarsen!(va_flags::Vector{Bool},amr::AMR{DIM,NDF})where{DIM,NDF}
     global_data = amr.global_data
     ds = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
     global_data.config.vs_trees_num[i] for i in 1:DIM]
-    # Δ = norm(ds)
     id = 0
     flag = zeros(global_data.config.solver.AMR_VS_MAXLEVEL)
     for i in eachindex(trees.data)
@@ -273,133 +230,74 @@ function vs_coarsen!(va_flags::Vector{Bool},amr::AMR{DIM,NDF})where{DIM,NDF}
             id += 1
             ps_data = trees.data[i][j]
             isa(ps_data,InsideSolidData) && continue
-            # ps_data.bound_enc<0 && continue # solid_cell
+            cdf = criterion_df(ps_data)
             vs_data = ps_data.vs_data
             U = ps_data.prim[2:1+DIM]
             lnmidpoint = reshape(vs_data.midpoint, :)
             lndf = reshape(vs_data.df, :)
+            lncdf = reshape(cdf,:)
             lnsdf = reshape(vs_data.sdf, :)
             lnflux = reshape(vs_data.flux, :)
             index = 1;flag.=0.
             midpoint_index = Matrix{Int}(undef, 2^DIM, DIM)
             df_index = Matrix{Int}(undef, 2^DIM, NDF)
-            # ps_data.bound_enc<0&&(n = ps_data.flux[1:DIM,1])
-            if ps_data.bound_enc<=0
-                while index < vs_data.vs_num + 1
-                    first_level = vs_data.level[index]
-                    if first_level > 0
-                        if flag[first_level]%1==0. &&
-                        all(x -> x == first_level, @view(vs_data.level[index+1:index+2^DIM-1]))
-                            for i in axes(midpoint_index,2)
-                                midpoint_index[:, i] .=
-                                    (i-1)*(vs_data.vs_num)+index:(i-1)*(vs_data.vs_num)+index+2^DIM-1
-                            end
-                            for i in axes(df_index,2)
-                                df_index[:, i] .=
-                                    (i-1)*(vs_data.vs_num)+index:(i-1)*(vs_data.vs_num)+index+2^DIM-1
-                            end
-                            midpoint = @view(lnmidpoint[midpoint_index])
-                            df = @view(lndf[df_index])
-                            if contribution_coarsen_flag(
-                                ps_data.w,
-                                U,
-                                midpoint,
-                                df,
-                                @view(vs_data.weight[index:index+2^DIM-1]),
-                                global_data
-                            )&&(midpoint_new =
-                            midpoint_coarsen(DIM,@view(midpoint[1, :]), first_level, ds);
-                        !macro_estimate_refine_flag(ps_data.prim,U,midpoint_new,ds,vs_data.level[index]-1))
-                                df_new = df_coarsen(DIM,NDF,df)
-                                vs_data.vs_num -= 2^DIM - 1
-                                level_coarsen_replace!(DIM,vs_data.level, index)
-                                weight_coarsen_replace!(DIM,vs_data.weight, index)
-                                midpoint_coarsen_replace!(
-                                    DIM,
-                                    lnmidpoint,
-                                    midpoint_new,
-                                    vs_data.vs_num,
-                                    index,
-                                )
-                                df_coarsen_replace!(DIM,NDF,lndf, df_new, vs_data.vs_num, index)
-                                sdf_coarsen_replace!(DIM,NDF,lnsdf)
-                                flux_coarsen_replace!(DIM,NDF,lnflux)
-                                !va_flags[id]&&(va_flags[id] = true)
-                            else
-                                index += 2^DIM - 1
-                            end
-                            if first_level > 1
-                                for i = 1:first_level-1
-                                    flag[i] += 1 / 2^(DIM * (first_level - i))
-                                end
-                            end
+            while index < vs_data.vs_num + 1
+                first_level = vs_data.level[index]
+                if first_level > 0
+                    if flag[first_level]%1==0. &&
+                    all(x -> x == first_level, @view(vs_data.level[index+1:index+2^DIM-1]))
+                        for i in axes(midpoint_index,2)
+                            midpoint_index[:, i] .=
+                                (i-1)*(vs_data.vs_num)+index:(i-1)*(vs_data.vs_num)+index+2^DIM-1
+                        end
+                        for i in axes(df_index,2)
+                            df_index[:, i] .=
+                                (i-1)*(vs_data.vs_num)+index:(i-1)*(vs_data.vs_num)+index+2^DIM-1
+                        end
+                        midpoint = @view(lnmidpoint[midpoint_index])
+                        df = @view(lndf[df_index]);cdf = @view(lncdf[df_index])
+                        if contribution_coarsen_flag(
+                            ps_data.w,
+                            U,
+                            midpoint,
+                            cdf,
+                            @view(vs_data.weight[index:index+2^DIM-1]),
+                            global_data
+                        )
+                            midpoint_new =
+                                midpoint_coarsen(DIM,@view(midpoint[1, :]), first_level, ds);
+                            df_new = df_coarsen(DIM,NDF,df)
+                            cdf_new = df_coarsen(DIM,NDF,cdf)
+                            vs_data.vs_num -= 2^DIM - 1
+                            level_coarsen_replace!(DIM,vs_data.level, index)
+                            weight_coarsen_replace!(DIM,vs_data.weight, index)
+                            midpoint_coarsen_replace!(
+                                DIM,
+                                lnmidpoint,
+                                midpoint_new,
+                                vs_data.vs_num,
+                                index,
+                            )
+                            df_coarsen_replace!(DIM,NDF,lndf, df_new, vs_data.vs_num, index)
+                            df_coarsen_replace!(DIM,NDF,lncdf,cdf_new,vs_data.vs_num,index)
+                            sdf_coarsen_replace!(DIM,NDF,lnsdf)
+                            flux_coarsen_replace!(DIM,NDF,lnflux)
+                            !va_flags[id]&&(va_flags[id] = true)
                         else
-                            for i = 1:first_level
-                                flag[i] += 1 / 2^(DIM * (first_level - i+1))
+                            index += 2^DIM - 1
+                        end
+                        if first_level > 1
+                            for i = 1:first_level-1
+                                flag[i] += 1 / 2^(DIM * (first_level - i))
                             end
                         end
-                    end
-                    index += 1
-                end
-            else
-                ib = global_data.config.IB[ps_data.bound_enc]
-                bc = get_bc(ib.bc)
-                while index < vs_data.vs_num + 1
-                    first_level = vs_data.level[index]
-                    if first_level > 0
-                        if flag[first_level]%1==0. &&
-                        all(x -> x == first_level, @view(vs_data.level[index+1:index+2^DIM-1]))
-                            for i in axes(midpoint_index,2)
-                                midpoint_index[:, i] .=
-                                    (i-1)*(vs_data.vs_num)+index:(i-1)*(vs_data.vs_num)+index+2^DIM-1
-                            end
-                            for i in axes(df_index,2)
-                                df_index[:, i] .=
-                                    (i-1)*(vs_data.vs_num)+index:(i-1)*(vs_data.vs_num)+index+2^DIM-1
-                            end
-                            midpoint = @view(lnmidpoint[midpoint_index])
-                            df = @view(lndf[df_index])
-                            if contribution_coarsen_flag(
-                                ps_data.w,
-                                U,
-                                midpoint,
-                                df,
-                                @view(vs_data.weight[index:index+2^DIM-1]),
-                                global_data
-                            )&&(midpoint_new =
-                            midpoint_coarsen(DIM,@view(midpoint[1, :]), first_level, ds);
-                        !macro_estimate_IB_refine_flag(ps_data.prim,bc,U,midpoint_new,ds,vs_data.level[index]-1))
-                                df_new = df_coarsen(DIM,NDF,df)
-                                vs_data.vs_num -= 2^DIM - 1
-                                level_coarsen_replace!(DIM,vs_data.level, index)
-                                weight_coarsen_replace!(DIM,vs_data.weight, index)
-                                midpoint_coarsen_replace!(
-                                    DIM,
-                                    lnmidpoint,
-                                    midpoint_new,
-                                    vs_data.vs_num,
-                                    index,
-                                )
-                                df_coarsen_replace!(DIM,NDF,lndf, df_new, vs_data.vs_num, index)
-                                sdf_coarsen_replace!(DIM,NDF,lnsdf)
-                                flux_coarsen_replace!(DIM,NDF,lnflux)
-                                !va_flags[id]&&(va_flags[id] = true)
-                            else
-                                index += 2^DIM - 1
-                            end
-                            if first_level > 1
-                                for i = 1:first_level-1
-                                    flag[i] += 1 / 2^(DIM * (first_level - i))
-                                end
-                            end
-                        else
-                            for i = 1:first_level
-                                flag[i] += 1 / 2^(DIM * (first_level - i+1))
-                            end
+                    else
+                        for i = 1:first_level
+                            flag[i] += 1 / 2^(DIM * (first_level - i+1))
                         end
                     end
-                    index += 1
                 end
+                index += 1
             end
             vs_data.sdf = reshape(lnsdf, vs_data.vs_num, NDF, DIM)
             vs_data.flux = reshape(lnflux, vs_data.vs_num, NDF)
@@ -466,26 +364,7 @@ function flux_coarsen_replace!(DIM::Integer,NDF::Integer,lnflux::AbstractVector)
     deleteat!(lnflux, 1:(2^DIM-1)*NDF)
 end
 
-# function pre_vs_refine!(trees::PS_Trees{DIM,NDF}, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
-#     fp = PointerWrapper(global_data.forest.p4est)
-#     va_flags = zeros(Bool,fp.local_num_quadrants[])
-#     for _ = 1:global_data.config.solver.AMR_VS_MAXLEVEL
-#         vs_refine!(trees, va_flags, global_data)
-#     end
-# end
-# function update_solid_vs!(amr::AMR)
-#     boundary = amr.field.boundary
-#     solid_cells = boundary.solid_cells
-#     IB_cells = boundary.IB_cells
-#     @inbounds for i in eachindex(solid_cells)
-#         for j in eachindex(solid_cells[i].ps_datas)
-#             ps_data = solid_cells[i].ps_datas[j]
-#             vs_data = ps_data.vs_data
-#             IB_vs = first(IB_cells[i].IB_nodes[j]).vs_data
-#             vs_data.vs_num = IB_vs.vs_num
-#         end
-#     end
-# end
+
 function vs_conserved_correction!(va_flags::Vector{Bool},amr)
     trees = amr.field.trees
     global_data = amr.global_data
@@ -499,10 +378,10 @@ function vs_conserved_correction!(va_flags::Vector{Bool},amr)
             F_c = discrete_maxwell(vs_data.midpoint, ps_data.prim, global_data)
             w = calc_w0(ps_data)
             prim = get_prim(w,global_data)
-            if 1/prim[end]>1e-3
+            # if 1/prim[end]>1e-3
                 F = discrete_maxwell(vs_data.midpoint, prim, global_data)
                 vs_data.df .+= F_c-F
-            end
+            # end
         end
     end
 end

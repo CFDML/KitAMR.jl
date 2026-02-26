@@ -8,6 +8,11 @@ function vanleer(sL::Real, sR::Real)
     SR = abs(sR)
     (sign(sL) + sign(sR)) * SL * SR / (SL + SR + EPS)
 end
+function minmod(sL::Real,sR::Real)
+    SL = abs(sL)
+    SR = abs(sR)
+    0.5(sign(sL)+sign(sR))*min(SL,SR)
+end
 function diff_L!(vs_data::AbstractVsData{DIM,NDF}, vs_data_n::AbstractVsData{DIM,NDF}, dsL::Float64, sL::AbstractMatrix) where{DIM,NDF}
     index = 1
     flag = 0.0
@@ -71,6 +76,47 @@ function diff_R!(vs_data::AbstractVsData{DIM,NDF}, vs_data_n::AbstractVsData{DIM
         else
             for j = 1:NDF
                 sR[i, j] -= (df[i, j] - dfn[index, j]) / dsR
+            end
+            flag += 1 / 2^(DIM * (level[i] - level_n[index]))
+            if flag == 1.0
+                index += 1
+                flag = 0.0
+            end
+        end
+    end
+end
+function donor_cell_limited_diff!(vs_data::AbstractVsData{DIM,NDF},aux_vs,sn_vs,ds,dir) where{DIM,NDF}
+    index = 1
+    flag = 0.0
+    level = vs_data.level
+    level_n = aux_vs.level
+    df = vs_data.df
+    sdf = @views vs_data.sdf[:,:,dir];sdf .= 0.
+    aux_df = aux_vs.df
+    sn_df = sn_vs.df
+    @inbounds for i = 1:vs_data.vs_num
+        if level[i] == level_n[index]
+            for j = 1:NDF
+                # 0.5*(abs(sign(aux_df[index,j]-df[i,j])+sign(df[i,j]-sn_df[i,j])))*
+                sdf[i, j] = (aux_df[index, j] - df[i, j]) / ds
+            end
+            index += 1
+        elseif level[i] < level_n[index]
+            while flag != 1.0
+                for j = 1:NDF
+                    sdf[i, j] +=
+                        # 0.5*(abs(sign(aux_df[index,j]-df[i,j])+sign(df[i,j]-sn_df[i,j])))*
+                            (aux_df[index, j] - df[i, j]) / 2^(DIM * (level_n[index] - level[i])) /ds
+                end
+                flag += 1 / 2^(DIM * (level_n[index] - level[i]))
+                index += 1
+            end
+            flag = 0.0
+        else
+            for j = 1:NDF
+                sdf[i, j] = 
+                    # 0.5*(abs(sign(aux_df[index,j]-df[i,j])+sign(df[i,j]-sn_df[i,j])))*
+                    (aux_df[index, j] - df[i, j]) / ds
             end
             flag += 1 / 2^(DIM * (level[i] - level_n[index]))
             if flag == 1.0
@@ -152,12 +198,12 @@ function update_slope_inner!(
     Rdata::T2,
     dir::Integer,
 ) where {T1<:AbstractPsData,T2<:Array,DIM,NDF}
-    if Ldata[1].bound_enc<0
-        update_slope_inner!(Val(0),Val(1),ps_data,global_data,Ldata,Rdata,dir)
-        # downwind_order_reduce!(ps_data,Ldata[1],dir,1.0)
+    if Ldata[1].bound_enc<0&&Rdata[1].bound_enc<0
+        ps_data.vs_data.sdf[:,:,dir] .= 0.
+    elseif Ldata[1].bound_enc<0
+        update_slope_donor_cell!(ps_data,Rdata[1],Ldata[1],dir)
     elseif Rdata[1].bound_enc<0
-        update_slope_inner!(Val(1),Val(0),ps_data,global_data,Ldata,Rdata,dir)
-        # downwind_order_reduce!(ps_data,Rdata[1],dir,-1.0)
+        update_slope_donor_cell!(ps_data,Ldata[1],Rdata[1],dir)
     else
         ds = ps_data.ds[dir]
         update_slope_inner_vs!(ps_data.vs_data, Ldata[1].vs_data, Rdata[1].vs_data, ds, ds, dir)
@@ -188,6 +234,10 @@ function update_slope_inner!(
     ds = ps_data.ds[dir]
     vs_data = ps_data.vs_data
     update_slope_Rbound_vs!(vs_data, Ldata[1].vs_data, ds, dir)
+end
+function update_slope_donor_cell!(ps_data,aux_cell,solid_neighbor,dir)
+    ds = aux_cell.midpoint[dir]-ps_data.midpoint[dir]
+    donor_cell_limited_diff!(ps_data.vs_data,aux_cell.vs_data,solid_neighbor.vs_data,ds,dir)
 end
 function update_slope_Rbound_vs!(
     vs_data::AbstractVsData{DIM,NDF},

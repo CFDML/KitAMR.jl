@@ -165,7 +165,7 @@ function Status(config)
         (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
         2^config[:AMR_VS_MAXLEVEL] / 2 for i in 1:DIM] : [maximum(abs.(quadrature.vcoords)) for _ in 1:DIM]
     Δt = config[:CFL]*minimum(ds ./ U)
-    return Status(0,ones(DIM+2),Δt*TIME_STEP_CONTRACT_RATIO,Δt,0.,1,1,1,Residual(DIM),Ref(false),false)
+    return Status(0,ones(DIM+2),Δt,Δt,0.,1,1,1,Residual(DIM),Ref(false),false)
 end
 
 mutable struct Global_Data{DIM,NDF}
