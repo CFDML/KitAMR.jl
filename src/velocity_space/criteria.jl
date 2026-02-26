@@ -25,11 +25,11 @@ function contribution_coarsen_flag(w::AbstractVector, U::AbstractVector, midpoin
 end
 function contribution_coarsen_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, ::Global_Data{DIM,2}) where{DIM}
     max(0.5 * (sum((U - midpoint) .^ 2) * df[1] + df[2])* weight /
-    (w[end] - 0.5 * w[1] * sum((U) .^ 2)),df[1]*weight/w[1]) < 1e-2* ADAPT_COEFFI_VS/ 2^DIM
+    (w[end] - 0.5 * w[1] * sum((U) .^ 2)),df[1]*weight/w[1]) < ADAPT_COEFFI_VS/ 2^DIM
 end
 function contribution_coarsen_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, ::Global_Data{DIM,1}) where{DIM}
     max(0.5 * (sum((U - midpoint) .^ 2) * df[1])* weight /
-    (w[end] - 0.5 * w[1] * sum((U) .^ 2)),df[1]*weight/w[1]) < 1e-2* ADAPT_COEFFI_VS/ 2^DIM
+    (w[end] - 0.5 * w[1] * sum((U) .^ 2)),df[1]*weight/w[1]) < ADAPT_COEFFI_VS/ 2^DIM
 end
 function macro_estimate_refine_flag(prim::AbstractVector,U,midpoint,ds,level)
     return false
@@ -40,7 +40,6 @@ function macro_estimate_refine_flag(prim::AbstractVector,U,midpoint,ds,level)
     end
 end
 function macro_estimate_IB_refine_flag(prim,bc,U,midpoint,ds,level)
-    return false
     Ub = bc[2:length(midpoint)+1]
     if (norm(midpoint-U)-norm(ds)/2^(level+1)<√(1/prim[end])||norm(midpoint-Ub)-norm(ds)/2^(level+1)<√(1/bc[end]))
         return true

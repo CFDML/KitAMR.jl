@@ -91,12 +91,23 @@ function calc_flux(::CAIDVM,here_vs,there_vs,flux_data::Union{FullFace,Flux_Data
     @inbounds @views begin
         dx = [midpoint[j]-here_mid[i,j]*Δt-here_ps_mid[j] for i in axes(here_mid,1),j in axes(here_mid,2)]
         ndx = [midpoint[j]-there_mid[i,j]*Δt-there_ps_mid[j] for i in axes(there_mid,1),j in axes(there_mid,2)]
-        df = [here_df[i,j]+dot(dx[i,:],here_sdf[i,j,:]) for i in axes(here_df,1),j in axes(here_df,2)]
-        ndf = [there_df[i,j]+dot(ndx[i,:],there_sdf[i,j,:]) for i in axes(there_df,1),j in axes(there_df,2)]
+        df = pp_reconstruct(here_df,here_sdf,here_data.ds,dx)
+        if there_data.bound_enc<0
+            ndf = [there_df[i,j]+dot(ndx[i,:],there_sdf[i,j,:]) for i in axes(there_df,1),j in axes(there_df,2)]
+        else
+            ndf = pp_reconstruct(there_df,there_sdf,there_data.ds,ndx)
+        end
         here_micro = [df[i,j]*here_vn[i] for i in axes(df,1),j in axes(df,2)]
         there_micro = [ndf[i,j]*there_vn[i] for i in axes(ndf,1),j in axes(ndf,2)]
     end
     here_weight = here_vs.weight;there_weight = there_vs.weight
     fw = micro_to_macro(here_micro,here_mid,here_weight,here_data.vs_data)+micro_to_macro(there_micro,there_mid,there_weight,here_data.vs_data)
     return fw,[here_micro,there_micro]
+end
+function pp_reconstruct(here_df,here_sdf,here_ds,dx) # positivity preserving reconstruct (10.1016/j.jcp.2009.12.030)
+    @views begin
+        β = [min(abs(here_df[i,j]/(0.5*dot(here_ds,abs.(here_sdf[i,j,:]))+EPS)),1.) for i in axes(here_df,1),j in axes(here_df,2)]
+        df = [here_df[i,j]+β[i,j]*dot(dx[i,:],here_sdf[i,j,:]) for i in axes(here_df,1),j in axes(here_df,2)]
+    end
+    return df
 end

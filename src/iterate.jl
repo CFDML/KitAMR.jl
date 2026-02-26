@@ -33,6 +33,7 @@ function update_gradmax!(amr::AMR{DIM}) where{DIM}
 end
 function iterate!(amr::AMR;buffer_steps = 0,i = typemax(Int))
     time_marching = amr.global_data.config.solver.time_marching
+    # Δt_comm!(amr)
     iterate!(time_marching,amr)
     residual_comm!(amr.global_data)
     amr.global_data.status.ps_adapt_step += 1
@@ -93,7 +94,7 @@ function iterate!(::CAIDVM_Marching,amr::AMR;buffer_steps = 0, i = typemax(Int))
     gas = global_data.config.gas
     trees = amr.field.trees
     Δt = global_data.status.Δt
-    global_data.status.Δt = i>buffer_steps ? global_data.status.Δt_ξ : global_data.status.Δt_ξ/buffer_steps
+    # global_data.status.Δt = i>buffer_steps ? global_data.status.Δt_ξ : global_data.status.Δt_ξ/buffer_steps
     @inbounds for i in eachindex(trees.data)
         @inbounds for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
@@ -114,7 +115,15 @@ function iterate!(::CAIDVM_Marching,amr::AMR;buffer_steps = 0, i = typemax(Int))
                 solid_dirs = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data[1:6])
                 for i in solid_dirs
                     solid_neighbor = ps_data.neighbor.data[i][1]
+                    fi = i + (isodd(i) ? 1 : -1)
+                    fluid_neighbor = ps_data.neighbor.data[fi][1]
                     @show i solid_neighbor.aux_point solid_neighbor.normal solid_neighbor.midpoint
+                    write_vs_VTK(fluid_neighbor.vs_data.df,fluid_neighbor.vs_data,amr,"./X38_singular_vs_fn"*string(fi),["df"],fieldvalues_fn)
+                    write_vs_VTK(solid_neighbor.vs_data.df,vs_data,amr,"./X38_singular_vs_sn"*string(i),["df"],fieldvalues_fn)
+                    dir = get_dir(i)
+                    write_vs_VTK(vs_data.sdf[:,:,dir],vs_data,amr,"./X38_singular_vs_sdf"*string(dir),["sdf"],fieldvalues_fn)
+                    write_vs_VTK(fluid_neighbor.vs_data.sdf[:,:,dir],fluid_neighbor.vs_data,amr,"./X38_singular_vs_sdf"*string(dir)*"_fn"*string(fi),["sdf"],fieldvalues_fn)
+                    write_vs_VTK(solid_neighbor.vs_data.sdf[:,:,dir],vs_data,amr,"./X38_singular_vs_sdf"*string(dir)*"_sn"*string(i),["sdf"],fieldvalues_fn)
                 end
                 write_vs_VTK(vs_data.df,vs_data,amr,"./X38_singular_vs",["df"],fieldvalues_fn)
             end
@@ -133,6 +142,18 @@ function iterate!(::CAIDVM_Marching,amr::AMR;buffer_steps = 0, i = typemax(Int))
             vs_data.flux .= 0.0
         end
     end
+end
+function donor_cell_collision!(ps_data::PS_Data{DIM,NDF},global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+    ps_data.bound_enc==0&&return nothing
+    vs_data = ps_data.vs_data
+    df = vs_data.df
+    for i in eachindex(df)
+        df[i] = max(0.,df[i])
+    end
+    prim_new = get_prim(calc_w0(ps_data),global_data)
+    maximum(abs.(prim_new-ps_data.prim))<EPS && return nothing
+    df .+= discrete_maxwell(vs_data.midpoint,ps_data.prim,global_data)-discrete_maxwell(vs_data.midpoint,prim_new,global_data)
+    return nothing
 end
 function iterate!(::Euler,amr::AMR{DIM}) where{DIM}
     global_data = amr.global_data
@@ -190,7 +211,24 @@ function check_for_convergence(amr::AMR)
     maximum(amr.global_data.status.residual.residual)<TOLERANCE&&(amr.global_data.status.residual.redundant_step+=1)
     return amr.global_data.status.residual.redundant_step>REDUNDANT_STEPS_NUM
 end
-function Δt_comm!(global_data::Global_Data)
+function Δt_comm!(amr::AMR)
+    global_data = amr.global_data
+    global_data.status.Δt = global_data.status.Δt_ξ
+    trees = amr.field.trees
+    flux_f = -EPS
+    @inbounds for i in eachindex(trees.data)
+        @inbounds for j in eachindex(trees.data[i])
+            ps_data = trees.data[i][j]
+            isa(ps_data,InsideSolidData) && continue
+            ps_data.bound_enc<0 && continue
+            vs_data = ps_data.vs_data
+            area = reduce(*, ps_data.ds)
+            for k in eachindex(vs_data.df)
+                flux_f = min(flux_f,vs_data.flux[k]/(vs_data.df[k]+EPS))
+            end
+            global_data.status.Δt = min(global_data.status.Δt,-0.8*area/flux_f)
+        end
+    end
     global_data.status.Δt = MPI.Allreduce(global_data.status.Δt, (x,y)->min(x,y), MPI.COMM_WORLD)
 end
 function macro_cons_time_step(ps_data,global_data::Global_Data{DIM}) where{DIM}

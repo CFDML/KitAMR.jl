@@ -236,15 +236,8 @@ function make_face_vs(face::FullFace{DIM,NDF}) where{DIM,NDF}
     rot,direction,_,here_data,there_data = unpack(face)
     vs_data = here_data.vs_data;nvs_data = there_data.vs_data
     here_mid = vs_data.midpoint;there_mid = nvs_data.midpoint
-    if there_data.bound_enc<0
-        calc_solid_cell_slope!(nvs_data,vs_data,there_data.midpoint,here_data.midpoint,direction)
-    # #     # heavi = [dot(there_data.normal,x)<=0. for x in eachrow(there_data.vs_data.midpoint)]
-    # #     # nheavi = [!x for x in heavi]
-    # # # else
-    end
     heavi = [x<=0. for x in rot.*@views here_mid[:,direction]]
     nheavi = [x>0. for x in rot.*@views there_mid[:,direction]]
-    # end
     @views here_vs = Face_VS_Data{DIM,NDF}(
         heavi,vs_data.weight[heavi],here_mid[heavi,:],here_mid[heavi,direction],
         vs_data.df[heavi,:],vs_data.sdf[heavi,:,:]
