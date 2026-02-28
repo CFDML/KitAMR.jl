@@ -91,10 +91,11 @@ function calc_flux(::CAIDVM,here_vs,there_vs,flux_data::Union{FullFace,Flux_Data
     @inbounds @views begin
         dx = [midpoint[j]-here_mid[i,j]*Δt-here_ps_mid[j] for i in axes(here_mid,1),j in axes(here_mid,2)]
         ndx = [midpoint[j]-there_mid[i,j]*Δt-there_ps_mid[j] for i in axes(there_mid,1),j in axes(there_mid,2)]
-        df = pp_reconstruct(here_df,here_sdf,here_data.ds,dx)
         if there_data.bound_enc<0
+            df = [here_df[i,j]+dot(dx[i,:],here_sdf[i,j,:]) for i in axes(here_df,1),j in axes(here_df,2)]
             ndf = [there_df[i,j]+dot(ndx[i,:],there_sdf[i,j,:]) for i in axes(there_df,1),j in axes(there_df,2)]
         else
+            df = pp_reconstruct(here_df,here_sdf,here_data.ds,dx)
             ndf = pp_reconstruct(there_df,there_sdf,there_data.ds,ndx)
         end
         here_micro = [df[i,j]*here_vn[i] for i in axes(df,1),j in axes(df,2)]

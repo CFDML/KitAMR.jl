@@ -1,13 +1,7 @@
 include("criteria.jl")
 
-function vs_refine!(amr::AMR)
-    trees = amr.field.trees
-    global_data = amr.global_data
-    fp = PointerWrapper(global_data.forest.p4est)
-    va_flags = zeros(Bool,fp.local_num_quadrants[])
-    vs_refine!(trees, va_flags, global_data)
-end
 function pre_vs_refine!(trees::PS_Trees{DIM,NDF}, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+    vr = vs_resolution(trees,global_data)
     !isa(global_data.config.quadrature,Vector)&&return nothing
     ds = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
         global_data.config.vs_trees_num[i] for i in 1:DIM]
@@ -37,8 +31,7 @@ function pre_vs_refine!(trees::PS_Trees{DIM,NDF}, global_data::Global_Data{DIM,N
                     df = @view(lndf[df_index])
                     if vs_data.level[index] < global_data.config.solver.AMR_VS_MAXLEVEL &&
                         (   vs_refine_udf==null_udf ? 
-                            (macro_estimate_refine_flag(ps_data.prim,U,midpoint,ds,vs_data.level[index])||
-                            contribution_refine_flag(ps_data.w, U, midpoint, df, vs_data.weight[index], global_data)) : 
+                            contribution_refine_flag(ps_data.w, U, midpoint, df, vs_data.weight[index], vr, global_data) : 
                             vs_refine_udf(midpoint;level = vs_data.level[index],du = ds./2^vs_data.level[index])
                         )
                         midpoint_new = midpoint_refine(DIM,midpoint, vs_data.level[index], ds)
@@ -84,10 +77,12 @@ function criterion_df(ps_data::AbstractPsData{DIM,NDF}) where{DIM,NDF}
     end
     return cdf
 end
-function vs_refine!(trees::PS_Trees{DIM,NDF}, va_flags::Vector{Bool}, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+function vs_refine!(va_data::Velocity_Adaptive_Data, amr::AMR{DIM,NDF}) where{DIM,NDF}
+    trees = amr.field.trees;global_data = amr.global_data
     !isa(global_data.config.quadrature,Vector)&&return nothing
     ds = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
     global_data.config.vs_trees_num[i] for i in 1:DIM]
+    va_flags = va_data.va_flags
     id = 0
     for i in eachindex(trees.data)
         for j in eachindex(trees.data[i])
@@ -115,7 +110,7 @@ function vs_refine!(trees::PS_Trees{DIM,NDF}, va_flags::Vector{Bool}, global_dat
                 midpoint = @view(lnmidpoint[midpoint_index])
                 df = @view(lndf[df_index]);cdf = @view(lncdf[df_index])
                 if vs_data.level[index] < global_data.config.solver.AMR_VS_MAXLEVEL &&
-                    contribution_refine_flag(ps_data.w, U, midpoint, cdf, vs_data.weight[index], global_data)
+                    contribution_refine_flag(ps_data.w, U, midpoint, cdf, vs_data.weight[index], va_data.vr,global_data)
                     midpoint_new = midpoint_refine(DIM,midpoint, vs_data.level[index], ds)
                     df_new = df_refine(DIM,midpoint, midpoint_new, df)
                     cdf_new = df_refine(DIM,midpoint,midpoint_new,df)
@@ -144,7 +139,7 @@ function vs_refine!(trees::PS_Trees{DIM,NDF}, va_flags::Vector{Bool}, global_dat
             vs_data.flux = reshape(lnflux, vs_data.vs_num, NDF)
         end
     end
-    return va_flags
+    return nothing
 end
 function midpoint_refine_replace!(DIM::Integer,lnmidpoint::AbstractVector, midpoint_new::AbstractMatrix, vs_num::Int, index::Int)
     for i = 1:DIM
@@ -218,11 +213,11 @@ function make_b(DIM::Integer,midpoint::AbstractVector, midpoint_new::AbstractMat
     b
 end
 
-function vs_coarsen!(va_flags::Vector{Bool},amr::AMR{DIM,NDF})where{DIM,NDF}
-    trees = amr.field.trees
-    global_data = amr.global_data
+function vs_coarsen!(va_data::Velocity_Adaptive_Data,amr::AMR{DIM,NDF})where{DIM,NDF}
+    trees = amr.field.trees;global_data = amr.global_data
     ds = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
     global_data.config.vs_trees_num[i] for i in 1:DIM]
+    va_flags = va_data.va_flags
     id = 0
     flag = zeros(global_data.config.solver.AMR_VS_MAXLEVEL)
     for i in eachindex(trees.data)
@@ -262,6 +257,7 @@ function vs_coarsen!(va_flags::Vector{Bool},amr::AMR{DIM,NDF})where{DIM,NDF}
                             midpoint,
                             cdf,
                             @view(vs_data.weight[index:index+2^DIM-1]),
+                            va_data.vr,
                             global_data
                         )
                             midpoint_new =
@@ -305,7 +301,7 @@ function vs_coarsen!(va_flags::Vector{Bool},amr::AMR{DIM,NDF})where{DIM,NDF}
             vs_data.df = reshape(lndf, vs_data.vs_num, NDF)
         end
     end
-    return va_flags
+    return nothing
 end
 
 function midpoint_coarsen(DIM::Integer,midpoint::AbstractVector, level::Int8, ds::AbstractVector)
@@ -365,9 +361,10 @@ function flux_coarsen_replace!(DIM::Integer,NDF::Integer,lnflux::AbstractVector)
 end
 
 
-function vs_conserved_correction!(va_flags::Vector{Bool},amr)
+function vs_conserved_correction!(va_data::Velocity_Adaptive_Data,amr)
     trees = amr.field.trees
     global_data = amr.global_data
+    va_flags = va_data.va_flags
     id = 0
     @inbounds for i in eachindex(trees.data)
         for j in eachindex(trees.data[i])
@@ -378,10 +375,49 @@ function vs_conserved_correction!(va_flags::Vector{Bool},amr)
             F_c = discrete_maxwell(vs_data.midpoint, ps_data.prim, global_data)
             w = calc_w0(ps_data)
             prim = get_prim(w,global_data)
-            # if 1/prim[end]>1e-3
-                F = discrete_maxwell(vs_data.midpoint, prim, global_data)
-                vs_data.df .+= F_c-F
-            # end
+            F = discrete_maxwell(vs_data.midpoint, prim, global_data)
+            vs_data.df .+= F_c-F
         end
     end
+end
+
+function vs_resolution(amr)
+    trees = amr.field.trees
+    vs_resolution(trees,amr.global_data)
+end
+function vs_resolution(trees::PS_Trees,global_data)
+    density_res = 0.;energy_res = 0.
+    @inbounds for tree in trees.data
+        for ps_data in tree
+            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0)&&continue
+            density_res_i,energy_res_i = vs_resolution(ps_data,global_data)
+            density_res = max(density_res_i,density_res)
+            energy_res = max(energy_res_i,energy_res)
+        end
+    end
+    density_res = MPI.Allreduce(density_res, (x,y)->max(x,y), MPI.COMM_WORLD)
+    energy_res = MPI.Allreduce(energy_res, (x,y)->max(x,y), MPI.COMM_WORLD)
+    return Velocity_Resolution(density_res,energy_res)
+end
+function vs_resolution(ps_data::PS_Data{DIM,1},global_data) where{DIM}
+    vs_data = ps_data.vs_data
+    U = ps_data.prim[2:DIM+1]
+    density_max = maximum(vs_data.df)
+    c2 = @views [sum((U-u).^2) for u in eachrow(vs_data.midpoint)]
+    energy_max = 0.5*maximum(vs_data.df.*c2)
+    vs_trees_num = global_data.config.vs_trees_num
+    quadrature = global_data.config.quadrature
+    du = [quadrature[2*i]-quadrature[2*i-1] for i in 1:DIM]
+    weight = reduce(*,du)/reduce(*,vs_trees_num)/2^(DIM*(global_data.config.solver.AMR_VS_MAXLEVEL))
+    return density_max*weight,energy_max*weight
+end
+
+function vs_adaptive!(amr)
+    vr = vs_resolution(amr)
+    fp = PointerWrapper(amr.global_data.forest.p4est)
+    va_flags = zeros(Bool,fp.local_num_quadrants[])
+    va_data = Velocity_Adaptive_Data(vr,va_flags)
+    vs_refine!(va_data,amr)
+    vs_coarsen!(va_data,amr)
+    vs_conserved_correction!(va_data,amr)
 end

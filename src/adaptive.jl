@@ -795,9 +795,7 @@ function adaptive!(ps4est::P_pxest_t,amr::AMR;ps_interval=40,vs_interval=80,part
         flag = true;amr.global_data.status.ps_adapt_step = 0
     end
     if amr.global_data.config.solver.VS_DYNAMIC_AMR&&amr.global_data.status.vs_adapt_step > vs_interval*converge_ratio
-        va_flags = vs_refine!(amr)
-        va_flags = vs_coarsen!(va_flags,amr)
-        vs_conserved_correction!(va_flags,amr)
+        vs_adaptive!(amr)
         flag = true;amr.global_data.status.vs_adapt_step=0
     end
     if (amr.global_data.config.solver.PS_DYNAMIC_AMR||amr.global_data.config.solver.VS_DYNAMIC_AMR)&&amr.global_data.status.partition_step>partition_interval*converge_ratio
@@ -812,7 +810,6 @@ function adaptive!(ps4est::P_pxest_t,amr::AMR;ps_interval=40,vs_interval=80,part
     end
     return nothing
 end
-
 function update_faces!(p4est::P_pxest_t, amr::AMR)
     amr.field.faces = Vector{AbstractFace}(undef, 0)
     initialize_faces!(p4est, amr)
