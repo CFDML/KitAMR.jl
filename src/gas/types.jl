@@ -8,4 +8,5 @@
     αᵣ::Float64 = 1.0
     ωᵣ::Float64 = 0.81
     μᵣ::Float64 = ref_vhs_vis(Kn,αᵣ,ωᵣ)
+    T_ref::Float64 = 1.0 # The reference temperature of the molecular model
 end

@@ -610,15 +610,15 @@ function update_solid_neighbor!(::AbstractFluxType,ps_data::PS_Data{DIM,NDF},sol
     faceid = solid_neighbor.faceid
     dir = get_dir(faceid)
     solid_cell = solid_neighbor.solid_cell;s_vs_data = solid_cell.vs_data
-    dxL = 0.5*ps_data.ds[dir]
-    dxR = norm(solid_cell.midpoint-aux_point)
     vn = @views [dot(v,n) for v in eachrow(ps_data.vs_data.midpoint)]
     aux_df = zeros(vs_data.vs_num,NDF)
-    ib_point = aux_point+0.5*(ps_data.midpoint-solid_cell.midpoint)
-    ib_df =  @views vs_data.df+vs_data.sdf[:,:,dir]*(ib_point[dir]-ps_data.midpoint[dir])
+    ib_point = aux_point+ps_data.midpoint-solid_cell.midpoint
+    ib_df = image_df(ps_data,ib_point,amr)
     Θ = heaviside.(vn)
-    vs_interpolate!(ib_df,vs_data.level,ib_point[dir],s_vs_data.df,
-        s_vs_data.level,solid_cell.midpoint[dir],aux_df,aux_point[dir],amr)
+    ssdf = @views solid_neighbor.vs_data.sdf[:,:,dir]
+    boundary_slope!(ssdf,vs_data.level,s_vs_data.level,ib_df,vs_data.df,
+        s_vs_data.df,ib_point[dir]-ps_data.midpoint[dir],ps_data.midpoint[dir]-solid_neighbor.midpoint[dir])
+    @. aux_df = ib_df+ssdf*(aux_point[dir]-ib_point[dir])
     cvc_gas_correction!(aux_df,solid_neighbor)
     aux_prim = get_bc(ib.bc;intersect_point=aux_point,ib);aux_prim[1] = 1.
     M = discrete_maxwell(vs_data.midpoint,aux_prim,global_data)
@@ -634,10 +634,11 @@ function update_solid_neighbor!(::AbstractFluxType,ps_data::PS_Data{DIM,NDF},sol
         end
     end
     cvc_correction!(aux_df,M,solid_neighbor,amr)
-    @. solid_neighbor.vs_data.df = aux_df+(aux_df-ib_df)/dxL*dxR
-    for j in axes(vs_data.df,2)
-        for i in axes(vs_data.df,1)
-            solid_neighbor.vs_data.sdf[i,j,dir] = (vs_data.df[i,j]-solid_neighbor.vs_data.df[i,j])/(ps_data.midpoint[dir]-solid_neighbor.midpoint[dir])
+    @. solid_neighbor.vs_data.df = aux_df+ssdf*(solid_neighbor.midpoint[dir]-aux_point[dir])    
+    for i in axes(ssdf,1)
+        for j in axes(ssdf,2)
+            # ssdf[i,j] = vanleer(ssdf[i,j],(vs_data.df[i,j]-solid_neighbor.vs_data.df[i,j])/(ps_data.midpoint[dir]-solid_neighbor.midpoint[dir]))            
+            ssdf[i,j] = vs_data.sdf[i,j,dir]
         end
     end
     solid_neighbor.w = calc_w0(vs_data.midpoint,solid_neighbor.vs_data.df,vs_data.weight,global_data)
