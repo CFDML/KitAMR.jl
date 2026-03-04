@@ -3,7 +3,7 @@ mesh = load("./example/X38/X38-surface-fine.stl")
 points = [x[i] for i in 1:3, x in mesh.position]
 mins = minimum(points,dims=2)
 maxes = maximum(points,dims=2)
-L = maximum(maxes-mins)/0.28
+L = maximum(maxes-mins)
 α = -π/9# AOA 20 degrees
 Rot = [cos(α) -sin(α) 0;sin(α) cos(α) 0;0 0 1.]
 normalized_points = Rot*points./L

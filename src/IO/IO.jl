@@ -520,11 +520,13 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Triangle}
                 end
                 
                 vs_data = ps_data.vs_data
+                β = @views [min(abs(vs_data.df/(0.5*dot(ps_data.ds,abs.(vs_data.sdf[i,j,:]))+EPS)),1.) for i in axes(vs_data.df,1), j in axes(vs_data.df,2)]
+                point_df = similar(vs_data.df)
                 for i in 1:4
                     df = vs_data.df
                     sdf = vs_data.sdf
                     dx = 0.5*ps_data.ds.*tb[i]
-                    @views point_df = df+[dot(sdf[i,j,:],dx) for i in axes(df,1), j in axes(df,2)]
+                    point_df .= @views df+[β[i,j]*dot(sdf[i,j,:],dx) for i in axes(df,1), j in axes(df,2)]
                     w = calc_w0(vs_data.midpoint,point_df,vs_data.weight,amr.global_data)
                     prim = get_prim(w,amr.global_data)
                     qf = calc_qf(vs_data.midpoint,point_df,vs_data.weight,prim,amr.global_data)
@@ -533,10 +535,10 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Triangle}
                     point_solutions[5*(index-1)+i,4] = 1.0/prim[end]
                     @views point_solutions[5*(index-1)+i,5:6] .= qf
                 end
-                    point_solutions[5*index,1] = ps_data.prim[1]
-                    @views point_solutions[5*index,2:3] .= ps_data.prim[2:3]
-                    point_solutions[5*index,4] = 1.0/ps_data.prim[end]
-                    @views point_solutions[5*index,5:6] .= ps_data.qf
+                point_solutions[5*index,1] = ps_data.prim[1]
+                @views point_solutions[5*index,2:3] .= ps_data.prim[2:3]
+                point_solutions[5*index,4] = 1.0/ps_data.prim[end]
+                @views point_solutions[5*index,5:6] .= ps_data.qf
             end
             index += 1
         end
@@ -601,14 +603,15 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Tetra}
     tb[5] = @SVector [-1.,-1.,1.];tb[6] = @SVector [1.,-1.,1.];tb[7] = @SVector [1.,1.,1.];tb[8] = @SVector [-1.,1.,1.]
     tb[9] = @SVector [-1.,0.,0.];tb[10] = @SVector [1.,0.,0.]; tb[11] = @SVector [0.,-1.,0.];tb[12] = @SVector [0.,1.,0.]
     tb[13] = @SVector [0.,0.,-1.];tb[14] = @SVector [0.,0.,1.]
-    ptb = Vector{SVector{4,Int}}(undef,24)# voxel-pyramid vertices table
+    ptb = Vector{SVector{4,Int}}(undef,24)# voxel-tetra vertices table
     ptb[1] = @SVector [1,2,13,15];ptb[2] = @SVector [2,3,13,15];ptb[3] = @SVector [3,4,13,15];ptb[4] = @SVector [4,1,13,15]
     ptb[5] = @SVector [5,6,14,15];ptb[6] = @SVector [6,7,14,15];ptb[7] = @SVector [7,8,14,15];ptb[8] = @SVector [8,5,14,15];
     ptb[9] = @SVector [1,4,9,15];ptb[10] = @SVector [4,8,9,15];ptb[11] = @SVector [8,5,9,15];ptb[12] = @SVector [5,1,9,15];
     ptb[13] = @SVector [2,6,10,15];ptb[14] = @SVector [6,7,10,15];ptb[15] = @SVector [7,3,10,15];ptb[16] = @SVector [3,2,10,15];
     ptb[17] = @SVector [1,2,11,15];ptb[18] = @SVector [2,6,11,15];ptb[19] = @SVector [6,5,11,15];ptb[20] = @SVector [5,1,11,15];
     ptb[21] = @SVector [3,4,12,15];ptb[22] = @SVector [4,8,12,15];ptb[23] = @SVector [8,7,12,15];ptb[24] = @SVector [7,3,12,15];
-    nv = length(tb)+1;nc = length(ptb)
+    nv = length(tb)+1 # The 15th one represents the midpoint of the voxel.
+    nc = length(ptb)
     vertices = Matrix{Float64}(undef,3,nv*N)
     cells = Vector{MeshCell}(undef,nc*N)
     levels = Vector{Int8}(undef,N)
@@ -625,7 +628,7 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Tetra}
             midpoint = ps_data.midpoint
         end
         for i in 1:nv-1
-            @. vertices[:,(index-1)*nv+i] = midpoint+tb[i]/2*ds
+            vertices[:,(index-1)*nv+i] .= midpoint+0.5*tb[i].*ds
         end
         vertices[:,nv*index] .= midpoint
         for i in eachindex(ptb)
@@ -636,18 +639,12 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Tetra}
     end
     solutions = Matrix{Float64}(undef,nc*N,8)
     point_solutions = Matrix{Float64}(undef,nv*N,8)
-    # bound_encs = Vector{Float64}(undef,N)
     index = 1
     for tree in amr.field.trees.data
         for ps_data in tree
             if isa(ps_data,InsideSolidData)||ps_data.bound_enc<0
                 solutions[nc*(index-1)+1:nc*index,:].=NaN
                 point_solutions[nv*(index-1)+1:nv*index,:] .= NaN
-                # if !isa(ps_data,InsideSolidData)
-                #     for i in 1:nc
-                #         solutions[nc*(index-1)+i,5] = 2.
-                #     end
-                # end
             else
                 for i in 1:nc
                     solutions[nc*(index-1)+i,1] = ps_data.prim[1]
@@ -657,11 +654,13 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Tetra}
                 end
                 
                 vs_data = ps_data.vs_data
+                β = @views [min(abs(vs_data.df/(0.5*dot(ps_data.ds,abs.(vs_data.sdf[i,j,:]))+EPS)),1.) for i in axes(vs_data.df,1), j in axes(vs_data.df,2)] # positivity preserving coefficient
+                point_df = similar(vs_data.df)
                 for i in 1:nv-1
                     df = vs_data.df
                     sdf = vs_data.sdf
                     dx = 0.5*ps_data.ds.*tb[i]
-                    @views point_df = df+[dot(sdf[i,j,:],dx) for i in axes(df,1), j in axes(df,2)]
+                    point_df .= @views df+[β[i,j]*dot(sdf[i,j,:],dx) for i in axes(df,1), j in axes(df,2)]
                     w = calc_w0(vs_data.midpoint,point_df,vs_data.weight,amr.global_data)
                     prim = get_prim(w,amr.global_data)
                     qf = calc_qf(vs_data.midpoint,point_df,vs_data.weight,prim,amr.global_data)
@@ -917,14 +916,10 @@ function result2vtk(dirname::String,vtkname::String)
         end
         vtk_grid(vtkname,vertices,cells) do vtk
             vtk["rho"] = [ps_solution.prim[1] for ps_solution in result.solution.ps_solutions]
-            # vtk["u"] = [ps_solution.prim[2] for ps_solution in result.solution.ps_solutions]
-            # vtk["v"] = [ps_solution.prim[3] for ps_solution in result.solution.ps_solutions]
             vtk["velocity"] = ([ps_solution.prim[2] for ps_solution in result.solution.ps_solutions],
                 [ps_solution.prim[3] for ps_solution in result.solution.ps_solutions],
                 [0. for _ in result.solution.ps_solutions])
             vtk["T"] = [1/ps_solution.prim[end] for ps_solution in result.solution.ps_solutions]
-            # vtk["qfx"] = [ps_solution.qf[1] for ps_solution in result.solution.ps_solutions]
-            # vtk["qfy"] = [ps_solution.qf[2] for ps_solution in result.solution.ps_solutions]
             vtk["qf"] = ([ps_solution.qf[1] for ps_solution in result.solution.ps_solutions],
                 [ps_solution.qf[2] for ps_solution in result.solution.ps_solutions],
                 [0. for _ in result.solution.ps_solutions])

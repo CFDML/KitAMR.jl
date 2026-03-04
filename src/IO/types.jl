@@ -38,7 +38,7 @@ end
 function Status(status::StatusForSave)
     return Status(status.max_vs_num,status.gradmax,status.Δt,
         status.Δt_ξ,status.sim_time,status.ps_adapt_step,
-        status.vs_adapt_step,status.partition_step,Residual(DIM),Ref(false))
+        status.vs_adapt_step,status.partition_step,Residual(DIM),Ref(false),false)
 end
 struct SolverSet
     config::ConfigureForSave

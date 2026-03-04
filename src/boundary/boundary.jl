@@ -64,17 +64,11 @@ function save_boundary_result!(ib::AbstractBoundary,ps_data,solid_neighbor::Soli
     faceid = solid_neighbor.faceid
     dir = get_dir(faceid)
     solid_cell = solid_neighbor.solid_cell;s_vs_data = solid_cell.vs_data
-    # dxL = ps_data.ds[dir]
-    # dxR = abs(solid_cell.midpoint[dir]-aux_point[dir])
     vn = @views [dot(v,n) for v in eachrow(ps_data.vs_data.midpoint)]
     aux_df = zeros(vs_data.vs_num,NDF)
-    # ib_point = aux_point+0.5*(ps_data.midpoint-solid_cell.midpoint)
     ib_point = aux_point+ps_data.midpoint-solid_cell.midpoint
-    # ib_df =  @views vs_data.df+vs_data.sdf[:,:,dir]*(ib_point[dir]-ps_data.midpoint[dir])
     ib_df = image_df(ps_data,ib_point,amr)
     Θ = heaviside.(vn)
-    # vs_interpolate!(ib_df,vs_data.level,ib_point[dir],s_vs_data.df,
-    #     s_vs_data.level,solid_cell.midpoint[dir],aux_df,aux_point[dir],amr)
     ssdf = @views solid_neighbor.vs_data.sdf[:,:,dir]
     boundary_slope!(ssdf,vs_data.level,s_vs_data.level,ib_df,vs_data.df,
         s_vs_data.df,ib_point[dir]-ps_data.midpoint[dir],ps_data.midpoint[dir]-solid_neighbor.midpoint[dir])
@@ -84,7 +78,6 @@ function save_boundary_result!(ib::AbstractBoundary,ps_data,solid_neighbor::Soli
     M = discrete_maxwell(vs_data.midpoint,aux_prim,global_data)
     _,Mu_R = @views cvc_Mu(M[:,1],vn,Θ,solid_neighbor)
     ρw = cvc_density(aux_df,vn,Θ,solid_neighbor,Mu_R)
-    # ρw = calc_IB_ρw(aux_point,ib,vs_data.midpoint,vs_data.weight,aux_df,vn,Θ)
     aux_prim[1] = ρw
     M .*= aux_prim[1]
     for i in 1:vs_data.vs_num
@@ -637,7 +630,6 @@ function update_solid_neighbor!(::AbstractFluxType,ps_data::PS_Data{DIM,NDF},sol
     @. solid_neighbor.vs_data.df = aux_df+ssdf*(solid_neighbor.midpoint[dir]-aux_point[dir])    
     for i in axes(ssdf,1)
         for j in axes(ssdf,2)
-            # ssdf[i,j] = vanleer(ssdf[i,j],(vs_data.df[i,j]-solid_neighbor.vs_data.df[i,j])/(ps_data.midpoint[dir]-solid_neighbor.midpoint[dir]))            
             ssdf[i,j] = vs_data.sdf[i,j,dir]
         end
     end
