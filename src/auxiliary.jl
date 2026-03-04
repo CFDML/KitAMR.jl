@@ -162,9 +162,6 @@ function check!(i,ps4est,amr)
             @show local_num_quadrants
             ref_vs_num = amr.global_data.status.max_vs_num
             @show ref_vs_num
-            Δt = amr.global_data.status.Δt
-            Δt_ξ = amr.global_data.status.Δt_ξ
-            @show Δt/Δt_ξ
         end
     end
     check_for_save!(ps4est,amr)
@@ -455,7 +452,7 @@ function Vertical_Volume_Flux(points::AbstractVector{Vector{Float64}},midpoint::
     for i in eachindex(points)
         p1 = points[i%N+1];p2 = points[i]
         dx= p1-p2
-        id = findall(x->abs(x)<EPS,dx)
+        id = findall(x->x==0.,dx)
         if length(id)>1
             throw(`Cut-cube Error!`)
         else
@@ -471,15 +468,24 @@ function Vertical_Volume_Flux(points::AbstractVector{Vector{Float64}},midpoint::
     end
     return H
 end
+function vertices_sweep!(midpoint,ddu,vertices) # Clean the eps in vertices.
+    if any(i->abs(midpoint[i])≈0.5*ddu[i],1:length(midpoint))
+        for i in eachindex(vertices)
+            abs(vertices[i]) < EPS && (vertices[i] = 0.)
+        end
+    end
+    return nothing
+end
 function cut_cube(n::Vector{Float64},C::Matrix{Float64},midpoint::Vector{Float64},ddu::Vector{Float64},vertices::Matrix{Float64}) # 3.627 μs (215 allocations: 8.45 KiB). Acceptable?
+    vertices_sweep!(midpoint,ddu,vertices)
     vltable = [[1,2],[3,4],[7,8],[5,6],[1,3],[2,4],[6,8],[5,7],[1,5],[2,6],[4,8],[3,7]] # vertices-edges table
     points = Vector{Vector{Float64}}(undef,6);index = 1
     dirs = permutedims(vertices)*n # what if vertices[i]=0.?
     for i in eachindex(vltable)
         flag = dirs[vltable[i][1]]*dirs[vltable[i][2]] # flag==0: cut any end of the edge; flag<0: cut the edge; flag>0: not cut the edge
-        if abs(flag)<EPS
+        if flag==0.
             if cld(i,4)==1 # avoid redundancy
-                if abs(dirs[vltable[i][1]])<EPS # end A intersects
+                if abs(dirs[vltable[i][1]])==0. # end A intersects
                     points[index] = vertices[:,vltable[i][1]];index+=1
                 else # end B intersects
                     points[index] = vertices[:,vltable[i][2]];index+=1
@@ -494,7 +500,7 @@ function cut_cube(n::Vector{Float64},C::Matrix{Float64},midpoint::Vector{Float64
     end
     index<4&&return false,0.,0.
     points = points[1:index-1]
-    posid = findall(x->x>EPS,dirs)
+    posid = findall(x->x>0.,dirs)
     pos = length(posid)<4 ? true : false # H represents solid?
     if any(x->abs(x)<EPS,n) # Simple case
         dir = findfirst(x->abs(x)<EPS,n) 
@@ -539,7 +545,7 @@ function cut_cube(n::Vector{Float64},C::Matrix{Float64},midpoint::Vector{Float64
             @views H+=Vertical_Volume_Flux(points[id],midpoint,vertices[:,posid])
             return true,8*prod(midpoint-@view(vertices[:,1]))-H,H # gas first
         else
-            negid = findall(x->x<-EPS,dirs)
+            negid = findall(x->x<0.,dirs)
             @views H+=Vertical_Volume_Flux(points[id],midpoint,vertices[:,negid])
             return true,H,8*prod(midpoint-@view(vertices[:,1]))-H
         end

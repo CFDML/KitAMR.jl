@@ -15,11 +15,12 @@ function update_gradmax!(amr::AMR{DIM}) where{DIM}
     for tree in amr.field.trees.data
         for ps_data in tree
             isa(ps_data, InsideSolidData)&&continue
-            ps_data.bound_enc!=0&&continue
+            ps_data.bound_enc<0&&continue
             ps_data.flux.=0.
             for neighbors in ps_data.neighbor.data
                 for neighbor in neighbors
                     isnothing(neighbor)&&continue
+                    isa(neighbor,SolidNeighbor)&&continue
                     for j in axes(ps_data.sw,1)
                         for k in axes(ps_data.sw,2)
                             ps_data.flux[j] = max(abs(ps_data.sw[j,k]),max(abs(neighbor.sw[j,k]),abs(ps_data.flux[j]))) # Temporarily used to store local_grad_max
