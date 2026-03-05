@@ -13,7 +13,7 @@ function update_gradmax!(amr::AMR{DIM}) where{DIM}
             end
         end
     end
-    gradmax = MPI.Allreduce(gradmax, (x,y)->max.(x,y), MPI.COMM_WORLD)
+    gradmax .= MPI.Allreduce(gradmax, (x,y)->max.(x,y), MPI.COMM_WORLD)
     return nothing
 end
 function iterate!(amr::AMR)
