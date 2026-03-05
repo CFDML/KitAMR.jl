@@ -6,7 +6,7 @@ ps4est,amr = KitAMR.init(config);
 KitAMR.listen_for_save!()
 max_sim_time = 20.
 nt = max_sim_time/amr.global_data.status.Δt+1.0 |> floor |> Int
-for i in 1:10
+for i in 1:nt
     if MPI.Comm_rank(MPI.COMM_WORLD)==0
         @show i
     end
