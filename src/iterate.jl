@@ -1,38 +1,22 @@
 function update_gradmax!(amr::AMR{DIM}) where{DIM}
-    global_data = amr.global_data
-    update_sw!(amr)
-    global_data.status.gradmax =
-        MPI.Allreduce(global_data.status.gradmax, (x,y)->max.(x,y), MPI.COMM_WORLD)
-    !global_data.config.solver.AMR_PS_SMOOTH&&return nothing
-    ps_datas = amr.ghost.ghost_wrap
-    for ps_data in ps_datas
-        isa(ps_data,AbstractInsideSolidData)&&continue
-        vs_data = ps_data.vs_data
-        for i in 1:DIM
-            ps_data.sw[:,i].=@views calc_w0(vs_data.midpoint,vs_data.sdf[:,:,i],vs_data.weight,amr.global_data)
-        end
-    end
-    for tree in amr.field.trees.data
+    gradmax = amr.global_data.status.gradmax 
+    gradmax .= 0.
+    trees = amr.field.trees.data
+    for tree in trees
         for ps_data in tree
-            isa(ps_data, InsideSolidData)&&continue
+            isa(ps_data,InsideSolidData)&&continue
             ps_data.bound_enc<0&&continue
-            ps_data.flux.=0.
-            for neighbors in ps_data.neighbor.data
-                for neighbor in neighbors
-                    isnothing(neighbor)&&continue
-                    isa(neighbor,SolidNeighbor)&&continue
-                    for j in axes(ps_data.sw,1)
-                        for k in axes(ps_data.sw,2)
-                            ps_data.flux[j] = max(abs(ps_data.sw[j,k]),max(abs(neighbor.sw[j,k]),abs(ps_data.flux[j]))) # Temporarily used to store local_grad_max
-                        end
-                    end
+            for i in 1:DIM
+                for j in eachindex(gradmax)
+                    gradmax[j] = max(gradmax[j],abs(ps_data.sw[j,i]))
                 end
             end
         end
     end
+    gradmax = MPI.Allreduce(gradmax, (x,y)->max.(x,y), MPI.COMM_WORLD)
     return nothing
 end
-function iterate!(amr::AMR;buffer_steps = 0,i = typemax(Int))
+function iterate!(amr::AMR)
     time_marching = amr.global_data.config.solver.time_marching
     iterate!(time_marching,amr)
     residual_comm!(amr.global_data)
@@ -89,7 +73,7 @@ function iterate!(::UGKS_Marching,amr::AMR)
     Δt_comm!(global_data)
 end
 # Conserved Adaptive Implicit DVM (CAIDVM)
-function iterate!(::CAIDVM_Marching,amr::AMR;buffer_steps = 0, i = typemax(Int))
+function iterate!(::CAIDVM_Marching,amr::AMR)
     global_data = amr.global_data
     gas = global_data.config.gas
     trees = amr.field.trees

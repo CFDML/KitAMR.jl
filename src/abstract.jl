@@ -1,7 +1,7 @@
 const COMM_NUMS_TAG = 10000
 const COMM_DATA_TAG = 20000
 const EPS = 1e-12
-const ADAPT_COEFFI_PS = 0.1
+const ADAPT_COEFFI_PS = 1.
 # const ADAPT_COEFFI_VS = 1e-3
 const ADAPT_COEFFI_VS = 0.125
 const SOLID_CELL_ID_NUM = 8

@@ -246,8 +246,15 @@ function ps_refine_flag(
     end
     qp.level[]>global_data.config.solver.AMR_DYNAMIC_PS_MAXLEVEL-1&&return Cint(0)
     global_data.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,global_data,qp.level[]) && return Cint(1)
-    agrad = ps_data.flux
-    rgrad = maximum(agrad ./ (global_data.status.gradmax.+EPS))
+    agrad = zeros(DIM+2)
+    gradmax = global_data.status.gradmax
+    dUmax = norm(gradmax[2:DIM+1])
+    for j in axes(ps_data.sw,1)
+        for k in axes(ps_data.sw,2)
+            agrad[j] = max(abs(ps_data.sw[j,k]),agrad[j])
+        end
+    end
+    rgrad = @views max(agrad[end]/gradmax[end],max(agrad[1]/gradmax[1],norm(agrad[2:DIM+1])/dUmax))
     dflag = global_data.config.user_defined.dynamic_ps_refine_flag(;ps_data)
     !dflag&&return Cint(0)
     if rgrad > 2.0^(2*(qp.level[] - global_data.config.solver.AMR_DYNAMIC_PS_MAXLEVEL)) * ADAPT_COEFFI_PS # 2 for second-order scheme
@@ -571,19 +578,26 @@ end
 function ps_coarsen_flag(ps_datas::Vector{PS_Data}, levels::Vector{Int}, amr::AMR{DIM,NDF}) where{DIM,NDF}
     global_data = amr.global_data
     levels[1]>global_data.config.solver.AMR_DYNAMIC_PS_MAXLEVEL&&return Cint(0)
-    flag = Cint(1)
+    agrad = zeros(DIM+2)
+    gradmax = global_data.status.gradmax
+    dUmax = norm(gradmax[2:DIM+1])
     for i = 1:2^DIM
         ps_data = ps_datas[i]
         (ps_data.bound_enc!=0||domain_flag(global_data,ps_data.midpoint,ps_data.ds)) && return Cint(0)
         global_data.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,global_data,levels[i]-1) && return Cint(0)
-        agrad = ps_data.flux
-        rgrad = maximum(agrad ./ (global_data.status.gradmax.+EPS))
+        for j in axes(ps_data.sw,1)
+            for k in axes(ps_data.sw,2)
+                agrad[j] = max(abs(ps_data.sw[j,k]),agrad[j])
+            end
+        end
+        rgrad = @views max(agrad[end]/gradmax[end],max(agrad[1]/gradmax[1],norm(agrad[2:DIM+1])/dUmax))
         if rgrad > 2.0^(2*(levels[i]-1 - global_data.config.solver.AMR_DYNAMIC_PS_MAXLEVEL)) * ADAPT_COEFFI_PS # 2 for second-order scheme
             flag = Cint(0)
             return flag
         end
+        agrad.=0.
     end
-    return flag
+    return Cint(1)
 end
 function ps_coarsen_flag(forest::Ptr{p4est_t}, which_tree, quadrants)
     GC.@preserve forest which_tree quadrants begin
@@ -780,18 +794,10 @@ function adaptive!(ps4est::P_pxest_t,amr::AMR;ps_interval=40,vs_interval=80,part
     flag = false
     if amr.global_data.config.solver.PS_DYNAMIC_AMR&&amr.global_data.status.ps_adapt_step > ps_interval*converge_ratio
         update_slope!(amr)
-        amr.global_data.config.solver.AMR_PS_SMOOTH&&slope_exchange!(ps4est,amr)
         update_gradmax!(amr)
         ps_refine!(ps4est,amr)
         ps_coarsen!(ps4est)
         ps_balance!(ps4est)
-        for tree in amr.field.trees.data
-            for ps_data in tree
-                isa(ps_data,InsideSolidData)&&continue
-                ps_data.bound_enc!=0&&continue
-                ps_data.flux .= 0.
-            end
-        end
         flag = true;amr.global_data.status.ps_adapt_step = 0
     end
     if amr.global_data.config.solver.VS_DYNAMIC_AMR&&amr.global_data.status.vs_adapt_step > vs_interval*converge_ratio
