@@ -1,8 +1,8 @@
 using LinearAlgebra
 function amr_region(;ps_data,kwargs...)
     midpoint = ps_data.midpoint
-    L = 0.28
-    if midpoint[1]>-2.0*L&&midpoint[1]<3.0*L&&midpoint[2]<2.0*L&&midpoint[2]>-2.0*L&&midpoint[3]<2.0*L&&midpoint[3]>-2.0*L
+    L = 1.0
+    if midpoint[1]>-1.0*L&&midpoint[1]<2.0*L&&midpoint[2]<1.0*L&&midpoint[2]>-1.0*L&&midpoint[3]<1.0*L&&midpoint[3]>-1.0*L
         return true
     end
     return false
@@ -14,26 +14,10 @@ function X38_buffer_IC(midpoint::Vector{Float64};kwargs...)
     T0 = 1.0
     Tw = 300/56
     _,distance = KitAMR.nn(ib.tkdt.kdt,midpoint)
-    R = 1.0*0.28
+    R = 0.3
     if distance > R
         return [1.0,Ma*√(5/6),0.,0.,1/T0]
     else
         return [1.0,distance*Ma*√(5/6)/R,0.,0.,1.0/(T0+(R-distance)*(Tw-T0)/R)]
     end
-end
-function vs_refine_region(midpoint;kwargs...)
-    level = kwargs[:level]
-    du = kwargs[:du]
-    refine_level = 2;DIM = 3
-    Ma = 3.834
-    Ts = 1.0+(5/3-1)*0.5*Ma^2
-    U_av = [0.5*Ma*√(5/6),0.,0.]
-    sn = sign.(U_av-midpoint)
-    midpoint_new = midpoint+0.25*du.*sn
-    flag1 = level<refine_level-1;flag2 = level<refine_level
-    for i in 1:DIM
-        flag1 = flag1&&midpoint_new[i]>U_av[i]-2.0*sqrt(Ts)&&midpoint_new[i]<U_av[i]+2.0*sqrt(Ts)
-        flag2 = flag2&&midpoint_new[i]>U_av[i]-1.0*sqrt(Ts)&&midpoint_new[i]<U_av[i]+1.0*sqrt(Ts)
-    end
-    return flag1||flag2
 end

@@ -28,8 +28,6 @@ struct Solver
     time_marching::AbstractTimeMarchingType
     PS_DYNAMIC_AMR::Bool
     VS_DYNAMIC_AMR::Bool
-    AMR_PS_SMOOTH::Bool
-    AMR_VS_SMOOTH::Bool
 end
 function Solver(config::Dict)
     return Solver(config[:CFL],config[:AMR_PS_MAXLEVEL],
@@ -37,8 +35,6 @@ function Solver(config::Dict)
         config[:AMR_VS_MAXLEVEL],config[:flux],config[:time_marching],
         (haskey(config,:PS_DYNAMIC_AMR) ? config[:PS_DYNAMIC_AMR] : true),
         (haskey(config,:VS_DYNAMIC_AMR) ? config[:VS_DYNAMIC_AMR] : true),
-        (haskey(config,:AMR_PS_SMOOTH) ? config[:AMR_PS_SMOOTH] : true),
-        (haskey(config,:AMR_VS_SMOOTH) ? config[:AMR_VS_SMOOTH] : true)
         )
 end
 mutable struct UDF

@@ -71,7 +71,7 @@ function save_boundary_result!(ib::AbstractBoundary,ps_data,solid_neighbor::Soli
     Θ = heaviside.(vn)
     ssdf = @views solid_neighbor.vs_data.sdf[:,:,dir]
     boundary_slope!(ssdf,vs_data.level,s_vs_data.level,ib_df,vs_data.df,
-        s_vs_data.df,ib_point[dir]-ps_data.midpoint[dir],ps_data.midpoint[dir]-solid_neighbor.midpoint[dir])
+        s_vs_data.df,ib_point[dir]-ps_data.midpoint[dir],ps_data.midpoint[dir]-solid_neighbor.midpoint[dir],amr)
     @. aux_df = ib_df+ssdf*(aux_point[dir]-ib_point[dir])
     cvc_gas_correction!(aux_df,solid_neighbor)
     aux_prim = get_bc(ib.bc;intersect_point=aux_point,ib);aux_prim[1] = 1.
@@ -555,8 +555,7 @@ function image_df(ps_data::PS_Data{DIM,NDF},fluid_cells,ip,amr) where{DIM,NDF}
     end
     return image_df
 end
-function boundary_slope!(sdf::AbstractMatrix,level,level_n,sp_df,dc_df,sc_df,dxf::Float64,dxs::Float64)
-    DIM = 3;NDF = size(sdf,2)
+function boundary_slope!(sdf::AbstractMatrix,level,level_n,sp_df,dc_df,sc_df,dxf::Float64,dxs::Float64,::AMR{DIM,NDF}) where{DIM,NDF}
     sL = zeros(size(sdf,1),NDF)
     index = 1
     flag = 0.0
@@ -610,7 +609,7 @@ function update_solid_neighbor!(::AbstractFluxType,ps_data::PS_Data{DIM,NDF},sol
     Θ = heaviside.(vn)
     ssdf = @views solid_neighbor.vs_data.sdf[:,:,dir]
     boundary_slope!(ssdf,vs_data.level,s_vs_data.level,ib_df,vs_data.df,
-        s_vs_data.df,ib_point[dir]-ps_data.midpoint[dir],ps_data.midpoint[dir]-solid_neighbor.midpoint[dir])
+        s_vs_data.df,ib_point[dir]-ps_data.midpoint[dir],ps_data.midpoint[dir]-solid_neighbor.midpoint[dir],amr)
     @. aux_df = ib_df+ssdf*(aux_point[dir]-ib_point[dir])
     cvc_gas_correction!(aux_df,solid_neighbor)
     aux_prim = get_bc(ib.bc;intersect_point=aux_point,ib);aux_prim[1] = 1.

@@ -520,7 +520,7 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Triangle}
                 end
                 
                 vs_data = ps_data.vs_data
-                β = @views [min(abs(vs_data.df/(0.5*dot(ps_data.ds,abs.(vs_data.sdf[i,j,:]))+EPS)),1.) for i in axes(vs_data.df,1), j in axes(vs_data.df,2)]
+                β = @views [min(abs(vs_data.df[i,j]/(0.5*dot(ps_data.ds,abs.(vs_data.sdf[i,j,:]))+EPS)),1.) for i in axes(vs_data.df,1), j in axes(vs_data.df,2)]
                 point_df = similar(vs_data.df)
                 for i in 1:4
                     df = vs_data.df
@@ -654,7 +654,7 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Tetra}
                 end
                 
                 vs_data = ps_data.vs_data
-                β = @views [min(abs(vs_data.df/(0.5*dot(ps_data.ds,abs.(vs_data.sdf[i,j,:]))+EPS)),1.) for i in axes(vs_data.df,1), j in axes(vs_data.df,2)] # positivity preserving coefficient
+                β = @views [min(abs(vs_data.df[i,j]/(0.5*dot(ps_data.ds,abs.(vs_data.sdf[i,j,:]))+EPS)),1.) for i in axes(vs_data.df,1), j in axes(vs_data.df,2)] # positivity preserving coefficient
                 point_df = similar(vs_data.df)
                 for i in 1:nv-1
                     df = vs_data.df
@@ -731,6 +731,57 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Voxel}
     end
     return vertices,cells,point_solutions,solutions
 end
+function save_surfaces_points(::String,::Vector{Boundary_Solution},amr::AMR{2})
+    return nothing
+end
+function save_surfaces_pvtu(dir_path::String,boundary_results::Vector{Boundary_Solution},amr::AMR{3})
+    np = MPI.Comm_size(MPI.COMM_WORLD)
+    rflags = [Ref(false) for _ in 1:np]
+    rank = MPI.Comm_rank(MPI.COMM_WORLD)
+    surface_path = dir_path*"/vtk"
+    for i in eachindex(boundary_results)
+        boundary_solutions = boundary_results[i]
+        rflags[rank+1][] = !isempty(boundary_solutions.ps_solutions)
+        reqs = Vector{MPI.Request}(undef,0)
+        for i in 1:np
+            i-1==rank&&continue
+            sreq = MPI.Isend(rflags[rank+1],MPI.COMM_WORLD;dest = i-1,tag = COMM_DATA_TAG+rank)
+            push!(reqs,sreq)
+        end
+        for i in 1:np
+            i-1==rank&&continue
+            rreq = MPI.Irecv!(
+                rflags[i],
+                MPI.COMM_WORLD;
+                source = i-1,
+                tag = COMM_DATA_TAG+i-1
+            )
+            push!(reqs,rreq)
+        end
+        MPI.Waitall(reqs)
+        if rflags[rank+1][]
+            nparts = length(findall(x->x[],rflags));part = length(findall(x->x[],rflags[1:rank+1]))
+            points = [boundary_solutions.midpoints[i][j] for i in eachindex(boundary_solutions.midpoints), j in 1:3] |> permutedims
+            cells = [MeshCell(VTKCellTypes.VTK_VERTEX,[i]) for i in eachindex(boundary_solutions.midpoints)]
+            pvtk_grid(surface_path*"/surface_"*string(i),points,cells;part = part,nparts = nparts) do pvtk
+                pvtk["rho"] = [x.prim[1] for x in boundary_solutions.ps_solutions]
+                pvtk["U"] = [x.prim[2] for x in boundary_solutions.ps_solutions]
+                pvtk["V"] = [x.prim[3] for x in boundary_solutions.ps_solutions]
+                pvtk["W"] = [x.prim[4] for x in boundary_solutions.ps_solutions]
+                pvtk["T"] = [1.0/x.prim[5] for x in boundary_solutions.ps_solutions]
+                pvtk["p11"] = [x.p[1] for x in boundary_solutions.ps_solutions]
+                pvtk["p12"] = [x.p[2] for x in boundary_solutions.ps_solutions]
+                pvtk["p13"] = [x.p[3] for x in boundary_solutions.ps_solutions]
+                pvtk["p22"] = [x.p[4] for x in boundary_solutions.ps_solutions]
+                pvtk["p23"] = [x.p[5] for x in boundary_solutions.ps_solutions]
+                pvtk["p33"] = [x.p[6] for x in boundary_solutions.ps_solutions ]
+                pvtk["normal"] = ([x[1] for x in boundary_solutions.normal],[x[2] for x in boundary_solutions.normal],
+                    [x[3] for x in boundary_solutions.normal])
+            end
+        end
+    end
+    return nothing
+end
 function save_boundary_result(dir_path::String,amr::AMR{DIM,NDF}) where{DIM,NDF}
     ibs = amr.global_data.config.IB
     boundary_results = [Boundary_Solution(Vector{Float64}[],Vector{Float64}[],Boundary_PS_Solution[]) for _ in eachindex(ibs)]
@@ -750,6 +801,7 @@ function save_boundary_result(dir_path::String,amr::AMR{DIM,NDF}) where{DIM,NDF}
     end
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
     save_object(dir_path*"boundary_result_"*string(rank)*".jld2",boundary_results)
+    save_surfaces_pvtu(dir_path,boundary_results,amr)
 end
 function boundary_write_csv(csvname,results,config::ConfigureForSave{2})
     for i in eachindex(config.IB)
