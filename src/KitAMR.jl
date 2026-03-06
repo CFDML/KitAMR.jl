@@ -7,7 +7,6 @@ using LinearAlgebra
 using Parameters
 using SpecialFunctions
 using StaticArrays
-# using PythonCall
 using Suppressor
 using WriteVTK
 using Documenter
@@ -15,7 +14,6 @@ using Reexport
 using CSV
 using DataFrames
 using Statistics
-
 using FileIO,NearestNeighbors,AbstractTrees
 using GeometryBasics:Mesh
 using StructArrays
@@ -27,32 +25,18 @@ include("../lib/P4estTypes/src/P4estTypes.jl")
 using .P4estTypes
 include("../lib/KitCore/KitCore.jl")
 using .KitCore
-include("abstract.jl")
-include("auxiliary.jl")
-include("dim.jl")
-include("./gas/types.jl")
-include("./velocity_space/types.jl")
-include("physical_space/types.jl")
-include("boundary/types.jl")
-include("solver/types.jl")
-include("./p4est/p4est_wrap.jl")
-include("model.jl")
-include("math.jl")
-include("IO/types.jl")
+include("Abstract/Types.jl")
+include("Boundary/Boundary.jl")
+include("Flux/Flux.jl")
+include("Gas/Gas.jl")
 include("IO/IO.jl")
-include("connectivity.jl")
-include("boundary/boundary.jl")
-include("adaptive.jl")
-include("neighbor.jl")
-include("ghost.jl")
-include("velocity_space/vs_space.jl")
-include("velocity_space/vs_adaptive.jl")
-include("initialize.jl")
-include("partition.jl")
-include("slope.jl")
-include("flux/flux.jl")
-include("iterate.jl")
-include("finalize.jl")
+include("Mesh/Mesh.jl")
+include("P4est/P4est_wrap.jl")
+include("Parallel/Parallel.jl")
+include("Physical_space/Physical_space.jl")
+include("Solver/Solver.jl")
+include("Theory/Theory.jl")
+include("Velocity_space/Velocity_space.jl")
 
 # const np = Ref{Py}()
 # const scipy = Ref{Py}()

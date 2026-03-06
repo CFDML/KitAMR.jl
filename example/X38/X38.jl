@@ -10,7 +10,7 @@ for i in 1:nt
     if MPI.Comm_rank(MPI.COMM_WORLD)==0
         @show i
     end
-    KitAMR.adaptive!(ps4est,amr;ps_interval = 40, vs_interval=40,partition_interval=40)
+    KitAMR.adaptive_mesh_refinement!(ps4est,amr;ps_interval = 40, vs_interval=40,partition_interval=40)
     KitAMR.update_slope!(amr)
     KitAMR.slope_exchange!(ps4est, amr) 
     KitAMR.update_solid_cell!(amr)
