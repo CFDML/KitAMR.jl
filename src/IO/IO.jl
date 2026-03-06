@@ -1,3 +1,5 @@
+include("Check.jl")
+
 function read_config(filename::T) where {T<:AbstractString}
     if MPI.Comm_rank(MPI.COMM_WORLD) == 0
         @info "reading config from $filename"
