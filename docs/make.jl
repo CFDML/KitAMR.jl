@@ -10,3 +10,7 @@ makedocs(;
         ],
     checkdocs = :none
 )
+
+deploydocs(
+    repo = "github.com/CFDML/KitAMR.jl.git",
+)
