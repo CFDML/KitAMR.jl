@@ -1,5 +1,6 @@
 # KitAMR.jl
 
+[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://cfdml.github.io/KitAMR.jl/dev/)
 ![CI](https://img.shields.io/github/actions/workflow/status/vavrines/KitBase.jl/ci.yml?branch=main)
 [![codecov](https://img.shields.io/codecov/c/github/CFDML/KitAMR.jl)](https://codecov.io/gh/CFDML/KitAMR.jl)
 
