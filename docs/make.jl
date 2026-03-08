@@ -12,6 +12,6 @@ makedocs(;
     checkdocs = :none
 )
 
-deploydocs(
+deploydocs(;devbranch = "ge",
     repo = "github.com/CFDML/KitAMR.jl.git",
 )
