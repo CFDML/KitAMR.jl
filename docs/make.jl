@@ -1,5 +1,5 @@
 using Documenter
-using KitAMR
+using .KitAMR
 type_page = ["Configuration"=>"type_configure.md"]
 makedocs(;
     sitename = "KitAMR.jl",
