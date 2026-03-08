@@ -71,7 +71,7 @@ $$
 The underlying discretization of the Boltzmann equation is based on finite volume method, with its discrete form as follows:
 
 $$
-\{\overlinebar U_j\Omega_j\}^{n+1} = 
+\{\overline U_j\Omega_j\}^{n+1} = 
 \{\overline U_j \Omega_j\}^n-\Delta t\sum_{\partial\Omega}\mathbf{F}^{\*}\cdot\Delta\mathbf{S}+\Delta t \overline{Q}_j\Omega_j
 $$
 
@@ -87,7 +87,8 @@ DVM is one of the popular approaches for solving rarefied flow problems. In this
 Considering the above limitation of DVM, we adopt Adaptive Mesh Refinement (AMR) to improve solving efficiency. AMR reallocates computational resources based on flow features, balancing efficiency and accuracy. 
 
 <div align="center">
-    <img src="./docs/build/assets/KitAMR.gif" alt="Image 1" width = "600" style="margin-left: 1px;">
+    <img src="./docs/src/assets/KitAMR.gif" alt="Image 1" width = "600" style="margin-left: 1px;">
+    <br>
     <figcaption><i>Hypersonic rarefied flow over a cylinder. The simultaneous AMR in physical space (left) and velocity space (right) are performed.</i></figcaption>
 </div>
 
@@ -96,7 +97,8 @@ The current solver discretizes with tree-based Cartesian grids, adapting the mes
 For an AMR solver, the load-balance ability is crucial for high efficiency. KitAMR.jl inherits the load-balance functionality in p4est. The domain decomposition is performed in physical space. The physical grids are encoded into a 1-dimensional sequence by Morton code, and are partitioned to maintain the phase grids number on each processor approximately equal.
 
 <div align="center">
-    <img src="./docs/build/assets/KitAMR_partition.gif" alt="Image 1" width = "600" style="margin-left: 1px;">
+    <img src="./docs/src/assets/KitAMR_partition.gif" alt="Image 1" width = "600" style="margin-left: 1px;">
+    <br>
     <figcaption><i>The variation of the processor rank in physical domain during a simulation.</i></figcaption>
 </div>
 
