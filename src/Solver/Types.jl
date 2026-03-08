@@ -62,17 +62,40 @@ mutable struct Output
     n
     )
 end
+
+"""
+$(TYPEDEF)
+
+Structure of problem configuration. `DIM` and `NDF` represent the dimension number of the problem and the number of the distribution function.
+This struct plays an key role in the solution process.
+
+## Fields
+
+$(TYPEDFIELDS)
+
+"""
 struct Configure{DIM,NDF}
+    "The range of the simulated domain. As an example, for 2D case, it should be aligned as [xmin,xmax,ymin,ymax]."
     geometry::Vector{Float64}
+    "The number of tree roots for each dimension. For 2D case, it should be aligned as [x_num,y_num]"
     trees_num::Vector{Int64}
+    "For Vector type, it represents the range of the velocity space. For 2D case, it should be aligned as [umin,umax,vmin,vmax]. The `AbstractQuadrature` type is reserved for other quadrature rule like Gauss-Hermite."
     quadrature::Union{AbstractQuadrature,Vector{Float64}}
+    "The number of tree roots for each dimension in velocity space."
     vs_trees_num::Vector{Int64}
+    "The initial` condition."
     IC::AbstractInitCondType
+    "The types of the domain boundary. For 2D case, the vector should catain 4 elements corresponding to the 4 domain boundaries."
     domain::Vector{Domain}
+    "The immersed boundary. Multiple boundaries are supported."
     IB::Vector{AbstractBoundary}
+    "The property of the simulated gas."
     gas::Gas
+    "The set of the solver."
     solver::Solver
+    "The set of the output form."
     output::Output
+    "The functions defined by users, including some criteria."
     user_defined::UDF
 end
 function config_IB(ib::Circle,config::Dict)

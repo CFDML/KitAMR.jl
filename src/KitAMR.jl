@@ -9,7 +9,7 @@ using SpecialFunctions
 using StaticArrays
 using Suppressor
 using WriteVTK
-using Documenter
+using DocStringExtensions
 using Reexport
 using CSV
 using DataFrames

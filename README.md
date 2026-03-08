@@ -71,11 +71,11 @@ $$
 The underlying discretization of the Boltzmann equation is based on finite volume method, with its discrete form as follows:
 
 $$
-\{\bar U_j\Omega_j\}^{n+1} = 
-\{\bar U_j \Omega_j\}^n-\Delta t\sum_{\partial\Omega}\mathbf{F}^{\*}\cdot\Delta\mathbf{S}+\Delta t \bar{Q}_j\Omega_j
+\{\overlinebar U_j\Omega_j\}^{n+1} = 
+\{\overline U_j \Omega_j\}^n-\Delta t\sum_{\partial\Omega}\mathbf{F}^{\*}\cdot\Delta\mathbf{S}+\Delta t \overline{Q}_j\Omega_j
 $$
 
-, where $\bar U_j^n\coloneqq\frac{1}{\Omega_j}\int_{\Omega_j}Ud\Omega_j|^n$, $\bar Q_j^n\coloneqq\frac{1}{\Omega_j}\int_{\Omega_j}Qd\Omega_j$ are the cell-averaged conservative variable and source. And $\bar Q_j^{\*}$ and $\mathbf{F}^{\*}$ are respectively cell- and time-averaged sources and numerical flux, which are defined as $\bar Q_j^{\*}\coloneqq\frac{1}{\Delta t}\int_n^{n+1}\bar Q_jdt$ and $\mathbf F^{\*}\cdot \Delta \mathbf{S}\coloneqq \frac{1}{\Delta t}\int_n^{n+1}\mathbf F\cdot\Delta \mathbf{S}dt$.
+, where $\overline U_j^n\coloneqq\frac{1}{\Omega_j}\int_{\Omega_j}Ud\Omega_j|^n$, $\overline Q_j^n\coloneqq\frac{1}{\Omega_j}\int_{\Omega_j}Qd\Omega_j$ are the cell-averaged conservative variable and source. And $\overline Q_j^{\*}$ and $\mathbf{F}^{\*}$ are respectively cell- and time-averaged sources and numerical flux, which are defined as $\overline Q_j^{\*}\coloneqq\frac{1}{\Delta t}\int_n^{n+1}\overline Q_jdt$ and $\mathbf F^{\*}\cdot \Delta \mathbf{S}\coloneqq \frac{1}{\Delta t}\int_n^{n+1}\mathbf F\cdot\Delta \mathbf{S}dt$.
 It is an exact relation for the time evolution of the space averaged conservative avriables over cell $j$ from time step $n$ to $n+1$. And the numerical flux $\mathbf F^{\*}$ identifies completely a scheme by the way it approximates the time-averaged physical flux along each cell face.
 ### Numerical Flux
 The numerical scheme that the solver currently supports is UGKS, with interface variables obtained from VanLeer reconstruction. For specific implementation details, please refer to the relevant literature.
@@ -87,7 +87,7 @@ DVM is one of the popular approaches for solving rarefied flow problems. In this
 Considering the above limitation of DVM, we adopt Adaptive Mesh Refinement (AMR) to improve solving efficiency. AMR reallocates computational resources based on flow features, balancing efficiency and accuracy. 
 
 <div align="center">
-    <img src="https://i.postimg.cc/0yzr1hvj/Kit-AMR.gif" alt="Image 1" width = "600" style="margin-left: 1px;">
+    <img src="./docs/build/assets/KitAMR.gif" alt="Image 1" width = "600" style="margin-left: 1px;">
     <figcaption><i>Hypersonic rarefied flow over a cylinder. The simultaneous AMR in physical space (left) and velocity space (right) are performed.</i></figcaption>
 </div>
 
@@ -96,7 +96,7 @@ The current solver discretizes with tree-based Cartesian grids, adapting the mes
 For an AMR solver, the load-balance ability is crucial for high efficiency. KitAMR.jl inherits the load-balance functionality in p4est. The domain decomposition is performed in physical space. The physical grids are encoded into a 1-dimensional sequence by Morton code, and are partitioned to maintain the phase grids number on each processor approximately equal.
 
 <div align="center">
-    <img src="https://i.postimg.cc/yNQyLM7R/Kit-AMR-partition.gif" alt="Image 1" width = "600" style="margin-left: 1px;">
+    <img src="./docs/build/assets/KitAMR_partition.gif" alt="Image 1" width = "600" style="margin-left: 1px;">
     <figcaption><i>The variation of the processor rank in physical domain during a simulation.</i></figcaption>
 </div>
 
