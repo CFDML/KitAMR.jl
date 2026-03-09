@@ -1,7 +1,20 @@
 # Domain boundary
+"""
+$(TYPEDEF)
+
+Structure of domain boundary.
+
+## Fields
+
+$(TYPEDFIELDS)
+
+"""
 struct Domain{T<:AbstractBoundaryType} <: AbstractBoundary
+    "Index of the domain boundary. From 1 to 6, it represents the boundary of `xmin`, `xmax`, `ymin`, `ymax`, `zmin`, `zmax`."
     id::Int
+    "Whether refine at the domain boundary. Default is `false`."
     refine::Bool
+    "The boundary condition at the domain boundary."
     bc::AbstractBCType
     Domain(T,id;refine=false) = new{T}(id,refine)
     Domain(T,id,bc;refine=false) = new{T}(id,refine,bc)
@@ -15,12 +28,22 @@ struct DomainFace{DIM,NDF,T}<:BoundaryFace
 end
 
 # Immersed boundary
+"""
+$(TYPEDEF)
+$(TYPEDFIELDS)
+"""
 struct Circle{T<:AbstractBoundaryType} <: AbstractBoundary
+    "The center of the circle."
     center::Vector
+    "The radius of the circle."
     radius::Real
+    "Is solid inside the circle?"
     solid::Bool # If is solid inside the circle, it should be true. Otherwise, it should be false.
+    "The refinement coefficient."
     search_coeffi::Real # The ratio of the search radius and the minimal mesh scale, which determines the maximal distance between IB nodes and aux_points.
+    "The primary macroscopic variables of the solid."
     bc::AbstractBCType
+    "The maximum distance of the refinement region from the boundary."
     search_radius::Real
     Circle(::Type{T},center::Vector,radius,solid,search_coeffi,bc) where{T<:AbstractBoundaryType} = new{T}(center,radius,solid,search_coeffi,bc)
     Circle(c::Circle{T},ds::Float64) where{T<:AbstractBoundaryType} = new{T}(c.center,
@@ -31,6 +54,10 @@ struct Circle{T<:AbstractBoundaryType} <: AbstractBoundary
         c.search_coeffi*ds
     )
 end
+"""
+$(TYPEDEF)
+$(TYPEDFIELDS)
+"""
 struct Sphere{T<:AbstractBoundaryType} <: AbstractBoundary # 3D circle
     center::Vector
     radius::Real
@@ -49,31 +76,44 @@ struct Sphere{T<:AbstractBoundaryType} <: AbstractBoundary # 3D circle
 end
 const AbstractCircle = Union{Circle,Sphere}
 
+"""
+$(TYPEDEF)
+$(TYPEDFIELDS)
+"""
 struct Vertices{DIM,T<:AbstractBoundaryType} <: AbstractBoundary
-    vertices::Vector{Vector{Float64}} # Vertices of the boundary, sorted in clockwise or counterclockwise order. 
+    "Vertices of the boundary, sorted in clockwise or counterclockwise order. "
+    vertices::Vector{Vector{Float64}}
     solid::Bool # Is solid inside the boundary?
-    refine_coeffi::Real
     bc::AbstractBCType
-    box::Vector{Vector{Float64}} # [[xmin,ymin,zmin],[xmax,ymax,zmax]]
+    "The outer box of the vertices as `[[xmin,ymin,zmin],[xmax,ymax,zmax]]`."
+    box::Vector{Vector{Float64}}
+    "The number of cell layers refined from the boundary."
     search_radius::Real
-    Vertices(::Type{T},file::String,solid,refine_coeffi,bc) where{T<:AbstractBoundaryType}= (
-        s = CSV.read(file,DataFrame;header=true);
-        DIM = length(names(s));
-        vertices = DIM==2 ? [[s.x[i],s.y[i]] for i in eachindex(s.x)] : [[s.x[i],s.y[i],s.z[i]] for i in eachindex(s.x)];
-        if vertices[1]==vertices[end]
-            vertices = vertices[1:end-1]
-        end;
-        box = DIM==2 ? [[minimum(s.x),minimum(s.y)],[maximum(s.x),maximum(s.y)]] : [[minimum(s.x),minimum(s.y),minimum(s.z)],[maximum(s.x),maximum(s.y),maximum(s.z)]];
-        new{DIM,T}(vertices,solid,refine_coeffi,bc,box)
-    )
-    Vertices(v::Vertices{DIM,T},config) where{DIM,T<:AbstractBoundaryType} =(
-        ds_max = maximum([(config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i] for i in 1:config[:DIM]]);
-        ds = norm([(config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i]/2^config[:AMR_PS_MAXLEVEL] for i in 1:config[:DIM]]);
-        new{DIM,T}(v.vertices,v.solid,v.refine_coeffi,v.bc,[v.box[1].-ds_max,v.box[2].+ds_max],v.refine_coeffi*ds)
-    )
+end
+"""
+$(TYPEDSIGNATURES)
+- `file` is the path to the `.csv` file.
+"""
+function Vertices(::Type{T},file::String,solid,refine_coeffi,bc) where{T<:AbstractBoundaryType}
+    s = CSV.read(file,DataFrame;header=true)
+    DIM = length(names(s))
+    vertices = [[s.x[i],s.y[i]] for i in eachindex(s.x)]
+    if vertices[1]==vertices[end]
+        vertices = vertices[1:end-1]
+    end
+    box = [[minimum(s.x),minimum(s.y)],[maximum(s.x),maximum(s.y)]]
+    return Vertices{DIM,T}(vertices,solid,bc,box,refine_coeffi)
+end
+function Vertices(v::Vertices{DIM,T},config) where{DIM,T<:AbstractBoundaryType}
+    ds_max = maximum([(config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i] for i in 1:config[:DIM]])
+    ds = norm([(config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i]/2^config[:AMR_PS_MAXLEVEL] for i in 1:config[:DIM]])
+    return Vertices{DIM,T}(v.vertices,v.solid,v.bc,[v.box[1].-ds_max,v.box[2].+ds_max],v.search_radius*ds)
 end
 
-
+"""
+$(TYPEDEF)
+$(TYPEDFIELDS)
+"""
 struct TriangleKDT
     kdt::KDTree
     mesh::Mesh
@@ -95,12 +135,20 @@ function TriangleKDT(mesh::Mesh)
     return TriangleKDT(kdt,mesh,triangle_box_table(kdt,mesh),triangle_recs(mesh),triangle_edges(mesh))
 end
 
+"""
+$(TYPEDEF)
+$(TYPEDFIELDS)
+"""
 struct Triangles{T<:AbstractBoundaryType} <: AbstractBoundary
     solid::Bool
     bc::AbstractBCType
     search_radius::Real
     tkdt::TriangleKDT
 end
+"""
+$(TYPEDSIGNATURES)
+- `file` is the path to the `.stl` file.
+"""
 function Triangles(::Type{T},file::String,solid,search_radius,bc) where{T<:AbstractBoundaryType}
     mesh = load(file)
     tkdt = TriangleKDT(mesh)

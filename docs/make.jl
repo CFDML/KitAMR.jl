@@ -1,7 +1,12 @@
 using Documenter
 push!(LOAD_PATH, "..")
 using KitAMR
-type_page = ["Configuration"=>"type_configure.md"]
+type_page = [
+    "Configuration"=>"type_configure.md",
+    "Condition"=>"type_condition.md",
+    "Gas"=>"type_gas.md",
+    "Output"=>"type_output.md"
+]
 makedocs(;
     sitename = "KitAMR.jl",
     modules = [KitAMR],
