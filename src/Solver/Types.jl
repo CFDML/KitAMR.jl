@@ -1,6 +1,27 @@
+"""
+$(TYPEDEF)
+
+Uniform initial condition. The field will be initialized with the Maxwellian distribution determined by the unified primary macroscopic variables in ic.
+
+## Fields
+
+$(TYPEDFIELDS)
+
+"""
 struct Uniform<:AbstractInitCondType 
     ic::AbstractVector
 end
+"""
+$(TYPEDEF)
+
+Physical-coordinates-determined initial condition. The field will be initialized with the Maxwellian distribution determined by the user-defined-function in PCIC_fn.
+The function will return primary macroscopic variables vector according to the information of the physical grid (mostly the physical coordinates).
+
+## Fields
+
+$(TYPEDFIELDS)
+
+"""
 struct PCoordFn<:AbstractInitCondType # A function that accepts physical coordinates and returns initial primary variable at the position.
     PCIC_fn::Function
 end
@@ -18,15 +39,32 @@ struct Euler <:AbstractTimeMarchingType end
 struct UGKS_Marching<:AbstractTimeMarchingType end
 struct CAIDVM_Marching<:AbstractTimeMarchingType end
 
+"""
+$(TYPEDEF)
 
+Structure of solver configuration.
+
+## Fields
+
+$(TYPEDFIELDS)
+
+"""
 struct Solver
+    "Courant-Friedrichs-Lewy number."
     CFL::Float64
+    "Maximum level of the (static) AMR in physical space."
     AMR_PS_MAXLEVEL::Int
+    "Maximum level of the dynamic AMR in physical space. In most cases, it should be smaller than the static one. The default is equal to `AMR_PS_MAXLEVEL`."
     AMR_DYNAMIC_PS_MAXLEVEL::Int
+    "Maximum level of the AMR in velocity space."
     AMR_VS_MAXLEVEL::Int
+    "The numerical flux type."
     flux::AbstractFluxType
+    "The time-marching scheme."
     time_marching::AbstractTimeMarchingType
+    "The dynamic AMR in physical space is open or not. The default is true."
     PS_DYNAMIC_AMR::Bool
+    "The dynamic AMR in velocity space is open or not. The default is true."
     VS_DYNAMIC_AMR::Bool
 end
 function Solver(config::Dict)
@@ -37,18 +75,48 @@ function Solver(config::Dict)
         (haskey(config,:VS_DYNAMIC_AMR) ? config[:VS_DYNAMIC_AMR] : true),
         )
 end
+
+"""
+$(TYPEDEF)
+
+Structure of user-defined-functions.
+
+## Fields
+
+$(TYPEDFIELDS)
+
+"""
 mutable struct UDF
+    "The static AMR flag in physical space."
     static_ps_refine_flag::Function
+    "The dynamic AMR flag in physical space."
     dynamic_ps_refine_flag::Function
+    "The static AMR flag in velocity space."
     static_vs_refine_flag::Function 
     UDF()=new()
 end
 null_udf(args...;kwargs...) = false
+
+"""
+$(TYPEDEF)
+
+Structure of output information.
+
+## Fields
+
+$(TYPEDFIELDS)
+
+"""
 mutable struct Output
+    "VTK cell type in physical space. Available options: `Pixel` and `Triangle` for 2D; `Voxel` and `Tetra` for 3D."
     vtk_celltype::DataType
+    "VTK cell type in velocity space. Available options: `Pixel` for 2D."
     vs_vtk_celltype::DataType
+    "Time interval between animation frams."
     anim_dt::Float64
+    "User-defined-function determining the physical cells need to output the velocity space."
     vs_output_criterion::Function
+    "Index of the last saved animation frame."
     anim_index::Int
     Output(config::Dict) = (n = new(config[:DIM]==2 ? Triangle : Tetra,
     config[:DIM]==2 ? Pixel : Voxel,
@@ -83,7 +151,7 @@ struct Configure{DIM,NDF}
     quadrature::Union{AbstractQuadrature,Vector{Float64}}
     "The number of tree roots for each dimension in velocity space."
     vs_trees_num::Vector{Int64}
-    "The initial` condition."
+    "The initial condition."
     IC::AbstractInitCondType
     "The types of the domain boundary. For 2D case, the vector should catain 4 elements corresponding to the 4 domain boundaries."
     domain::Vector{Domain}
@@ -160,18 +228,35 @@ end
 function Residual(DIM::Int)
     return Residual(1,ones(DIM+2),zeros(DIM+2),zeros(DIM+2),0)
 end
+
+"""
+$(TYPEDEF)
+
+Structure of simulation status. It contains the real time information, and is updated every step.
+
+## Fields
+
+$(TYPEDFIELDS)
+"""
 mutable struct Status
+    "Maximum number of the velocity grids among ghost quadrants."
     max_vs_num::Int # maximum vs_num among ghost quadrants
+    "Maximum absolute value of the gradients of conserved variables."
     gradmax::Vector{Float64}
-    Δt::Float64
+    "Size of time step."
     Δt_ξ::Float64
+    "Dimensionless simulation time."
     sim_time::Float64
+    "Number of steps after last AMR in physical space."
     ps_adapt_step::Int
+    "Number of steps after last AMR in velocity space."
     vs_adapt_step::Int
+    "Number of steps after last partition."
     partition_step::Int
+    "Residual of conserved variables."
     residual::Residual
+    "Flag indicating whether to save."
     save_flag::Base.RefValue{Bool}
-    ib_ghost::Bool
 end
 function Status(config)
     DIM = config[:DIM]
@@ -183,8 +268,8 @@ function Status(config)
     U = isa(quadrature,Vector) ? [max(quadrature[2*i],abs(quadrature[2*i-1])) -
         (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
         2^config[:AMR_VS_MAXLEVEL] / 2 for i in 1:DIM] : [maximum(abs.(quadrature.vcoords)) for _ in 1:DIM]
-    Δt = config[:CFL]*minimum(ds ./ U)
-    return Status(0,ones(DIM+2),Δt,Δt,0.,1,1,1,Residual(DIM),Ref(false),false)
+    Δt_ξ = config[:CFL]*minimum(ds ./ U)
+    return Status(0,ones(DIM+2),Δt_ξ,0.,1,1,1,Residual(DIM),Ref(false))
 end
 
 mutable struct Global_Data{DIM,NDF}

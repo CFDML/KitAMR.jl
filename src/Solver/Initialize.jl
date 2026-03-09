@@ -223,7 +223,6 @@ function init_solid_midpoints_kernel(ip, data, dp)
     global_data, solid_midpoints = unsafe_pointer_to_objref(data)
     boundaries = global_data.config.IB
     ds, midpoint = quad_to_cell(ip.p4est, ip.treeid[], ip.quad)
-    # solid_cell_flags = Vector{Bool}(undef,length(global_data.config.IB))
     for i in eachindex(boundaries)
         inside = solid_flag(boundaries[i],midpoint)
         solid_cell_flag(boundaries[i],midpoint,ds,global_data,inside)&&push!(solid_midpoints[i],midpoint)

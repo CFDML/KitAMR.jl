@@ -49,9 +49,21 @@ PW_pxest_iter_face_side_t = Union{PointerWrapper{p4est_iter_face_side_t},Pointer
 abstract type AbstractInitCondType end
 
 abstract type AbstractVTKCellType end
+"""
+$(TYPEDEF)
+"""
 abstract type Pixel <: AbstractVTKCellType end
+"""
+$(TYPEDEF)
+"""
 abstract type Triangle <: AbstractVTKCellType end
+"""
+$(TYPEDEF)
+"""
 abstract type Voxel <: AbstractVTKCellType end
+"""
+$(TYPEDEF)
+"""
 abstract type Tetra <: AbstractVTKCellType end
 
 abstract type AbstractFluxType end
@@ -70,12 +82,33 @@ abstract type AbstractGas end
 
 abstract type AbstractBoundary end
 abstract type AbstractBoundaryType end
+
+"""
+$(TYPEDEF)
+Fully diffused Maxwellian gas-surface interaction model.
+"""
 abstract type Maxwellian<:AbstractBoundaryType end
+
+"""
+$(TYPEDEF)
+"""
 abstract type SuperSonicInflow <: AbstractBoundaryType end
+"""
+$(TYPEDEF)
+"""
 abstract type SuperSonicOutflow <: AbstractBoundaryType end
+"""
+$(TYPEDEF)
+"""
 abstract type UniformOutflow <: AbstractBoundaryType end
+"""
+$(TYPEDEF)
+"""
 abstract type InterpolatedOutflow <: AbstractBoundaryType end
 abstract type AxisSymmetric <: AbstractBoundaryType end
+"""
+$(TYPEDEF)
+"""
 abstract type Period <: AbstractBoundaryType end
 const AbstractBCType = Union{Vector,Function}
 
@@ -89,3 +122,5 @@ include("../Physical_space/Types.jl")
 include("../Boundary/Types.jl")
 include("../Solver/Types.jl")
 include("../IO/Types.jl")
+
+export SuperSonicInflow, SuperSonicOutflow, UniformOutflow, InterpolatedOutflow, Period, Maxwellian, Pixel, Voxel, Triangle, Tetra

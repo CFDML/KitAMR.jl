@@ -284,7 +284,6 @@ end
 function solid_exchange!(p4est::P_pxest_t, amr::AMR{DIM,NDF}) where{DIM,NDF}
     MPI.Comm_size(MPI.COMM_WORLD) == 1 && return nothing
     isempty(amr.global_data.config.IB) && return nothing
-    # !amr.global_data.status.ib_ghost && return nothing
     update_solid_mirror_data!(p4est, amr)
     amr_exchange!(
         p4est,
@@ -404,7 +403,6 @@ function update_ghost!(p4est::Ptr{p4est_t}, amr::AMR)
     global_data.forest.ghost = p4est_ghost_new(p4est, P4EST_CONNECT_FULL)
     amr.ghost.ghost_exchange = initialize_ghost_exchange(p4est, global_data)
     amr.ghost.ghost_wrap = initialize_ghost_wrap(global_data, amr.ghost.ghost_exchange)
-    # ib_ghost_check!(amr)
 end
 function update_ghost!(p4est::Ptr{p8est_t}, amr::AMR)
     ghost_exchange = amr.ghost.ghost_exchange
@@ -414,14 +412,4 @@ function update_ghost!(p4est::Ptr{p8est_t}, amr::AMR)
     global_data.forest.ghost = p8est_ghost_new(p4est, P8EST_CONNECT_FULL)
     amr.ghost.ghost_exchange = initialize_ghost_exchange(p4est, global_data)
     amr.ghost.ghost_wrap = initialize_ghost_wrap(global_data, amr.ghost.ghost_exchange)
-    # ib_ghost_check!(amr)
 end
-function ib_ghost_check!(amr)
-    ghost_wrap = amr.ghost.ghost_wrap
-    amr.global_data.status.ib_ghost = false
-    for ps_data in ghost_wrap
-        isa(ps_data,GhostInsideSolidData)&&continue
-        ps_data.bound_enc!=0 && (amr.global_data.status.ib_ghost = true)
-    end
-end
-
