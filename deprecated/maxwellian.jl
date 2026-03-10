@@ -82,7 +82,7 @@ function RBF_coeffi(sigma::Real,points::AbstractVector{Vector{T}}) where{T}
     return Φ
 end
 
-function update_solid_cell!(amr::AMR)
+function update_solid_cell!(amr::KitAMR_Data)
     global_data = amr.global_data
     boundary = amr.field.boundary
     for i in eachindex(boundary.solid_cells)

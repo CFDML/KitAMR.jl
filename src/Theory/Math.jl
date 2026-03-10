@@ -178,7 +178,7 @@ function calc_ρw(
     there_vn::AbstractVector,
     here_weight,
     there_weight,
-    ::AMR{2,2}
+    ::KitAMR_Data{2,2}
 )
     @inbounds @views SF = sum(@. here_weight * here_vn * here_df[:,1])
     @inbounds @views SG =
@@ -194,7 +194,7 @@ function calc_ρw(
     there_vn::AbstractVector,
     here_weight,
     there_weight,
-    ::AMR{3,1}
+    ::KitAMR_Data{3,1}
 )
     @inbounds @views SF = sum(@. here_weight * here_vn * here_df[:,1])
     @inbounds @views SG =

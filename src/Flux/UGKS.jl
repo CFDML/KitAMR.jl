@@ -1,4 +1,4 @@
-function calc_domain_flux(::UGKS,here_vs::Face_VS_Data,face::DomainFace{2,2,SuperSonicInflow},amr::AMR)
+function calc_domain_flux(::UGKS,here_vs::Face_VS_Data,face::DomainFace{2,2,SuperSonicInflow},amr::KitAMR_Data)
     rot,direction,midpoint,_,here_data = unpack(face)
     heavi,_,_,_,here_df,here_sdf = unpack(here_vs)
     global_data = amr.global_data
@@ -39,7 +39,7 @@ function calc_domain_flux(::UGKS,here_vs::Face_VS_Data,face::DomainFace{2,2,Supe
     there_micro = calc_micro_flux(There_vs, there_F, there_F⁺, aR, A, Mξ, Mt, direction)
     return fw,[here_micro,there_micro]
 end
-function calc_domain_flux(::UGKS,here_vs::Face_VS_Data,face::DomainFace{2,2,UniformOutflow},amr::AMR)
+function calc_domain_flux(::UGKS,here_vs::Face_VS_Data,face::DomainFace{2,2,UniformOutflow},amr::KitAMR_Data)
     rot,direction,midpoint,_,here_data = unpack(face)
     heavi,here_weight,here_mid,here_vn,here_df,here_sdf = unpack(here_vs)
     global_data = amr.global_data
@@ -74,7 +74,7 @@ function calc_domain_flux(::UGKS,here_vs::Face_VS_Data,face::DomainFace{2,2,Unif
     there_micro = calc_micro_flux(There_vs, there_F, there_F⁺, aR, A, Mξ, Mt, direction)
     return fw,[here_micro,there_micro]
 end
-function calc_domain_flux(::UGKS,here_vs::Face_VS_Data,face::DomainFace{2,2,InterpolatedOutflow},amr::AMR)
+function calc_domain_flux(::UGKS,here_vs::Face_VS_Data,face::DomainFace{2,2,InterpolatedOutflow},amr::KitAMR_Data)
     rot,direction,midpoint,_,here_data = unpack(face)
     heavi,here_weight,here_mid,here_vn,here_df,here_sdf = unpack(here_vs)
     global_data = amr.global_data
@@ -251,7 +251,7 @@ function calc_micro_flux(
         )
     end
 end
-function calc_flux(::UGKS,here_vs,there_vs,flux_data::Union{FullFace,Flux_Data},amr::AMR{2,2}) # without face area
+function calc_flux(::UGKS,here_vs,there_vs,flux_data::Union{FullFace,FluxData},amr::KitAMR_Data{2,2}) # without face area
     rot,direction,midpoint,here_data,there_data = unpack(flux_data)
     global_data = amr.global_data
     gas = global_data.config.gas;Δt = global_data.status.Δt

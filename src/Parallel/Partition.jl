@@ -403,7 +403,7 @@ function down_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::V
     end
     return s_vs_numss, s_datas
 end
-function transfer_wrap(sends::Vector, send_nums::Vector, amr::AMR{DIM,NDF}) where{DIM,NDF}
+function transfer_wrap(sends::Vector, send_nums::Vector, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     isempty(sends) && return Vector{Vector{Int}}(undef, 0), Vector{Transfer_Data{DIM,NDF}}(undef, 0)
     trees = amr.field.trees.data
     up_vs_numss, up_datas = up_transfer_wrap(DIM,NDF,sends, send_nums, trees)
@@ -587,7 +587,7 @@ function partition_transfer(
     r_vs_numss = pre_transfer(sends, s_vs_numss, receives, receive_nums)
     transfer(sends, s_datas, receives, receive_nums, r_vs_numss)
 end
-function unpack_data(vs_nums, data, amr::AMR{DIM,NDF}) where{DIM,NDF}
+function unpack_data(vs_nums, data, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     transfer_ps_datas = Vector{AbstractPsData{DIM,NDF}}(undef, length(vs_nums))
     quadrature = amr.global_data.config.quadrature
     vs_trees_num = reduce(*, amr.global_data.config.vs_trees_num)
@@ -625,7 +625,7 @@ function unpack_data(vs_nums, data, amr::AMR{DIM,NDF}) where{DIM,NDF}
     end
     return transfer_ps_datas
 end
-function unpack_data(up_vs_numss, down_vs_numss, up_datas, down_datas, amr::AMR{DIM,NDF}) where{DIM,NDF}
+function unpack_data(up_vs_numss, down_vs_numss, up_datas, down_datas, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     up_ps_datas = Vector{AbstractPsData{DIM,NDF}}(undef, 0)
     down_ps_datas = Vector{AbstractPsData{DIM,NDF}}(undef, 0)
     for i in eachindex(up_vs_numss)
@@ -686,11 +686,11 @@ function init_transferred_quadrant!(p4est::P_pxest_t, ti_data::Transfer_Init, am
         init_transferred_quadrant!,
     )
 end
-function init_transferred_ps!(p4est::P_pxest_t, ti_data::Transfer_Init, amr::AMR)
+function init_transferred_ps!(p4est::P_pxest_t, ti_data::Transfer_Init, amr::KitAMR_Data)
     insert_trees!(p4est, ti_data, amr)
     init_transferred_quadrant!(p4est, ti_data, amr)
 end
-function insert_trees!(p4est::P_pxest_t, ti_data::Transfer_Init, amr::AMR{DIM,NDF}) where{DIM,NDF}
+function insert_trees!(p4est::P_pxest_t, ti_data::Transfer_Init, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     trees = amr.field.trees.data
     pp = PointerWrapper(p4est)
     if !isempty(trees)
@@ -712,7 +712,7 @@ function insert_trees!(p4est::P_pxest_t, ti_data::Transfer_Init, amr::AMR{DIM,ND
     amr.field.trees.offset = pp.first_local_tree[] - 1
 end
 
-function ps_partition!(p4est::P_pxest_t, amr::AMR)
+function ps_partition!(p4est::P_pxest_t, amr::KitAMR_Data)
     src_gfq, dest_gfq, src_flt, src_llt = partition!(p4est)
     receives, sends, receive_nums, send_nums = get_receive_send(src_gfq, dest_gfq)
     s_vs_numss, s_datas = transfer_wrap(sends, send_nums, amr)

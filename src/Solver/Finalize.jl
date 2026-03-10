@@ -1,3 +1,7 @@
+"""
+$(TYPEDSIGNATURES)
+Update residuals.
+"""
 function residual_check!(ps_data::PS_Data,prim::Vector{Float64},global_data::Global_Data)
     Res = global_data.status.residual
     Res.step%RES_CHECK_INTERVAL!=0&&(return nothing)
@@ -18,7 +22,7 @@ function residual_comm!(global_data::Global_Data)
     MPI.Bcast!(Res.residual,0,MPI.COMM_WORLD)
     Res.sumRes.=0.;Res.sumAvg.=0.
 end
-function check_for_convergence(amr::AMR)
+function check_for_convergence(amr::KitAMR_Data)
     maximum(amr.global_data.status.residual.residual)<TOLERANCE&&(amr.global_data.status.residual.redundant_step+=1)
     return amr.global_data.status.residual.redundant_step>REDUNDANT_STEPS_NUM
 end
@@ -35,7 +39,7 @@ function finalize_ghost!(ghost_exchange::Ghost_Exchange)
         sc_free(id, ghost_exchange.mirror_structure_pointers[i])
     end
 end
-function finalize_p4est!(ps4est::Ptr{p4est_t}, amr::AMR)
+function finalize_p4est!(ps4est::Ptr{p4est_t}, amr::KitAMR_Data)
     global_data = amr.global_data
     p4est_ghost_destroy(global_data.forest.ghost)
     p4est_mesh_destroy(global_data.forest.mesh)
@@ -43,12 +47,17 @@ function finalize_p4est!(ps4est::Ptr{p4est_t}, amr::AMR)
     p4est_connectivity_destroy(pointer(pp.connectivity))
     p4est_destroy(ps4est)
 end
-function finalize!(ps4est::Ptr{p4est_t}, amr::AMR)
+
+"""
+$(TYPEDSIGNATURES)
+"""
+function finalize!(ps4est::Ptr{p4est_t}, amr::KitAMR_Data)
     finalize_ghost!(amr.ghost.ghost_exchange)
     finalize_p4est!(ps4est, amr)
+    return nothing
 end
 
-function finalize_p4est!(ps4est::Ptr{p8est_t}, amr::AMR)
+function finalize_p4est!(ps4est::Ptr{p8est_t}, amr::KitAMR_Data)
     global_data = amr.global_data
     p8est_ghost_destroy(global_data.forest.ghost)
     p8est_mesh_destroy(global_data.forest.mesh)
@@ -56,7 +65,12 @@ function finalize_p4est!(ps4est::Ptr{p8est_t}, amr::AMR)
     p8est_connectivity_destroy(pointer(pp.connectivity))
     p8est_destroy(ps4est)
 end
-function finalize!(ps4est::Ptr{p8est_t}, amr::AMR)
+
+"""
+$(TYPEDSIGNATURES)
+"""
+function finalize!(ps4est::Ptr{p8est_t}, amr::KitAMR_Data)
     finalize_ghost!(amr.ghost.ghost_exchange)
     finalize_p4est!(ps4est, amr)
+    return nothing
 end

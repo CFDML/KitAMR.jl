@@ -1,4 +1,4 @@
-function calc_domain_flux(::CAIDVM,here_vs::Face_VS_Data,face::DomainFace{DIM,NDF,Maxwellian},amr::AMR) where{DIM,NDF}
+function calc_domain_flux(::CAIDVM,here_vs::Face_VS_Data,face::DomainFace{DIM,NDF,Maxwellian},amr::KitAMR_Data) where{DIM,NDF}
     _,direction,midpoint,_,ps_data = unpack(face)
     heavi,here_weight,here_mid,here_vn,here_df,here_sdf = unpack(here_vs)
     Δt = amr.global_data.status.Δt
@@ -20,7 +20,7 @@ function calc_domain_flux(::CAIDVM,here_vs::Face_VS_Data,face::DomainFace{DIM,ND
     fw = micro_to_macro(here_micro,here_mid,here_weight,vs_data)+micro_to_macro(there_micro,there_mid,there_weight,vs_data)
     return fw,[here_micro,there_micro]
 end
-function calc_domain_flux(::CAIDVM,here_vs::Face_VS_Data,face::DomainFace{DIM,NDF,SuperSonicInflow},amr::AMR) where{DIM,NDF}
+function calc_domain_flux(::CAIDVM,here_vs::Face_VS_Data,face::DomainFace{DIM,NDF,SuperSonicInflow},amr::KitAMR_Data) where{DIM,NDF}
     _,direction,midpoint,_,ps_data = unpack(face)
     heavi,here_weight,here_mid,here_vn,here_df,here_sdf = unpack(here_vs)
     Δt = amr.global_data.status.Δt
@@ -41,7 +41,7 @@ function calc_domain_flux(::CAIDVM,here_vs::Face_VS_Data,face::DomainFace{DIM,ND
     fw = micro_to_macro(here_micro,here_mid,here_weight,vs_data)+micro_to_macro(there_micro,there_mid,there_weight,vs_data)
     return fw,[here_micro,there_micro]
 end
-function calc_domain_flux(::CAIDVM,here_vs::Face_VS_Data,face::DomainFace{DIM,NDF,UniformOutflow},amr::AMR) where{DIM,NDF}
+function calc_domain_flux(::CAIDVM,here_vs::Face_VS_Data,face::DomainFace{DIM,NDF,UniformOutflow},amr::KitAMR_Data) where{DIM,NDF}
     _,direction,_,_,ps_data = unpack(face)
     heavi,here_weight,here_mid,here_vn,_,_ = unpack(here_vs)
     vs_data = ps_data.vs_data
@@ -56,7 +56,7 @@ function calc_domain_flux(::CAIDVM,here_vs::Face_VS_Data,face::DomainFace{DIM,ND
     fw = micro_to_macro(here_micro,here_mid,here_weight,vs_data)+micro_to_macro(there_micro,there_mid,there_weight,vs_data)
     return fw,[here_micro,there_micro]
 end
-function calc_domain_flux(::CAIDVM,here_vs::Face_VS_Data,face::DomainFace{2,NDF,InterpolatedOutflow},amr::AMR) where{NDF}
+function calc_domain_flux(::CAIDVM,here_vs::Face_VS_Data,face::DomainFace{2,NDF,InterpolatedOutflow},amr::KitAMR_Data) where{NDF}
     _,direction,midpoint,_,ps_data = unpack(face)
     heavi,here_weight,here_mid,here_vn,here_df,here_sdf = unpack(here_vs)
     Δt = amr.global_data.status.Δt
@@ -80,7 +80,7 @@ function calc_domain_flux(::CAIDVM,here_vs::Face_VS_Data,face::DomainFace{2,NDF,
     fw = micro_to_macro(here_micro,here_mid,here_weight,vs_data)+micro_to_macro(there_micro,there_mid,there_weight,vs_data)
     return fw,[here_micro,there_micro]
 end
-function calc_flux(::CAIDVM,here_vs,there_vs,flux_data::Union{FullFace,Flux_Data},amr::AMR{DIM,NDF}) where{DIM,NDF} # without face area and Δt
+function calc_flux(::CAIDVM,here_vs,there_vs,flux_data::Union{FullFace,FluxData},amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF} # without face area and Δt
     _,_,midpoint,here_data,there_data = unpack(flux_data)
     Δt = amr.global_data.status.Δt
     here_mid = here_vs.midpoint;there_mid = there_vs.midpoint

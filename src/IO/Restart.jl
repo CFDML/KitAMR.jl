@@ -2,7 +2,7 @@ function pause(ps4est,amr;path::String = "pause_data",kwargs...)
     save_pause_data(ps4est,amr,path)
     save_pause_p4est(ps4est;path)
 end
-function save_pause_data(ps4est,amr::AMR{DIM,NDF},path::String) where{DIM,NDF}
+function save_pause_data(ps4est,amr::KitAMR_Data{DIM,NDF},path::String) where{DIM,NDF}
     fp = PointerWrapper(ps4est)
     N = fp.local_num_quadrants[];rank = MPI.Comm_rank(MPI.COMM_WORLD)
     vs_nums = Vector{Int}(undef,N);bound_encs = Vector{Int}(undef,N)

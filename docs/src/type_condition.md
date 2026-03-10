@@ -3,8 +3,11 @@
 To launch a simulation, initial and boundary conditions are necessary.
 
 ## Initial conditions
-The types of initial conditions are abstracted as `AbstractInitCondType`.
-
+The types of initial conditions are abstracted as 
+```@docs
+AbstractInitCondType
+```
+Currently, available options are
 ```@docs
 Uniform
 ```
@@ -14,7 +17,11 @@ PCoordFn
 ```
 
 ## Boundary conditions
-The type of the boundary conditions is determined by `T<:AbstractBoundaryType`. Currently, available options are
+The type of the boundary conditions is determined by 
+```@docs
+AbstractBoundCondType
+```
+Currently, available options are
 ```@docs
 Maxwellian
 ```
@@ -39,7 +46,11 @@ InterpolatedOutflow
 Period
 ```
 
-With these types of boundary conditions, two types of boundaries are constructed.
+With these types of boundary conditions, 
+```@docs
+AbstractBoundaryType
+```
+can be constructed. There are two types of the boundary.
 ### Domain boundary
 KitAMR.jl always adopts square simulation domain. At the edges of the domain, proper conditions are required to maintain the well-posedness.
 
@@ -67,14 +78,14 @@ Vertices
 ```
 The most common constructor is
 ```@docs
-Vertices(::Type{T},file::String,solid,refine_coeffi,bc) where{T<:KitAMR.AbstractBoundaryType}
+Vertices(::Type{T},file::String,solid,refine_coeffi,bc) where{T<:KitAMR.AbstractBoundCondType}
 ```
 ```@docs
 Triangles
 ```
 The most common constructor is
 ```@docs
-Triangles(::Type{T},file::String,solid,search_radius,bc) where{T<:KitAMR.AbstractBoundaryType}
+Triangles(::Type{T},file::String,solid,search_radius,bc) where{T<:KitAMR.AbstractBoundCondType}
 ```
 `TriangleKDT` is a struct containing information related to K-D tree for efficient mesh generation:
 ```@docs

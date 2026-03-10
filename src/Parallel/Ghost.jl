@@ -130,7 +130,7 @@ function get_mirror_structure(ps4est, global_data::Global_Data{DIM,NDF}) where{D
         return mirror_structure_pointers
     end
 end
-function update_mirror_data!(ps4est, amr::AMR{DIM,NDF}) where{DIM,NDF}
+function update_mirror_data!(ps4est, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     GC.@preserve ps4est amr begin
         mirror_data_pointers = amr.ghost.ghost_exchange.mirror_data_pointers
         vs_num = amr.global_data.status.max_vs_num
@@ -152,7 +152,7 @@ function update_mirror_data!(ps4est, amr::AMR{DIM,NDF}) where{DIM,NDF}
         end
     end
 end
-function update_solid_mirror_data!(ps4est,amr::AMR{DIM,NDF}) where{DIM,NDF}
+function update_solid_mirror_data!(ps4est,amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     GC.@preserve ps4est amr begin
         mirror_data_pointers = amr.ghost.ghost_exchange.mirror_data_pointers
         vs_num = amr.global_data.status.max_vs_num
@@ -174,7 +174,7 @@ function update_solid_mirror_data!(ps4est,amr::AMR{DIM,NDF}) where{DIM,NDF}
         end
     end
 end
-function update_mirror_slope!(ps4est, amr::AMR{DIM,NDF}) where{DIM,NDF}
+function update_mirror_slope!(ps4est, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     GC.@preserve ps4est amr begin
         mirror_slope_pointers = amr.ghost.ghost_exchange.mirror_slope_pointers
         vs_num = amr.global_data.status.max_vs_num
@@ -270,7 +270,7 @@ function amr_exchange!(
         )
     end
 end
-function data_exchange!(p4est::P_pxest_t, amr::AMR{DIM,NDF}) where{DIM,NDF}
+function data_exchange!(p4est::P_pxest_t, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     MPI.Comm_size(MPI.COMM_WORLD) == 1 && return nothing
     update_mirror_data!(p4est, amr)
     amr_exchange!(
@@ -281,7 +281,7 @@ function data_exchange!(p4est::P_pxest_t, amr::AMR{DIM,NDF}) where{DIM,NDF}
         size_Ghost_Data(amr.global_data.status.max_vs_num,DIM,NDF),
     )
 end
-function solid_exchange!(p4est::P_pxest_t, amr::AMR{DIM,NDF}) where{DIM,NDF}
+function solid_exchange!(p4est::P_pxest_t, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     MPI.Comm_size(MPI.COMM_WORLD) == 1 && return nothing
     isempty(amr.global_data.config.IB) && return nothing
     update_solid_mirror_data!(p4est, amr)
@@ -293,7 +293,7 @@ function solid_exchange!(p4est::P_pxest_t, amr::AMR{DIM,NDF}) where{DIM,NDF}
         size_Ghost_Data(amr.global_data.status.max_vs_num,DIM,NDF),
     )
 end
-function slope_exchange!(p4est::P_pxest_t, amr::AMR{DIM,NDF}) where{DIM,NDF}
+function slope_exchange!(p4est::P_pxest_t, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     MPI.Comm_size(MPI.COMM_WORLD) == 1 && return nothing
     update_mirror_slope!(p4est, amr)
     amr_exchange!(
@@ -395,7 +395,7 @@ function initialize_ghost_wrap(global_data::Global_Data{DIM,NDF}, ghost_exchange
     return ghost_wrap
 end
 
-function update_ghost!(p4est::Ptr{p4est_t}, amr::AMR)
+function update_ghost!(p4est::Ptr{p4est_t}, amr::KitAMR_Data)
     ghost_exchange = amr.ghost.ghost_exchange
     global_data = amr.global_data
     finalize_ghost!(ghost_exchange)
@@ -404,7 +404,7 @@ function update_ghost!(p4est::Ptr{p4est_t}, amr::AMR)
     amr.ghost.ghost_exchange = initialize_ghost_exchange(p4est, global_data)
     amr.ghost.ghost_wrap = initialize_ghost_wrap(global_data, amr.ghost.ghost_exchange)
 end
-function update_ghost!(p4est::Ptr{p8est_t}, amr::AMR)
+function update_ghost!(p4est::Ptr{p8est_t}, amr::KitAMR_Data)
     ghost_exchange = amr.ghost.ghost_exchange
     global_data = amr.global_data
     finalize_ghost!(ghost_exchange)

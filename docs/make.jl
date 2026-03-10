@@ -3,16 +3,23 @@ push!(LOAD_PATH, "..")
 using KitAMR
 type_page = [
     "Configuration"=>"type_configure.md",
+    "Data"=>"type_data.md",
     "Condition"=>"type_condition.md",
     "Gas"=>"type_gas.md",
+    "Physical space"=>"type_physical_space.md",
+    "Velocity space"=>"type_velocity_space.md",
     "Output"=>"type_output.md"
+]
+methods_page = [
+    "Finalization"=>"methods_finalize.md"
 ]
 makedocs(;
     sitename = "KitAMR.jl",
     modules = [KitAMR],
     pages = [
         "Home"=>"index.md",
-        "Types"=>type_page
+        "Types"=>type_page,
+        "Functions and Methods"=>methods_page
         ],
     checkdocs = :none
 )

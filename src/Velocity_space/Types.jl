@@ -1,13 +1,28 @@
+"""
+$(TYPEDEF)
+$(TYPEDFIELDS)
+"""
 mutable struct VS_Data{DIM,NDF} <: AbstractVsData{DIM,NDF}
+    "Number of velocity cells."
     vs_num::Int
+    "Refinement level of velocity cells."
     level::Vector{Int8} # vs_num
+    "Quadrature weight of velocity cells."
     weight::Vector{Float64} # vs_num
+    "Coordinates of centers of velocity cells in velocity space."
     midpoint::Matrix{Float64} # vs_num x DIM
+    "Discretized distribution function."
     df::Matrix{Float64} # vs_num x NDF
+    "Spatial gradients (df/dx) of distribution function."
     sdf::Array{Float64,3} # vs_num x NDF x DIM
+    "Numerical flux of distribution function."
     flux::Matrix{Float64} # vs_num x NDF
 end
 
+"""
+$(TYPEDEF)
+$(TYPEDFIELDS)
+"""
 mutable struct Ghost_VS_Data{DIM,NDF} <: AbstractVsData{DIM,NDF}
     vs_num::Int
     level::Vector{Int8} # vs_num
@@ -17,10 +32,17 @@ mutable struct Ghost_VS_Data{DIM,NDF} <: AbstractVsData{DIM,NDF}
     sdf::Array{Float64,3} # vs_num x NDF x DIM
 end
 
+"""
+$(TYPEDEF)
+Information of the velocity space corresponding to the face during the calculation of numerical flux.
+$(TYPEDFIELDS)
+"""
 struct Face_VS_Data{DIM,NDF} # different sides of the face combining the face-velocity-space
+    "Upwinding flags. Upwinding velocities are set to `true`."
     heavi::Vector{Bool}
     weight::AbstractVector{Float64}
     midpoint::AbstractMatrix{Float64}
+    "Normal component of velocities across the face."
     vn::AbstractVector{Float64}
     df::AbstractMatrix{Float64}
     sdf::AbstractArray{Float64}
@@ -32,16 +54,25 @@ struct VelocityTemplates
     indices::Vector{Int} # Indices of the templates
     Ainv::Matrix{Float64} # The inversion of the coefficient marix for bi-linear interpolation
 end
+
+"""
+$(TYPEDEF)
+Structure for cut cell in velocity space used in immersed boundaries.
+$(TYPEDFIELDS)
+"""
 mutable struct CuttedVelocityCells
+    "Indices of cut cells in [`SolidNeighbor`](@ref)'s [`VS_Data`](@ref)."
     indices::Vector{Int}
+    "Quadrature weight of velocity cells. Specially, the weight of cut cells is set to 0."
     weight::Vector{Float64}
+    "Distribution function of gas part corresponding to velocity at the center of cut cells."
     gas_dfs::Matrix{Float64}
+    "Distribution function of solid part corresponding to velocity at the center of cut cells."
     solid_dfs::Matrix{Float64}
-    # gas_midpoints::Matrix{Float64}
-    # solid_midpoints::Matrix{Float64}
+    "Areas of gas part in cut cells."
     gas_weights::Vector{Float64}
-    solid_weights::Vector{Float64} # Range from 0 to 1, representing the percent of the solid part.
-    # templates::Vector{VelocityTemplates}
+    "Areas of solid part in cut cells."
+    solid_weights::Vector{Float64}
 end
 mutable struct VS_Projection{DIM}
     c2r_index::Matrix{Int} #

@@ -75,7 +75,7 @@ function criterion_df(ps_data::AbstractPsData{DIM,NDF}) where{DIM,NDF}
     end
     return cdf
 end
-function vs_refine!(va_data::Velocity_Adaptive_Data, amr::AMR{DIM,NDF}) where{DIM,NDF}
+function vs_refine!(va_data::Velocity_Adaptive_Data, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     trees = amr.field.trees;global_data = amr.global_data
     !isa(global_data.config.quadrature,Vector)&&return nothing
     ds = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
@@ -211,7 +211,7 @@ function make_b(DIM::Integer,midpoint::AbstractVector, midpoint_new::AbstractMat
     b
 end
 
-function vs_coarsen!(va_data::Velocity_Adaptive_Data,amr::AMR{DIM,NDF})where{DIM,NDF}
+function vs_coarsen!(va_data::Velocity_Adaptive_Data,amr::KitAMR_Data{DIM,NDF})where{DIM,NDF}
     trees = amr.field.trees;global_data = amr.global_data
     ds = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
     global_data.config.vs_trees_num[i] for i in 1:DIM]

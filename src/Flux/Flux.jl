@@ -9,30 +9,30 @@ end
 function face_area(ps_data::AbstractPsData{3}, DIR::Integer)
     return reduce(*, @view(ps_data.ds[FAT[2][DIR]]))
 end
-function flux!(face::DomainFace,amr::AMR)
+function flux!(face::DomainFace,amr::KitAMR_Data)
     here_vs = make_face_vs(face)
     flux,micro_flux = calc_domain_flux(amr.global_data.config.solver.flux,here_vs,face,amr)
     update_domain_flux!(flux,micro_flux,face,here_vs.heavi)
 end
-function flux!(face::FullFace,amr::AMR)
+function flux!(face::FullFace,amr::KitAMR_Data)
     here_vs,there_vs = make_face_vs(face)
     flux,micro_flux = calc_flux(amr.global_data.config.solver.flux,here_vs,there_vs,face,amr)
     update_flux!(flux,micro_flux,face,here_vs.heavi)
 end
-function flux!(face::HangingFace{DIM,NDF},amr::AMR) where{DIM,NDF}
+function flux!(face::HangingFace{DIM,NDF},amr::KitAMR_Data) where{DIM,NDF}
     rot,direction,midpoint,here_data,there_data = unpack(face)
     here_vs,there_vs = make_face_vs(face)
     for i in eachindex(there_vs)
-        flux_data = Flux_Data{HangingFace{DIM,NDF}}(rot,direction,midpoint[i],here_data,there_data[i])
+        flux_data = FluxData{HangingFace{DIM,NDF}}(rot,direction,midpoint[i],here_data,there_data[i])
         flux,micro_flux = calc_flux(amr.global_data.config.solver.flux,here_vs,there_vs[i],flux_data,amr)
         update_flux!(flux,micro_flux,flux_data,here_vs.heavi)
     end
 end
-function flux!(face::BackHangingFace{DIM,NDF},amr::AMR) where{DIM,NDF}
+function flux!(face::BackHangingFace{DIM,NDF},amr::KitAMR_Data) where{DIM,NDF}
     rot,direction,midpoint,here_data,there_data = unpack(face)
     here_vs,there_vs = make_face_vs(face)
     for i in eachindex(here_vs)
-        flux_data = Flux_Data{BackHangingFace{DIM,NDF}}(rot,direction,midpoint[i],here_data[i],there_data)
+        flux_data = FluxData{BackHangingFace{DIM,NDF}}(rot,direction,midpoint[i],here_data[i],there_data)
         flux,micro_flux = calc_flux(amr.global_data.config.solver.flux,here_vs[i],there_vs,flux_data,amr)
         update_flux!(flux,micro_flux,flux_data,here_vs[i].heavi)
     end
@@ -52,20 +52,20 @@ function update_domain_flux!(::Nothing,micro_flux::Vector{Matrix{Float64}},face:
     ps_data.vs_data.flux[heavi,:] .+= area*here_micro
     ps_data.vs_data.flux[.!heavi,:] .+= area*there_micro
 end
-function face_area(::Flux_Data{HangingFace{DIM,NDF}},here_data::AbstractPsData{DIM},direction,rot) where{DIM,NDF}
+function face_area(::FluxData{HangingFace{DIM,NDF}},here_data::AbstractPsData{DIM},direction,rot) where{DIM,NDF}
     face_area(here_data,direction)/2^(DIM-1)*rot
 end
-function face_area(::T,here_data,direction,rot) where{T<:Union{Flux_Data{BackHangingFace{DIM,NDF}},FullFace{DIM,NDF}} where{DIM,NDF}}
+function face_area(::T,here_data,direction,rot) where{T<:Union{FluxData{BackHangingFace{DIM,NDF}},FullFace{DIM,NDF}} where{DIM,NDF}}
     face_area(here_data,direction)*rot
 end
-function update_flux!(flux::AbstractVector,micro_flux::Vector{Matrix{Float64}},face::Union{FullFace,Flux_Data},heavi::Vector{Bool})
+function update_flux!(flux::AbstractVector,micro_flux::Vector{Matrix{Float64}},face::Union{FullFace,FluxData},heavi::Vector{Bool})
     rot,direction,_,here_data,there_data = unpack(face)
     area = face_area(face,here_data,direction,rot)
     here_micro,there_micro = micro_flux
     update_macro_flux!(flux*area,here_data,there_data)
     update_micro_flux!(here_micro*area,there_micro*area,here_data,there_data,heavi)
 end
-function update_flux!(::Nothing,micro_flux::Vector{Matrix{Float64}},face::Union{FullFace,Flux_Data},heavi::Vector{Bool})
+function update_flux!(::Nothing,micro_flux::Vector{Matrix{Float64}},face::Union{FullFace,FluxData},heavi::Vector{Bool})
     rot,direction,_,here_data,there_data = unpack(face)
     area = face_area(face,here_data,direction,rot)
     here_micro,there_micro = micro_flux
@@ -290,7 +290,7 @@ function make_face_vs(face::BackHangingFace{DIM,NDF}) where{DIM,NDF}
     end
     return here_vs,there_vs
 end
-function flux!(amr::AMR)
+function flux!(amr::KitAMR_Data)
     faces = amr.field.faces
     @simd for face in faces
         flux!(face,amr)

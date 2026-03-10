@@ -4,7 +4,7 @@ end
 function face_area(ps_data::AbstractPsData{3}, DIR::Integer)
     return reduce(*, @view(ps_data.ds[FAT[2][DIR]]))
 end
-function calc_flux!(domain::Domain{Maxwellian},ps_data::PS_Data{2,2},faceid::Integer,amr::AMR{2,2})
+function calc_flux!(domain::Domain{Maxwellian},ps_data::PS_Data{2,2},faceid::Integer,amr::KitAMR_Data{2,2})
     global_data = amr.global_data
     DIR = get_dir(faceid)
     ROT = get_rot(faceid)
@@ -50,7 +50,7 @@ function make_face_data(ps_data::PS_Data{DIM,NDF},::Domain{Outflow},::Global_Dat
     sdf_n = zeros(vs_data.vs_num,NDF)
     return Face_VS_Data{DIM,NDF}(vs_data.weight,vs_data.midpoint,vn,vs_data.df,sdf_n),vs_data.vs_num
 end
-function calc_flux!(domain::Domain{Inflow},ps_data::PS_Data{2,2},faceid,amr::AMR{2,2})
+function calc_flux!(domain::Domain{Inflow},ps_data::PS_Data{2,2},faceid,amr::KitAMR_Data{2,2})
     DIR = get_dir(faceid)
     ROT = get_rot(faceid) # Left: -1, Right: 1
     global_data = amr.global_data
@@ -78,7 +78,7 @@ function calc_flux!(domain::Domain{Inflow},ps_data::PS_Data{2,2},faceid,amr::AMR
     micro_flux = calc_micro_flux(f_vs_data, F, F⁺, aL, aR, A, Mξ, Mt, offset, dsf)
     vs_data.flux += ROT.*micro_flux
 end
-function calc_flux!(domain::Domain{Outflow},ps_data::PS_Data{2,2},faceid,amr::AMR{2,2})
+function calc_flux!(domain::Domain{Outflow},ps_data::PS_Data{2,2},faceid,amr::KitAMR_Data{2,2})
     DIR = get_dir(faceid)
     ROT = get_rot(faceid) # Left: -1, Right: 1
     global_data = amr.global_data
@@ -105,13 +105,13 @@ function calc_flux!(domain::Domain{Outflow},ps_data::PS_Data{2,2},faceid,amr::AM
     micro_flux = calc_micro_flux(f_vs_data, F, F⁺, aL, aR, A, Mξ, Mt, offset, dsf)
     vs_data.flux += ROT.*micro_flux
 end
-function calc_flux!(::BoundaryNeighbor,face::Face{BoundaryFace},amr::AMR{2,2})
+function calc_flux!(::BoundaryNeighbor,face::Face{BoundaryFace},amr::KitAMR_Data{2,2})
     ps_data = face.data
     faceid = face.faceid
     domain = amr.global_data.config.domain[faceid]
     calc_flux!(domain,ps_data,faceid,amr)
 end
-function calc_flux!(::BoundaryNeighbor, face::Face{BoundaryFace}, amr::AMR{3,1})
+function calc_flux!(::BoundaryNeighbor, face::Face{BoundaryFace}, amr::KitAMR_Data{3,1})
     ps_data = face.data
     global_data = amr.global_data
     faceid = face.faceid
@@ -476,7 +476,7 @@ function update_face_data_L!(
     return (bit_L, offset)
 end
 
-function calc_flux!(::SameSizeNeighbor, face::Face{InnerFace}, amr::AMR{2,2})
+function calc_flux!(::SameSizeNeighbor, face::Face{InnerFace}, amr::KitAMR_Data{2,2})
     ps_data = face.data
     faceid = face.faceid
     DIR = get_dir(faceid)
@@ -525,7 +525,7 @@ function calc_flux!(::SameSizeNeighbor, face::Face{InnerFace}, amr::AMR{2,2})
         update_vs_flux!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
     end
 end
-function calc_flux!(::SameSizeNeighbor, face::Face{InnerFace}, amr::AMR{3,1})
+function calc_flux!(::SameSizeNeighbor, face::Face{InnerFace}, amr::KitAMR_Data{3,1})
     ps_data = face.data
     faceid = face.faceid
     DIR = get_dir(faceid)
@@ -561,7 +561,7 @@ function calc_flux!(::SameSizeNeighbor, face::Face{InnerFace}, amr::AMR{3,1})
         update_vs_flux!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
     end
 end
-function calc_flux!(::HalfSizeNeighbor, face::Face, amr::AMR{2,2})
+function calc_flux!(::HalfSizeNeighbor, face::Face, amr::KitAMR_Data{2,2})
     ps_data = face.data
     faceid = face.faceid
     DIR = get_dir(faceid)
@@ -607,7 +607,7 @@ function calc_flux!(::HalfSizeNeighbor, face::Face, amr::AMR{2,2})
         end
     end
 end
-function calc_flux!(::HalfSizeNeighbor, face::Face, amr::AMR{3,1})
+function calc_flux!(::HalfSizeNeighbor, face::Face, amr::KitAMR_Data{3,1})
     ps_data = face.data
     faceid = face.faceid
     DIR = get_dir(faceid)
@@ -655,7 +655,7 @@ function calc_flux!(::HalfSizeNeighbor, face::Face, amr::AMR{3,1})
         end
     end
 end
-function calc_flux!(::DoubleSizeNeighbor, face::Face, amr::AMR{2,2})
+function calc_flux!(::DoubleSizeNeighbor, face::Face, amr::KitAMR_Data{2,2})
     ps_data = face.data
     faceid = face.faceid
     DIR = get_dir(faceid)
@@ -717,7 +717,7 @@ function calc_flux!(::DoubleSizeNeighbor, face::Face, amr::AMR{2,2})
         update_vs_flux!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
     end
 end
-function calc_flux!(::DoubleSizeNeighbor, face::Face, amr::AMR{3,1})
+function calc_flux!(::DoubleSizeNeighbor, face::Face, amr::KitAMR_Data{3,1})
     ps_data = face.data
     faceid = face.faceid
     DIR = get_dir(faceid)
@@ -777,7 +777,7 @@ function calc_flux!(::DoubleSizeNeighbor, face::Face, amr::AMR{3,1})
         update_vs_flux!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
     end
 end
-function update_flux!(amr::AMR)
+function update_flux!(amr::KitAMR_Data)
     faces = amr.field.faces
     @inbounds @simd for i in eachindex(faces)
         face = faces[i]

@@ -1,4 +1,4 @@
-function calc_flux!(::Val{1}, ::Val{0}, face::Face, AMR_2D::AMR_2D, faceid::Int)
+function calc_flux!(::Val{1}, ::Val{0}, face::Face, AMR_2D::KitAMR_Data_2D, faceid::Int)
     ps_data = face.data
     dir = get_dir(faceid)
     rot = get_rot(faceid)
@@ -259,7 +259,7 @@ end
 function update_nflux!(::Ghost_PS_Data, ::AV)
     return nothing
 end
-function calc_flux!(::Val{0}, ::Val{1}, face::Face, AMR_2D::AMR_2D, faceid::Int)
+function calc_flux!(::Val{0}, ::Val{1}, face::Face, AMR_2D::KitAMR_Data_2D, faceid::Int)
     ps_data = face.data
     dir = get_dir(faceid)
     rot = get_rot(faceid) # Left: -1, Right: 1
@@ -317,7 +317,7 @@ function calc_flux!(::Val{0}, ::Val{1}, face::Face, AMR_2D::AMR_2D, faceid::Int)
     #     # @show maximum(vs_data.sdf[:,1,1]) maximum(vs_data.sdf[:,1,2])
     # end
 end
-function calc_flux!(::Val{0}, ::Val{2}, face::Face, AMR_2D::AMR_2D, faceid::Int)
+function calc_flux!(::Val{0}, ::Val{2}, face::Face, AMR_2D::KitAMR_Data_2D, faceid::Int)
     ps_data = face.data
     dir = get_dir(faceid)
     rot = get_rot(faceid) # Left: -1, Right: 1
@@ -366,7 +366,7 @@ function calc_flux!(::Val{0}, ::Val{2}, face::Face, AMR_2D::AMR_2D, faceid::Int)
     #     @show ps_data.flux faceid
     # end
 end
-function calc_flux!(::Val{2}, ::Val{-1}, face::Face, AMR_2D::AMR_2D, faceid::Int)
+function calc_flux!(::Val{2}, ::Val{-1}, face::Face, AMR_2D::KitAMR_Data_2D, faceid::Int)
     ps_data = face.data
     dir = get_dir(faceid)
     rot = get_rot(faceid) # Left: -1, Right: 1
@@ -434,7 +434,7 @@ function calc_flux!(
     ::Val{2},
     ::Val{-1},
     face::Face{T},
-    AMR_2D::AMR_2D,
+    AMR_2D::KitAMR_Data_2D,
     faceid::Int,
 ) where {T<:Ghost_PS_Data}
     ps_data = face.data
@@ -473,7 +473,7 @@ function calc_flux!(
     update_vs_flux!(fh, fb, bit_L, vs_data, vs_data_n, offset, rot)
 end
 
-function update_flux!(AMR_2D::AMR_2D)
+function update_flux!(AMR_2D::KitAMR_Data_2D)
     faces = AMR_2D.faces
     @inbounds @simd for i in eachindex(faces)
         face = faces[i]
