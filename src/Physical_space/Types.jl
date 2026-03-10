@@ -52,7 +52,7 @@ $(TYPEDFIELDS)
 mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
     "Index of the quadrant corresponding to `PS_Data`."
     quadid::Cint # The unique identification of the ps_data, is currently used for SolidCells and IB nodes' partition. Only need to be updated before partition. Can be negative for SolidCells/IB nodes for the convenience of boundary_flag
-    "Encoding of the cell type. `0`:fluid_cell;`>0`:`bound_enc` th immersed boundary's donor cell;`<0`: `bound_enc` th boundary's solid_cell (or solid_neighbor)"
+    "Encoding of the cell type. `0`:fluid cell;`>0`: donor cell of `bound_enc` th immersed boundary;`<0`: solid cell (or solid neighbor) of `bound_enc` th boundary."
     bound_enc::Int # 0:fluid_cell;>0:bound_enc th boundary's IB_cell;<0: bound_enc th boundary's solid_cell;
     "Deprecated."
     solid_cell_index::Vector{Int}
@@ -175,7 +175,7 @@ $(TYPEDEF)
 Struct for flux calculation corresponding to a single face.
 $(TYPEDFIELDS)
 """
-struct Flux_Data{T<:InnerFace}
+struct FluxData{T<:InnerFace}
     rot::Float64
     direction::Int # face normal direction
     midpoint::Vector{Float64} # midpoint of the face

@@ -9,7 +9,7 @@ function IB_prim(bc::AbstractVector,::AbstractVector,ρw::Real)
     prim[1] = ρw
     return prim
 end
-function save_boundary_result!(ib::AbstractBoundary,ps_data,solid_neighbor::SolidNeighbor{DIM,NDF},boundary_results,amr::AMR{DIM,NDF};dir_path="") where{DIM,NDF}
+function save_boundary_result!(ib::AbstractBoundaryType,ps_data,solid_neighbor::SolidNeighbor{DIM,NDF},boundary_results,amr::KitAMR_Data{DIM,NDF};dir_path="") where{DIM,NDF}
     global_data = amr.global_data
     vs_data = ps_data.vs_data
     aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
@@ -53,7 +53,7 @@ function save_boundary_result!(ib::AbstractBoundary,ps_data,solid_neighbor::Soli
         @suppress write_vs_VTK(aux_df,vs_data,amr,dir_path*"/"*string(ps_data.midpoint)*string(n),["df"],fieldvalues_fn)
     end
 end
-function save_boundary_result!(ib::AbstractBoundary,ps_data::PS_Data{DIM,NDF},boundary_results::Vector{Boundary_Solution},amr::AMR{DIM,NDF};dir_path="") where{DIM,NDF}
+function save_boundary_result!(ib::AbstractBoundaryType,ps_data::PS_Data{DIM,NDF},boundary_results::Vector{Boundary_Solution},amr::KitAMR_Data{DIM,NDF};dir_path="") where{DIM,NDF}
     solid_neighbors = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
     for i in solid_neighbors
         save_boundary_result!(ib,ps_data,ps_data.neighbor.data[i][1],boundary_results,amr;dir_path)
@@ -91,18 +91,18 @@ function solid_flag(midpoint,global_data::Global_Data)
     end
     return false
 end
-function solid_cell_flag(boundaries::Vector{AbstractBoundary},midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data)
+function solid_cell_flag(boundaries::Vector{AbstractBoundaryType},midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data)
     for boundary in boundaries
         solid_cell_flag(boundary,midpoint,ds,global_data,solid_flag(boundary,midpoint))&& return true
     end
     return false
 end
-function InsideSolid_flag(boundary::AbstractBoundary,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data)
+function InsideSolid_flag(boundary::AbstractBoundaryType,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data)
     inside = solid_flag(boundary,midpoint)
     (solid_flag(boundary,midpoint)&&!solid_cell_flag(boundary,midpoint,ds,global_data,inside))&& return true # In solid region and not the ghost cell( a.k.a. solid cell)
     return false
 end
-function InsideSolid_flag(boundaries::Vector{AbstractBoundary},midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data)
+function InsideSolid_flag(boundaries::Vector{AbstractBoundaryType},midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data)
     for boundary in boundaries
         InsideSolid_flag(boundary,midpoint,ds,global_data) && return true
     end
@@ -172,7 +172,7 @@ function broadcast_boundary_midpoints!(boundary_points::Vector{Vector{Vector{Flo
 end
 
 
-function IB_flag(boundary::AbstractBoundary,aux_point::AbstractVector,midpoint::AbstractVector,ds::AbstractVector,level::Integer,global_data::Global_Data{DIM}) where{DIM}
+function IB_flag(boundary::AbstractBoundaryType,aux_point::AbstractVector,midpoint::AbstractVector,ds::AbstractVector,level::Integer,global_data::Global_Data{DIM}) where{DIM}
     r = boundary.search_radius
     if level==global_data.config.solver.AMR_PS_MAXLEVEL
         return norm(midpoint-aux_point)<r
@@ -208,7 +208,7 @@ function IB_flag(aux_points::Vector{Vector{Vector{Float64}}},midpoint::AbstractV
     return false
 end
 
-function vs_extrapolate!(df::AbstractMatrix{Float64},sdf::AbstractMatrix{Float64},level::AbstractVector{Int8},dft::AbstractMatrix{Float64},levelt::Vector{Int8},dx::Float64,::AMR{DIM,NDF}) where{DIM,NDF}
+function vs_extrapolate!(df::AbstractMatrix{Float64},sdf::AbstractMatrix{Float64},level::AbstractVector{Int8},dft::AbstractMatrix{Float64},levelt::Vector{Int8},dx::Float64,::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     j = 1;flag = 0.0
     @inbounds for i in axes(dft,1)
         if levelt[i] == level[j]
@@ -231,7 +231,7 @@ function vs_extrapolate!(df::AbstractMatrix{Float64},sdf::AbstractMatrix{Float64
         end
     end
 end
-function vs_extrapolate!(df::AbstractMatrix{Float64},sdf::AbstractMatrix{Float64},level::AbstractVector{Int8},dft::AbstractMatrix{Float64},levelt::Vector{Int8},dx::Float64,weight::AbstractVector{Float64},::AMR{DIM,NDF}) where{DIM,NDF}
+function vs_extrapolate!(df::AbstractMatrix{Float64},sdf::AbstractMatrix{Float64},level::AbstractVector{Int8},dft::AbstractMatrix{Float64},levelt::Vector{Int8},dx::Float64,weight::AbstractVector{Float64},::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     j = 1;flag = 0.0
     @inbounds for i in axes(dft,1)
         if levelt[i] == level[j]
@@ -254,7 +254,7 @@ function vs_extrapolate!(df::AbstractMatrix{Float64},sdf::AbstractMatrix{Float64
         end
     end
 end
-function vs_extrapolate!(df::AbstractMatrix{Float64},sdf::AbstractArray{Float64},level::AbstractVector{Int8},dft::AbstractMatrix{Float64},levelt::Vector{Int8},dx::Vector{Float64},weight::AbstractVector{Float64},::AMR{DIM,NDF}) where{DIM,NDF}
+function vs_extrapolate!(df::AbstractMatrix{Float64},sdf::AbstractArray{Float64},level::AbstractVector{Int8},dft::AbstractMatrix{Float64},levelt::Vector{Int8},dx::Vector{Float64},weight::AbstractVector{Float64},::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     ddf = @views [dot(sdf[i,j,:],dx) for i in axes(sdf,1), j in axes(sdf,2)]
     j = 1;flag = 0.0
     @inbounds for i in axes(dft,1)
@@ -278,7 +278,7 @@ function vs_extrapolate!(df::AbstractMatrix{Float64},sdf::AbstractArray{Float64}
         end
     end
 end
-function update_solid_cell!(::Union{DVM,CAIDVM,UGKS},ps_data::PS_Data{DIM,NDF},fluid_cells::Vector,amr::AMR{DIM,NDF}) where{DIM,NDF}
+function update_solid_cell!(::Union{DVM,CAIDVM,UGKS},ps_data::PS_Data{DIM,NDF},fluid_cells::Vector,amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     vs_data = ps_data.vs_data;vs_data.df.=0.
     weights = Matrix{Float64}(undef,vs_data.vs_num,length(fluid_cells))
     for i in eachindex(fluid_cells)
@@ -298,12 +298,12 @@ function update_solid_cell!(::Union{DVM,CAIDVM,UGKS},ps_data::PS_Data{DIM,NDF},f
     ps_data.w = calc_w0(ps_data)
     ps_data.prim = get_prim(ps_data,amr.global_data)
 end
-function update_solid_cell!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF}) where{DIM,NDF}
+function update_solid_cell!(ps_data::PS_Data{DIM,NDF},amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     fluid_dirs = findall(x->!isnothing(x[1])&&!isa(x[1],AbstractInsideSolidData)&&x[1].bound_enc>=0,ps_data.neighbor.data)
     fluid_cells = [ps_data.neighbor.data[i][1] for i in fluid_dirs]
     update_solid_cell!(amr.global_data.config.solver.flux,ps_data,fluid_cells,amr)
 end
-function update_solid_cell!(amr::AMR)
+function update_solid_cell!(amr::KitAMR_Data)
     for tree in amr.field.trees.data
         for ps_data in tree
             (isa(ps_data,InsideSolidData)||ps_data.bound_enc>=0)&&continue
@@ -311,7 +311,7 @@ function update_solid_cell!(amr::AMR)
         end
     end
 end
-function initialize_solid_neighbor!(amr::AMR)
+function initialize_solid_neighbor!(amr::KitAMR_Data)
     for tree in amr.field.trees.data
         for ps_data in tree
             (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0)&&continue
@@ -319,7 +319,7 @@ function initialize_solid_neighbor!(amr::AMR)
         end
     end
 end
-function initialize_cutted_velocity_cell(n::Vector{Float64},vs_data::VS_Data{2},amr::AMR{2,NDF}) where{NDF}
+function initialize_cutted_velocity_cell(n::Vector{Float64},vs_data::VS_Data{2},amr::KitAMR_Data{2,NDF}) where{NDF}
     any(x->abs(x)<1e-6,n)&&(return CuttedVelocityCells(Int[],copy(vs_data.weight),Matrix{Float64}(undef,0,0),Matrix{Float64}(undef,0,0),Float64[],Float64[]))
     global_data = amr.global_data
     du = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
@@ -343,7 +343,7 @@ function initialize_cutted_velocity_cell(n::Vector{Float64},vs_data::VS_Data{2},
     weight[index].=0.
     return CuttedVelocityCells(index,weight,gas_dfs,solid_dfs,gas_weights,solid_weights)
 end
-function initialize_cutted_velocity_cell(n::AbstractVector,vs_data::VS_Data{3},amr::AMR{3,NDF}) where{NDF}
+function initialize_cutted_velocity_cell(n::AbstractVector,vs_data::VS_Data{3},amr::KitAMR_Data{3,NDF}) where{NDF}
     l = findall(x->abs(x)<1e-6,n)
     length(l)>1 &&
         (return CuttedVelocityCells(Int[],copy(vs_data.weight),Matrix{Float64}(undef,0,0),Matrix{Float64}(undef,0,0),Float64[],Float64[]))
@@ -371,7 +371,7 @@ function initialize_cutted_velocity_cell(n::AbstractVector,vs_data::VS_Data{3},a
     weight[index].=0.
     return CuttedVelocityCells(index,weight,gas_dfs,solid_dfs,gas_weights,solid_weights)
 end
-function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF}) where{DIM,NDF}
+function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     solid_dirs = findall(x->!isnothing(x[1])&&x[1].bound_enc<0,ps_data.neighbor.data[1:2*DIM])
     vs_data = ps_data.vs_data
     for i in solid_dirs
@@ -395,7 +395,7 @@ function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF})
     end
     return nothing
 end
-function vs_interpolate!(f_df::AbstractMatrix,f_level::AbstractVector{Int8},fx,s_df,s_level,sx,b_df,bx,::AMR{DIM,NDF}) where{DIM,NDF}
+function vs_interpolate!(f_df::AbstractMatrix,f_level::AbstractVector{Int8},fx,s_df,s_level,sx,b_df,bx,::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     j = 1;flag = 0.0
     @inbounds for i in axes(f_df,1)
         if f_level[i] == s_level[j]
@@ -456,7 +456,7 @@ function cvc_correction!(aux_df,F::AbstractMatrix,solid_neighbor,amr)
         @views @. aux_df[cvc.indices[i],:] = (cvc.gas_weights[i]*cvc.gas_dfs[i,:]+cvc.solid_weights[i]*cvc.solid_dfs[i,:])/(cvc.gas_weights[i]+cvc.solid_weights[i])
     end
 end
-function image_df(ps_data,ip,amr::AMR{DIM,NDF}) where{DIM,NDF}
+function image_df(ps_data,ip,amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     fluid_dirs = findall(x->!isnothing(x[1])&&!isa(x[1],AbstractInsideSolidData)&&x[1].bound_enc>=0,ps_data.neighbor.data)
     fluid_cells = Vector{AbstractPsData{DIM,NDF}}(undef,length(fluid_dirs)+1)
     for i in eachindex(fluid_dirs)
@@ -485,7 +485,7 @@ function image_df(ps_data::PS_Data{DIM,NDF},fluid_cells,ip,amr) where{DIM,NDF}
     end
     return image_df
 end
-function boundary_slope!(sdf::AbstractMatrix,level,level_n,sp_df,dc_df,sc_df,dxf::Float64,dxs::Float64,::AMR{DIM,NDF}) where{DIM,NDF}
+function boundary_slope!(sdf::AbstractMatrix,level,level_n,sp_df,dc_df,sc_df,dxf::Float64,dxs::Float64,::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     sL = zeros(size(sdf,1),NDF)
     index = 1
     flag = 0.0
@@ -525,7 +525,7 @@ function boundary_slope!(sdf::AbstractMatrix,level,level_n,sp_df,dc_df,sc_df,dxf
         end
     end
 end
-function update_solid_neighbor!(::AbstractFluxType,ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidNeighbor{DIM,NDF},amr::AMR) where{DIM,NDF}
+function update_solid_neighbor!(::AbstractFluxType,ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidNeighbor{DIM,NDF},amr::KitAMR_Data) where{DIM,NDF}
     global_data = amr.global_data;ib = global_data.config.IB[ps_data.bound_enc]
     vs_data = ps_data.vs_data
     aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
@@ -565,13 +565,13 @@ function update_solid_neighbor!(::AbstractFluxType,ps_data::PS_Data{DIM,NDF},sol
     solid_neighbor.w = calc_w0(vs_data.midpoint,solid_neighbor.vs_data.df,vs_data.weight,global_data)
     solid_neighbor.sw[:,dir] .= (solid_neighbor.w-ps_data.w)./(solid_neighbor.midpoint[dir]-ps_data.midpoint[dir])
 end
-function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::AMR{DIM,NDF}) where{DIM,NDF}
+function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     solid_neighbors = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)
     for i in solid_neighbors
         update_solid_neighbor!(amr.global_data.config.solver.flux,ps_data,ps_data.neighbor.data[i][1],amr)
     end
 end
-function update_solid_neighbor!(amr::AMR{DIM,NDF};buffer_steps::Int=0,i::Int = typemax(Int64)) where{DIM,NDF}
+function update_solid_neighbor!(amr::KitAMR_Data{DIM,NDF};buffer_steps::Int=0,i::Int = typemax(Int64)) where{DIM,NDF}
     for tree in amr.field.trees.data
         for ps_data in tree
             (isa(ps_data,InsideSolidData)||ps_data.bound_enc<=0)&&continue
@@ -579,6 +579,6 @@ function update_solid_neighbor!(amr::AMR{DIM,NDF};buffer_steps::Int=0,i::Int = t
         end
     end
 end
-function update_solid!(amr::AMR{DIM,NDF}) where{DIM,NDF}
+function update_solid!(amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     initialize_solid_neighbor!(amr)
 end

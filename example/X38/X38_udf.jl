@@ -1,8 +1,9 @@
 using LinearAlgebra
 function amr_region(;ps_data,kwargs...)
     midpoint = ps_data.midpoint
+    ds = ps_data.ds
     L = 1.0
-    if midpoint[1]>-1.0*L&&midpoint[1]<2.0*L&&midpoint[2]<1.0*L&&midpoint[2]>-1.0*L&&midpoint[3]<1.0*L&&midpoint[3]>-1.0*L
+    if midpoint[1]+ds[1]>-2.0*L&&midpoint[1]-ds[1]<2.0*L&&midpoint[2]-ds[2]<2.0*L&&midpoint[2]+ds[2]>-2.0*L&&midpoint[3]-ds[3]<2.0*L&&midpoint[3]+ds[3]>-2.0*L
         return true
     end
     return false

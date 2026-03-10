@@ -339,7 +339,7 @@ function update_slope!(
     update_slope_bound_ps!(ps_data, Ldata, ds, dir)
 end
 
-function update_slope!(amr::AMR{DIM,NDF}) where{DIM,NDF}
+function update_slope!(amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     trees = amr.field.trees
     global_data = amr.global_data
     @inbounds for i in eachindex(trees.data)

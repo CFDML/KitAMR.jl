@@ -1,4 +1,4 @@
-function vs_merge!(sdf::AbstractArray,sdf_n::AbstractArray,level::Vector,level_n::Vector,::AMR{DIM}) where{DIM}
+function vs_merge!(sdf::AbstractArray,sdf_n::AbstractArray,level::Vector,level_n::Vector,::KitAMR_Data{DIM}) where{DIM}
     j = 1
     flag = 0.0
     for i in axes(sdf,1)
@@ -22,7 +22,7 @@ function vs_merge!(sdf::AbstractArray,sdf_n::AbstractArray,level::Vector,level_n
         end
     end
 end
-function vs_merge!(sdf::AbstractMatrix,sdf_n::AbstractMatrix,level::Vector,level_n::Vector,::AMR{DIM}) where{DIM}
+function vs_merge!(sdf::AbstractMatrix,sdf_n::AbstractMatrix,level::Vector,level_n::Vector,::KitAMR_Data{DIM}) where{DIM}
     j = 1
     flag = 0.0
     for i in axes(sdf,1)
@@ -236,36 +236,8 @@ function ps_merge(Odatas::Vector,index::Int,global_data::Global_Data{DIM,NDF}) w
     return p
 end
 function ps_refine_flag(
-    ps_data::PS_Data{DIM},
-    amr::AMR{DIM},
-    qp::PW_pxest_quadrant_t,
-) where{DIM}
-    global_data = amr.global_data
-    if ps_data.bound_enc!=0||domain_flag(global_data,ps_data.midpoint,ps_data.ds)
-        return Cint(1)
-    end
-    qp.level[]>global_data.config.solver.AMR_DYNAMIC_PS_MAXLEVEL-1&&return Cint(0)
-    global_data.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,global_data,qp.level[]) && return Cint(1)
-    dflag = global_data.config.user_defined.dynamic_ps_refine_flag(;ps_data)
-    !dflag&&return Cint(0)
-    agrad = zeros(DIM+2)
-    gradmax = global_data.status.gradmax
-    for j in axes(ps_data.sw,1)
-        for k in axes(ps_data.sw,2)
-            agrad[j] = max(abs(ps_data.sw[j,k]),agrad[j])
-        end
-    end
-    rgrad = maximum(agrad./gradmax)
-    if rgrad > 2.0^(2*(qp.level[] - global_data.config.solver.AMR_DYNAMIC_PS_MAXLEVEL)) * ADAPT_COEFFI_PS # 2 for second-order scheme
-        flag = Cint(1)
-    else
-        flag = Cint(0)
-    end
-    flag
-end
-function ps_refine_flag(
     ::InsideSolidData,
-    ::AMR,
+    ::KitAMR_Data,
     ::PW_pxest_quadrant_t,
 )
     Cint(0)
@@ -280,7 +252,7 @@ function ps_refine_flag(forest::P_pxest_t, which_tree, quadrant)
         ps_refine_flag(ps_data, amr, qp)
     end
 end
-function ps_replace(::Val{1}, out_quad, in_quads, which_tree, amr::AMR{DIM}) where{DIM}# refine replace
+function ps_replace(::Val{1}, out_quad, in_quads, which_tree, amr::KitAMR_Data{DIM}) where{DIM}# refine replace
     trees = amr.field.trees
     treeid = Int(which_tree) - trees.offset
     datas = trees.data[treeid]
@@ -315,7 +287,7 @@ function ps_replace(::Val{1}, out_quad, in_quads, which_tree, amr::AMR{DIM}) whe
         dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
     end
 end
-function ps_replace(::ChildNum, out_quad, in_quads, which_tree, amr::AMR{DIM,NDF}) where{DIM,NDF} # coarsen replace, average or interpolate? Currently interpolation strategy is adopted. If my memory serves me right, problems came out with average most likely due to the iterative balance process.
+function ps_replace(::ChildNum, out_quad, in_quads, which_tree, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF} # coarsen replace, average or interpolate? Currently interpolation strategy is adopted. If my memory serves me right, problems came out with average most likely due to the iterative balance process.
     trees = amr.field.trees
     treeid = Int(which_tree) - trees.offset
     datas = trees.data[treeid]
@@ -410,7 +382,7 @@ function pre_ps_replace(::ChildNum, p4est, out_quad, in_quads, which_tree, trees
 end
 
 
-function ps_refine!(p4est::Ptr{p4est_t},amr::AMR; recursive = 0)
+function ps_refine!(p4est::Ptr{p4est_t},amr::KitAMR_Data; recursive = 0)
     p4est_refine_ext(
         p4est,
         recursive,
@@ -435,7 +407,7 @@ function ps_refine!(p4est::Ptr{p4est_t},amr::AMR; recursive = 0)
         )
     )
 end
-function ps_refine!(p4est::Ptr{p8est_t},amr::AMR; recursive = 0)
+function ps_refine!(p4est::Ptr{p8est_t},amr::KitAMR_Data; recursive = 0)
     p8est_refine_ext(
         p4est,
         recursive,
@@ -574,28 +546,6 @@ function pre_ps_coarsen!(p4est::Ptr{p8est_t}; recursive = 0)
     )
 end
 
-function ps_coarsen_flag(ps_datas::Vector{PS_Data}, levels::Vector{Int}, amr::AMR{DIM,NDF}) where{DIM,NDF}
-    global_data = amr.global_data
-    levels[1]>global_data.config.solver.AMR_DYNAMIC_PS_MAXLEVEL&&return Cint(0)
-    agrad = zeros(DIM+2)
-    gradmax = global_data.status.gradmax
-    for i = 1:2^DIM
-        ps_data = ps_datas[i]
-        (ps_data.bound_enc!=0||domain_flag(global_data,ps_data.midpoint,ps_data.ds)) && return Cint(0)
-        global_data.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,global_data,levels[i]-1) && return Cint(0)
-        for j in axes(ps_data.sw,1)
-            for k in axes(ps_data.sw,2)
-                agrad[j] = max(abs(ps_data.sw[j,k]),agrad[j])
-            end
-        end
-        rgrad = maximum(agrad./gradmax)
-        if rgrad > 2.0^(2*(levels[i]-1 - global_data.config.solver.AMR_DYNAMIC_PS_MAXLEVEL)) * ADAPT_COEFFI_PS # 2 for second-order scheme
-            return Cint(0)
-        end
-        agrad.=0.
-    end
-    return Cint(1)
-end
 function ps_coarsen_flag(forest::Ptr{p4est_t}, which_tree, quadrants)
     GC.@preserve forest which_tree quadrants begin
         DIM = 2
@@ -783,9 +733,11 @@ function pre_ps_balance!(p4est::Ptr{p8est_t})
         )
     )
 end
-function update_gradmax!(amr::AMR{DIM}) where{DIM}
+function update_gradmax!(amr::KitAMR_Data{DIM}) where{DIM}
     gradmax = amr.global_data.status.gradmax 
-    gradmax .= 0.
+    wmax = amr.global_data.status.wmax
+    wmin = amr.global_data.status.wmin
+    gradmax .= 0.;wmax .= -Inf; wmin .= Inf
     trees = amr.field.trees.data
     for tree in trees
         for ps_data in tree
@@ -796,12 +748,17 @@ function update_gradmax!(amr::AMR{DIM}) where{DIM}
                     gradmax[j] = max(gradmax[j],abs(ps_data.sw[j,i]))
                 end
             end
+            wmax .= max.(wmax,ps_data.w)
+            wmin .= min.(wmin,ps_data.w)
         end
     end
     gradmax .= MPI.Allreduce(gradmax, (x,y)->max.(x,y), MPI.COMM_WORLD)
+    wmax .= MPI.Allreduce(wmax, (x,y)->max.(x,y), MPI.COMM_WORLD)
+    wmin .= MPI.Allreduce(wmin, (x,y)->min.(x,y), MPI.COMM_WORLD)
+    gradmax ./= (wmax-wmin)
     return nothing
 end
-function ps_adaptive_mesh_refinement!(ps4est::P_pxest_t,amr::AMR)
+function ps_adaptive_mesh_refinement!(ps4est::P_pxest_t,amr::KitAMR_Data)
     update_slope!(amr)
     update_gradmax!(amr)
     ps_refine!(ps4est,amr)

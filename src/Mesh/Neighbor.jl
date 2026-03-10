@@ -191,7 +191,7 @@ end
 function initialize_neighbor_data!(info, data)
     AMR_volume_iterate(info, data, P4est_PS_Data, initialize_neighbor_data!)
 end
-function initialize_neighbor_data!(ps4est::P_pxest_t, amr::AMR)
+function initialize_neighbor_data!(ps4est::P_pxest_t, amr::KitAMR_Data)
     p_amr = pointer_from_objref(amr)
     GC.@preserve amr AMR_4est_volume_iterate(
         ps4est,
@@ -281,7 +281,7 @@ end
 function update_neighbor_kernel!(info, data)
     AMR_volume_iterate(info, data, P4est_PS_Data, update_neighbor_kernel!)
 end
-function update_neighbor_kernel!(ps4est::P_pxest_t, amr::AMR)
+function update_neighbor_kernel!(ps4est::P_pxest_t, amr::KitAMR_Data)
     p_amr = pointer_from_objref(amr)
     MPI.Barrier(MPI.COMM_WORLD)
     GC.@preserve amr AMR_4est_volume_iterate(
@@ -291,14 +291,14 @@ function update_neighbor_kernel!(ps4est::P_pxest_t, amr::AMR)
         update_neighbor_kernel!,
     )
 end
-function update_neighbor!(p4est::Ptr{p4est_t}, amr::AMR)
+function update_neighbor!(p4est::Ptr{p4est_t}, amr::KitAMR_Data)
     global_data = amr.global_data
     p4est_mesh_destroy(global_data.forest.mesh)
     global_data.forest.mesh =
         p4est_mesh_new_ext(p4est, global_data.forest.ghost, 1, 1,  P4EST_CONNECT_FULL)
     update_neighbor_kernel!(p4est, amr)
 end
-function update_neighbor!(p4est::Ptr{p8est_t}, amr::AMR)
+function update_neighbor!(p4est::Ptr{p8est_t}, amr::KitAMR_Data)
     global_data = amr.global_data
     p8est_mesh_destroy(global_data.forest.mesh)
     global_data.forest.mesh =

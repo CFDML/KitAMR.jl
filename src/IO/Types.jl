@@ -5,7 +5,7 @@ struct ConfigureForSave{DIM,NDF}
     vs_trees_num::Vector{Int64}
     IC::AbstractInitCondType
     domain::Vector{Domain}
-    IB::Vector{AbstractBoundary}
+    IB::Vector{AbstractBoundaryType}
     gas::Gas
     solver::Solver
     user_defined::UDF

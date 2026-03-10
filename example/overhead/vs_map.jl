@@ -38,14 +38,14 @@ function vs_diff_slope!(p1,p2,global_data)
     Ldata[1] = nothing;Rdata[1] = p2
     KitAMR.update_slope_inner!(Val(0),Val(1),p1,global_data,Ldata,Rdata,1)
 end
-function vs_same_slope!(p1,p3,global_data::KitAMR.Global_Data{DIM,NDF}) where{DIM,NDF}
+function vs_same_slope!(p1,p3,global_data::KitAMR_Data.Global_Data{DIM,NDF}) where{DIM,NDF}
     dir = 1
     vs_num = p1.vs_data.vs_num
     sR = zeros(vs_num,NDF)
     sR.=(p3.vs_data.df-p1.vs_data.df)/p1.ds[dir]
     p1.vs_data.sdf[:,:,dir] .= sR
 end
-function vs_diff_flux!(p1,p2,global_data::KitAMR.Global_Data{DIM,NDF}) where{DIM,NDF}
+function vs_diff_flux!(p1,p2,global_data::KitAMR_Data.Global_Data{DIM,NDF}) where{DIM,NDF}
     rot = -1.;direction = 1;here_data = p1;there_data = p2
     vs_data = here_data.vs_data;nvs_data = there_data.vs_data
     here_mid = vs_data.midpoint;there_mid = nvs_data.midpoint
@@ -80,7 +80,7 @@ function vs_diff_flux!(p1,p2,global_data::KitAMR.Global_Data{DIM,NDF}) where{DIM
     KitAMR.update_macro_flux!(flux*area,here_data,there_data)
     KitAMR.update_micro_flux!(here_micro*area,there_micro*area,here_data,there_data,heavi)
 end
-function vs_same_flux!(p1,p3,global_data::KitAMR.Global_Data{DIM,NDF}) where{DIM,NDF}
+function vs_same_flux!(p1,p3,global_data::KitAMR_Data.Global_Data{DIM,NDF}) where{DIM,NDF}
     rot = -1.;direction = 1;here_data = p1;there_data = p3
     vs_data = here_data.vs_data;nvs_data = there_data.vs_data
     here_mid = vs_data.midpoint;there_mid = nvs_data.midpoint

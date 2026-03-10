@@ -9,3 +9,4 @@ function get_bc(bc::Function;intersect_point,ib,kwargs...)
 end
 
 export Domain, Circle, Sphere, Vertices, Triangles, TriangleKDT
+export DomainFace

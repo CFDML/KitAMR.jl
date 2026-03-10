@@ -112,7 +112,7 @@ mutable struct Output
     vtk_celltype::DataType
     "VTK cell type in velocity space. Available options: `Pixel` for 2D."
     vs_vtk_celltype::DataType
-    "Time interval between animation frams."
+    "Time interval between animation frames."
     anim_dt::Float64
     "User-defined-function determining the physical cells need to output the velocity space."
     vs_output_criterion::Function
@@ -143,27 +143,27 @@ $(TYPEDFIELDS)
 
 """
 struct Configure{DIM,NDF}
-    "The range of the simulated domain. As an example, for 2D case, it should be aligned as [xmin,xmax,ymin,ymax]."
+    "Range of the simulated domain. As an example, for 2D case, it should be aligned as [xmin,xmax,ymin,ymax]."
     geometry::Vector{Float64}
-    "The number of tree roots for each dimension. For 2D case, it should be aligned as [x_num,y_num]"
+    "Number of tree roots for each dimension. For 2D case, it should be aligned as [x_num,y_num]"
     trees_num::Vector{Int64}
     "For Vector type, it represents the range of the velocity space. For 2D case, it should be aligned as [umin,umax,vmin,vmax]. The `AbstractQuadrature` type is reserved for other quadrature rule like Gauss-Hermite."
     quadrature::Union{AbstractQuadrature,Vector{Float64}}
-    "The number of tree roots for each dimension in velocity space."
+    "Number of tree roots for each dimension in velocity space."
     vs_trees_num::Vector{Int64}
-    "The initial condition."
+    "Initial condition defined by [`AbstractInitCondType`](@ref)."
     IC::AbstractInitCondType
-    "The types of the domain boundary. For 2D case, the vector should catain 4 elements corresponding to the 4 domain boundaries."
+    "Types of the domain boundary. For 2D case, the vector should catain 4 elements corresponding to the 4 domain boundaries. The element type is defined by [`Domain`](@ref)."
     domain::Vector{Domain}
-    "The immersed boundary. Multiple boundaries are supported."
-    IB::Vector{AbstractBoundary}
-    "The property of the simulated gas."
+    "Immersed boundary. Multiple boundaries are supported. The element type is defined by [`AbstractBoundaryType`](@ref)"
+    IB::Vector{AbstractBoundaryType}
+    "Properties of the simulated gas defined by [`Gas`](@ref)."
     gas::Gas
-    "The set of the solver."
+    "Setup of the solver defined by [`Solver`](@ref)."
     solver::Solver
-    "The set of the output form."
+    "Setup of the output form defined by [`Output`](@ref)."
     output::Output
-    "The functions defined by users, including some criteria."
+    "Functions defined by users, including some criteria."
     user_defined::UDF
 end
 function config_IB(ib::Circle,config::Dict)
@@ -207,6 +207,11 @@ function Configure(config::Dict)
         gas,Solver(config),Output(config),user_defined)
 end
 
+"""
+$(TYPEDEF)
+Structure related to `p4est`.
+$(TYPEDFIELDS)
+"""
 mutable struct Forest{DIM}
     p4est::P_pxest_t
     ghost::P_pxest_ghost_t
@@ -218,11 +223,20 @@ mutable struct Forest{DIM}
     n
     )
 end
+"""
+$(TYPEDEF)
+$(TYPEDFIELDS)
+"""
 mutable struct Residual
+    "Current step number."
     step::Int
+    "Residual of primary variables, is updated by [`residual_check!`](@ref)."
     residual::Vector{Float64}
+    "Summation of residuals."
     sumRes::Vector{Float64}
+    "Summation of primary variables to average `sumRes`."
     sumAvg::Vector{Float64}
+    "Count of redundant step to insure the convergence."
     redundant_step::Int
 end
 function Residual(DIM::Int)
@@ -243,7 +257,13 @@ mutable struct Status
     max_vs_num::Int # maximum vs_num among ghost quadrants
     "Maximum absolute value of the gradients of conserved variables."
     gradmax::Vector{Float64}
-    "Size of time step."
+    "Maximum value of conserved variables."
+    wmax::Vector{Float64}
+    "Minimum value of conserved variables."
+    wmin::Vector{Float64}
+    "Time step size used in [`iterate!`](@ref)."
+    Δt::Float64
+    "Time step size constraint by grid size."
     Δt_ξ::Float64
     "Dimensionless simulation time."
     sim_time::Float64
@@ -253,7 +273,7 @@ mutable struct Status
     vs_adapt_step::Int
     "Number of steps after last partition."
     partition_step::Int
-    "Residual of conserved variables."
+    "Residual of conserved variables defined by [`Residual`](@ref)."
     residual::Residual
     "Flag indicating whether to save."
     save_flag::Base.RefValue{Bool}
@@ -269,12 +289,20 @@ function Status(config)
         (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
         2^config[:AMR_VS_MAXLEVEL] / 2 for i in 1:DIM] : [maximum(abs.(quadrature.vcoords)) for _ in 1:DIM]
     Δt_ξ = config[:CFL]*minimum(ds ./ U)
-    return Status(0,ones(DIM+2),Δt_ξ,0.,1,1,1,Residual(DIM),Ref(false))
+    return Status(0,zeros(DIM+2),zeros(DIM+2), zeros(DIM+2), Δt_ξ,Δt_ξ,0.,1,1,1,Residual(DIM),Ref(false))
 end
 
+"""
+$(TYPEDEF)
+Structure of required information during a simulation.
+$(TYPEDFIELDS)
+"""
 mutable struct Global_Data{DIM,NDF}
+    "Defined by [`Configure`](@ref)."
     config::Configure{DIM,NDF}
+    "Defined by [`Forest`](@ref)."
     forest::Forest{DIM}
+    "Defined by [`Status`](@ref)."
     status::Status
     Global_Data(config::Dict) = (n = new{config[:DIM],config[:NDF]}();
     n.config = Configure(config);
@@ -288,6 +316,11 @@ mutable struct P4est_PS_Data
     ps_data::Ptr{Nothing}
 end
 
+"""
+$(TYPEDEF)
+Structure of ghost data and pointers used by `p4est`.
+$(TYPEDFIELDS)
+"""
 mutable struct Ghost_Exchange
     ghost_datas
     ghost_slopes
@@ -297,28 +330,50 @@ mutable struct Ghost_Exchange
     mirror_structure_pointers
 end
 
+"""
+$(TYPEDEF)
+Structure of cells data managed by `Julia`.
+$(TYPEDFIELDS)
+"""
 mutable struct PS_Trees{DIM,NDF} 
     data::Vector{Vector{AbstractPsData{DIM,NDF}}}
+    "Offset of treeid used in partition."
     offset::Int
 end
 
+"""
+$(TYPEDEF)
+Structure of ghost layer for communication between processors.
+$(TYPEDFIELDS)
+"""
 mutable struct Ghost
     ghost_exchange::Ghost_Exchange
     ghost_wrap::Vector{AbstractGhostPsData}
 end
 
+"""
+$(TYPEDEF)
+Structure of fields data.
+$(TYPEDFIELDS)
+"""
 mutable struct Field{DIM,NDF}
+    "Cells data defined by [`PS_Trees`](@ref)."
     trees::PS_Trees{DIM,NDF}
+    "Mapping between faces and cells. The element type is defined by [`AbstractFace`](@ref)."
     faces::Vector{AbstractFace}
     immersed_boundary::ImmersedBoundary
 end
 
-
-mutable struct AMR{DIM,NDF}
+"""
+$(TYPEDEF)
+Structure that collects all of the data.
+$(TYPEDFIELDS)
+"""
+mutable struct KitAMR_Data{DIM,NDF}
     global_data::Global_Data
     ghost::Ghost
     field::Field{DIM,NDF}
-    AMR(global_data::Global_Data{DIM,NDF},field) where{DIM,NDF} = (n = new{DIM,NDF}();
+    KitAMR_Data(global_data::Global_Data{DIM,NDF},field) where{DIM,NDF} = (n = new{DIM,NDF}();
         n.global_data = global_data;
         n.field = field;
         n

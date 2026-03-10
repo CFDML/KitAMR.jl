@@ -1,8 +1,8 @@
 """
+$(TYPEDSIGNATURES)
 Collision and time marching.
 """
-
-function iterate!(amr::AMR)
+function iterate!(amr::KitAMR_Data)
     time_marching = amr.global_data.config.solver.time_marching
     iterate!(time_marching,amr)
     residual_comm!(amr.global_data)
@@ -12,7 +12,7 @@ function iterate!(amr::AMR)
     amr.global_data.status.residual.step += 1
     amr.global_data.status.sim_time+=amr.global_data.status.Δt
 end
-function iterate!(::UGKS_Marching,amr::AMR)
+function iterate!(::UGKS_Marching,amr::KitAMR_Data)
     global_data = amr.global_data
     gas = global_data.config.gas
     trees = amr.field.trees
@@ -55,7 +55,11 @@ function iterate!(::UGKS_Marching,amr::AMR)
     Δt_comm!(global_data)
 end
 # Conserved Adaptive Implicit DVM (CAIDVM)
-function iterate!(::CAIDVM_Marching,amr::AMR)
+"""
+$(TYPEDSIGNATURES)
+Iteration for Conserved Adaptive Implicit DVM (CAIDVM).
+"""
+function iterate!(::CAIDVM_Marching,amr::KitAMR_Data)
     global_data = amr.global_data
     gas = global_data.config.gas
     trees = amr.field.trees
@@ -89,7 +93,7 @@ function iterate!(::CAIDVM_Marching,amr::AMR)
         end
     end
 end
-function iterate!(::Euler,amr::AMR{DIM}) where{DIM}
+function iterate!(::Euler,amr::KitAMR_Data{DIM}) where{DIM}
     global_data = amr.global_data
     gas = global_data.config.gas
     trees = amr.field.trees

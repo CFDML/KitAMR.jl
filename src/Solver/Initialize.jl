@@ -1,5 +1,5 @@
 # 2D
-function initialize_faces!(ps4est::Ptr{p4est_t},amr::AMR)
+function initialize_faces!(ps4est::Ptr{p4est_t},amr::KitAMR_Data)
     global_data = amr.global_data
     p_data = pointer_from_objref(amr)
     GC.@preserve amr AMR_face_iterate(ps4est;user_data = p_data,ghost = global_data.forest.ghost) do ip,data
@@ -39,7 +39,7 @@ function solid_hanging_face_check(base_quad,faceid)
     ids = findall(x->(isa(x,PS_Data)&&x.bound_enc>=0),base_quad.neighbor.data[faceid])
     return ids
 end
-function initialize_domain_face!(side::PW_pxest_iter_face_side_t,amr::AMR{DIM,NDF}) where{DIM,NDF}
+function initialize_domain_face!(side::PW_pxest_iter_face_side_t,amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     faces = amr.field.faces
     base_quad = 
         unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data,
@@ -54,7 +54,7 @@ function initialize_domain_face!(side::PW_pxest_iter_face_side_t,amr::AMR{DIM,ND
     push!(faces,DomainFace{DIM,NDF,typeof(domain).parameters[1]}(rot,direction,midpoint,domain,base_quad))
     return nothing
 end
-function initialize_full_face!(side::PW_pxest_iter_face_side_t,amr::AMR{DIM,NDF}) where{DIM,NDF}
+function initialize_full_face!(side::PW_pxest_iter_face_side_t,amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     faces = amr.field.faces
     base_quad =
         unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data,
@@ -79,7 +79,7 @@ function initialize_full_face!(side::PW_pxest_iter_face_side_t,amr::AMR{DIM,NDF}
     end
     return nothing
 end
-function initialize_hanging_face!(side::PW_pxest_iter_face_side_t,amr::AMR{DIM,NDF}) where{DIM,NDF}
+function initialize_hanging_face!(side::PW_pxest_iter_face_side_t,amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     faces = amr.field.faces
     base_quad =
         unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data,
@@ -119,7 +119,7 @@ function initialize_hanging_face!(side::PW_pxest_iter_face_side_t,amr::AMR{DIM,N
     end
     return nothing
 end
-function initialize_back_hanging_face!(side::PointerWrapper{p4est_iter_face_side_t},amr::AMR{DIM,NDF}) where{DIM,NDF}
+function initialize_back_hanging_face!(side::PointerWrapper{p4est_iter_face_side_t},amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     faces = amr.field.faces
     is_ghost = Base.unsafe_wrap(
         Vector{Int8},
@@ -155,7 +155,7 @@ function initialize_back_hanging_face!(side::PointerWrapper{p4est_iter_face_side
 end
 
 # 3D
-function initialize_faces!(ps4est::Ptr{p8est_t},amr::AMR)
+function initialize_faces!(ps4est::Ptr{p8est_t},amr::KitAMR_Data)
     global_data = amr.global_data
     p_data = pointer_from_objref(amr)
     GC.@preserve amr AMR_face_iterate(ps4est;user_data = p_data,ghost = global_data.forest.ghost) do ip,data
@@ -185,7 +185,7 @@ function initialize_faces!(ps4est::Ptr{p8est_t},amr::AMR)
         end
     end
 end
-function initialize_back_hanging_face!(side::PointerWrapper{p8est_iter_face_side_t},amr::AMR{DIM,NDF}) where{DIM,NDF}
+function initialize_back_hanging_face!(side::PointerWrapper{p8est_iter_face_side_t},amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     faces = amr.field.faces
     is_ghost = Base.unsafe_wrap(
         Vector{Int8},
@@ -436,7 +436,7 @@ function init(config::Dict)
     trees, ps4est = init_field!(global_data)
     field = Field{config[:DIM],config[:NDF]}(trees,Vector{AbstractFace}(undef,0),ImmersedBoundary())
     MPI.Barrier(MPI.COMM_WORLD)
-    amr = AMR(
+    amr = KitAMR_Data(
         global_data,field
     )
     PointerWrapper(ps4est).user_pointer = pointer_from_objref(amr)

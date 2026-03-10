@@ -177,7 +177,7 @@ function fieldvalues_fn(vs_data::VS_Data{3})
     return [vs_data.df[:,1],vs_data.level]
 end
 =#
-function write_vs_VTK(vs_data::AbstractVsData{2,2},amr::AMR{2,2},filename::String,fieldnames::Vector{String},fieldvalues_fn)
+function write_vs_VTK(vs_data::AbstractVsData{2,2},amr::KitAMR_Data{2,2},filename::String,fieldnames::Vector{String},fieldvalues_fn)
     global_data = amr.global_data
     xmin,xmax,ymin,ymax = global_data.config.quadrature
     Nx,Ny = global_data.config.vs_trees_num
@@ -203,7 +203,7 @@ function write_vs_VTK(vs_data::AbstractVsData{2,2},amr::AMR{2,2},filename::Strin
         end
     end
 end
-function write_vs_VTK(df::AbstractMatrix,vs_data::AbstractVsData{2,2},amr::AMR{2,2},filename::String,fieldnames::Vector{String},fieldvalues_fn)
+function write_vs_VTK(df::AbstractMatrix,vs_data::AbstractVsData{2,2},amr::KitAMR_Data{2,2},filename::String,fieldnames::Vector{String},fieldvalues_fn)
     global_data = amr.global_data
     xmin,xmax,ymin,ymax = global_data.config.quadrature
     Nx,Ny = global_data.config.vs_trees_num
@@ -229,7 +229,7 @@ function write_vs_VTK(df::AbstractMatrix,vs_data::AbstractVsData{2,2},amr::AMR{2
         end
     end
 end
-function write_vs_VTK(df::AbstractMatrix,vs_data::AbstractVsData{3,1},amr::AMR{3,1},filename::String,fieldnames::Vector{String},fieldvalues_fn)
+function write_vs_VTK(df::AbstractMatrix,vs_data::AbstractVsData{3,1},amr::KitAMR_Data{3,1},filename::String,fieldnames::Vector{String},fieldvalues_fn)
     global_data = amr.global_data
     xmin,xmax,ymin,ymax,zmin,zmax = global_data.config.quadrature
     Nx,Ny,Nz = global_data.config.vs_trees_num
@@ -256,10 +256,10 @@ function write_vs_VTK(df::AbstractMatrix,vs_data::AbstractVsData{3,1},amr::AMR{3
         end
     end
 end
-function neighbor_num(ps_data::PS_Data,::P_pxest_t,::AMR,::Integer)
+function neighbor_num(ps_data::PS_Data,::P_pxest_t,::KitAMR_Data,::Integer)
     return abs.(ps_data.neighbor.state)
 end
-function neighbor_num(::InsideSolidData,ps4est::P_pxest_t,amr::AMR{DIM},quadid::Integer) where {DIM}
+function neighbor_num(::InsideSolidData,ps4est::P_pxest_t,amr::KitAMR_Data{DIM},quadid::Integer) where {DIM}
     neighbor_num = Vector{Int}(undef,2*DIM)
     global_data = amr.global_data
     ghost = global_data.forest.ghost
@@ -285,7 +285,7 @@ function neighbor_num(::InsideSolidData,ps4est::P_pxest_t,amr::AMR{DIM},quadid::
     end
     return neighbor_num
 end
-function save_vs_result(amr::AMR{DIM,NDF};dir_path) where{DIM,NDF}
+function save_vs_result(amr::KitAMR_Data{DIM,NDF};dir_path) where{DIM,NDF}
     vs_solutions = VS_Solution[]
     vs_path = dir_path*"vs_result_"*string(MPI.Comm_rank(MPI.COMM_WORLD))*".jld2"
     for tree in amr.field.trees.data
@@ -309,7 +309,7 @@ function load_vs_result(path)
     end
     return vs_result
 end
-function save_result(ps4est::Ptr{p4est_t},amr::AMR{DIM,NDF};dir_path="") where{DIM,NDF}
+function save_result(ps4est::Ptr{p4est_t},amr::KitAMR_Data{DIM,NDF};dir_path="") where{DIM,NDF}
     update_slope!(amr)
     slope_exchange!(ps4est,amr)
     update_solid_cell!(amr)
@@ -367,7 +367,7 @@ function save_result(ps4est::Ptr{p4est_t},amr::AMR{DIM,NDF};dir_path="") where{D
     save_vs_result(amr;dir_path)
     save_boundary_result(dir_path,amr)
 end
-function save_result(ps4est::Ptr{p8est_t},amr::AMR{DIM,NDF};dir_path="") where{DIM,NDF}
+function save_result(ps4est::Ptr{p8est_t},amr::KitAMR_Data{DIM,NDF};dir_path="") where{DIM,NDF}
     update_slope!(amr)
     slope_exchange!(ps4est,amr)
     update_solid_cell!(amr)
@@ -733,10 +733,10 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Voxel}
     end
     return vertices,cells,point_solutions,solutions
 end
-function save_surfaces_points(::String,::Vector{Boundary_Solution},amr::AMR{2})
+function save_surfaces_points(::String,::Vector{Boundary_Solution},amr::KitAMR_Data{2})
     return nothing
 end
-function save_surfaces_pvtu(dir_path::String,boundary_results::Vector{Boundary_Solution},amr::AMR{3})
+function save_surfaces_pvtu(dir_path::String,boundary_results::Vector{Boundary_Solution},amr::KitAMR_Data{3})
     np = MPI.Comm_size(MPI.COMM_WORLD)
     rflags = [Ref(false) for _ in 1:np]
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
@@ -784,7 +784,7 @@ function save_surfaces_pvtu(dir_path::String,boundary_results::Vector{Boundary_S
     end
     return nothing
 end
-function save_boundary_result(dir_path::String,amr::AMR{DIM,NDF}) where{DIM,NDF}
+function save_boundary_result(dir_path::String,amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     ibs = amr.global_data.config.IB
     boundary_results = [Boundary_Solution(Vector{Float64}[],Vector{Float64}[],Boundary_PS_Solution[]) for _ in eachindex(ibs)]
     for i in eachindex(ibs)

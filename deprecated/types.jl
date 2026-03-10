@@ -237,7 +237,7 @@ mutable struct Transfer_Init
     up_index::Int
     up_insert_index::Int
     down_index::Int
-    amr::AMR_2D
+    amr::KitAMR_Data_2D
 end
 
 struct Solution

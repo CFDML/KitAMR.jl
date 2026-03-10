@@ -1,4 +1,4 @@
-function collect_results(ps4est, amr::AMR{2})
+function collect_results(ps4est, amr::KitAMR_Data{2})
     pp = PointerWrapper(ps4est)
     trees = amr.field.trees
     solutions = Array{Solution_2D}(undef, pp.local_num_quadrants[])
@@ -17,7 +17,7 @@ function collect_results(ps4est, amr::AMR{2})
     end
     return solutions
 end
-function collect_results(ps4est, amr::AMR{3})
+function collect_results(ps4est, amr::KitAMR_Data{3})
     pp = PointerWrapper(ps4est)
     trees = amr.field.trees
     solutions = Array{Solution_3D}(undef, pp.local_num_quadrants[])
@@ -140,7 +140,7 @@ function reshape_solutions(
     return Xs,Ys,Zs,Zj
 end
 
-function collect_mesh(amr::AMR)
+function collect_mesh(amr::KitAMR_Data)
     mesh_points = collect_mesh_points(amr)
     num_faces = collect_num_faces(mesh_points)
     meshes = communicate_mesh(mesh_points, num_faces)
@@ -239,7 +239,7 @@ end
 # function collect_mesh_points!(::Face, ::AbstractVector, ::AbstractVector)
 #     return nothing
 # end
-# function collect_save_mesh(amr::AMR{2})
+# function collect_save_mesh(amr::KitAMR_Data{2})
 #     x = Vector{Float64}(undef, 0)
 #     y = Vector{Float64}(undef, 0)
 #     for i in eachindex(amr.faces)
@@ -248,7 +248,7 @@ end
 #     end
 #     return Mesh_Points(x, y)
 # end
-# function collect_mesh_points(amr::AMR{2})
+# function collect_mesh_points(amr::KitAMR_Data{2})
 #     x = Vector{Float64}(undef, 0)
 #     y = Vector{Float64}(undef, 0)
 #     for i in eachindex(amr.faces)
@@ -293,7 +293,7 @@ end
 #     y[2] = ps_data.midpoint[2] + 0.5*ps_data.ds[2]
 #     lines!(ax,x,y,color = :red, linewidth = 0.5)
 # end
-# function mesh_plot(amr::AMR_2D)
+# function mesh_plot(amr::KitAMR_Data_2D)
 #     f = Figure()
 #     ax = Axis(f[1, 1],xlabel = L"x",ylabel = L"y")
 #     for i in eachindex(amr.faces)
@@ -303,7 +303,7 @@ end
 #     save("mesh.png",f)
 # end
 
-# function collect_save_results(p4est::Ptr{p4est_t}, amr::AMR{2})
+# function collect_save_results(p4est::Ptr{p4est_t}, amr::KitAMR_Data{2})
 #     pp = PointerWrapper(p4est)
 #     field_data = Vector{Field}(undef, pp.local_num_quadrants[])
 #     index = 1
@@ -316,7 +316,7 @@ end
 #     end
 #     return field_data
 # end
-function write_result!(p4est::Ptr{p4est_t}, amr::AMR{2}, name::String)
+function write_result!(p4est::Ptr{p4est_t}, amr::KitAMR_Data{2}, name::String)
     results = collect_save_results(p4est, amr)
     JLD2.save_object(name * "_" * string(MPI.Comm_rank(MPI.COMM_WORLD)) * ".jld", results)
 end
@@ -384,7 +384,7 @@ function collect_vs_mesh(ds::AbstractVector, midpoint::AbstractMatrix, level::Ab
     end
     return x, y
 end
-function save_result(amr::AMR{2})
+function save_result(amr::KitAMR_Data{2})
     global_data = amr.global_data
     data_set = amr.data_set
     global_data.gas.sim_time >= data_set.PS_time_interval * global_data.ps_save_index &&
@@ -393,7 +393,7 @@ function save_result(amr::AMR{2})
     global_data.gas.sim_time >= data_set.VS_time_interval * global_data.vs_save_index &&
         VS_save(amr)
 end
-function save_set(amr::AMR{2})
+function save_set(amr::KitAMR_Data{2})
     dir_path = "./result/"
     !isdir(dir_path) && mkpath(dir_path)
     data_set = amr.data_set
@@ -407,7 +407,7 @@ function save_set(amr::AMR{2})
     )
     JLD2.save_object(dir_path * "result_set.jld", result_set)
 end
-function PS_save(amr::AMR{2})
+function PS_save(amr::KitAMR_Data{2})
     global_data = amr.global_data
     field = collect_save_results(amr.p4est, amr)
     mesh = collect_save_mesh(amr)
@@ -420,7 +420,7 @@ function PS_save(amr::AMR{2})
     )
     global_data.ps_save_index += 1
 end
-function VS_save(amr::AMR{2})
+function VS_save(amr::KitAMR_Data{2})
     MPI.Comm_rank(MPI.COMM_WORLD) != MPI.Comm_size(MPI.COMM_WORLD) - 1 && return
     global_data = amr.global_data
     ps_data = amr.field.trees.data[end][end]
@@ -441,7 +441,7 @@ function VS_save(amr::AMR{2})
     )
     global_data.vs_save_index += 1
 end
-function save_VS_final(amr::AMR{2})
+function save_VS_final(amr::KitAMR_Data{2})
     global_data = amr.global_data
     dir_path = "./result/VS_result/end"
     !isdir(dir_path) && mkpath(dir_path)

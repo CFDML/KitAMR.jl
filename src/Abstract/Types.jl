@@ -1,7 +1,7 @@
 const COMM_NUMS_TAG = 10000
 const COMM_DATA_TAG = 20000
 const EPS = 1e-12
-const ADAPT_COEFFI_PS = 0.25
+const ADAPT_COEFFI_PS = 0.5
 const ADAPT_COEFFI_VS = 0.125
 const SOLID_CELL_ID_NUM = 8
 const BALANCE_FLAG = 127
@@ -46,6 +46,9 @@ PW_pxest_iter_volume_info_t = Union{PointerWrapper{p4est_iter_volume_info_t}, Po
 PW_pxest_iter_face_info_t = Union{PointerWrapper{p4est_iter_face_info_t},PointerWrapper{p8est_iter_face_info_t}}
 PW_pxest_iter_face_side_t = Union{PointerWrapper{p4est_iter_face_side_t},PointerWrapper{p8est_iter_face_side_t}}
 
+"""
+$(TYPEDEF)
+"""
 abstract type AbstractInitCondType end
 
 abstract type AbstractVTKCellType end
@@ -70,48 +73,62 @@ abstract type AbstractFluxType end
 abstract type AbstractDVMFluxType <: AbstractFluxType end
 
 abstract type AbstractTimeMarchingType end
-
+"""
+$(TYPEDEF)
+"""
 abstract type AbstractPsData{DIM,NDF} end
 abstract type AbstractGhostPsData{DIM,NDF} <: AbstractPsData{DIM,NDF} end
 
+"""
+$(TYPEDEF)
+"""
 abstract type AbstractFace end
 abstract type InnerFace <: AbstractFace end
 abstract type BoundaryFace <: AbstractFace end
 
 abstract type AbstractGas end
 
-abstract type AbstractBoundary end
+"""
+$(TYPEDEF)
+"""
 abstract type AbstractBoundaryType end
+"""
+$(TYPEDEF)
+"""
+abstract type AbstractBoundCondType end
 
 """
 $(TYPEDEF)
 Fully diffused Maxwellian gas-surface interaction model.
 """
-abstract type Maxwellian<:AbstractBoundaryType end
+abstract type Maxwellian<:AbstractBoundCondType end
 
 """
 $(TYPEDEF)
 """
-abstract type SuperSonicInflow <: AbstractBoundaryType end
+abstract type SuperSonicInflow <: AbstractBoundCondType end
 """
 $(TYPEDEF)
 """
-abstract type SuperSonicOutflow <: AbstractBoundaryType end
+abstract type SuperSonicOutflow <: AbstractBoundCondType end
 """
 $(TYPEDEF)
 """
-abstract type UniformOutflow <: AbstractBoundaryType end
+abstract type UniformOutflow <: AbstractBoundCondType end
 """
 $(TYPEDEF)
 """
-abstract type InterpolatedOutflow <: AbstractBoundaryType end
-abstract type AxisSymmetric <: AbstractBoundaryType end
+abstract type InterpolatedOutflow <: AbstractBoundCondType end
+abstract type AxisSymmetric <: AbstractBoundCondType end
 """
 $(TYPEDEF)
 """
-abstract type Period <: AbstractBoundaryType end
+abstract type Period <: AbstractBoundCondType end
 const AbstractBCType = Union{Vector,Function}
 
+"""
+$(TYPEDEF)
+"""
 abstract type AbstractVsData{DIM,NDF} end
 
 abstract type AbstractQuadrature end
@@ -123,4 +140,8 @@ include("../Boundary/Types.jl")
 include("../Solver/Types.jl")
 include("../IO/Types.jl")
 
-export SuperSonicInflow, SuperSonicOutflow, UniformOutflow, InterpolatedOutflow, Period, Maxwellian, Pixel, Voxel, Triangle, Tetra
+export SuperSonicInflow, SuperSonicOutflow, UniformOutflow, InterpolatedOutflow, Period, Maxwellian
+export AbstractInitCondType, AbstractBoundCondType, AbstractBoundaryType
+export Pixel, Voxel, Triangle, Tetra
+export AbstractPsData, AbstractFace
+export AbstractVsData
