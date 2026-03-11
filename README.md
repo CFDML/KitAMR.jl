@@ -21,26 +21,6 @@ For 1.0 version, we enable the solver to determinately simulate rarefied flows w
 
 All of the funcationalities are applicable to both 2D and 3D cases.
 
-<div align="center">
-    <div style="display: flex; gap: 20px;  width: 100%;">
-        <div style="flex: 1; ">
-            <img 
-            src="docs/src/assets/X38_Temperature_z.svg"  
-            style="width: 100%; aspect-ratio: 1/1;  border: none;">
-        </div>
-        <div style="flex: 1;">
-            <img 
-            src="docs/src/assets/X38_Temperature_contour_y.svg"
-            style="width: 100%; aspect-ratio: 1/1; border: none;">
-        </div>
-        <div style="flex: 1;">
-            <img 
-            src="docs/src/assets/X38_surf_P.svg"
-            style="width: 100%; aspect-ratio: 1/1; border: none;">
-        </div>
-    </div>
-    <figcaption><i>A flow over X-38 model with Ma=8, Kn=0.275 simulated by KitAMR.jl.</i></figcaption>
-</div>
 
 ## Theory
 ### Kinetic Methods
@@ -126,6 +106,3 @@ For an AMR solver, the load-balance ability is crucial for high efficiency. KitA
 
 ### Cartesian Grids
 Cartesian grids offer advantages such as high grid quality, automated mesh generation, nature of the parallelism and capability for dynamic adaptation, but struggle with complex boundary geometries. To address this challenge, we developed an Immersed Boundary Method (IBM) for the discrete velocity model of the Boltzmann equation, which has been planted in KitAMR.jl. For more details, you may refer to our paper: https://doi.org/10.48550/arXiv.2512.20252.
-
-## Installation and Utility
-The documentation will be released soon.
