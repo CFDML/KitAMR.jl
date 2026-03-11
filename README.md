@@ -41,6 +41,7 @@ All of the funcationalities are applicable to both 2D and 3D cases.
     </div>
     <figcaption><i>A flow over X-38 model with Ma=8, Kn=0.275 simulated by KitAMR.jl.</i></figcaption>
 </div>
+
 ## Theory
 ### Kinetic Methods
 In kinetic theory, methods simulate the macroscopic motion of fluids by describing the evolution of distribution functions of fluid particles in velocity space over time. Such methods include direct simulation Monte Carlo (DSMC), discrete velocity method (DVM), lattice Boltzmann equation (LBE), gas-kinetic scheme, semi-Lagrangian method, implicit-explicit (IMEX) method, and others.
