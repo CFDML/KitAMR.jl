@@ -11,6 +11,8 @@ type_page = [
     "Output"=>"type_output.md"
 ]
 methods_page = [
+    "Initialization"=>"methods_initialize.md",
+    "Iteration"=>"methods_iterate.md",
     "Finalization"=>"methods_finalize.md"
 ]
 makedocs(;

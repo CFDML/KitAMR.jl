@@ -2,7 +2,7 @@ using KitAMR,MPI
 include("./cylinder_udf.jl")
 MPI.Init()
 config = KitAMR.read_config("./example/cylinder/configure_cylinder_Kn0p01.txt")
-ps4est,amr = KitAMR.init(config);
+ps4est,amr = KitAMR.initialize_KitAMR(config);
 # Partition for IB
 KitAMR.ps_partition!(ps4est, amr)
 KitAMR.update_ghost!(ps4est, amr)

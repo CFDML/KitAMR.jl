@@ -1,4 +1,7 @@
 # 2D
+"""
+$(TYPEDSIGNATURES)
+"""
 function initialize_faces!(ps4est::Ptr{p4est_t},amr::KitAMR_Data)
     global_data = amr.global_data
     p_data = pointer_from_objref(amr)
@@ -155,6 +158,9 @@ function initialize_back_hanging_face!(side::PointerWrapper{p4est_iter_face_side
 end
 
 # 3D
+"""
+$(TYPEDSIGNATURES)
+"""
 function initialize_faces!(ps4est::Ptr{p8est_t},amr::KitAMR_Data)
     global_data = amr.global_data
     p_data = pointer_from_objref(amr)
@@ -294,10 +300,13 @@ end
 function init_aux_points(global_data::Global_Data,solid_midpoints::Vector)
     calc_intersect_point(global_data.config.IB,solid_midpoints)
 end
+
+"""
+$(TYPEDSIGNATURES)
+"""
 function pre_refine!(ps4est::Ptr{p4est_t},global_data::Global_Data)
     pre_ps_refine!(ps4est,global_data)
     pre_ps_balance!(ps4est)
-    # AMR_partition(ps4est)
     solid_midpoints = Vector{Vector{Vector{Float64}}}(undef,length(global_data.config.IB)) # boundaries{solidcells{midpoints{}}}
     for i in eachindex(solid_midpoints)
         solid_midpoints[i] = Vector{Float64}[]
@@ -315,6 +324,9 @@ function pre_refine!(ps4est::Ptr{p4est_t},global_data::Global_Data)
     AMR_partition(ps4est)
     pre_ps_balance!(ps4est)
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function pre_refine!(ps4est::Ptr{p8est_t},global_data::Global_Data)
     user_defined_ps_refine!(ps4est,global_data)
     AMR_partition(ps4est) do p4est,which_tree,quadrant
@@ -343,7 +355,11 @@ function pre_refine!(ps4est::Ptr{p8est_t},global_data::Global_Data)
     PointerWrapper(ps4est).user_pointer = pointer_from_objref(global_data)
     return trees
 end
-function init_ps!(ps4est::Ptr{p4est_t},global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+
+"""
+$(TYPEDSIGNATURES)
+"""
+function initialize_ps!(ps4est::Ptr{p4est_t},global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     fp = PointerWrapper(ps4est)
     trees_data =
         Vector{Vector{AbstractPsData{DIM,NDF}}}(undef, fp.last_local_tree[] - fp.first_local_tree[] + 1)
@@ -358,7 +374,11 @@ function init_ps!(ps4est::Ptr{p4est_t},global_data::Global_Data{DIM,NDF}) where{
     re_init_vs4est!(trees, global_data)
     return trees
 end
-function init_ps!(p4est::Ptr{p8est_t},global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+
+"""
+$(TYPEDSIGNATURES)
+"""
+function initialize_ps!(p4est::Ptr{p8est_t},global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     fp = PointerWrapper(p4est)
     trees_data = [AbstractPsData{DIM,NDF}[] for _ in 1:fp.last_local_tree[] - fp.first_local_tree[] + 1]
     trees = PS_Trees{DIM,NDF}(trees_data, fp.first_local_tree[] - 1)
@@ -393,9 +413,13 @@ function init_ps!(p4est::Ptr{p8est_t},global_data::Global_Data{DIM,NDF}) where{D
     re_init_vs4est!(trees, global_data)
     return trees
 end
-function init_field!(global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+
+"""
+$(TYPEDSIGNATURES)
+Initialize field for 2D case.
+"""
+function initialize_field!(global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
     GC.@preserve global_data begin
-        # connectivity_ps = Cartesian_connectivity(global_data.config.trees_num..., global_data.config.geometry...)
         connectivity_ps = set_connectivity(global_data)
         ps4est = AMR_4est_new(
             MPI.COMM_WORLD,
@@ -405,11 +429,16 @@ function init_field!(global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
         )
         global_data.forest.p4est = ps4est
         pre_refine!(ps4est,global_data)
-        trees = init_ps!(ps4est,global_data)
+        trees = initialize_ps!(ps4est,global_data)
         return trees, ps4est
     end
 end
-function init_field!(global_data::Global_Data{3,NDF}) where{NDF}
+
+"""
+$(TYPEDSIGNATURES)
+Initialize field for 3D case.
+"""
+function initialize_field!(global_data::Global_Data{3,NDF}) where{NDF}
     GC.@preserve global_data begin
         connectivity_ps = set_connectivity(global_data)
         ps4est = AMR_4est_new(
@@ -421,19 +450,29 @@ function init_field!(global_data::Global_Data{3,NDF}) where{NDF}
         global_data.forest.p4est = ps4est
         mesh_tree = pre_refine!(ps4est,global_data)
         GC.@preserve mesh_tree begin
-            trees = init_ps!(ps4est,global_data)
+            trees = initialize_ps!(ps4est,global_data)
         end
         return trees, ps4est
     end
 end
+
+"""
+$(TYPEDSIGNATURES)
+Initialize [`Ghost`](@ref) structure.
+"""
 function initialize_ghost(p4est::P_pxest_t,global_data::Global_Data)
     ghost_exchange = initialize_ghost_exchange(p4est,global_data)
     ghost_wrap = initialize_ghost_wrap(global_data,ghost_exchange)
     return Ghost(ghost_exchange,ghost_wrap)
 end
-function init(config::Dict)
+
+"""
+$(TYPEDSIGNATURES)
+Initialize everthing according to `config` dictionary.
+"""
+function initialize_KitAMR(config::Dict)
     global_data = Global_Data(config)
-    trees, ps4est = init_field!(global_data)
+    trees, ps4est = initialize_field!(global_data)
     field = Field{config[:DIM],config[:NDF]}(trees,Vector{AbstractFace}(undef,0),ImmersedBoundary())
     MPI.Barrier(MPI.COMM_WORLD)
     amr = KitAMR_Data(
@@ -449,5 +488,5 @@ function init(config::Dict)
     initialize_neighbor_data!(ps4est, amr)
     initialize_solid_neighbor!(amr)
     initialize_faces!(ps4est, amr)
-    return (ps4est, amr)
+    return ps4est, amr
 end

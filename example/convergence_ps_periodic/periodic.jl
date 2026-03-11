@@ -2,7 +2,7 @@ using KitAMR,MPI
 MPI.Init()
 
 config = KitAMR.read_config("./example/convergence_ps_periodic/configure_periodic_16.txt")
-ps4est,amr = KitAMR.init(config);
+ps4est,amr = KitAMR.initialize_KitAMR(config);
 KitAMR.listen_for_save!()
 max_sim_time = 20.
 nt = max_sim_time/amr.global_data.status.Δt+1.0 |> floor |> Int
@@ -24,7 +24,7 @@ KitAMR.finalize!(ps4est,amr)
 
 
 config = KitAMR.read_config("./example/convergence_ps_periodic/configure_periodic_32.txt")
-ps4est,amr = KitAMR.init(config);
+ps4est,amr = KitAMR.initialize_KitAMR(config);
 KitAMR.listen_for_save!()
 max_sim_time = 20.
 nt = max_sim_time/amr.global_data.status.Δt+1.0 |> floor |> Int
@@ -45,7 +45,7 @@ KitAMR.save_result(ps4est,amr)
 KitAMR.finalize!(ps4est,amr)
 
 config = KitAMR.read_config("./example/convergence_ps_periodic/configure_periodic_64.txt")
-ps4est,amr = KitAMR.init(config);
+ps4est,amr = KitAMR.initialize_KitAMR(config);
 KitAMR.listen_for_save!()
 max_sim_time = 20.
 nt = max_sim_time/amr.global_data.status.Δt+1.0 |> floor |> Int
@@ -67,7 +67,7 @@ KitAMR.finalize!(ps4est,amr)
 
 
 config = KitAMR.read_config("./example/convergence_ps_periodic/configure_periodic_256.txt")
-ps4est,amr = KitAMR.init(config);
+ps4est,amr = KitAMR.initialize_KitAMR(config);
 KitAMR.listen_for_save!()
 max_sim_time = 20.
 nt = max_sim_time/amr.global_data.status.Δt+1.0 |> floor |> Int

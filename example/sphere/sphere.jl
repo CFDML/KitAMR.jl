@@ -2,7 +2,7 @@ using KitAMR,MPI
 include("./sphere_udf.jl")
 MPI.Init()
 config = KitAMR.read_config("./example/sphere/configure_sphere.txt")
-ps4est,amr = KitAMR.init(config);
+ps4est,amr = KitAMR.initialize_KitAMR(config);
 KitAMR.save_result(ps4est,amr)
 KitAMR.listen_for_save!()
 max_sim_time = 20.
