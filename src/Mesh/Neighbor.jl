@@ -134,6 +134,10 @@ function access_neighbor(
     sc_array_destroy(neighbor_qid)
     return (neighbor, state)
 end
+
+"""
+$(TYPEDSIGNATURES)
+"""
 function initialize_neighbor_data!(ip::PointerWrapper{p4est_iter_volume_info_t}, data, dp)
     amr = unsafe_pointer_to_objref(data)
     ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
@@ -161,6 +165,10 @@ function initialize_neighbor_data!(ip::PointerWrapper{p4est_iter_volume_info_t},
     end
     return nothing
 end
+
+"""
+$(TYPEDSIGNATURES)
+"""
 function initialize_neighbor_data!(ip::PointerWrapper{p8est_iter_volume_info_t}, data, dp)
     amr = unsafe_pointer_to_objref(data)
     ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
@@ -188,9 +196,16 @@ function initialize_neighbor_data!(ip::PointerWrapper{p8est_iter_volume_info_t},
     end
     return nothing
 end
+
+"""
+$(TYPEDSIGNATURES)
+"""
 function initialize_neighbor_data!(info, data)
     AMR_volume_iterate(info, data, P4est_PS_Data, initialize_neighbor_data!)
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function initialize_neighbor_data!(ps4est::P_pxest_t, amr::KitAMR_Data)
     p_amr = pointer_from_objref(amr)
     GC.@preserve amr AMR_4est_volume_iterate(

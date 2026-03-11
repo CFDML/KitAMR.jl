@@ -17,6 +17,30 @@ For 1.0 version, we enable the solver to determinately simulate rarefied flows w
 
 All of the funcationalities are applicable to both 2D and 3D cases.
 
+
+```@raw html
+<div align="center">
+    <div style="display: flex; gap: 20px;  width: 100%;">
+        <div style="flex: 1; ">
+            <img 
+            src="assets/X38_Temperature_z.svg"  
+            style="width: 100%; aspect-ratio: 1/1;  border: none;">
+        </div>
+        <div style="flex: 1;">
+            <img 
+            src="assets/X38_Temperature_contour_y.svg"
+            style="width: 100%; aspect-ratio: 1/1; border: none;">
+        </div>
+        <div style="flex: 1;">
+            <img 
+            src="assets/X38_surf_P.svg"
+            style="width: 100%; aspect-ratio: 1/1; border: none;">
+        </div>
+    </div>
+    <figcaption><i>A flow over X-38 model with Ma=8, Kn=0.275 simulated by KitAMR.jl.</i></figcaption>
+</div>
+```
+
 ## Theory
 ### Kinetic Methods
 In kinetic theory, methods simulate the macroscopic motion of fluids by describing the evolution of distribution functions of fluid particles in velocity space over time. Such methods include direct simulation Monte Carlo (DSMC), discrete velocity method (DVM), lattice Boltzmann equation (LBE), gas-kinetic scheme, semi-Lagrangian method, implicit-explicit (IMEX) method, and others.

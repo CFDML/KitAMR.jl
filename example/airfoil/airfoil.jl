@@ -2,7 +2,7 @@ using KitAMR,MPI
 include("./airfoil_udf.jl")
 MPI.Init()
 config = KitAMR.read_config("./example/airfoil/configure_airfoil.txt")
-ps4est,amr = KitAMR.init(config);
+ps4est,amr = KitAMR.initialize_KitAMR(config);
 KitAMR.ps_partition!(ps4est, amr)
 KitAMR.update_ghost!(ps4est, amr)
 KitAMR.update_neighbor!(ps4est, amr)

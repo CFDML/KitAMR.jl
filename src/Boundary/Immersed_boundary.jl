@@ -311,6 +311,10 @@ function update_solid_cell!(amr::KitAMR_Data)
         end
     end
 end
+
+"""
+$(TYPEDSIGNATURES)
+"""
 function initialize_solid_neighbor!(amr::KitAMR_Data)
     for tree in amr.field.trees.data
         for ps_data in tree
@@ -371,6 +375,10 @@ function initialize_cutted_velocity_cell(n::AbstractVector,vs_data::VS_Data{3},a
     weight[index].=0.
     return CuttedVelocityCells(index,weight,gas_dfs,solid_dfs,gas_weights,solid_weights)
 end
+
+"""
+$(TYPEDSIGNATURES)
+"""
 function initialize_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     solid_dirs = findall(x->!isnothing(x[1])&&x[1].bound_enc<0,ps_data.neighbor.data[1:2*DIM])
     vs_data = ps_data.vs_data
