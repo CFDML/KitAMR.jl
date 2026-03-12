@@ -1,24 +1,39 @@
 include("CAIDVM.jl")
-include("DUGKS.jl")
 include("DVM.jl")
 include("UGKS.jl")
 include("Slope.jl")
+export update_slope!, update_slope_inner_vs!, update_slope_bound_vs!, update_slope_inner_ps!, update_slope_bound_ps!
+export vanleer, minmod, diff_vs!
+export flux!, update_flux!, update_domain_flux!, update_micro_flux!, update_macro_flux!, make_face_vs
+export calc_flux, calc_domain_flux
+
 function face_area(ps_data::AbstractPsData{2}, DIR::Integer)
     return ps_data.ds[FAT[1][DIR]]
 end
 function face_area(ps_data::AbstractPsData{3}, DIR::Integer)
     return reduce(*, @view(ps_data.ds[FAT[2][DIR]]))
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function flux!(face::DomainFace,amr::KitAMR_Data)
     here_vs = make_face_vs(face)
     flux,micro_flux = calc_domain_flux(amr.global_data.config.solver.flux,here_vs,face,amr)
     update_domain_flux!(flux,micro_flux,face,here_vs.heavi)
+    return nothing
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function flux!(face::FullFace,amr::KitAMR_Data)
     here_vs,there_vs = make_face_vs(face)
     flux,micro_flux = calc_flux(amr.global_data.config.solver.flux,here_vs,there_vs,face,amr)
     update_flux!(flux,micro_flux,face,here_vs.heavi)
+    return nothing
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function flux!(face::HangingFace{DIM,NDF},amr::KitAMR_Data) where{DIM,NDF}
     rot,direction,midpoint,here_data,there_data = unpack(face)
     here_vs,there_vs = make_face_vs(face)
@@ -27,7 +42,11 @@ function flux!(face::HangingFace{DIM,NDF},amr::KitAMR_Data) where{DIM,NDF}
         flux,micro_flux = calc_flux(amr.global_data.config.solver.flux,here_vs,there_vs[i],flux_data,amr)
         update_flux!(flux,micro_flux,flux_data,here_vs.heavi)
     end
+    return nothing
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function flux!(face::BackHangingFace{DIM,NDF},amr::KitAMR_Data) where{DIM,NDF}
     rot,direction,midpoint,here_data,there_data = unpack(face)
     here_vs,there_vs = make_face_vs(face)
@@ -36,7 +55,12 @@ function flux!(face::BackHangingFace{DIM,NDF},amr::KitAMR_Data) where{DIM,NDF}
         flux,micro_flux = calc_flux(amr.global_data.config.solver.flux,here_vs[i],there_vs,flux_data,amr)
         update_flux!(flux,micro_flux,flux_data,here_vs[i].heavi)
     end
+    return nothing
 end
+
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_domain_flux!(flux::AbstractVector,micro_flux::Vector{Matrix{Float64}},face::DomainFace,heavi::Vector{Bool})
     rot,direction,_,_,ps_data = unpack(face)
     area = rot*face_area(ps_data,direction)
@@ -44,13 +68,18 @@ function update_domain_flux!(flux::AbstractVector,micro_flux::Vector{Matrix{Floa
     ps_data.flux .+= area*flux
     ps_data.vs_data.flux[heavi,:] .+= area*here_micro
     ps_data.vs_data.flux[.!heavi,:] .+= area*there_micro
+    return nothing
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_domain_flux!(::Nothing,micro_flux::Vector{Matrix{Float64}},face::DomainFace,heavi::Vector{Bool})
     rot,direction,_,_,ps_data = unpack(face)
     area = rot*face_area(ps_data,direction)
     here_micro,there_micro = micro_flux
     ps_data.vs_data.flux[heavi,:] .+= area*here_micro
     ps_data.vs_data.flux[.!heavi,:] .+= area*there_micro
+    return nothing
 end
 function face_area(::FluxData{HangingFace{DIM,NDF}},here_data::AbstractPsData{DIM},direction,rot) where{DIM,NDF}
     face_area(here_data,direction)/2^(DIM-1)*rot
@@ -58,37 +87,67 @@ end
 function face_area(::T,here_data,direction,rot) where{T<:Union{FluxData{BackHangingFace{DIM,NDF}},FullFace{DIM,NDF}} where{DIM,NDF}}
     face_area(here_data,direction)*rot
 end
+
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_flux!(flux::AbstractVector,micro_flux::Vector{Matrix{Float64}},face::Union{FullFace,FluxData},heavi::Vector{Bool})
     rot,direction,_,here_data,there_data = unpack(face)
     area = face_area(face,here_data,direction,rot)
     here_micro,there_micro = micro_flux
     update_macro_flux!(flux*area,here_data,there_data)
     update_micro_flux!(here_micro*area,there_micro*area,here_data,there_data,heavi)
+    return nothing
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_flux!(::Nothing,micro_flux::Vector{Matrix{Float64}},face::Union{FullFace,FluxData},heavi::Vector{Bool})
     rot,direction,_,here_data,there_data = unpack(face)
     area = face_area(face,here_data,direction,rot)
     here_micro,there_micro = micro_flux
     update_micro_flux!(here_micro*area,there_micro*area,here_data,there_data,heavi)
+    return nothing
 end
+
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_macro_flux!(flux::Vector,here_data::PS_Data,there_data::PS_Data)
     here_data.flux .+= flux
     if there_data.bound_enc>=0
         there_data.flux .-= flux
     end
+    return nothing
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_macro_flux!(flux::Vector,here_data::PS_Data,::AbstractGhostPsData)
     here_data.flux .+= flux
+    return nothing
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_macro_flux!(flux::Vector,here_data::PS_Data,::SolidNeighbor)
     here_data.flux .+= flux
+    return nothing
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM},::SolidNeighbor{DIM},heavi::Vector{Bool}) where{DIM}
     vs_data = here_data.vs_data;flux = vs_data.flux
     @. flux[heavi,:]+= here_micro
     nheavi = [!x for x in heavi]
     @. flux[nheavi,:]+= there_micro
+    return nothing
 end
+
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM,NDF},there_data::PS_Data,heavi::Vector{Bool}) where{DIM,NDF}
     vs_data = here_data.vs_data;nvs_data = there_data.vs_data
     level = vs_data.level;level_n = nvs_data.level
@@ -162,7 +221,11 @@ function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM,NDF},t
             end
         end
     end
+    return nothing
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM,NDF},there_data::AbstractGhostPsData,heavi::Vector{Bool}) where{DIM,NDF}
     vs_data = here_data.vs_data;nvs_data = there_data.vs_data
     level = vs_data.level;level_n = nvs_data.level
@@ -221,8 +284,12 @@ function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM,NDF},t
             end
         end
     end
+    return nothing
 end
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function make_face_vs(face::DomainFace{DIM,NDF})where{DIM,NDF}
     rot,direction,_,_,ps_data = unpack(face)
     vs_data = ps_data.vs_data;here_mid = vs_data.midpoint
@@ -233,6 +300,9 @@ function make_face_vs(face::DomainFace{DIM,NDF})where{DIM,NDF}
     )
     return here_vs
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function make_face_vs(face::FullFace{DIM,NDF}) where{DIM,NDF}
     rot,direction,_,here_data,there_data = unpack(face)
     vs_data = here_data.vs_data;nvs_data = there_data.vs_data
@@ -249,6 +319,9 @@ function make_face_vs(face::FullFace{DIM,NDF}) where{DIM,NDF}
     )
     return here_vs,there_vs
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function make_face_vs(face::HangingFace{DIM,NDF}) where{DIM,NDF}
     rot,direction,_,here_data,there_data = unpack(face)
     vs_data = here_data.vs_data
@@ -270,6 +343,9 @@ function make_face_vs(face::HangingFace{DIM,NDF}) where{DIM,NDF}
     end
     return here_vs,there_vs
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function make_face_vs(face::BackHangingFace{DIM,NDF}) where{DIM,NDF}
     rot,direction,_,here_data,there_data = unpack(face)
     nvs_data = there_data.vs_data
@@ -290,9 +366,15 @@ function make_face_vs(face::BackHangingFace{DIM,NDF}) where{DIM,NDF}
     end
     return here_vs,there_vs
 end
+
+"""
+$(TYPEDSIGNATURES)
+Outer function for flux computation and update. The iteration is carried out through faces, which avoids redundant computation.
+"""
 function flux!(amr::KitAMR_Data)
     faces = amr.field.faces
     @simd for face in faces
         flux!(face,amr)
     end
+    return nothing
 end

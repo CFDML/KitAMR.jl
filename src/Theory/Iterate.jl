@@ -12,7 +12,7 @@ function iterate!(amr::KitAMR_Data)
     amr.global_data.status.residual.step += 1
     amr.global_data.status.sim_time+=amr.global_data.status.Δt
 end
-function iterate!(::UGKS_Marching,amr::KitAMR_Data)
+function iterate!(::Type{UGKS_Marching},amr::KitAMR_Data)
     global_data = amr.global_data
     gas = global_data.config.gas
     trees = amr.field.trees
@@ -59,7 +59,7 @@ end
 $(TYPEDSIGNATURES)
 Iteration for Conserved Adaptive Implicit DVM (CAIDVM).
 """
-function iterate!(::CAIDVM_Marching,amr::KitAMR_Data)
+function iterate!(::Type{CAIDVM_Marching},amr::KitAMR_Data)
     global_data = amr.global_data
     gas = global_data.config.gas
     trees = amr.field.trees

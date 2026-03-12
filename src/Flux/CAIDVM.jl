@@ -1,4 +1,7 @@
-function calc_domain_flux(::CAIDVM,here_vs::Face_VS_Data,face::DomainFace{DIM,NDF,Maxwellian},amr::KitAMR_Data) where{DIM,NDF}
+"""
+$(TYPEDSIGNATURES)
+"""
+function calc_domain_flux(::Type{CAIDVM},here_vs::Face_VS_Data,face::DomainFace{DIM,NDF,Maxwellian},amr::KitAMR_Data) where{DIM,NDF}
     _,direction,midpoint,_,ps_data = unpack(face)
     heavi,here_weight,here_mid,here_vn,here_df,here_sdf = unpack(here_vs)
     Δt = amr.global_data.status.Δt
@@ -20,7 +23,10 @@ function calc_domain_flux(::CAIDVM,here_vs::Face_VS_Data,face::DomainFace{DIM,ND
     fw = micro_to_macro(here_micro,here_mid,here_weight,vs_data)+micro_to_macro(there_micro,there_mid,there_weight,vs_data)
     return fw,[here_micro,there_micro]
 end
-function calc_domain_flux(::CAIDVM,here_vs::Face_VS_Data,face::DomainFace{DIM,NDF,SuperSonicInflow},amr::KitAMR_Data) where{DIM,NDF}
+"""
+$(TYPEDSIGNATURES)
+"""
+function calc_domain_flux(::Type{CAIDVM},here_vs::Face_VS_Data,face::DomainFace{DIM,NDF,SuperSonicInflow},amr::KitAMR_Data) where{DIM,NDF}
     _,direction,midpoint,_,ps_data = unpack(face)
     heavi,here_weight,here_mid,here_vn,here_df,here_sdf = unpack(here_vs)
     Δt = amr.global_data.status.Δt
@@ -41,7 +47,10 @@ function calc_domain_flux(::CAIDVM,here_vs::Face_VS_Data,face::DomainFace{DIM,ND
     fw = micro_to_macro(here_micro,here_mid,here_weight,vs_data)+micro_to_macro(there_micro,there_mid,there_weight,vs_data)
     return fw,[here_micro,there_micro]
 end
-function calc_domain_flux(::CAIDVM,here_vs::Face_VS_Data,face::DomainFace{DIM,NDF,UniformOutflow},amr::KitAMR_Data) where{DIM,NDF}
+"""
+$(TYPEDSIGNATURES)
+"""
+function calc_domain_flux(::Type{CAIDVM},here_vs::Face_VS_Data,face::DomainFace{DIM,NDF,UniformOutflow},amr::KitAMR_Data) where{DIM,NDF}
     _,direction,_,_,ps_data = unpack(face)
     heavi,here_weight,here_mid,here_vn,_,_ = unpack(here_vs)
     vs_data = ps_data.vs_data
@@ -56,7 +65,10 @@ function calc_domain_flux(::CAIDVM,here_vs::Face_VS_Data,face::DomainFace{DIM,ND
     fw = micro_to_macro(here_micro,here_mid,here_weight,vs_data)+micro_to_macro(there_micro,there_mid,there_weight,vs_data)
     return fw,[here_micro,there_micro]
 end
-function calc_domain_flux(::CAIDVM,here_vs::Face_VS_Data,face::DomainFace{2,NDF,InterpolatedOutflow},amr::KitAMR_Data) where{NDF}
+"""
+$(TYPEDSIGNATURES)
+"""
+function calc_domain_flux(::Type{CAIDVM},here_vs::Face_VS_Data,face::DomainFace{2,NDF,InterpolatedOutflow},amr::KitAMR_Data) where{NDF}
     _,direction,midpoint,_,ps_data = unpack(face)
     heavi,here_weight,here_mid,here_vn,here_df,here_sdf = unpack(here_vs)
     Δt = amr.global_data.status.Δt
@@ -80,7 +92,11 @@ function calc_domain_flux(::CAIDVM,here_vs::Face_VS_Data,face::DomainFace{2,NDF,
     fw = micro_to_macro(here_micro,here_mid,here_weight,vs_data)+micro_to_macro(there_micro,there_mid,there_weight,vs_data)
     return fw,[here_micro,there_micro]
 end
-function calc_flux(::CAIDVM,here_vs,there_vs,flux_data::Union{FullFace,FluxData},amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF} # without face area and Δt
+"""
+$(TYPEDSIGNATURES)
+Compute the flux across a single inner face. For [`CAIDVM`](@ref), both macro and micro fluxes are computed.
+"""
+function calc_flux(::Type{CAIDVM},here_vs,there_vs,flux_data::Union{FullFace,FluxData},amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF} # without face area and Δt
     _,_,midpoint,here_data,there_data = unpack(flux_data)
     Δt = amr.global_data.status.Δt
     here_mid = here_vs.midpoint;there_mid = there_vs.midpoint
@@ -95,8 +111,8 @@ function calc_flux(::CAIDVM,here_vs,there_vs,flux_data::Union{FullFace,FluxData}
             df = [here_df[i,j]+dot(dx[i,:],here_sdf[i,j,:]) for i in axes(here_df,1),j in axes(here_df,2)]
             ndf = [there_df[i,j]+dot(ndx[i,:],there_sdf[i,j,:]) for i in axes(there_df,1),j in axes(there_df,2)]
         else
-            df = pp_reconstruct(here_df,here_sdf,here_data.ds,dx)
-            ndf = pp_reconstruct(there_df,there_sdf,there_data.ds,ndx)
+            df = positivity_preserving_reconstruct(here_df,here_sdf,here_data.ds,dx)
+            ndf = positivity_preserving_reconstruct(there_df,there_sdf,there_data.ds,ndx)
         end
         here_micro = [df[i,j]*here_vn[i] for i in axes(df,1),j in axes(df,2)]
         there_micro = [ndf[i,j]*there_vn[i] for i in axes(ndf,1),j in axes(ndf,2)]
@@ -105,7 +121,12 @@ function calc_flux(::CAIDVM,here_vs,there_vs,flux_data::Union{FullFace,FluxData}
     fw = micro_to_macro(here_micro,here_mid,here_weight,here_data.vs_data)+micro_to_macro(there_micro,there_mid,there_weight,here_data.vs_data)
     return fw,[here_micro,there_micro]
 end
-function pp_reconstruct(here_df,here_sdf,here_ds,dx) # positivity preserving reconstruct (10.1016/j.jcp.2009.12.030)
+
+"""
+$(TYPEDSIGNATURES)
+Positivity preserving reconstruction (10.1016/j.jcp.2009.12.030).
+"""
+function positivity_preserving_reconstruct(here_df,here_sdf,here_ds,dx) # positivity preserving reconstruct (10.1016/j.jcp.2009.12.030)
     @views begin
         β = [min(abs(here_df[i,j]/(0.5*dot(here_ds,abs.(here_sdf[i,j,:]))+EPS)),1.) for i in axes(here_df,1),j in axes(here_df,2)]
         df = [here_df[i,j]+β[i,j]*dot(dx[i,:],here_sdf[i,j,:]) for i in axes(here_df,1),j in axes(here_df,2)]
