@@ -1,18 +1,31 @@
+"""
+$(TYPEDSIGNATURES)
+"""
 function vanleer(sL::AbstractArray, sR::AbstractArray)
     SL = abs.(sL)
     SR = abs.(sR)
     @. (sign(sL) + sign(sR)) * SL * SR / (SL + SR + EPS)
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function vanleer(sL::Real, sR::Real)
     SL = abs(sL)
     SR = abs(sR)
     (sign(sL) + sign(sR)) * SL * SR / (SL + SR + EPS)
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function minmod(sL::Real,sR::Real)
     SL = abs(sL)
     SR = abs(sR)
     0.5(sign(sL)+sign(sR))*min(SL,SR)
 end
+"""
+$(TYPEDSIGNATURES)
+Difference in through all velocity cells in two neighboring physical cells.
+"""
 function diff_vs!(vs_data::AbstractVsData{DIM,NDF}, vs_data_n::AbstractVsData{DIM,NDF}, dsL::Float64, sL::AbstractMatrix) where{DIM,NDF}
     index = 1
     flag = 0.0
@@ -49,7 +62,9 @@ function diff_vs!(vs_data::AbstractVsData{DIM,NDF}, vs_data_n::AbstractVsData{DI
         end
     end
 end
-
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_slope_bound_vs!(
     vs_data::AbstractVsData{DIM,NDF},
     neighbor_datas::AbstractVector,
@@ -63,7 +78,11 @@ function update_slope_bound_vs!(
         diff_vs!(vs_data, neighbor_data, ds, sdf)
     end
     vs_data.sdf[:, :, dir] .= sdf / N
+    return nothing
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_slope_inner_vs!(
     vs_data::AbstractVsData{DIM,NDF},
     Ldata::Vector,
@@ -84,8 +103,11 @@ function update_slope_inner_vs!(
         diff_vs!(vs_data, R_data, dsR, sR)
     end
     vs_data.sdf[:, :, dir] .= vanleer(sL / nL, sR / nR)
+    return nothing
 end
-
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_slope_inner_ps!(
     ps_data::PS_Data{DIM,NDF}, 
     Ldata::AbstractVector, 
@@ -108,6 +130,9 @@ function update_slope_inner_ps!(
     end
     return nothing
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_slope_bound_ps!(
     ps_data::PS_Data{DIM,NDF}, 
     Ldata::AbstractVector, 
@@ -126,6 +151,9 @@ end
 
 
 # Inner
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_slope!(
     ::Val{1},
     ::Val{1},
@@ -152,6 +180,9 @@ function update_slope!(
     end
     return nothing
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_slope!(
     ::Val{1},
     ::NeighborNum,
@@ -165,6 +196,9 @@ function update_slope!(
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ds, -0.75 * ds, dir)
     update_slope_inner_ps!(ps_data, Ldata, Rdata, ds, -0.75 * ds, dir)
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_slope!(
     ::NeighborNum,
     ::Val{1},
@@ -178,6 +212,9 @@ function update_slope!(
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, -ds, dir)
     update_slope_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, -ds, dir)
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_slope!(
     ::NeighborNum,
     ::NeighborNum,
@@ -191,6 +228,9 @@ function update_slope!(
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, -0.75 * ds, dir)
     update_slope_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, -0.75 * ds, dir)
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_slope!(
     ::Val{-1},
     ::Val{-1},
@@ -204,6 +244,9 @@ function update_slope!(
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, -1.5 * ds, dir)
     update_slope_inner_ps!(ps_data, Ldata, Rdata, 1.5 * ds, -1.5 * ds, dir)
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_slope!(
     ::Val{1},
     ::Val{-1},
@@ -217,6 +260,9 @@ function update_slope!(
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ds, -1.5 * ds, dir)
     update_slope_inner_ps!(ps_data, Ldata, Rdata, ds, -1.5 * ds, dir)
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_slope!(
     ::Val{-1},
     ::Val{1},
@@ -230,6 +276,9 @@ function update_slope!(
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, -ds, dir)
     update_slope_inner_ps!(ps_data, Ldata, Rdata, 1.5 * ds, -ds, dir)
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_slope!(
     ::NeighborNum,
     ::Val{-1},
@@ -243,6 +292,9 @@ function update_slope!(
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, -1.5 * ds, dir)
     update_slope_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, -1.5 * ds, dir)
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_slope!(
     ::Val{-1},
     ::NeighborNum,
@@ -258,6 +310,9 @@ function update_slope!(
 end
 
 # Boundary
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_slope!(
     ::Val{0},
     ::Val{1},
@@ -272,6 +327,9 @@ function update_slope!(
     update_slope_bound_vs!(vs_data, Rdata, ds, dir)
     update_slope_bound_ps!(ps_data, Rdata, ds, dir)
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_slope!(
     ::Val{1},
     ::Val{0},
@@ -286,6 +344,9 @@ function update_slope!(
     update_slope_bound_vs!(vs_data, Ldata, ds, dir)
     update_slope_bound_ps!(ps_data, Ldata, ds, dir)
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_slope!(
     ::NeighborNum,
     ::Val{0},
@@ -299,6 +360,9 @@ function update_slope!(
     update_slope_bound_vs!(ps_data.vs_data, Ldata, ds, dir)
     update_slope_bound_ps!(ps_data, Ldata, ds, dir)
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_slope!(
     ::Val{0},
     ::NeighborNum,
@@ -312,6 +376,9 @@ function update_slope!(
     update_slope_bound_vs!(ps_data.vs_data, Rdata, ds, dir)
     update_slope_bound_ps!(ps_data, Rdata, ds, dir)
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_slope!(
     ::Val{0},
     ::Val{-1},
@@ -325,6 +392,9 @@ function update_slope!(
     update_slope_bound_vs!(ps_data.vs_data, Rdata, ds, dir)
     update_slope_bound_ps!(ps_data, Rdata, ds, dir)
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_slope!(
     ::Val{-1},
     ::Val{0},
@@ -339,6 +409,9 @@ function update_slope!(
     update_slope_bound_ps!(ps_data, Ldata, ds, dir)
 end
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_slope!(amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     trees = amr.field.trees
     global_data = amr.global_data

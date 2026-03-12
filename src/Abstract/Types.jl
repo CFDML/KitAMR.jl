@@ -69,10 +69,37 @@ $(TYPEDEF)
 """
 abstract type Tetra <: AbstractVTKCellType end
 
+"""
+$(TYPEDEF)
+"""
 abstract type AbstractFluxType end
+"""
+$(TYPEDEF)
+"""
 abstract type AbstractDVMFluxType <: AbstractFluxType end
-
+"""
+$(TYPEDEF)
+"""
 abstract type AbstractTimeMarchingType end
+
+
+abstract type UGKS<:AbstractDVMFluxType end
+abstract type DVM<:AbstractDVMFluxType end
+"""
+$(TYPEDEF)
+Conserved adaptive implicit DVM flux.
+"""
+abstract type CAIDVM<:AbstractDVMFluxType end # Conserved DVM, which encures energy conserved flux.
+const MicroFlux = Union{DVM}
+const HybridFlux = Union{UGKS,CAIDVM} # to add more...
+
+
+abstract type Euler <:AbstractTimeMarchingType end
+abstract type UGKS_Marching<:AbstractTimeMarchingType end
+"""
+$(TYPEDEF)
+"""
+abstract type CAIDVM_Marching<:AbstractTimeMarchingType end
 """
 $(TYPEDEF)
 """
@@ -145,3 +172,4 @@ export AbstractInitCondType, AbstractBoundCondType, AbstractBoundaryType
 export Pixel, Voxel, Triangle, Tetra
 export AbstractPsData, AbstractFace
 export AbstractVsData
+export AbstractFluxType, AbstractDVMFluxType, CAIDVM

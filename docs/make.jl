@@ -12,6 +12,8 @@ type_page = [
 ]
 methods_page = [
     "Initialization"=>"methods_initialize.md",
+    "Reconstruction"=>"methods_reconstruct.md",
+    "Flux"=>"methods_flux.md",
     "Iteration"=>"methods_iterate.md",
     "Finalization"=>"methods_finalize.md"
 ]

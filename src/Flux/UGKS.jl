@@ -1,4 +1,4 @@
-function calc_domain_flux(::UGKS,here_vs::Face_VS_Data,face::DomainFace{2,2,SuperSonicInflow},amr::KitAMR_Data)
+function calc_domain_flux(::Type{UGKS},here_vs::Face_VS_Data,face::DomainFace{2,2,SuperSonicInflow},amr::KitAMR_Data)
     rot,direction,midpoint,_,here_data = unpack(face)
     heavi,_,_,_,here_df,here_sdf = unpack(here_vs)
     global_data = amr.global_data
@@ -39,7 +39,7 @@ function calc_domain_flux(::UGKS,here_vs::Face_VS_Data,face::DomainFace{2,2,Supe
     there_micro = calc_micro_flux(There_vs, there_F, there_F⁺, aR, A, Mξ, Mt, direction)
     return fw,[here_micro,there_micro]
 end
-function calc_domain_flux(::UGKS,here_vs::Face_VS_Data,face::DomainFace{2,2,UniformOutflow},amr::KitAMR_Data)
+function calc_domain_flux(::Type{UGKS},here_vs::Face_VS_Data,face::DomainFace{2,2,UniformOutflow},amr::KitAMR_Data)
     rot,direction,midpoint,_,here_data = unpack(face)
     heavi,here_weight,here_mid,here_vn,here_df,here_sdf = unpack(here_vs)
     global_data = amr.global_data
@@ -74,7 +74,7 @@ function calc_domain_flux(::UGKS,here_vs::Face_VS_Data,face::DomainFace{2,2,Unif
     there_micro = calc_micro_flux(There_vs, there_F, there_F⁺, aR, A, Mξ, Mt, direction)
     return fw,[here_micro,there_micro]
 end
-function calc_domain_flux(::UGKS,here_vs::Face_VS_Data,face::DomainFace{2,2,InterpolatedOutflow},amr::KitAMR_Data)
+function calc_domain_flux(::Type{UGKS},here_vs::Face_VS_Data,face::DomainFace{2,2,InterpolatedOutflow},amr::KitAMR_Data)
     rot,direction,midpoint,_,here_data = unpack(face)
     heavi,here_weight,here_mid,here_vn,here_df,here_sdf = unpack(here_vs)
     global_data = amr.global_data
@@ -251,7 +251,7 @@ function calc_micro_flux(
         )
     end
 end
-function calc_flux(::UGKS,here_vs,there_vs,flux_data::Union{FullFace,FluxData},amr::KitAMR_Data{2,2}) # without face area
+function calc_flux(::Type{UGKS},here_vs,there_vs,flux_data::Union{FullFace,FluxData},amr::KitAMR_Data{2,2}) # without face area
     rot,direction,midpoint,here_data,there_data = unpack(flux_data)
     global_data = amr.global_data
     gas = global_data.config.gas;Δt = global_data.status.Δt
@@ -285,7 +285,7 @@ function calc_flux(::UGKS,here_vs,there_vs,flux_data::Union{FullFace,FluxData},a
         here_micro = calc_micro_flux(Here_vs, here_F, here_F⁺, aL, A, Mξ, Mt, direction)
         there_micro = calc_micro_flux(There_vs, there_F, there_F⁺, aR, A, Mξ, Mt, direction)
     else
-        fw, microflux = calc_flux(CAIDVM(),here_vs,there_vs,flux_data,amr)
+        fw, microflux = calc_flux(CAIDVM,here_vs,there_vs,flux_data,amr)
         here_micro,there_micro = microflux
         here_micro *= global_data.status.Δt;there_micro *= global_data.status.Δt
         fw *= global_data.status.Δt

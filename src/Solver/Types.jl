@@ -27,17 +27,6 @@ struct PCoordFn<:AbstractInitCondType # A function that accepts physical coordin
 end
 
 
-struct UGKS<:AbstractDVMFluxType end
-struct DVM<:AbstractDVMFluxType end
-struct CAIDVM<:AbstractDVMFluxType end # Conserved DVM, which encures energy conserved flux.
-const MicroFlux = Union{DVM}
-const HybridFlux = Union{UGKS,CAIDVM} # to add more...
-
-
-struct Rungekuta{O} <: AbstractTimeMarchingType end
-struct Euler <:AbstractTimeMarchingType end
-struct UGKS_Marching<:AbstractTimeMarchingType end
-struct CAIDVM_Marching<:AbstractTimeMarchingType end
 
 """
 $(TYPEDEF)
@@ -59,9 +48,9 @@ struct Solver
     "Maximum level of the AMR in velocity space."
     AMR_VS_MAXLEVEL::Int
     "The numerical flux type."
-    flux::AbstractFluxType
+    flux::Type{Tf} where {Tf<:AbstractFluxType}
     "The time-marching scheme."
-    time_marching::AbstractTimeMarchingType
+    time_marching::Type{Tt} where {Tt<:AbstractTimeMarchingType}
     "The dynamic AMR in physical space is open or not. The default is true."
     PS_DYNAMIC_AMR::Bool
     "The dynamic AMR in velocity space is open or not. The default is true."
