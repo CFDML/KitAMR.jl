@@ -2,6 +2,10 @@ get_dir(faceid::Int) = div(faceid - 1, 2) + 1
 get_rot(faceid::Int) = (-1.0)^(faceid - 1)
 get_sound(prim::Vector{Cdouble}, γ::Real) = √(0.5 * γ * prim[end])
 heaviside(x::Real) = ifelse(x >= 0, one(x), zero(x))
+"""
+$(TYPEDSIGNATURES)
+Get primary macroscopic variables from the conserved variables.
+"""
 function get_prim(ps_data::PS_Data{2,NDF}, global_data::Global_Data{2,NDF}) where {NDF}
     get_prim_2D(ps_data.w, global_data.config.gas.γ)
 end
@@ -15,6 +19,10 @@ function get_prim(w::AbstractVector, global_data::Global_Data{3,NDF}) where {NDF
     get_prim_3D(w, global_data.config.gas.γ)
 end
 
+"""
+$(TYPEDSIGNATURES)
+Get conserved macroscopic variables from the primary variables.
+"""
 function get_conserved(ps_data::PS_Data{2,NDF}, global_data::Global_Data) where {NDF}
     get_conserved_2D(ps_data.prim, global_data.config.gas.γ)
 end
@@ -29,6 +37,10 @@ function get_conserved(prim::AbstractVector, global_data::Global_Data{3,NDF}) wh
     get_conserved_3D(prim, global_data.config.gas.γ)
 end
 
+"""
+$(TYPEDSIGNATURES)
+Caculate the discretized Maxwellian distribution according to the primary macroscopic variables.
+"""
 function discrete_maxwell(ps_data::PS_Data, global_data::Global_Data)
     discrete_maxwell(ps_data.vs_data.midpoint, ps_data.prim, global_data)
 end
@@ -77,6 +89,11 @@ function discrete_maxwell(midpoint::AbstractVector,prim::AbstractVector,global_d
         global_data.config.gas.K,
     )
 end
+
+"""
+$(TYPEDSIGNATURES)
+Calculate the discretized Shakhov correction.
+"""
 function shakhov_part(
     midpoint::AbstractMatrix,
     F::AbstractMatrix,
@@ -132,6 +149,10 @@ function shakhov_part(
     )
 end
 
+"""
+$(TYPEDSIGNATURES)
+Calculate the heat flux according to the microscopic distribution.
+"""
 function calc_qf(vs_data::AbstractVsData{2,2}, prim::AbstractVector)
     heat_flux_2D2F(
         @view(vs_data.midpoint[:, 1]),
@@ -152,6 +173,11 @@ function calc_qf(vs_data::AbstractVsData{3,1}, prim::AbstractVector)
         vs_data.weight,
     )
 end
+
+"""
+$(TYPEDSIGNATURES)
+Calculate the conserved macroscopic variables according to the microscopic distribution.
+"""
 function calc_w0(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{2,2})
     @views micro_to_macro_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],weight)
 end

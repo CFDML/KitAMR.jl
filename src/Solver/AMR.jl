@@ -24,6 +24,11 @@ function update_faces!(p4est::P_pxest_t, amr::KitAMR_Data)
     amr.field.faces = Vector{AbstractFace}(undef, 0)
     initialize_faces!(p4est, amr)
 end
+
+"""
+$(TYPEDSIGNATURES)
+Recover the ghost layers, neighbor relations, immersed boundaries, and faces after an AMR or partition process.
+"""
 function amr_recover!(ps4est::P_pxest_t,amr::KitAMR_Data)
     update_ghost!(ps4est, amr)
     update_neighbor!(ps4est, amr)

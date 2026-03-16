@@ -252,7 +252,12 @@ function ps_refine_flag(forest::P_pxest_t, which_tree, quadrant)
         ps_refine_flag(ps_data, amr, qp)
     end
 end
-function ps_replace(::Val{1}, out_quad, in_quads, which_tree, amr::KitAMR_Data{DIM}) where{DIM}# refine replace
+
+"""
+$(TYPEDSIGNATURES)
+Replacement function in a refinement process.
+"""
+function ps_replace!(::Val{1}, out_quad, in_quads, which_tree, amr::KitAMR_Data{DIM}) where{DIM}# refine replace
     trees = amr.field.trees
     treeid = Int(which_tree) - trees.offset
     datas = trees.data[treeid]
@@ -286,8 +291,13 @@ function ps_replace(::Val{1}, out_quad, in_quads, which_tree, amr::KitAMR_Data{D
         insert!(datas, index - 1 + i, ps_data)
         dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
     end
+    return nothing
 end
-function ps_replace(::ChildNum, out_quad, in_quads, which_tree, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF} # coarsen replace, average or interpolate? Currently interpolation strategy is adopted. If my memory serves me right, problems came out with average most likely due to the iterative balance process.
+"""
+$(TYPEDSIGNATURES)
+Replacement function in a coarsening process.
+"""
+function ps_replace!(::ChildNum, out_quad, in_quads, which_tree, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF} # coarsen replace, average or interpolate? Currently interpolation strategy is adopted. If my memory serves me right, problems came out with average most likely due to the iterative balance process.
     trees = amr.field.trees
     treeid = Int(which_tree) - trees.offset
     datas = trees.data[treeid]
@@ -322,6 +332,7 @@ function ps_replace(::ChildNum, out_quad, in_quads, which_tree, amr::KitAMR_Data
     deleteat!(datas, index:index+2^DIM-1)
     insert!(datas, index, ps_data)
     dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
+    return nothing
 end
 function p4est_replace(forest::T1, which_tree, num_out, out_quads::Ptr{T2}, num_in, in_quads) where{T1<:P_pxest_t,T2<:P_pxest_quadrant_t}
     GC.@preserve forest which_tree num_out out_quads num_in in_quads begin
@@ -329,7 +340,7 @@ function p4est_replace(forest::T1, which_tree, num_out, out_quads::Ptr{T2}, num_
         amr = unsafe_pointer_to_objref(pointer(fp.user_pointer))
         out_quads_wrap = unsafe_wrap(Vector{T2}, out_quads, num_out)
         in_quads_wrap = unsafe_wrap(Vector{T2}, in_quads, num_in)
-        ps_replace(Val(Int(num_out)), out_quads_wrap, in_quads_wrap, which_tree, amr)
+        ps_replace!(Val(Int(num_out)), out_quads_wrap, in_quads_wrap, which_tree, amr)
         return nothing
     end
 end
@@ -381,7 +392,9 @@ function pre_ps_replace(::ChildNum, p4est, out_quad, in_quads, which_tree, trees
     dp[] = P4est_PS_Data(pointer_from_objref(mesh_data))
 end
 
-
+"""
+$(TYPEDSIGNATURES)
+"""
 function ps_refine!(p4est::Ptr{p4est_t},amr::KitAMR_Data; recursive = 0)
     p4est_refine_ext(
         p4est,
@@ -407,6 +420,9 @@ function ps_refine!(p4est::Ptr{p4est_t},amr::KitAMR_Data; recursive = 0)
         )
     )
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function ps_refine!(p4est::Ptr{p8est_t},amr::KitAMR_Data; recursive = 0)
     p8est_refine_ext(
         p4est,
@@ -584,6 +600,9 @@ function ps_coarsen_flag(forest::Ptr{p8est_t}, which_tree, quadrants)
         ps_coarsen_flag(ps_datas, levels, amr)
     end
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function ps_coarsen!(p4est::Ptr{p4est_t}; recursive = 0)
     p4est_coarsen_ext(
         p4est,
@@ -609,6 +628,9 @@ function ps_coarsen!(p4est::Ptr{p4est_t}; recursive = 0)
         )
     )
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function ps_coarsen!(p4est::Ptr{p8est_t}; recursive = 0)
     p8est_coarsen_ext(
         p4est,
@@ -634,6 +656,9 @@ function ps_coarsen!(p4est::Ptr{p8est_t}; recursive = 0)
         )
     )
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function ps_balance!(p4est::Ptr{p4est_t})
     p4est_balance_ext(
         p4est,
@@ -733,6 +758,11 @@ function pre_ps_balance!(p4est::Ptr{p8est_t})
         )
     )
 end
+
+"""
+$(TYPEDSIGNATURES)
+Update the globally maximum gradients of conserved variables as a referrence of the AMR in physical space.
+"""
 function update_gradmax!(amr::KitAMR_Data{DIM}) where{DIM}
     gradmax = amr.global_data.status.gradmax 
     wmax = amr.global_data.status.wmax
@@ -758,8 +788,12 @@ function update_gradmax!(amr::KitAMR_Data{DIM}) where{DIM}
     gradmax ./= (wmax-wmin)
     return nothing
 end
+
+"""
+$(TYPEDSIGNATURES)
+Outer function of AMR in physical space.
+"""
 function ps_adaptive_mesh_refinement!(ps4est::P_pxest_t,amr::KitAMR_Data)
-    update_slope!(amr)
     update_gradmax!(amr)
     ps_refine!(ps4est,amr)
     ps_coarsen!(ps4est)

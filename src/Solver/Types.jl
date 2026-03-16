@@ -38,30 +38,41 @@ Structure of solver configuration.
 $(TYPEDFIELDS)
 
 """
-struct Solver
-    "Courant-Friedrichs-Lewy number."
+struct Solver{DIM,NDF}
+    "Courant-Friedrichs-Lewy number. Default is `0.4`."
     CFL::Float64
-    "Maximum level of the (static) AMR in physical space."
+    "Maximum level of the (static) AMR in physical space. **Mandatory**."
     AMR_PS_MAXLEVEL::Int
-    "Maximum level of the dynamic AMR in physical space. In most cases, it should be smaller than the static one. The default is equal to `AMR_PS_MAXLEVEL`."
+    "Maximum level of the dynamic AMR in physical space. In most cases, it should be smaller than the static one. Default is equal to `AMR_PS_MAXLEVEL`."
     AMR_DYNAMIC_PS_MAXLEVEL::Int
-    "Maximum level of the AMR in velocity space."
+    "Maximum level of the AMR in velocity space. **Mandatory**."
     AMR_VS_MAXLEVEL::Int
-    "The numerical flux type."
+    "The numerical flux type. **Mandatory**."
     flux::Type{Tf} where {Tf<:AbstractFluxType}
-    "The time-marching scheme."
+    "The time-marching scheme. **Mandatory**."
     time_marching::Type{Tt} where {Tt<:AbstractTimeMarchingType}
-    "The dynamic AMR in physical space is open or not. The default is true."
+    "The dynamic AMR in physical space is open or not. Default is `true`."
     PS_DYNAMIC_AMR::Bool
-    "The dynamic AMR in velocity space is open or not. The default is true."
+    "The dynamic AMR in velocity space is open or not. Default is `true`."
     VS_DYNAMIC_AMR::Bool
 end
 function Solver(config::Dict)
-    return Solver(config[:CFL],config[:AMR_PS_MAXLEVEL],
+    return Solver{config[:DIM],config[:NDF]}(config[:CFL],config[:AMR_PS_MAXLEVEL],
         haskey(config,:AMR_DYNAMIC_PS_MAXLEVEL) ? config[:AMR_DYNAMIC_PS_MAXLEVEL] : config[:AMR_PS_MAXLEVEL],
         config[:AMR_VS_MAXLEVEL],config[:flux],config[:time_marching],
         (haskey(config,:PS_DYNAMIC_AMR) ? config[:PS_DYNAMIC_AMR] : true),
         (haskey(config,:VS_DYNAMIC_AMR) ? config[:VS_DYNAMIC_AMR] : true),
+        )
+end
+function Solver(;kwargs...)
+    CFL = haskey(kwargs,:CFL) ? kwargs[:CFL] : 0.4 
+    AMR_DYNAMIC_PS_MAXLEVEL = haskey(kwargs,:AMR_DYNAMIC_PS_MAXLEVEL) ? kwargs[:AMR_DYNAMIC_PS_MAXLEVEL] : kwargs[:AMR_PS_MAXLEVEL]
+    PS_DYNAMIC_AMR = haskey(kwargs,:PS_DYNAMIC_AMR) ? kwargs[:PS_DYNAMIC_AMR] : true
+    VS_DYNAMIC_AMR = haskey(kwargs,:VS_DYNAMIC_AMR) ? kwargs[:VS_DYNAMIC_AMR] : true
+    return Solver{kwargs[:DIM],kwargs[:NDF]}(
+        CFL,kwargs[:AMR_PS_MAXLEVEL],AMR_DYNAMIC_PS_MAXLEVEL,
+        kwargs[:AMR_VS_MAXLEVEL],kwargs[:flux],kwargs[:time_marching],
+        PS_DYNAMIC_AMR,VS_DYNAMIC_AMR
         )
 end
 
@@ -82,10 +93,18 @@ mutable struct UDF
     dynamic_ps_refine_flag::Function
     "The static AMR flag in velocity space."
     static_vs_refine_flag::Function 
-    UDF()=new()
 end
 null_udf(args...;kwargs...) = false
-
+function UDF(;kwargs...)
+    static_ps_refine_flag = haskey(kwargs,:static_ps_refine_flag) ? kwargs[:static_ps_refine_flag] : null_udf
+    dynamic_ps_refine_flag = haskey(kwargs,:dynamic_ps_refine_flag) ? kwargs[:dynamic_ps_refine_flag] : null_udf
+    static_vs_refine_flag = haskey(kwargs,:static_vs_refine_flag) ? kwargs[:static_vs_refine_flag] : null_udf
+    return UDF(
+        static_ps_refine_flag,
+        dynamic_ps_refine_flag,
+        static_vs_refine_flag
+    )
+end
 """
 $(TYPEDEF)
 
@@ -97,27 +116,42 @@ $(TYPEDFIELDS)
 
 """
 mutable struct Output
-    "VTK cell type in physical space. Available options: `Pixel` and `Triangle` for 2D; `Voxel` and `Tetra` for 3D."
-    vtk_celltype::DataType
+    "VTK cell type in physical space. Available options: `Pixel` and `Triangle` for 2D; `Voxel` and `Tetra` for 3D. Default is [`Triangle`](@ref) for 2D and [`Tetra`](@ref) for 3D."
+    vtk_celltype::Type{Tp} where{Tp<:AbstractVTKCellType}
     "VTK cell type in velocity space. Available options: `Pixel` for 2D."
-    vs_vtk_celltype::DataType
+    vs_vtk_celltype::Type{Tv} where{Tv<:AbstractVTKCellType}
     "Time interval between animation frames."
     anim_dt::Float64
     "User-defined-function determining the physical cells need to output the velocity space."
     vs_output_criterion::Function
     "Index of the last saved animation frame."
     anim_index::Int
-    Output(config::Dict) = (n = new(config[:DIM]==2 ? Triangle : Tetra,
-    config[:DIM]==2 ? Pixel : Voxel,
-    0.,null_udf,0
-    );
-        for i in fieldnames(Output)
-            if haskey(config,i)
-                setfield!(n,i,config[i])
-            end
-        end;
-    n
+end
+function Output(config::Dict)
+    output = Output(
+        config[:DIM]==2 ? Triangle : Tetra,
+        config[:DIM]==2 ? Pixel : Voxel,
+        0.,null_udf,0
     )
+    for i in fieldnames(Output)
+        if haskey(config,i)
+            setfield!(n,i,config[i])
+        end
+    end
+    return output
+end
+function Output(solver::Solver{DIM,NDF};kwargs...) where{DIM,NDF}
+    output = Output(
+        DIM==2 ? Triangle : Tetra,
+        DIM==2 ? Pixel : Voxel,
+        0.,null_udf,0
+    )
+    for i in fieldnames(Output)
+        if haskey(kwargs,i)
+            setfield!(n,i,kwargs[i])
+        end
+    end
+    return output
 end
 
 """
@@ -149,7 +183,7 @@ struct Configure{DIM,NDF}
     "Properties of the simulated gas defined by [`Gas`](@ref)."
     gas::Gas
     "Setup of the solver defined by [`Solver`](@ref)."
-    solver::Solver
+    solver::Solver{DIM,NDF}
     "Setup of the output form defined by [`Output`](@ref)."
     output::Output
     "Functions defined by users, including some criteria."
@@ -195,7 +229,34 @@ function Configure(config::Dict)
         config[:quadrature],config[:vs_trees_num],config[:IC],config[:domain],IB,
         gas,Solver(config),Output(config),user_defined)
 end
-
+function Configure(solver::Solver{DIM,NDF};kwargs...) where{DIM,NDF}
+    geometry = kwargs[:geometry]
+    trees_num = kwargs[:trees_num]
+    AMR_PS_MAXLEVEL = solver.AMR_PS_MAXLEVEL
+    IB = haskey(kwargs,:IB) ? kwargs[:IB] : []
+    config_dict = Dict(
+        :DIM=>DIM,
+        :geometry=>geometry,
+        :trees_num=>trees_num,
+        :AMR_PS_MAXLEVEL=>AMR_PS_MAXLEVEL,
+    )
+    for i in eachindex(IB)
+        IB[i] = config_IB(IB[i],config_dict)
+    end
+    return Configure{DIM,NDF}(
+        geometry,
+        trees_num,
+        kwargs[:quadrature],
+        kwargs[:vs_trees_num],
+        kwargs[:IC],
+        kwargs[:domain],
+        IB,
+        kwargs[:gas],
+        solver,
+        kwargs[:output],
+        kwargs[:user_defined]
+    )
+end
 """
 $(TYPEDEF)
 Structure related to `p4est`.
@@ -267,7 +328,7 @@ mutable struct Status
     "Flag indicating whether to save."
     save_flag::Base.RefValue{Bool}
 end
-function Status(config)
+function Status(config::Dict)
     DIM = config[:DIM]
     trees_num = config[:trees_num]
     geometry = config[:geometry]
@@ -278,6 +339,18 @@ function Status(config)
         (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
         2^config[:AMR_VS_MAXLEVEL] / 2 for i in 1:DIM] : [maximum(abs.(quadrature.vcoords)) for _ in 1:DIM]
     Δt_ξ = config[:CFL]*minimum(ds ./ U)
+    return Status(0,zeros(DIM+2),zeros(DIM+2), zeros(DIM+2), Δt_ξ,Δt_ξ,0.,1,1,1,Residual(DIM),Ref(false))
+end
+function Status(config::Configure{DIM,NDF}) where{DIM,NDF}
+    trees_num = config.trees_num
+    geometry = config.geometry
+    vs_trees_num = config.vs_trees_num
+    quadrature = config.quadrature
+    ds = [(geometry[2*i]-geometry[2*i-1])/trees_num[i]/2^config.solver.AMR_PS_MAXLEVEL for i in 1:DIM]
+    U = isa(quadrature,Vector) ? [max(quadrature[2*i],abs(quadrature[2*i-1])) -
+        (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
+        2^config.solver.AMR_VS_MAXLEVEL / 2 for i in 1:DIM] : [maximum(abs.(quadrature.vcoords)) for _ in 1:DIM]
+    Δt_ξ = config.solver.CFL*minimum(ds ./ U)
     return Status(0,zeros(DIM+2),zeros(DIM+2), zeros(DIM+2), Δt_ξ,Δt_ξ,0.,1,1,1,Residual(DIM),Ref(false))
 end
 
@@ -296,6 +369,12 @@ mutable struct Global_Data{DIM,NDF}
     Global_Data(config::Dict) = (n = new{config[:DIM],config[:NDF]}();
     n.config = Configure(config);
     n.forest = Forest(config[:DIM]);
+    n.status = Status(config);
+    n
+    )
+    Global_Data(config::Configure{DIM,NDF}) where{DIM,NDF} = (n = new{DIM,NDF}();
+    n.config = config;
+    n.forest = Forest(DIM);
     n.status = Status(config);
     n
     )

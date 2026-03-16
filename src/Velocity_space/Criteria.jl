@@ -1,10 +1,12 @@
 """
-Adaptation flag corresponding to the velocity cell's contribution to the macro quantities. Specifically, the mass and the energy are considered.
+$(TYPEDSIGNATURES)
 """
 function contribution_refine_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, vr::Velocity_Resolution, global_data::Global_Data)
     return local_contribution_refine_flag(w,U,midpoint,df,weight,global_data)||global_contribution_refine_flag(U,midpoint,df,weight,vr,global_data)
 end
-
+"""
+$(TYPEDSIGNATURES)
+"""
 function contribution_coarsen_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractMatrix, df::AbstractMatrix, weight::AbstractVector, vr::Velocity_Resolution, global_data::Global_Data)
     return local_contribution_coarsen_flag(w,U,midpoint,df,weight,global_data)&&global_contribution_coarsen_flag(U,midpoint,df,weight,vr,global_data)
 end

@@ -22,6 +22,10 @@ function residual_comm!(global_data::Global_Data)
     MPI.Bcast!(Res.residual,0,MPI.COMM_WORLD)
     Res.sumRes.=0.;Res.sumAvg.=0.
 end
+"""
+$(SIGNATURES)
+Check whether the `residual` and `redundant_step` in [`Status`](@ref) satisfies the convergence criterion.
+"""
 function check_for_convergence(amr::KitAMR_Data)
     maximum(amr.global_data.status.residual.residual)<TOLERANCE&&(amr.global_data.status.residual.redundant_step+=1)
     return amr.global_data.status.residual.redundant_step>REDUNDANT_STEPS_NUM

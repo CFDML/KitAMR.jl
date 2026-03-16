@@ -75,6 +75,10 @@ function criterion_df(ps_data::AbstractPsData{DIM,NDF}) where{DIM,NDF}
     end
     return cdf
 end
+
+"""
+$(TYPEDSIGNATURES)
+"""
 function vs_refine!(va_data::Velocity_Adaptive_Data, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     trees = amr.field.trees;global_data = amr.global_data
     !isa(global_data.config.quadrature,Vector)&&return nothing
@@ -139,6 +143,9 @@ function vs_refine!(va_data::Velocity_Adaptive_Data, amr::KitAMR_Data{DIM,NDF}) 
     end
     return nothing
 end
+"""
+$(SIGNATURES)
+"""
 function midpoint_refine_replace!(DIM::Integer,lnmidpoint::AbstractVector, midpoint_new::AbstractMatrix, vs_num::Int, index::Int)
     for i = 1:DIM
         deleteat!(lnmidpoint, (i - 1) * (vs_num) + index)
@@ -147,18 +154,27 @@ function midpoint_refine_replace!(DIM::Integer,lnmidpoint::AbstractVector, midpo
         end
     end
 end
+"""
+$(SIGNATURES)
+"""
 function weight_refine_replace!(DIM::Integer,weight::AbstractVector, index::Int)
     weight_new = popat!(weight, index) / 2^DIM
     for _ = 1:2^DIM
         insert!(weight, index, weight_new)
     end
 end
+"""
+$(SIGNATURES)
+"""
 function level_refine_replace!(DIM::Integer,level::AbstractVector, index::Int)
     level_new = popat!(level, index) + 1
     for _ = 1:2^DIM
         insert!(level, index, level_new)
     end
 end
+"""
+$(SIGNATURES)
+"""
 function df_refine_replace!(DIM::Integer,NDF::Integer,lndf::AbstractVector, df_new::AbstractMatrix, vs_num::Int, index::Int)
     for i = 1:NDF
         deleteat!(lndf, (i - 1) * (vs_num) + index)
@@ -167,13 +183,21 @@ function df_refine_replace!(DIM::Integer,NDF::Integer,lndf::AbstractVector, df_n
         end
     end
 end
+"""
+$(SIGNATURES)
+"""
 function sdf_refine_replace!(DIM::Integer,NDF::Integer,lnsdf::AbstractVector)
     append!(lnsdf, zeros((2^DIM - 1) * NDF * DIM))
 end
+"""
+$(SIGNATURES)
+"""
 function flux_refine_replace!(DIM::Integer,NDF::Integer,lnflux::AbstractVector)
     append!(lnflux, zeros((2^DIM - 1) * NDF))
 end
-
+"""
+$(SIGNATURES)
+"""
 function midpoint_refine(DIM::Integer,midpoint::AbstractVector, level::Int8, ds::AbstractVector)
     midpoint_new = Matrix{Float64}(undef, 2^DIM, DIM)
     ds_new = ds / 2^(level + 1)
@@ -182,35 +206,13 @@ function midpoint_refine(DIM::Integer,midpoint::AbstractVector, level::Int8, ds:
     end
     return midpoint_new
 end
-# df_refine(DIM::Integer,midpoint::AbstractVector,midpoint_new::AbstractMatrix,df::AbstractVector) = refine_moment_conserve(midpoint,midpoint_new)*df'
+"""
+$(SIGNATURES)
+"""
 df_refine(DIM::Integer,::AbstractVector, ::AbstractMatrix, df::AbstractVector) = ones(2^DIM) * df'
-function refine_moment_conserve(DIM::Integer,midpoint::AbstractVector, midpoint_new::AbstractMatrix)
-    α = pinv(make_A(DIM,midpoint_new), rtol = 1e-8) * make_b(DIM,midpoint, midpoint_new)
-    pushfirst!(α, 4 - sum(α))
-    α
-end
-
-
-function make_A(DIM::Integer,midpoint_new::AbstractMatrix)
-    A = Matrix{Float64}(undef, 2^DIM - 1, 2^DIM - 1)
-    A[1:DIM, :] .= transpose(@view(midpoint_new[2:end, :]))
-    for i = 1:2^DIM-1
-        A[end, i] = sum(@view(midpoint_new[i+1, :]) .^ 2)
-    end
-    for i = 1:DIM
-        A[i, :] .-= midpoint_new[1, i]
-    end
-    A[end, :] .-= sum(@view(midpoint_new[1, :]) .^ 2)
-    A
-end
-function make_b(DIM::Integer,midpoint::AbstractVector, midpoint_new::AbstractMatrix)
-    b = Vector{Float64}(undef, 2^DIM - 1)
-    b[1:DIM] .= midpoint .- @view(midpoint_new[1, :])
-    b[end] = sum(midpoint .^ 2) .- sum(@view(midpoint_new[1, :]) .^ 2)
-    b *= 2.0^DIM
-    b
-end
-
+"""
+$(TYPEDSIGNATURES)
+"""
 function vs_coarsen!(va_data::Velocity_Adaptive_Data,amr::KitAMR_Data{DIM,NDF})where{DIM,NDF}
     trees = amr.field.trees;global_data = amr.global_data
     ds = [(global_data.config.quadrature[2*i] - global_data.config.quadrature[2*i-1]) /
@@ -306,6 +308,9 @@ function midpoint_coarsen(DIM::Integer,midpoint::AbstractVector, level::Int8, ds
     ds_new = ds / 2^level
     @. midpoint - 0.5 * ds_new * RMT[DIM][1]
 end
+"""
+$(SIGNATURES)
+"""
 function df_coarsen(DIM::Integer,NDF::Integer,df::AbstractMatrix)
     df_new = zeros(NDF)
     for i = 1:2^DIM
@@ -316,19 +321,27 @@ function df_coarsen(DIM::Integer,NDF::Integer,df::AbstractMatrix)
 end
 
 
-
+"""
+$(SIGNATURES)
+"""
 function level_coarsen_replace!(DIM::Integer,level::AbstractVector, index::Int)
     for _ = 1:2^DIM-1
         deleteat!(level, index)
     end
     level[index] -= 1
 end
+"""
+$(SIGNATURES)
+"""
 function weight_coarsen_replace!(DIM::Integer,weight::AbstractVector, index::Int)
     for _ = 1:2^DIM-1
         deleteat!(weight, index)
     end
     weight[index] *= 2^DIM
 end
+"""
+$(SIGNATURES)
+"""
 function midpoint_coarsen_replace!(
     DIM::Integer,
     lnmidpoint::AbstractVector,
@@ -343,6 +356,9 @@ for i = 1:DIM
         lnmidpoint[(i-1)*(vs_num)+index] = midpoint_new[i]
     end
 end
+"""
+$(SIGNATURES)
+"""
 function df_coarsen_replace!(DIM::Integer,NDF::Integer,lndf::AbstractVector, df_new::AbstractVector, vs_num::Int, index::Int)
     for i = 1:NDF
         for _ = 1:2^DIM-1
@@ -351,14 +367,22 @@ function df_coarsen_replace!(DIM::Integer,NDF::Integer,lndf::AbstractVector, df_
         lndf[(i-1)*(vs_num)+index] = df_new[i]
     end
 end
+"""
+$(SIGNATURES)
+"""
 function sdf_coarsen_replace!(DIM::Integer,NDF::Integer,lnsdf::AbstractVector)
     deleteat!(lnsdf, 1:(2^DIM-1)*NDF*DIM)
 end
+"""
+$(SIGNATURES)
+"""
 function flux_coarsen_replace!(DIM::Integer,NDF::Integer,lnflux::AbstractVector)
     deleteat!(lnflux, 1:(2^DIM-1)*NDF)
 end
 
-
+"""
+$(TYPEDSIGNATURES)
+"""
 function vs_conserved_correction!(va_data::Velocity_Adaptive_Data,amr)
     trees = amr.field.trees
     global_data = amr.global_data
@@ -410,6 +434,9 @@ function vs_resolution(ps_data::PS_Data{DIM,1},global_data) where{DIM}
     return density_max*weight,energy_max*weight
 end
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function vs_adaptive_mesh_refinement!(amr)
     vr = vs_resolution(amr)
     fp = PointerWrapper(amr.global_data.forest.p4est)
