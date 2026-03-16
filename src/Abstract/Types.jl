@@ -173,3 +173,4 @@ export Pixel, Voxel, Triangle, Tetra
 export AbstractPsData, AbstractFace
 export AbstractVsData
 export AbstractFluxType, AbstractDVMFluxType, CAIDVM
+export AbstractTimeMarchingType, CAIDVM_Marching

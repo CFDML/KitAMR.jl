@@ -1,6 +1,6 @@
 # Data
 
-All of the datas in KitAMR.jl are organized as follows:
+All of the data in KitAMR.jl are organized as follows:
 
 ```@docs
 KitAMR_Data

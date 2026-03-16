@@ -15,7 +15,11 @@ methods_page = [
     "Reconstruction"=>"methods_reconstruct.md",
     "Flux"=>"methods_flux.md",
     "Iteration"=>"methods_iterate.md",
-    "Finalization"=>"methods_finalize.md"
+    "AMR"=>"methods_AMR.md",
+    "Parallel"=>"methods_parallel.md",
+    "Theory"=>"methods_theory.md",
+    "Finalization"=>"methods_finalize.md",
+    "IO"=>"methods_io.md"
 ]
 makedocs(;
     sitename = "KitAMR.jl",
@@ -23,8 +27,12 @@ makedocs(;
     pages = [
         "Home"=>"index.md",
         "Types"=>type_page,
-        "Functions and Methods"=>methods_page
+        "Functions and Methods"=>methods_page,
+        "Tutorial"=>"tutorial.md",
+        "Index"=>"index_internal.md",
+        "Limitations"=>"limitations.md"
         ],
+    # format = Documenter.HTML(; collapselevel=1),
     checkdocs = :none
 )
 

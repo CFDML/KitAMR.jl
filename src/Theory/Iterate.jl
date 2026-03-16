@@ -1,6 +1,6 @@
 """
 $(TYPEDSIGNATURES)
-Collision and time marching.
+Outer function of collision and time marching.
 """
 function iterate!(amr::KitAMR_Data)
     time_marching = amr.global_data.config.solver.time_marching
@@ -11,6 +11,7 @@ function iterate!(amr::KitAMR_Data)
     amr.global_data.status.partition_step += 1
     amr.global_data.status.residual.step += 1
     amr.global_data.status.sim_time+=amr.global_data.status.Δt
+    return nothing
 end
 function iterate!(::Type{UGKS_Marching},amr::KitAMR_Data)
     global_data = amr.global_data
@@ -92,8 +93,9 @@ function iterate!(::Type{CAIDVM_Marching},amr::KitAMR_Data)
             vs_data.flux .= 0.0
         end
     end
+    return nothing
 end
-function iterate!(::Euler,amr::KitAMR_Data{DIM}) where{DIM}
+function iterate!(::Type{Euler},amr::KitAMR_Data{DIM}) where{DIM}
     global_data = amr.global_data
     gas = global_data.config.gas
     trees = amr.field.trees

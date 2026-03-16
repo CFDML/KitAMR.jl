@@ -1,6 +1,10 @@
 size_Ghost_Data(vs_num,DIM,NDF) = 3 * DIM + 4 + NDF * vs_num
 size_Ghost_Slope(vs_num,DIM,NDF) = vs_num * DIM * NDF+DIM*(DIM+2)
 size_Ghost_VS_Structure(vs_num,DIM) = vs_num * (DIM + 2)
+"""
+$(TYPEDSIGNATURES)
+Get the globally largest number of the velocity cells in ghost layers.
+"""
 function get_vs_num(forest::P_pxest_t, ghost::P_pxest_ghost_t)
     get_vs_num(PointerWrapper(forest), PointerWrapper(ghost))
 end
@@ -270,6 +274,11 @@ function amr_exchange!(
         )
     end
 end
+
+"""
+$(TYPEDSIGNATURES)
+Update `df` in [`Ghost_VS_Data`](@ref).
+"""
 function data_exchange!(p4est::P_pxest_t, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     MPI.Comm_size(MPI.COMM_WORLD) == 1 && return nothing
     update_mirror_data!(p4est, amr)
@@ -281,6 +290,13 @@ function data_exchange!(p4est::P_pxest_t, amr::KitAMR_Data{DIM,NDF}) where{DIM,N
         size_Ghost_Data(amr.global_data.status.max_vs_num,DIM,NDF),
     )
 end
+
+"""
+$(TYPEDSIGNATURES)
+Update `df` in [`Ghost_VS_Data`](@ref) for the update of immersed boundaries. 
+    Currently, the communication occurs through all ghost layers. The difference between [`data_exchange!`](@ref) 
+    is that only immersed-boundary-related ghost cells' `mirror_data` is updated.
+"""
 function solid_exchange!(p4est::P_pxest_t, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     MPI.Comm_size(MPI.COMM_WORLD) == 1 && return nothing
     isempty(amr.global_data.config.IB) && return nothing
@@ -293,6 +309,11 @@ function solid_exchange!(p4est::P_pxest_t, amr::KitAMR_Data{DIM,NDF}) where{DIM,
         size_Ghost_Data(amr.global_data.status.max_vs_num,DIM,NDF),
     )
 end
+
+"""
+$(TYPEDSIGNATURES)
+Update `sdf` in [`Ghost_VS_Data`](@ref).
+"""
 function slope_exchange!(p4est::P_pxest_t, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     MPI.Comm_size(MPI.COMM_WORLD) == 1 && return nothing
     update_mirror_slope!(p4est, amr)

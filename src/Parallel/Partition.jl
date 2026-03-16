@@ -206,6 +206,10 @@ function partition_check(p4est::P_pxest_t)
     nums = [gfq[i]-gfq[i-1] for i in 2:MPI.Comm_size(MPI.COMM_WORLD)+1]
     return (maximum(nums)-minimum(nums))/minimum(nums)>0.1
 end
+
+"""
+$(TYPEDSIGNATURES)
+"""
 function partition_weight(p4est::P_pxest_t,which_tree,quadrant::P_pxest_quadrant_t)
     qp = PointerWrapper(quadrant)
     dp = PointerWrapper(P4est_PS_Data,qp.p.user_data[])
@@ -218,6 +222,9 @@ function partition_weight(p4est::P_pxest_t,which_tree,quadrant::P_pxest_quadrant
     end
     return Cint(ps_data.vs_data.vs_num)
 end
+"""
+$(TYPEDSIGNATURES)
+"""
 function partition!(p4est::Ptr{p4est_t},weight::Function = partition_weight)
     pp = PointerWrapper(p4est)
     gfq = Base.unsafe_wrap(
@@ -712,6 +719,10 @@ function insert_trees!(p4est::P_pxest_t, ti_data::Transfer_Init, amr::KitAMR_Dat
     amr.field.trees.offset = pp.first_local_tree[] - 1
 end
 
+"""
+$(TYPEDSIGNATURES)
+Re-partition grids in physical space to balance the computational load according to the weight function.
+"""
 function ps_partition!(p4est::P_pxest_t, amr::KitAMR_Data)
     src_gfq, dest_gfq, src_flt, src_llt = partition!(p4est)
     receives, sends, receive_nums, send_nums = get_receive_send(src_gfq, dest_gfq)

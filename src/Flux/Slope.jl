@@ -24,7 +24,7 @@ function minmod(sL::Real,sR::Real)
 end
 """
 $(TYPEDSIGNATURES)
-Difference in through all velocity cells in two neighboring physical cells.
+Difference through all velocity cells in two neighboring physical cells.
 """
 function diff_vs!(vs_data::AbstractVsData{DIM,NDF}, vs_data_n::AbstractVsData{DIM,NDF}, dsL::Float64, sL::AbstractMatrix) where{DIM,NDF}
     index = 1

@@ -488,5 +488,25 @@ function initialize_KitAMR(config::Dict)
     initialize_neighbor_data!(ps4est, amr)
     initialize_solid_neighbor!(amr)
     initialize_faces!(ps4est, amr)
-    return ps4est, amr
+    return ps4est,amr
+end
+function initialize_KitAMR(config::Configure{DIM,NDF}) where{DIM,NDF}
+    global_data = Global_Data(config)
+    trees, ps4est = initialize_field!(global_data)
+    field = Field{DIM,NDF}(trees,Vector{AbstractFace}(undef,0),ImmersedBoundary())
+    MPI.Barrier(MPI.COMM_WORLD)
+    amr = KitAMR_Data(
+        global_data,field
+    )
+    PointerWrapper(ps4est).user_pointer = pointer_from_objref(amr)
+    ps_partition!(ps4est, amr)
+    ghost_ps = AMR_ghost_new(ps4est)
+    mesh_ps = AMR_mesh_new(ps4est, ghost_ps)
+    global_data.forest.ghost = ghost_ps
+    global_data.forest.mesh = mesh_ps
+    amr.ghost = initialize_ghost(ps4est, global_data)
+    initialize_neighbor_data!(ps4est, amr)
+    initialize_solid_neighbor!(amr)
+    initialize_faces!(ps4est, amr)
+    return ps4est,amr
 end

@@ -1,3 +1,7 @@
+"""
+$(SIGNATURES)
+Perform a check procedure. Simulation status will be output every `RES_CHECK_INTERVAL` steps.
+"""
 function check!(i,ps4est,amr)
     if amr.global_data.status.residual.step%RES_CHECK_INTERVAL==0
         if MPI.Comm_rank(MPI.COMM_WORLD) == 0
@@ -16,13 +20,20 @@ function check!(i,ps4est,amr)
     end
     check_for_save!(ps4est,amr)
 end
-
+"""
+$(SIGNATURES)
+Start listening for the input from command line. Must be called before calling [`check_for_save!`](@ref).
+"""
 function listen_for_save!(;rank=0)
     if MPI.Comm_rank(MPI.COMM_WORLD)==rank
         Base.start_reading(stdin)
     end
     return nothing
 end
+"""
+$(SIGNATURES)
+Check whether `save` is input during the iteration. If the result is true, a saving process will be executed.
+"""
 function check_for_save!(ps4est::P_pxest_t,amr;rank=0)
     save_flag = amr.global_data.status.save_flag
     if MPI.Comm_rank(MPI.COMM_WORLD)==rank

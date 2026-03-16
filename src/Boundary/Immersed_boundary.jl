@@ -278,7 +278,7 @@ function vs_extrapolate!(df::AbstractMatrix{Float64},sdf::AbstractArray{Float64}
         end
     end
 end
-function update_solid_cell!(::Union{DVM,CAIDVM,UGKS},ps_data::PS_Data{DIM,NDF},fluid_cells::Vector,amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
+function update_solid_cell!(::Type{T},ps_data::PS_Data{DIM,NDF},fluid_cells::Vector,amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF,T<:Union{DVM,CAIDVM,UGKS}}
     vs_data = ps_data.vs_data;vs_data.df.=0.
     weights = Matrix{Float64}(undef,vs_data.vs_num,length(fluid_cells))
     for i in eachindex(fluid_cells)
@@ -533,7 +533,7 @@ function boundary_slope!(sdf::AbstractMatrix,level,level_n,sp_df,dc_df,sc_df,dxf
         end
     end
 end
-function update_solid_neighbor!(::AbstractFluxType,ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidNeighbor{DIM,NDF},amr::KitAMR_Data) where{DIM,NDF}
+function update_solid_neighbor!(::Type{T},ps_data::PS_Data{DIM,NDF},solid_neighbor::SolidNeighbor{DIM,NDF},amr::KitAMR_Data) where{DIM,NDF,T<:AbstractFluxType}
     global_data = amr.global_data;ib = global_data.config.IB[ps_data.bound_enc]
     vs_data = ps_data.vs_data
     aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal

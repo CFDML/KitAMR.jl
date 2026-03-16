@@ -1,3 +1,6 @@
+"""
+$(TYPEDSIGNATURES)
+"""
 function ps_refine_flag(
     ps_data::PS_Data{DIM},
     amr::KitAMR_Data{DIM},
@@ -26,7 +29,9 @@ function ps_refine_flag(
     end
     flag
 end
-
+"""
+$(TYPEDSIGNATURES)
+"""
 function ps_coarsen_flag(ps_datas::Vector{PS_Data}, levels::Vector{Int}, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     global_data = amr.global_data
     levels[1]>global_data.config.solver.AMR_DYNAMIC_PS_MAXLEVEL&&return Cint(0)
