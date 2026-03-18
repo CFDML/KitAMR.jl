@@ -1,3 +1,6 @@
+"""
+$(TYPEDSIGNATURES)
+"""
 function adaptive_mesh_refinement!(ps4est::P_pxest_t,amr::KitAMR_Data;ps_interval=40,vs_interval=80,partition_interval=40)
     amr.global_data.status.residual.redundant_step>0&&(return nothing)
     res = maximum(amr.global_data.status.residual.residual)

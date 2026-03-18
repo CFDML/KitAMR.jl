@@ -224,7 +224,10 @@ function calc_intersect(f_midpoint,s_midpoint,ds,dir,ib::Triangles)
     end
     return Float64[],Float64[]
 end
-
+"""
+$(TYPEDSIGNATURES)
+Whether a quadrant is overlap with the hyper_rec of the immersed boundary.
+"""
 function pre_partition_box_flag(midpoint,ds,ib::Triangles)
     r = ib.search_radius
     kdt = ib.tkdt.kdt
@@ -237,7 +240,10 @@ function pre_partition_box_flag(midpoint,ds,ib::Triangles)
         return false
     end
 end
-
+"""
+$(TYPEDSIGNATURES)
+Whether a quadrant is inside the refine radius of the immersed boundary.
+"""
 function search_radius_refine_flag!(i::Int,ib::Triangles,midpoint,ds,mesh_data)
     r = ib.search_radius
     kdt = ib.tkdt.kdt
@@ -258,7 +264,10 @@ end
 function solid_flag(ib::Triangles,midpoint)
     ray_casting(ib,midpoint)
 end
-
+"""
+$(TYPEDSIGNATURES)
+Whether a solid quadrant inside the search_radius is a ghost cell.
+"""
 function ghost_cell_flag(ib::Triangles,midpoint,ds)
     intersect_ids = all_intersect_test(midpoint,2.0*ds,ib.tkdt)
     isempty(intersect_ids)&&return false

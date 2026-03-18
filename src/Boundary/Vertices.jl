@@ -60,7 +60,7 @@ function calc_normal(p1,p2,s1,s2) # Calculate the unit normal vector of the vect
     end
     return n
 end
-function find_horizontal_intersection_2D(s_midpoint, f_midpoint, points)
+function find_horizontal_intersection(s_midpoint, f_midpoint, points)
     n = length(points)
     x_seg_min, x_seg_max = minmax(s_midpoint[1], f_midpoint[1])
     y0 = s_midpoint[2]
@@ -92,7 +92,7 @@ function find_horizontal_intersection_2D(s_midpoint, f_midpoint, points)
     throw("Intersect error!")
     return Float64[],Float64[]
 end
-function find_vertical_intersection_2D(s_midpoint, f_midpoint, points)
+function find_vertical_intersection(s_midpoint, f_midpoint, points)
     n = length(points)
     y_seg_min, y_seg_max = minmax(s_midpoint[2], f_midpoint[2])
     x0 = s_midpoint[1]

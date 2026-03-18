@@ -421,19 +421,18 @@ function vs_resolution(trees::PS_Trees,global_data)
     energy_res = MPI.Allreduce(energy_res, (x,y)->max(x,y), MPI.COMM_WORLD)
     return Velocity_Resolution(density_res,energy_res)
 end
-function vs_resolution(ps_data::PS_Data{DIM,1},global_data) where{DIM}
+function vs_resolution(ps_data::PS_Data{DIM,NDF},global_data) where{DIM,NDF}
     vs_data = ps_data.vs_data
     U = ps_data.prim[2:DIM+1]
     density_max = maximum(vs_data.df)
     c2 = @views [sum((U-u).^2) for u in eachrow(vs_data.midpoint)]
-    energy_max = 0.5*maximum(vs_data.df.*c2)
+    energy_max = NDF==1 ? 0.5*maximum(vs_data.df.*c2) : 0.5*maximum(@view(vs_data.df[:,1]).*c2+@view(vs_data.df[:,2]))
     vs_trees_num = global_data.config.vs_trees_num
     quadrature = global_data.config.quadrature
     du = [quadrature[2*i]-quadrature[2*i-1] for i in 1:DIM]
     weight = reduce(*,du)/reduce(*,vs_trees_num)/2^(DIM*(global_data.config.solver.AMR_VS_MAXLEVEL))
     return density_max*weight,energy_max*weight
 end
-
 """
 $(TYPEDSIGNATURES)
 """

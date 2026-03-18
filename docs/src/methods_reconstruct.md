@@ -1,5 +1,6 @@
 # Reconstruction
 
+## Slope
 In current version, the distribution function is reconstructed as a linear function. Besides the function value at center of the cell, the slope is also required. The slope is obtained by finite difference. To eliminate the oscillation near discontinuities, the vanLeer limiter is adopted. 
 
 ```@docs
@@ -64,3 +65,13 @@ Update macro slope `sw`. Currently, `sw` is only used as an indicator for AMR in
 ---
 
 To preserve the positivity of the distribution function, a positivity-preserving reconstruction strategy is adopted. Detailed information is in [Flux](@ref).
+
+## Immersed boundary method
+
+Boundaries with complex geometry are resolved with immersed boundary method. More specifically, a sharp interface method with ghost cell is adopted. Detailed information can be found in our paper https://doi.org/10.48550/arXiv.2512.20252. KitAMR.jl provided interfaces for the reconstruction of the ghost cells
+```@docs
+update_solid_cell!
+```
+```@docs
+update_solid_neighbor!
+```

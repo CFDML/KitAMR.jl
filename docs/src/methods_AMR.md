@@ -1,6 +1,9 @@
 # Adaptive mesh refinement 
 
-AMR is the core functionality of KitAMR.jl.
+AMR is the core functionality of KitAMR.jl. An integrated interface is provided
+```@docs
+adaptive_mesh_refinement!
+```
 
 ## Physical space
 
