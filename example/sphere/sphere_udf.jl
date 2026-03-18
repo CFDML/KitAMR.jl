@@ -1,6 +1,6 @@
 using LinearAlgebra
 function shock_wave_region(midpoint,ds,global_data,level)
-    refine_level = 5
+    refine_level = 4
     if midpoint[1]>-1.2&&midpoint[1]<1.2&&midpoint[2]<1.2&&midpoint[2]>-1.2&&√sum(midpoint.^2)>0.5&&midpoint[3]>-1.2&&midpoint[3]<1.2&&level<refine_level-2
         return true
     elseif midpoint[1]>-0.8&&midpoint[1]<0.8&&midpoint[2]<0.8&&midpoint[2]>-0.8&&√sum(midpoint.^2)>0.5&&midpoint[3]>-0.8&&midpoint[3]<0.8&&level<refine_level-1
@@ -8,14 +8,14 @@ function shock_wave_region(midpoint,ds,global_data,level)
     end
     return false
 end
-function sphere_buffer_IC(midpoint::Vector{Float64})
+function sphere_buffer_IC(midpoint::Vector{Float64};kwargs...)
     r = norm(midpoint)
     Ma = 3.834
     Tw = 1.0+(5/3-1)*0.5*Ma^2
     if r>1.0
         return [1.0,Ma*√(5/6),0.,0.,1.0]
     else
-        return [1.0,(r-0.5)/(1.0-0.5)*Ma*√(5/6),0.,0.,Tw-(r-0.5)*(Tw-1.0)]
+        return [1.0,(r-0.5)/(1.0-0.5)*Ma*√(5/6),0.,0.,1.0/(Tw-(r-0.5)*(Tw-1.0))]
     end
 end
 function vs_refine_region(midpoint;kwargs...)

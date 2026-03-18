@@ -10,4 +10,4 @@ end
 
 export Domain, Circle, Sphere, Vertices, Triangles, TriangleKDT
 export DomainFace
-export initialize_solid_neighbor!
+export initialize_solid_neighbor!, update_solid_neighbor!, update_solid_cell!

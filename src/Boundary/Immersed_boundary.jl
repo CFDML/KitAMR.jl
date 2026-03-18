@@ -303,6 +303,11 @@ function update_solid_cell!(ps_data::PS_Data{DIM,NDF},amr::KitAMR_Data{DIM,NDF})
     fluid_cells = [ps_data.neighbor.data[i][1] for i in fluid_dirs]
     update_solid_cell!(amr.global_data.config.solver.flux,ps_data,fluid_cells,amr)
 end
+
+"""
+$(TYPEDSIGNATURES)
+Update `solid_cell` in [`SolidNeighbor`](@ref) with interpolation.
+"""
 function update_solid_cell!(amr::KitAMR_Data)
     for tree in amr.field.trees.data
         for ps_data in tree
@@ -579,7 +584,11 @@ function update_solid_neighbor!(ps_data::PS_Data{DIM,NDF},amr::KitAMR_Data{DIM,N
         update_solid_neighbor!(amr.global_data.config.solver.flux,ps_data,ps_data.neighbor.data[i][1],amr)
     end
 end
-function update_solid_neighbor!(amr::KitAMR_Data{DIM,NDF};buffer_steps::Int=0,i::Int = typemax(Int64)) where{DIM,NDF}
+"""
+$(TYPEDSIGNATURES)
+Update [`VS_Data`](@ref) variables in [`SolidNeighbor`](@ref) with the immersed boundary method.
+"""
+function update_solid_neighbor!(amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
     for tree in amr.field.trees.data
         for ps_data in tree
             (isa(ps_data,InsideSolidData)||ps_data.bound_enc<=0)&&continue

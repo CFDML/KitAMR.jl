@@ -101,7 +101,7 @@ function Vertical_Volume_Flux(points::AbstractVector{Vector{Float64}},midpoint::
     for i in eachindex(points)
         p1 = points[i%N+1];p2 = points[i]
         dx= p1-p2
-        id = findall(x->x==0.,dx)
+        id = findall(x->abs(x)<3.0*eps(),dx)
         if length(id)>1
             throw(`Cut-cube Error!`)
         else
@@ -131,10 +131,11 @@ function cut_cube(n::Vector{Float64},C::Matrix{Float64},midpoint::Vector{Float64
     points = Vector{Vector{Float64}}(undef,6);index = 1
     dirs = permutedims(vertices)*n # what if vertices[i]=0.?
     for i in eachindex(vltable)
-        flag = dirs[vltable[i][1]]*dirs[vltable[i][2]] # flag==0: cut any end of the edge; flag<0: cut the edge; flag>0: not cut the edge
-        if flag==0.
+        d1 = dirs[vltable[i][1]]; d2 = dirs[vltable[i][2]]
+        flag = d1*d2 # flag==0: cut any end of the edge; flag<0: cut the edge; flag>0: not cut the edge
+        if min(abs(d1),abs(d2))<3.0*eps()
             if cld(i,4)==1 # avoid redundancy
-                if abs(dirs[vltable[i][1]])==0. # end A intersects
+                if abs(dirs[vltable[i][1]])<3.0*eps() # end A intersects
                     points[index] = vertices[:,vltable[i][1]];index+=1
                 else # end B intersects
                     points[index] = vertices[:,vltable[i][2]];index+=1
@@ -149,7 +150,7 @@ function cut_cube(n::Vector{Float64},C::Matrix{Float64},midpoint::Vector{Float64
     end
     index<4&&return false,0.,0.
     points = points[1:index-1]
-    posid = findall(x->x>0.,dirs)
+    posid = findall(x->x>3.0*eps(),dirs)
     pos = length(posid)<4 ? true : false # H represents solid?
     if any(x->abs(x)<EPS,n) # Simple case
         dir = findfirst(x->abs(x)<EPS,n) 
@@ -194,7 +195,7 @@ function cut_cube(n::Vector{Float64},C::Matrix{Float64},midpoint::Vector{Float64
             @views H+=Vertical_Volume_Flux(points[id],midpoint,vertices[:,posid])
             return true,8*prod(midpoint-@view(vertices[:,1]))-H,H # gas first
         else
-            negid = findall(x->x<0.,dirs)
+            negid = findall(x->x<-3.0*eps(),dirs)
             @views H+=Vertical_Volume_Flux(points[id],midpoint,vertices[:,negid])
             return true,H,8*prod(midpoint-@view(vertices[:,1]))-H
         end

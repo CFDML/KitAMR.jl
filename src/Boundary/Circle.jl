@@ -63,3 +63,38 @@ function calc_intersect(f_midpoint,s_midpoint,::Vector,::Int,circle::Sphere)
     ap[dir] = dz+f_midpoint[dir];n[dir] = dz+r_midpoint[dir];n/=(circle.solid ? r : -r)
     return ap,n
 end
+
+function pre_partition_box_flag(midpoint,ds,ib::AbstractCircle)
+    r = ib.search_radius
+    hyper_rec = HyperRectangle(SVector{3,Float64}(ib.center.-ib.radius.-r),SVector{3,Float64}(ib.center.+ib.radius.+r))
+    lower = midpoint-0.5*ds;upper = midpoint+0.5*ds
+    if overlap_test(lower,upper,hyper_rec)
+        return true
+    else
+        return false
+    end
+end
+
+function search_radius_refine_flag!(i::Int,ib::AbstractCircle,midpoint,ds,mesh_data)
+    r = ib.search_radius
+    hyper_rec = HyperRectangle(SVector{3,Float64}(ib.center.-ib.radius.-r),SVector{3,Float64}(ib.center.+ib.radius.+r))
+    lower = midpoint-0.5*ds;upper = midpoint+0.5*ds
+    if overlap_test(lower,upper,hyper_rec)
+        mesh_data.in_box = i
+        distance = abs(norm(midpoint-ib.center)-ib.radius)
+        if distance<r+0.5*norm(ds)
+            mesh_data.in_search_radius=i
+            return true
+        end
+    end
+    return false
+end
+
+function ghost_cell_flag(ib::Sphere,midpoint,ds)
+    flag = 0
+    for i = 1:6
+        flag += norm(midpoint.+ds.*NMT[3][i].-ib.center)>ib.radius ? 1 : -1 # any neighbor cross boundary?
+    end
+    abs(flag)==6 && return false
+    return true
+end

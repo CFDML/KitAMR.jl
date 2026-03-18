@@ -48,10 +48,8 @@ config = Configure(solver;
 )
 # ----------------------------------------------------------------------------------------------------
 
-
-
-ps4est,amr = KitAMR.initialize_KitAMR(config) # Initialization for `KitAMR_Data`.
-KitAMR.listen_for_save!() # Start listening for `save` input from `stdin`.
+ps4est,amr = initialize_KitAMR(config) # Initialization for `KitAMR_Data`.
+listen_for_save!() # Start listening for `save` input from `stdin`.
 max_sim_time = 20. # Maximum simulation time.
 nt = max_sim_time/amr.global_data.status.Δt+1.0 |> floor |> Int # Maximum number of time marching steps.
 

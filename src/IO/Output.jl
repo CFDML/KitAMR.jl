@@ -700,7 +700,7 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Voxel}
     end
     return vertices,cells,point_solutions,solutions
 end
-function save_surfaces_points(::String,::Vector{Boundary_Solution},amr::KitAMR_Data{2})
+function save_surfaces_pvtu(::String,::Vector{Boundary_Solution},amr::KitAMR_Data{2})
     return nothing
 end
 function save_surfaces_pvtu(dir_path::String,boundary_results::Vector{Boundary_Solution},amr::KitAMR_Data{3})
