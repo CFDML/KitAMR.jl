@@ -65,7 +65,7 @@ function iterate!(::Type{CAIDVM_Marching},amr::KitAMR_Data)
     gas = global_data.config.gas
     trees = amr.field.trees
     Δt = global_data.status.Δt
-    @inbounds for i in eachindex(trees.data)
+    for i in eachindex(trees.data)
         @inbounds for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
             isa(ps_data,InsideSolidData) && continue

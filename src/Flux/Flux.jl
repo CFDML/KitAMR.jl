@@ -373,7 +373,7 @@ Outer function for flux computation and update. The iteration is carried out thr
 """
 function flux!(amr::KitAMR_Data)
     faces = amr.field.faces
-    @simd for face in faces
+    for face in faces
         flux!(face,amr)
     end
     return nothing
