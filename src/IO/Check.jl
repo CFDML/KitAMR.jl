@@ -4,18 +4,21 @@ Perform a check procedure. Simulation status will be output every `RES_CHECK_INT
 """
 function check!(i,ps4est,amr)
     if amr.global_data.status.residual.step%RES_CHECK_INTERVAL==0
+        max_vs_num,total_phase_num = check_vs_num(amr)
         if MPI.Comm_rank(MPI.COMM_WORLD) == 0
             i+=1
-            @show i
+            println("Iteration: $i")
             sim_time = amr.global_data.status.sim_time
-            @show sim_time
+            println("Simulation time: $sim_time")
             res = maximum(amr.global_data.status.residual.residual)
-            @show res
-            pp = PointerWrapper(ps4est)
-            local_num_quadrants = pp.local_num_quadrants[]
-            @show local_num_quadrants
+            println("Residual: $res")
             ref_vs_num = amr.global_data.status.max_vs_num
-            @show ref_vs_num
+            println("MPI buffer size: $ref_vs_num")
+            println("Maximum number of velocity grids: $max_vs_num")
+            pp = PointerWrapper(ps4est)
+            global_num_quadrants = pp.global_num_quadrants[]
+            println("Total number of physical grids: $global_num_quadrants")
+            println("Total number of phase grids: $total_phase_num")
         end
     end
     check_for_save!(ps4est,amr)
@@ -164,4 +167,42 @@ function check_for_animsave!(ps4est::Ptr{p4est_t},amr;path="./animation")
         end
         output.anim_index += 1
     end
+end
+
+function check_vs_num(amr::KitAMR_Data)
+    trees = amr.field.trees.data
+    buffer = zeros(Int,2) # [max,total]
+    for tree in trees
+        for ps_data in tree
+            isa(ps_data,InsideSolidData)&&continue
+            ps_data.bound_enc<0&&continue
+            vs_num = ps_data.vs_data.vs_num
+            buffer[1] = max(buffer[1],vs_num)
+            buffer[2] += vs_num
+        end
+    end
+    if MPI.Comm_rank(MPI.COMM_WORLD)==0
+        buffer[1] = MPI.Reduce(buffer[1],(x,y)->(
+            max(x,y)
+        ),
+        MPI.COMM_WORLD
+        )
+        buffer[2] = MPI.Reduce(buffer[1],(x,y)->(
+            x+y
+        ),
+        MPI.COMM_WORLD
+        )
+    else
+        MPI.Reduce(buffer[1],(x,y)->(
+            max(x,y)
+        ),
+        MPI.COMM_WORLD
+        )
+        MPI.Reduce(buffer[2],(x,y)->(
+            x+y
+        ),
+        MPI.COMM_WORLD
+        )
+    end
+    return buffer
 end

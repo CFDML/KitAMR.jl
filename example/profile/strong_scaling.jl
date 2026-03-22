@@ -1,4 +1,5 @@
-using KitAMR,MPI
+Pkg.add(NVTX)
+using KitAMR,MPI,NVTX
 MPI.Init()
 
 solver = Solver(;
@@ -38,33 +39,37 @@ ps4est,amr = initialize_KitAMR(config);
 KitAMR.listen_for_save!()
 max_sim_time = 20.
 nt = max_sim_time/amr.global_data.status.Δt+1.0 |> floor |> Int
-for i in 1:nt
+for i in 1:10
     # adaptive_mesh_refinement!(ps4est,amr)
     if MPI.Comm_rank(MPI.COMM_WORLD)==0
        @show i     
     end
-    if i==5
-        MPI.Barrier(MPI.COMM_WORLD)
-        t_start = time_ns()
+    NVTX.@range "update_slope" begin
+        update_slope!(amr)
     end
-    if i==25
-        MPI.Barrier(MPI.COMM_WORLD)
-        t_end = time_ns()
-        if MPI.Comm_rank(MPI.COMM_WORLD)==0
-            global t_start
-            time = (t_end-t_start)/1e9
-            @show time
-        end
-        break
+    MPI.Barrier(MPI.COMM_WORLD)
+    NVTX.@range "slope_exchange" begin
+        slope_exchange!(ps4est, amr) 
     end
-    update_slope!(amr)
-    slope_exchange!(ps4est, amr) 
-    update_solid_cell!(amr)
-    data_exchange!(ps4est, amr)
-    update_solid_neighbor!(amr)
-    flux!(amr) 
-    iterate!(amr) 
-    data_exchange!(ps4est, amr)
+    NVTX.@range "update_solid_cell" begin
+        update_solid_cell!(amr)
+    end
+    NVTX.@range "solid_exchange" begin
+        solid_exchange!(ps4est, amr)
+    end
+    NVTX.@range "update_solid_neighbor" begin
+        update_solid_neighbor!(amr)
+    end
+    NVTX.@range "flux" begin
+        flux!(amr) 
+    end
+    NVTX.@range "iterate" begin
+        iterate!(amr) 
+    end
+    MPI.Barrier(MPI.COMM_WORLD)
+    NVTX.@range "data_exchange" begin
+        data_exchange!(ps4est, amr)
+    end
     check_for_convergence(amr)&&break
     check!(i,ps4est,amr)
 end

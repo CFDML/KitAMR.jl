@@ -108,14 +108,12 @@ function calc_flux(::Type{CAIDVM},here_vs,there_vs,flux_data::Union{FullFace,Flu
         dx = [midpoint[j]-here_mid[i,j]*Δt-here_ps_mid[j] for i in axes(here_mid,1),j in axes(here_mid,2)]
         ndx = [midpoint[j]-there_mid[i,j]*Δt-there_ps_mid[j] for i in axes(there_mid,1),j in axes(there_mid,2)]
         if there_data.bound_enc<0
-            df = [here_df[i,j]+dot(dx[i,:],here_sdf[i,j,:]) for i in axes(here_df,1),j in axes(here_df,2)]
-            ndf = [there_df[i,j]+dot(ndx[i,:],there_sdf[i,j,:]) for i in axes(there_df,1),j in axes(there_df,2)]
+            here_micro = [(here_df[i,j]+dot(dx[i,:],here_sdf[i,j,:]))*here_vn[i] for i in axes(here_df,1),j in axes(here_df,2)]
+            there_micro = [(there_df[i,j]+dot(ndx[i,:],there_sdf[i,j,:]))*there_vn[i] for i in axes(there_df,1),j in axes(there_df,2)]
         else
-            df = positivity_preserving_reconstruct(here_df,here_sdf,here_data.ds,dx)
-            ndf = positivity_preserving_reconstruct(there_df,there_sdf,there_data.ds,ndx)
+            here_micro = positivity_preserving_reconstruct(here_df,here_sdf,here_data.ds,dx,here_vn)
+            there_micro = positivity_preserving_reconstruct(there_df,there_sdf,there_data.ds,ndx,there_vn)
         end
-        here_micro = [df[i,j]*here_vn[i] for i in axes(df,1),j in axes(df,2)]
-        there_micro = [ndf[i,j]*there_vn[i] for i in axes(ndf,1),j in axes(ndf,2)]
     end
     here_weight = here_vs.weight;there_weight = there_vs.weight
     fw = micro_to_macro(here_micro,here_mid,here_weight,here_data.vs_data)+micro_to_macro(there_micro,there_mid,there_weight,here_data.vs_data)
@@ -126,10 +124,9 @@ end
 $(TYPEDSIGNATURES)
 Positivity preserving reconstruction (10.1016/j.jcp.2009.12.030).
 """
-function positivity_preserving_reconstruct(here_df,here_sdf,here_ds,dx) # positivity preserving reconstruct (10.1016/j.jcp.2009.12.030)
+function positivity_preserving_reconstruct(here_df,here_sdf,here_ds,dx,vn) # positivity preserving reconstruct (10.1016/j.jcp.2009.12.030)
     @views begin
-        β = [min(abs(here_df[i,j]/(0.5*dot(here_ds,abs.(here_sdf[i,j,:]))+EPS)),1.) for i in axes(here_df,1),j in axes(here_df,2)]
-        df = [here_df[i,j]+β[i,j]*dot(dx[i,:],here_sdf[i,j,:]) for i in axes(here_df,1),j in axes(here_df,2)]
+        micro = [(here_df[i,j]+min(abs(here_df[i,j]/(0.5*dot(here_ds,abs.(here_sdf[i,j,:]))+EPS)),1.)*dot(dx[i,:],here_sdf[i,j,:]))*vn[i] for i in axes(here_df,1),j in axes(here_df,2)]
     end
-    return df
+    return micro
 end
