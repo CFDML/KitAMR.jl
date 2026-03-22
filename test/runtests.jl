@@ -2,7 +2,7 @@ using KitAMR, MPI
 MPI.Init()
 
 solver = Solver(;
-    DIM = 3, NDF = 1,
+    DIM = 2, NDF = 2,
     AMR_PS_MAXLEVEL = 0,
     AMR_VS_MAXLEVEL = 0,
     PS_DYNAMIC_AMR = false,
@@ -19,15 +19,15 @@ gas = Gas(;
 output = Output(solver)
 udf = UDF()
 config = Configure(solver;
-    geometry = [-0.5,0.5,-0.5,0.5,-0.5,0.5],
-    trees_num = [16,16,16],
-    quadrature = [-5.0,5.0,-5.0,5.0,-5.0,5.0],
-    vs_trees_num = [24,24,24],
-    IC = Uniform([1.,0.,0.,0.,1.]),
+    geometry = [-0.5,0.5],
+    trees_num = [16,16],
+    quadrature = [-5.0,5.0,-5.0,5.0],
+    vs_trees_num = [16,16],
+    IC = Uniform([1.,0.,0.,1.]),
     domain = [
-            Domain(Maxwellian,1,[1.,0.,0.,0.,1.]),
-            Domain(Maxwellian,2,[1.,1.0*sqrt(5/6),0.,0.,1.0]),Domain(Period,3),
-            Domain(Period,4),Domain(Period,5),Domain(Period,6)
+            Domain(Maxwellian,1,[1.,0.,0.,1.]),
+            Domain(Maxwellian,2,[1.,1.0*sqrt(5/6),0.,1.0]),Domain(Period,3),
+            Domain(Period,4)
         ],
     output = output,
     gas = gas,
@@ -35,7 +35,6 @@ config = Configure(solver;
 )
 
 ps4est,amr = initialize_KitAMR(config);
-KitAMR.listen_for_save!()
 max_sim_time = 20.
 nt = max_sim_time/amr.global_data.status.Δt+1.0 |> floor |> Int
 for i in 1:10
