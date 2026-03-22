@@ -20,8 +20,8 @@ function check!(i,ps4est,amr)
             println("Total number of physical grids: $global_num_quadrants")
             println("Total number of phase grids: $total_phase_num")
         end
+        check_for_save!(ps4est,amr)
     end
-    check_for_save!(ps4est,amr)
 end
 """
 $(SIGNATURES)
