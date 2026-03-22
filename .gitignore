@@ -4,7 +4,7 @@ tuto/
 .CondaPkg/
 p
 check.png
-.vscode/settings.json
+.vscode
 .DS_Store
 result20*
 boundary_vs
@@ -16,4 +16,3 @@ result_*
 animation
 *.json
 *.jld2
-test*
