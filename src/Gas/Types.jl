@@ -22,17 +22,15 @@ mutable struct Gas <: AbstractGas
     "The reference temperature of the molecular model. Default is `1.0`."
     T_ref::Float64 # The reference temperature of the molecular model
 end
-function Gas(;kwargs...)
-    Kn = haskey(kwargs,:Kn) ? kwargs[:Kn] : 0.05
-    Pr = haskey(kwargs,:Pr) ? kwargs[:Pr] : 2/3
-    K = haskey(kwargs,:K) ? kwargs[:K] : 1.0
-    γ = haskey(kwargs,:γ) ? kwargs[:γ] : 5/3
-    ω = haskey(kwargs,:ω) ? kwargs[:ω] : 0.5
-    αᵣ = haskey(kwargs,:αᵣ) ? kwargs[:αᵣ] : 1.0
-    ωᵣ = haskey(kwargs,:ωᵣ) ? kwargs[:ωᵣ] : 0.81
-    μᵣ = haskey(kwargs,:μᵣ) ? kwargs[:μᵣ] : ref_vhs_vis(Kn,αᵣ,ωᵣ)
-    T_ref = haskey(kwargs,:T_ref) ? kwargs[:T_ref] : 1.0
-    return Gas(
-        Kn,Pr,K,γ,ω,αᵣ,ωᵣ,μᵣ,T_ref
-    )
+function Gas(; kwargs...)
+    Kn = haskey(kwargs, :Kn) ? kwargs[:Kn] : 0.05
+    Pr = haskey(kwargs, :Pr) ? kwargs[:Pr] : 2/3
+    K = haskey(kwargs, :K) ? kwargs[:K] : 1.0
+    γ = haskey(kwargs, :γ) ? kwargs[:γ] : 5/3
+    ω = haskey(kwargs, :ω) ? kwargs[:ω] : 0.5
+    αᵣ = haskey(kwargs, :αᵣ) ? kwargs[:αᵣ] : 1.0
+    ωᵣ = haskey(kwargs, :ωᵣ) ? kwargs[:ωᵣ] : 0.81
+    μᵣ = haskey(kwargs, :μᵣ) ? kwargs[:μᵣ] : ref_vhs_vis(Kn, αᵣ, ωᵣ)
+    T_ref = haskey(kwargs, :T_ref) ? kwargs[:T_ref] : 1.0
+    return Gas(Kn, Pr, K, γ, ω, αᵣ, ωᵣ, μᵣ, T_ref)
 end

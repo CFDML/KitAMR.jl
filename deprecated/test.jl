@@ -1,14 +1,14 @@
-using KitAMR,MPI,CairoMakie
+using KitAMR, MPI, CairoMakie
 
 MPI.Init()
 config = KitAMR.read_config("configure_2D.txt")
-ps4est,amr = KitAMR.init(config);
+ps4est, amr = KitAMR.init(config);
 
 for i = 1:50
     if amr.global_data.status.ps_adapt_step == 10
         KitAMR.update_slope!(amr)
         KitAMR.update_gradmax!(amr)
-        KitAMR.ps_refine!(ps4est,amr)
+        KitAMR.ps_refine!(ps4est, amr)
         KitAMR.ps_coarsen!(ps4est)
         KitAMR.ps_balance!(ps4est)
         if amr.global_data.status.partition_step == 20
@@ -25,19 +25,19 @@ for i = 1:50
         KitAMR.update_faces!(ps4est, amr)
         amr.global_data.status.ps_adapt_step = 0
     end
-    KitAMR.update_Δt!(amr) 
-    KitAMR.update_slope!(amr) 
-    KitAMR.slope_exchange!(ps4est, amr) 
-    KitAMR.update_flux!(amr) 
+    KitAMR.update_Δt!(amr)
+    KitAMR.update_slope!(amr)
+    KitAMR.slope_exchange!(ps4est, amr)
+    KitAMR.update_flux!(amr)
     # 2.540001 seconds (30.35 M allocations: 6.902 GiB, 11.05% gc time) vcat()
     # 5.969858 seconds (45.08 M allocations: 9.719 GiB, 9.98% gc time, 0.05% compilation time) Vcat()
-    KitAMR.update_volume!(amr) 
+    KitAMR.update_volume!(amr)
     KitAMR.data_exchange!(ps4est, amr)
     amr.global_data.status.ps_adapt_step += 1
     amr.global_data.status.vs_adapt_step += 1
     amr.global_data.status.partition_step += 1
     if MPI.Comm_rank(MPI.COMM_WORLD) == 0
-	@show i
+        @show i
         @show amr.global_data.status.sim_time
         pp = KitAMR.PointerWrapper(ps4est)
         @show pp.local_num_quadrants[]
@@ -53,7 +53,7 @@ function fieldvalues_fn(ps_data)
     return [1/ps_data.prim[end]]
 end
 
-KitAMR.write_VTK(ps4est,"testT",["T"],fieldvalues_fn)
+KitAMR.write_VTK(ps4est, "testT", ["T"], fieldvalues_fn)
 # solutions = KitAMR.collect_solution(ps4est,amr)
 # dir_path = "./result/PS_result/"
 # !isdir(dir_path) && mkpath(dir_path)

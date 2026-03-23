@@ -17,16 +17,21 @@ end
 """
 $(TYPEDSIGNATURES)
 """
-function minmod(sL::Real,sR::Real)
+function minmod(sL::Real, sR::Real)
     SL = abs(sL)
     SR = abs(sR)
-    0.5(sign(sL)+sign(sR))*min(SL,SR)
+    0.5(sign(sL)+sign(sR))*min(SL, SR)
 end
 """
 $(TYPEDSIGNATURES)
 Difference through all velocity cells in two neighboring physical cells.
 """
-function diff_vs!(vs_data::AbstractVsData{DIM,NDF}, vs_data_n::AbstractVsData{DIM,NDF}, dsL::Float64, sL::AbstractMatrix) where{DIM,NDF}
+function diff_vs!(
+    vs_data::AbstractVsData{DIM,NDF},
+    vs_data_n::AbstractVsData{DIM,NDF},
+    dsL::Float64,
+    sL::AbstractMatrix,
+) where {DIM,NDF}
     index = 1
     flag = 0.0
     level = vs_data.level
@@ -70,7 +75,7 @@ function update_slope_bound_vs!(
     neighbor_datas::AbstractVector,
     ds::Float64,
     dir::Int,
-) where{DIM,NDF}
+) where {DIM,NDF}
     sdf = zeros(Float64, vs_data.vs_num, NDF)
     N = length(neighbor_datas)
     for j = 1:N
@@ -90,15 +95,16 @@ function update_slope_inner_vs!(
     dsL::Float64,
     dsR::Float64,
     dir::Int,
-) where{DIM,NDF}
+) where {DIM,NDF}
     sL = zeros(Float64, vs_data.vs_num, NDF)
     sR = zeros(Float64, vs_data.vs_num, NDF)
-    nL = length(Ldata);nR = length(Rdata)
-    for j in 1:nL
+    nL = length(Ldata);
+    nR = length(Rdata)
+    for j = 1:nL
         L_data = Ldata[j].vs_data
         diff_vs!(vs_data, L_data, dsL, sL)
     end
-    for j in 1:nR
+    for j = 1:nR
         R_data = Rdata[j].vs_data
         diff_vs!(vs_data, R_data, dsR, sR)
     end
@@ -109,24 +115,27 @@ end
 $(TYPEDSIGNATURES)
 """
 function update_slope_inner_ps!(
-    ps_data::PS_Data{DIM,NDF}, 
-    Ldata::AbstractVector, 
-    Rdata::AbstractVector, 
-    dsL::Float64, 
-    dsR::Float64, 
+    ps_data::PS_Data{DIM,NDF},
+    Ldata::AbstractVector,
+    Rdata::AbstractVector,
+    dsL::Float64,
+    dsR::Float64,
     dir::Int,
-) where{DIM,NDF}
-    swL = zeros(Float64,DIM+2);swR = zeros(Float64,DIM+2)
-    nL = length(Ldata);nR = length(Rdata)
-    for j in 1:nL
+) where {DIM,NDF}
+    swL = zeros(Float64, DIM+2);
+    swR = zeros(Float64, DIM+2)
+    nL = length(Ldata);
+    nR = length(Rdata)
+    for j = 1:nL
         @. swL += (ps_data.w-Ldata[j].w)/dsL
     end
-    for j in 1:nR
+    for j = 1:nR
         @. swR += (ps_data.w-Rdata[j].w)/dsR
     end
-    swL/=nL;swR/=nR
+    swL/=nL;
+    swR/=nR
     for j in eachindex(swL)
-        ps_data.sw[j,dir] = abs(swL[j])>abs(swR[j]) ? swL[j] : swR[j]
+        ps_data.sw[j, dir] = abs(swL[j])>abs(swR[j]) ? swL[j] : swR[j]
     end
     return nothing
 end
@@ -134,18 +143,18 @@ end
 $(TYPEDSIGNATURES)
 """
 function update_slope_bound_ps!(
-    ps_data::PS_Data{DIM,NDF}, 
-    Ldata::AbstractVector, 
-    dsL::Float64, 
+    ps_data::PS_Data{DIM,NDF},
+    Ldata::AbstractVector,
+    dsL::Float64,
     dir::Int,
-) where{DIM,NDF}
-    swL = zeros(Float64,DIM+2)
+) where {DIM,NDF}
+    swL = zeros(Float64, DIM+2)
     nL = length(Ldata)
-    for j in 1:nL
+    for j = 1:nL
         @. swL += (ps_data.w-Ldata[j].w)/dsL
     end
     swL/=nL
-    ps_data.sw[:,dir] .= swL
+    ps_data.sw[:, dir] .= swL
     return nothing
 end
 
@@ -164,15 +173,15 @@ function update_slope!(
     dir::Integer,
 ) where {DIM,NDF}
     if Ldata[1].bound_enc<0&&Rdata[1].bound_enc<0
-        ps_data.vs_data.sdf[:,:,dir] .= 0.
+        ps_data.vs_data.sdf[:, :, dir] .= 0.0
     elseif Ldata[1].bound_enc<0
         ds = ps_data.midpoint[dir]-Rdata[1].midpoint[dir]
-        update_slope_bound_vs!(ps_data.vs_data,Rdata,ds,dir)
-        update_slope_bound_ps!(ps_data,Rdata,ds,dir)
+        update_slope_bound_vs!(ps_data.vs_data, Rdata, ds, dir)
+        update_slope_bound_ps!(ps_data, Rdata, ds, dir)
     elseif Rdata[1].bound_enc<0
         ds = ps_data.midpoint[dir]-Ldata[1].midpoint[dir]
-        update_slope_bound_vs!(ps_data.vs_data,Ldata,ds,dir)
-        update_slope_bound_ps!(ps_data,Ldata,ds,dir)
+        update_slope_bound_vs!(ps_data.vs_data, Ldata, ds, dir)
+        update_slope_bound_ps!(ps_data, Ldata, ds, dir)
     else
         ds = ps_data.ds[dir]
         update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ds, -ds, dir)
@@ -412,13 +421,13 @@ end
 """
 $(TYPEDSIGNATURES)
 """
-function update_slope!(amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
+function update_slope!(amr::KitAMR_Data{DIM,NDF}) where {DIM,NDF}
     trees = amr.field.trees
     global_data = amr.global_data
     @inbounds for i in eachindex(trees.data)
         @inbounds for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
-            isa(ps_data,InsideSolidData) && continue
+            isa(ps_data, InsideSolidData) && continue
             ps_data.bound_enc<0 && continue # solid_cells
             neighbor = ps_data.neighbor
             for dir = 1:DIM

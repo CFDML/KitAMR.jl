@@ -24,9 +24,7 @@ include("pointerwrappers.jl")
 """
     P4est.uses_mpi()
 
-Is intended to return `true`` if the `p4est` library was compiled with MPI
-enabled. Since P4est.jl currently only supports `p4est` with MPI enabled,
-this may always return `true`.
+Is intended to return ```true`` if the ```p4est`library was compiled with MPI enabled. Since P4est.jl currently only supports`p4est`with MPI enabled, this may always return`true`.
 """
 uses_mpi() = isdefined(@__MODULE__, :P4EST_ENABLE_MPI)
 
@@ -108,8 +106,8 @@ path_sc_library() = _PREFERENCE_LIBSC
 Returns `false` if a system-provided MPI installation is set via the MPIPreferences, but
 not a system-provided `p4est` installation. In this case, P4est.jl is not usable.
 """
-preferences_set_correctly() = !(_PREFERENCE_LIBP4EST == "P4est_jll" &&
-                                MPIPreferences.binary == "system")
+preferences_set_correctly() =
+    !(_PREFERENCE_LIBP4EST == "P4est_jll" && MPIPreferences.binary == "system")
 
 """
     P4est.init(log_handler, log_threshold)
@@ -119,9 +117,11 @@ nothing. Thus, `P4est.init` can safely be called multiple times.
 
 To use the default log handler and suppress most output created by default by
 `p4est`, call this function as
+
 ```julia
 P4est.init(C_NULL, SC_LP_ERROR)
 ```
+
 before calling other functions from `p4est`.
 """
 function init(log_handler, log_threshold)

@@ -13,6 +13,7 @@ to having to load/store the entire struct when accessing only a single field. Th
 be helpful especially when accessing data in nested structures.
 
 ### Example
+
 ```repl
 julia> using P4est, MPI
 
@@ -78,8 +79,10 @@ function Base.setproperty!(pw::PointerWrapper{T}, name::Symbol, v) where {T}
         # see https://github.com/trixi-framework/P4est.jl/issues/72 and https://github.com/trixi-framework/P4est.jl/issues/79
         return Base.setproperty!(pointer(pw), name, v)
     end
-    return unsafe_store!(reinterpret(Ptr{fieldtype(T, i)}, pointer(pw) + fieldoffset(T, i)),
-                         v)
+    return unsafe_store!(
+        reinterpret(Ptr{fieldtype(T, i)}, pointer(pw) + fieldoffset(T, i)),
+        v,
+    )
 end
 
 # `[]` allows one to access the actual underlying data and
@@ -91,10 +94,12 @@ Base.setindex!(pw::PointerWrapper, value, i::Integer = 1) = unsafe_store!(pw, va
 Base.unsafe_load(pw::PointerWrapper, i::Integer = 1) = unsafe_load(pointer(pw), i)
 
 # When `unsafe_wrap`ping a PointerWrapper object, we really want to wrap the underlying array
-function Base.unsafe_wrap(AType::Union{Type{Array}, Type{Array{T}}, Type{Array{T, N}}},
-                          pw::PointerWrapper,
-                          dims::Union{NTuple{N, Int}, Integer};
-                          own::Bool = false,) where {T, N}
+function Base.unsafe_wrap(
+    AType::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
+    pw::PointerWrapper,
+    dims::Union{NTuple{N,Int},Integer};
+    own::Bool = false,
+) where {T,N}
     unsafe_wrap(AType, pointer(pw), dims; own)
 end
 
