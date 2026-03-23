@@ -2,9 +2,14 @@ include("CAIDVM.jl")
 include("DVM.jl")
 include("UGKS.jl")
 include("Slope.jl")
-export update_slope!, update_slope_inner_vs!, update_slope_bound_vs!, update_slope_inner_ps!, update_slope_bound_ps!
+export update_slope!,
+    update_slope_inner_vs!,
+    update_slope_bound_vs!,
+    update_slope_inner_ps!,
+    update_slope_bound_ps!
 export vanleer, minmod, diff_vs!
-export flux!, update_flux!, update_domain_flux!, update_micro_flux!, update_macro_flux!, make_face_vs
+export flux!,
+    update_flux!, update_domain_flux!, update_micro_flux!, update_macro_flux!, make_face_vs
 export calc_flux, calc_domain_flux, positivity_preserving_reconstruct
 
 function face_area(ps_data::AbstractPsData{2}, DIR::Integer)
@@ -16,44 +21,70 @@ end
 """
 $(TYPEDSIGNATURES)
 """
-function flux!(face::DomainFace,amr::KitAMR_Data)
+function flux!(face::DomainFace, amr::KitAMR_Data)
     here_vs = make_face_vs(face)
-    flux,micro_flux = calc_domain_flux(amr.global_data.config.solver.flux,here_vs,face,amr)
-    update_domain_flux!(flux,micro_flux,face,here_vs.heavi)
+    flux, micro_flux =
+        calc_domain_flux(amr.global_data.config.solver.flux, here_vs, face, amr)
+    update_domain_flux!(flux, micro_flux, face, here_vs.heavi)
     return nothing
 end
 """
 $(TYPEDSIGNATURES)
 """
-function flux!(face::FullFace,amr::KitAMR_Data)
-    here_vs,there_vs = make_face_vs(face)
-    flux,micro_flux = calc_flux(amr.global_data.config.solver.flux,here_vs,there_vs,face,amr)
-    update_flux!(flux,micro_flux,face,here_vs.heavi)
+function flux!(face::FullFace, amr::KitAMR_Data)
+    here_vs, there_vs = make_face_vs(face)
+    flux, micro_flux =
+        calc_flux(amr.global_data.config.solver.flux, here_vs, there_vs, face, amr)
+    update_flux!(flux, micro_flux, face, here_vs.heavi)
     return nothing
 end
 """
 $(TYPEDSIGNATURES)
 """
-function flux!(face::HangingFace{DIM,NDF},amr::KitAMR_Data) where{DIM,NDF}
-    rot,direction,midpoint,here_data,there_data = unpack(face)
-    here_vs,there_vs = make_face_vs(face)
+function flux!(face::HangingFace{DIM,NDF}, amr::KitAMR_Data) where {DIM,NDF}
+    rot, direction, midpoint, here_data, there_data = unpack(face)
+    here_vs, there_vs = make_face_vs(face)
     for i in eachindex(there_vs)
-        flux_data = FluxData{HangingFace{DIM,NDF}}(rot,direction,midpoint[i],here_data,there_data[i])
-        flux,micro_flux = calc_flux(amr.global_data.config.solver.flux,here_vs,there_vs[i],flux_data,amr)
-        update_flux!(flux,micro_flux,flux_data,here_vs.heavi)
+        flux_data = FluxData{HangingFace{DIM,NDF}}(
+            rot,
+            direction,
+            midpoint[i],
+            here_data,
+            there_data[i],
+        )
+        flux, micro_flux = calc_flux(
+            amr.global_data.config.solver.flux,
+            here_vs,
+            there_vs[i],
+            flux_data,
+            amr,
+        )
+        update_flux!(flux, micro_flux, flux_data, here_vs.heavi)
     end
     return nothing
 end
 """
 $(TYPEDSIGNATURES)
 """
-function flux!(face::BackHangingFace{DIM,NDF},amr::KitAMR_Data) where{DIM,NDF}
-    rot,direction,midpoint,here_data,there_data = unpack(face)
-    here_vs,there_vs = make_face_vs(face)
+function flux!(face::BackHangingFace{DIM,NDF}, amr::KitAMR_Data) where {DIM,NDF}
+    rot, direction, midpoint, here_data, there_data = unpack(face)
+    here_vs, there_vs = make_face_vs(face)
     for i in eachindex(here_vs)
-        flux_data = FluxData{BackHangingFace{DIM,NDF}}(rot,direction,midpoint[i],here_data[i],there_data)
-        flux,micro_flux = calc_flux(amr.global_data.config.solver.flux,here_vs[i],there_vs,flux_data,amr)
-        update_flux!(flux,micro_flux,flux_data,here_vs[i].heavi)
+        flux_data = FluxData{BackHangingFace{DIM,NDF}}(
+            rot,
+            direction,
+            midpoint[i],
+            here_data[i],
+            there_data,
+        )
+        flux, micro_flux = calc_flux(
+            amr.global_data.config.solver.flux,
+            here_vs[i],
+            there_vs,
+            flux_data,
+            amr,
+        )
+        update_flux!(flux, micro_flux, flux_data, here_vs[i].heavi)
     end
     return nothing
 end
@@ -61,59 +92,89 @@ end
 """
 $(TYPEDSIGNATURES)
 """
-function update_domain_flux!(flux::AbstractVector,micro_flux::Vector{Matrix{Float64}},face::DomainFace,heavi::Vector{Bool})
-    rot,direction,_,_,ps_data = unpack(face)
-    area = rot*face_area(ps_data,direction)
-    here_micro,there_micro = micro_flux
+function update_domain_flux!(
+    flux::AbstractVector,
+    micro_flux::Vector{Matrix{Float64}},
+    face::DomainFace,
+    heavi::Vector{Bool},
+)
+    rot, direction, _, _, ps_data = unpack(face)
+    area = rot*face_area(ps_data, direction)
+    here_micro, there_micro = micro_flux
     ps_data.flux .+= area*flux
-    ps_data.vs_data.flux[heavi,:] .+= area*here_micro
-    ps_data.vs_data.flux[.!heavi,:] .+= area*there_micro
+    ps_data.vs_data.flux[heavi, :] .+= area*here_micro
+    ps_data.vs_data.flux[.!heavi, :] .+= area*there_micro
     return nothing
 end
 """
 $(TYPEDSIGNATURES)
 """
-function update_domain_flux!(::Nothing,micro_flux::Vector{Matrix{Float64}},face::DomainFace,heavi::Vector{Bool})
-    rot,direction,_,_,ps_data = unpack(face)
-    area = rot*face_area(ps_data,direction)
-    here_micro,there_micro = micro_flux
-    ps_data.vs_data.flux[heavi,:] .+= area*here_micro
-    ps_data.vs_data.flux[.!heavi,:] .+= area*there_micro
+function update_domain_flux!(
+    ::Nothing,
+    micro_flux::Vector{Matrix{Float64}},
+    face::DomainFace,
+    heavi::Vector{Bool},
+)
+    rot, direction, _, _, ps_data = unpack(face)
+    area = rot*face_area(ps_data, direction)
+    here_micro, there_micro = micro_flux
+    ps_data.vs_data.flux[heavi, :] .+= area*here_micro
+    ps_data.vs_data.flux[.!heavi, :] .+= area*there_micro
     return nothing
 end
-function face_area(::FluxData{HangingFace{DIM,NDF}},here_data::AbstractPsData{DIM},direction,rot) where{DIM,NDF}
-    face_area(here_data,direction)/2^(DIM-1)*rot
+function face_area(
+    ::FluxData{HangingFace{DIM,NDF}},
+    here_data::AbstractPsData{DIM},
+    direction,
+    rot,
+) where {DIM,NDF}
+    face_area(here_data, direction)/2^(DIM-1)*rot
 end
-function face_area(::T,here_data,direction,rot) where{T<:Union{FluxData{BackHangingFace{DIM,NDF}},FullFace{DIM,NDF}} where{DIM,NDF}}
-    face_area(here_data,direction)*rot
+function face_area(
+    ::T,
+    here_data,
+    direction,
+    rot,
+) where {T<:Union{FluxData{BackHangingFace{DIM,NDF}},FullFace{DIM,NDF}} where {DIM,NDF}}
+    face_area(here_data, direction)*rot
 end
 
 """
 $(TYPEDSIGNATURES)
 """
-function update_flux!(flux::AbstractVector,micro_flux::Vector{Matrix{Float64}},face::Union{FullFace,FluxData},heavi::Vector{Bool})
-    rot,direction,_,here_data,there_data = unpack(face)
-    area = face_area(face,here_data,direction,rot)
-    here_micro,there_micro = micro_flux
-    update_macro_flux!(flux*area,here_data,there_data)
-    update_micro_flux!(here_micro*area,there_micro*area,here_data,there_data,heavi)
+function update_flux!(
+    flux::AbstractVector,
+    micro_flux::Vector{Matrix{Float64}},
+    face::Union{FullFace,FluxData},
+    heavi::Vector{Bool},
+)
+    rot, direction, _, here_data, there_data = unpack(face)
+    area = face_area(face, here_data, direction, rot)
+    here_micro, there_micro = micro_flux
+    update_macro_flux!(flux*area, here_data, there_data)
+    update_micro_flux!(here_micro*area, there_micro*area, here_data, there_data, heavi)
     return nothing
 end
 """
 $(TYPEDSIGNATURES)
 """
-function update_flux!(::Nothing,micro_flux::Vector{Matrix{Float64}},face::Union{FullFace,FluxData},heavi::Vector{Bool})
-    rot,direction,_,here_data,there_data = unpack(face)
-    area = face_area(face,here_data,direction,rot)
-    here_micro,there_micro = micro_flux
-    update_micro_flux!(here_micro*area,there_micro*area,here_data,there_data,heavi)
+function update_flux!(
+    ::Nothing,
+    micro_flux::Vector{Matrix{Float64}},
+    face::Union{FullFace,FluxData},
+    heavi::Vector{Bool},
+)
+    rot, direction, _, here_data, there_data = unpack(face)
+    area = face_area(face, here_data, direction, rot)
+    here_micro, there_micro = micro_flux
+    update_micro_flux!(here_micro*area, there_micro*area, here_data, there_data, heavi)
     return nothing
 end
 
 """
 $(TYPEDSIGNATURES)
 """
-function update_macro_flux!(flux::Vector,here_data::PS_Data,there_data::PS_Data)
+function update_macro_flux!(flux::Vector, here_data::PS_Data, there_data::PS_Data)
     here_data.flux .+= flux
     if there_data.bound_enc>=0
         there_data.flux .-= flux
@@ -123,49 +184,66 @@ end
 """
 $(TYPEDSIGNATURES)
 """
-function update_macro_flux!(flux::Vector,here_data::PS_Data,::AbstractGhostPsData)
+function update_macro_flux!(flux::Vector, here_data::PS_Data, ::AbstractGhostPsData)
     here_data.flux .+= flux
     return nothing
 end
 """
 $(TYPEDSIGNATURES)
 """
-function update_macro_flux!(flux::Vector,here_data::PS_Data,::SolidNeighbor)
+function update_macro_flux!(flux::Vector, here_data::PS_Data, ::SolidNeighbor)
     here_data.flux .+= flux
     return nothing
 end
 """
 $(TYPEDSIGNATURES)
 """
-function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM},::SolidNeighbor{DIM},heavi::Vector{Bool}) where{DIM}
-    vs_data = here_data.vs_data;flux = vs_data.flux
-    @. flux[heavi,:]+= here_micro
+function update_micro_flux!(
+    here_micro,
+    there_micro,
+    here_data::PS_Data{DIM},
+    ::SolidNeighbor{DIM},
+    heavi::Vector{Bool},
+) where {DIM}
+    vs_data = here_data.vs_data;
+    flux = vs_data.flux
+    @. flux[heavi, :] += here_micro
     nheavi = [!x for x in heavi]
-    @. flux[nheavi,:]+= there_micro
+    @. flux[nheavi, :] += there_micro
     return nothing
 end
 
 """
 $(TYPEDSIGNATURES)
 """
-function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM,NDF},there_data::PS_Data,heavi::Vector{Bool}) where{DIM,NDF}
-    vs_data = here_data.vs_data;nvs_data = there_data.vs_data
-    level = vs_data.level;level_n = nvs_data.level
-    flux = vs_data.flux;flux_n = nvs_data.flux
-    index = j = index_n = 1;flag = 0.
+function update_micro_flux!(
+    here_micro,
+    there_micro,
+    here_data::PS_Data{DIM,NDF},
+    there_data::PS_Data,
+    heavi::Vector{Bool},
+) where {DIM,NDF}
+    vs_data = here_data.vs_data;
+    nvs_data = there_data.vs_data
+    level = vs_data.level;
+    level_n = nvs_data.level
+    flux = vs_data.flux;
+    flux_n = nvs_data.flux
+    index = j = index_n = 1;
+    flag = 0.0
     @inbounds for i = 1:vs_data.vs_num
         if heavi[i]
-            @simd for ii in 1:NDF
-                flux[i, ii] +=here_micro[index, ii]
+            @simd for ii = 1:NDF
+                flux[i, ii] += here_micro[index, ii]
             end
             if level[i] == level_n[j]
-                @simd for ii in 1:NDF
+                @simd for ii = 1:NDF
                     flux_n[j, ii] -= here_micro[index, ii]
                 end
                 j += 1
             elseif level[i] < level_n[j]
                 while flag != 1.0
-                    @simd for ii in 1:NDF
+                    @simd for ii = 1:NDF
                         flux_n[j, ii] -= here_micro[index, ii]
                     end
                     flag += 1 / 2^(DIM * (level_n[j] - level[i]))
@@ -173,7 +251,7 @@ function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM,NDF},t
                 end
                 flag = 0.0
             else
-                @simd for ii in 1:NDF
+                @simd for ii = 1:NDF
                     flux_n[j, ii] -=
                         (here_micro[index, ii]) / 2^(DIM * (level[i] - level_n[j]))
                 end
@@ -186,7 +264,7 @@ function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM,NDF},t
             index += 1
         else
             if level[i] == level_n[j]
-                @simd for ii in 1:NDF
+                @simd for ii = 1:NDF
                     flux_n[j, ii] -= there_micro[index_n, ii]
                     flux[i, ii] += there_micro[index_n, ii]
                 end
@@ -194,11 +272,10 @@ function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM,NDF},t
                 index_n += 1
             elseif level[i] < level_n[j]
                 while flag != 1.0
-                    @simd for ii in 1:NDF
+                    @simd for ii = 1:NDF
                         flux_n[j, ii] -= there_micro[index_n, ii]
                         flux[i, ii] +=
-                            (there_micro[index_n, ii]) /
-                            2^(DIM * (level_n[j] - level[i]))
+                            (there_micro[index_n, ii]) / 2^(DIM * (level_n[j] - level[i]))
                     end
                     flag += 1 / 2^(DIM * (level_n[j] - level[i]))
                     j += 1
@@ -206,12 +283,12 @@ function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM,NDF},t
                 end
                 flag = 0.0
             else
-                @simd for ii in 1:NDF
-                    flux[i, ii] +=  there_micro[index_n, ii]
+                @simd for ii = 1:NDF
+                    flux[i, ii] += there_micro[index_n, ii]
                 end
                 flag += 1 / 2^(DIM * (level[i] - level_n[j]))
                 if flag == 1.0
-                    @simd for ii in 1:NDF
+                    @simd for ii = 1:NDF
                         flux_n[j, ii] -= there_micro[index_n, ii]
                     end
                     j += 1
@@ -226,15 +303,24 @@ end
 """
 $(TYPEDSIGNATURES)
 """
-function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM,NDF},there_data::AbstractGhostPsData,heavi::Vector{Bool}) where{DIM,NDF}
-    vs_data = here_data.vs_data;nvs_data = there_data.vs_data
-    level = vs_data.level;level_n = nvs_data.level
+function update_micro_flux!(
+    here_micro,
+    there_micro,
+    here_data::PS_Data{DIM,NDF},
+    there_data::AbstractGhostPsData,
+    heavi::Vector{Bool},
+) where {DIM,NDF}
+    vs_data = here_data.vs_data;
+    nvs_data = there_data.vs_data
+    level = vs_data.level;
+    level_n = nvs_data.level
     flux = vs_data.flux
-    index = j = index_n = 1;flag = 0.
+    index = j = index_n = 1;
+    flag = 0.0
     @inbounds for i = 1:vs_data.vs_num
         if heavi[i]
-            @simd for ii in 1:NDF
-                flux[i, ii] +=here_micro[index, ii]
+            @simd for ii = 1:NDF
+                flux[i, ii] += here_micro[index, ii]
             end
             if level[i] == level_n[j]
                 j += 1
@@ -254,17 +340,16 @@ function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM,NDF},t
             index += 1
         else
             if level[i] == level_n[j]
-                @simd for ii in 1:NDF
+                @simd for ii = 1:NDF
                     flux[i, ii] += there_micro[index_n, ii]
                 end
                 j += 1
                 index_n += 1
             elseif level[i] < level_n[j]
                 while flag != 1.0
-                    for ii in 1:NDF
+                    for ii = 1:NDF
                         flux[i, ii] +=
-                            (there_micro[index_n, ii]) /
-                            2^(DIM * (level_n[j] - level[i]))
+                            (there_micro[index_n, ii]) / 2^(DIM * (level_n[j] - level[i]))
                     end
                     flag += 1 / 2^(DIM * (level_n[j] - level[i]))
                     j += 1
@@ -272,7 +357,7 @@ function update_micro_flux!(here_micro,there_micro,here_data::PS_Data{DIM,NDF},t
                 end
                 flag = 0.0
             else
-                for ii in 1:NDF
+                for ii = 1:NDF
                     flux[i, ii] += there_micro[index_n, ii]
                 end
                 flag += 1 / 2^(DIM * (level[i] - level_n[j]))
@@ -290,81 +375,112 @@ end
 """
 $(TYPEDSIGNATURES)
 """
-function make_face_vs(face::DomainFace{DIM,NDF})where{DIM,NDF}
-    rot,direction,_,_,ps_data = unpack(face)
-    vs_data = ps_data.vs_data;here_mid = vs_data.midpoint
-    heavi = [x<=0. for x in rot.*@views here_mid[:,direction]]
+function make_face_vs(face::DomainFace{DIM,NDF}) where {DIM,NDF}
+    rot, direction, _, _, ps_data = unpack(face)
+    vs_data = ps_data.vs_data;
+    here_mid = vs_data.midpoint
+    heavi = [x<=0.0 for x in rot .* @views here_mid[:, direction]]
     @views here_vs = Face_VS_Data{DIM,NDF}(
-        heavi,vs_data.weight[heavi],here_mid[heavi,:],here_mid[heavi,direction],
-        vs_data.df[heavi,:],vs_data.sdf[heavi,:,:]
+        heavi,
+        vs_data.weight[heavi],
+        here_mid[heavi, :],
+        here_mid[heavi, direction],
+        vs_data.df[heavi, :],
+        vs_data.sdf[heavi, :, :],
     )
     return here_vs
 end
 """
 $(TYPEDSIGNATURES)
 """
-function make_face_vs(face::FullFace{DIM,NDF}) where{DIM,NDF}
-    rot,direction,_,here_data,there_data = unpack(face)
-    vs_data = here_data.vs_data;nvs_data = there_data.vs_data
-    here_mid = vs_data.midpoint;there_mid = nvs_data.midpoint
-    heavi = [x<=0. for x in rot.*@views here_mid[:,direction]]
-    nheavi = [x>0. for x in rot.*@views there_mid[:,direction]]
+function make_face_vs(face::FullFace{DIM,NDF}) where {DIM,NDF}
+    rot, direction, _, here_data, there_data = unpack(face)
+    vs_data = here_data.vs_data;
+    nvs_data = there_data.vs_data
+    here_mid = vs_data.midpoint;
+    there_mid = nvs_data.midpoint
+    heavi = [x<=0.0 for x in rot .* @views here_mid[:, direction]]
+    nheavi = [x>0.0 for x in rot .* @views there_mid[:, direction]]
     @views here_vs = Face_VS_Data{DIM,NDF}(
-        heavi,vs_data.weight[heavi],here_mid[heavi,:],here_mid[heavi,direction],
-        vs_data.df[heavi,:],vs_data.sdf[heavi,:,:]
+        heavi,
+        vs_data.weight[heavi],
+        here_mid[heavi, :],
+        here_mid[heavi, direction],
+        vs_data.df[heavi, :],
+        vs_data.sdf[heavi, :, :],
     )
     @views there_vs = Face_VS_Data{DIM,NDF}(
-        nheavi,nvs_data.weight[nheavi],there_mid[nheavi,:],there_mid[nheavi,direction],
-        nvs_data.df[nheavi,:],nvs_data.sdf[nheavi,:,:]
+        nheavi,
+        nvs_data.weight[nheavi],
+        there_mid[nheavi, :],
+        there_mid[nheavi, direction],
+        nvs_data.df[nheavi, :],
+        nvs_data.sdf[nheavi, :, :],
     )
-    return here_vs,there_vs
+    return here_vs, there_vs
 end
 """
 $(TYPEDSIGNATURES)
 """
-function make_face_vs(face::HangingFace{DIM,NDF}) where{DIM,NDF}
-    rot,direction,_,here_data,there_data = unpack(face)
+function make_face_vs(face::HangingFace{DIM,NDF}) where {DIM,NDF}
+    rot, direction, _, here_data, there_data = unpack(face)
     vs_data = here_data.vs_data
     here_mid = vs_data.midpoint
-    heavi = [x<=0. for x in rot.*@views here_mid[:,direction]]
+    heavi = [x<=0.0 for x in rot .* @views here_mid[:, direction]]
     @views here_vs = Face_VS_Data{DIM,NDF}(
-        heavi,vs_data.weight[heavi],here_mid[heavi,:],here_mid[heavi,direction],vs_data.df[heavi,:],
-        vs_data.sdf[heavi,:,:]
+        heavi,
+        vs_data.weight[heavi],
+        here_mid[heavi, :],
+        here_mid[heavi, direction],
+        vs_data.df[heavi, :],
+        vs_data.sdf[heavi, :, :],
     )
-    there_vs = Vector{Face_VS_Data{DIM,NDF}}(undef,length(there_data))
+    there_vs = Vector{Face_VS_Data{DIM,NDF}}(undef, length(there_data))
     for i in eachindex(there_data)
         nvs_data = there_data[i].vs_data
         there_mid = nvs_data.midpoint
-        nheavi = [x>0. for x in rot.*@views there_mid[:,direction]]
+        nheavi = [x>0.0 for x in rot .* @views there_mid[:, direction]]
         @views there_vs[i] = Face_VS_Data{DIM,NDF}(
-            nheavi,nvs_data.weight[nheavi],there_mid[nheavi,:],there_mid[nheavi,direction],
-            nvs_data.df[nheavi,:],nvs_data.sdf[nheavi,:,:]
+            nheavi,
+            nvs_data.weight[nheavi],
+            there_mid[nheavi, :],
+            there_mid[nheavi, direction],
+            nvs_data.df[nheavi, :],
+            nvs_data.sdf[nheavi, :, :],
         )
     end
-    return here_vs,there_vs
+    return here_vs, there_vs
 end
 """
 $(TYPEDSIGNATURES)
 """
-function make_face_vs(face::BackHangingFace{DIM,NDF}) where{DIM,NDF}
-    rot,direction,_,here_data,there_data = unpack(face)
+function make_face_vs(face::BackHangingFace{DIM,NDF}) where {DIM,NDF}
+    rot, direction, _, here_data, there_data = unpack(face)
     nvs_data = there_data.vs_data
-    nheavi = [x>0. for x in rot.*@views nvs_data.midpoint[:,direction]]
+    nheavi = [x>0.0 for x in rot .* @views nvs_data.midpoint[:, direction]]
     @views there_vs = Face_VS_Data{DIM,NDF}(
-            nheavi,nvs_data.weight[nheavi],nvs_data.midpoint[nheavi,:],nvs_data.midpoint[nheavi,direction],
-            nvs_data.df[nheavi,:],nvs_data.sdf[nheavi,:,:]
-        )
-    here_vs = Vector{Face_VS_Data{DIM,NDF}}(undef,length(here_data))
+        nheavi,
+        nvs_data.weight[nheavi],
+        nvs_data.midpoint[nheavi, :],
+        nvs_data.midpoint[nheavi, direction],
+        nvs_data.df[nheavi, :],
+        nvs_data.sdf[nheavi, :, :],
+    )
+    here_vs = Vector{Face_VS_Data{DIM,NDF}}(undef, length(here_data))
     for i in eachindex(here_data)
         vs_data = here_data[i].vs_data
         here_mid = vs_data.midpoint
-        heavi = [x<=0. for x in rot.*@views here_mid[:,direction]]
+        heavi = [x<=0.0 for x in rot .* @views here_mid[:, direction]]
         @views here_vs[i] = Face_VS_Data{DIM,NDF}(
-        heavi,vs_data.weight[heavi],here_mid[heavi,:],here_mid[heavi,direction],vs_data.df[heavi,:],
-        vs_data.sdf[heavi,:,:]
-    )
+            heavi,
+            vs_data.weight[heavi],
+            here_mid[heavi, :],
+            here_mid[heavi, direction],
+            vs_data.df[heavi, :],
+            vs_data.sdf[heavi, :, :],
+        )
     end
-    return here_vs,there_vs
+    return here_vs, there_vs
 end
 
 """
@@ -374,7 +490,7 @@ Outer function for flux computation and update. The iteration is carried out thr
 function flux!(amr::KitAMR_Data)
     faces = amr.field.faces
     for face in faces
-        flux!(face,amr)
+        flux!(face, amr)
     end
     return nothing
 end

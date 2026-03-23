@@ -7,7 +7,6 @@ Structure of domain boundary.
 ## Fields
 
 $(TYPEDFIELDS)
-
 """
 struct Domain{T<:AbstractBoundCondType} <: AbstractBoundaryType
     "Index of the domain boundary. From 1 to 6, it represents the boundary of `xmin`, `xmax`, `ymin`, `ymax`, `zmin`, `zmax`."
@@ -16,8 +15,8 @@ struct Domain{T<:AbstractBoundCondType} <: AbstractBoundaryType
     refine::Bool
     "The boundary condition at the domain boundary."
     bc::AbstractBCType
-    Domain(T,id;refine=false) = new{T}(id,refine)
-    Domain(T,id,bc;refine=false) = new{T}(id,refine,bc)
+    Domain(T, id; refine = false) = new{T}(id, refine)
+    Domain(T, id, bc; refine = false) = new{T}(id, refine, bc)
 end
 
 """
@@ -50,14 +49,16 @@ struct Circle{T<:AbstractBoundCondType} <: AbstractBoundaryType
     bc::AbstractBCType
     "Maximum distance of the refinement region from the boundary."
     search_radius::Real
-    Circle(::Type{T},center::Vector,radius,solid,search_coeffi,bc) where{T<:AbstractBoundCondType} = new{T}(center,radius,solid,search_coeffi,bc)
-    Circle(c::Circle{T},ds::Float64) where{T<:AbstractBoundCondType} = new{T}(c.center,
-        c.radius,
-        c.solid,
-        c.search_coeffi,
-        c.bc,
-        c.search_coeffi*ds
-    )
+    Circle(
+        ::Type{T},
+        center::Vector,
+        radius,
+        solid,
+        search_coeffi,
+        bc,
+    ) where {T<:AbstractBoundCondType} = new{T}(center, radius, solid, search_coeffi, bc)
+    Circle(c::Circle{T}, ds::Float64) where {T<:AbstractBoundCondType} =
+        new{T}(c.center, c.radius, c.solid, c.search_coeffi, c.bc, c.search_coeffi*ds)
 end
 """
 $(TYPEDEF)
@@ -70,14 +71,16 @@ struct Sphere{T<:AbstractBoundCondType} <: AbstractBoundaryType # 3D circle
     search_coeffi::Real
     bc::AbstractBCType
     search_radius::Real
-    Sphere(::Type{T},center::Vector,radius,solid,search_coeffi,bc) where{T<:AbstractBoundCondType} = new{T}(center,radius,solid,search_coeffi,bc)
-    Sphere(c::Sphere{T},ds::Float64) where{T<:AbstractBoundCondType} = new{T}(c.center,
-        c.radius,
-        c.solid,
-        c.search_coeffi,
-        c.bc,
-        c.search_coeffi*ds
-    )
+    Sphere(
+        ::Type{T},
+        center::Vector,
+        radius,
+        solid,
+        search_coeffi,
+        bc,
+    ) where {T<:AbstractBoundCondType} = new{T}(center, radius, solid, search_coeffi, bc)
+    Sphere(c::Sphere{T}, ds::Float64) where {T<:AbstractBoundCondType} =
+        new{T}(c.center, c.radius, c.solid, c.search_coeffi, c.bc, c.search_coeffi*ds)
 end
 const AbstractCircle = Union{Circle,Sphere}
 
@@ -97,22 +100,42 @@ struct Vertices{DIM,T<:AbstractBoundCondType} <: AbstractBoundaryType
 end
 """
 $(TYPEDSIGNATURES)
-- `file` is the path to the `.csv` file.
+
+  - `file` is the path to the `.csv` file.
 """
-function Vertices(::Type{T},file::String,solid,refine_coeffi,bc) where{T<:AbstractBoundCondType}
-    s = CSV.read(file,DataFrame;header=true)
+function Vertices(
+    ::Type{T},
+    file::String,
+    solid,
+    refine_coeffi,
+    bc,
+) where {T<:AbstractBoundCondType}
+    s = CSV.read(file, DataFrame; header = true)
     DIM = length(names(s))
-    vertices = [[s.x[i],s.y[i]] for i in eachindex(s.x)]
+    vertices = [[s.x[i], s.y[i]] for i in eachindex(s.x)]
     if vertices[1]==vertices[end]
-        vertices = vertices[1:end-1]
+        vertices = vertices[1:(end-1)]
     end
-    box = [[minimum(s.x),minimum(s.y)],[maximum(s.x),maximum(s.y)]]
-    return Vertices{DIM,T}(vertices,solid,bc,box,refine_coeffi)
+    box = [[minimum(s.x), minimum(s.y)], [maximum(s.x), maximum(s.y)]]
+    return Vertices{DIM,T}(vertices, solid, bc, box, refine_coeffi)
 end
-function Vertices(v::Vertices{DIM,T},config) where{DIM,T<:AbstractBoundCondType}
-    ds_max = maximum([(config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i] for i in 1:config[:DIM]])
-    ds = norm([(config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i]/2^config[:AMR_PS_MAXLEVEL] for i in 1:config[:DIM]])
-    return Vertices{DIM,T}(v.vertices,v.solid,v.bc,[v.box[1].-ds_max,v.box[2].+ds_max],v.search_radius*ds)
+function Vertices(v::Vertices{DIM,T}, config) where {DIM,T<:AbstractBoundCondType}
+    ds_max = maximum([
+        (config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i] for
+        i = 1:config[:DIM]
+    ])
+    ds = norm([
+        (
+            config[:geometry][2i]-config[:geometry][2i-1]
+        )/config[:trees_num][i]/2^config[:AMR_PS_MAXLEVEL] for i = 1:config[:DIM]
+    ])
+    return Vertices{DIM,T}(
+        v.vertices,
+        v.solid,
+        v.bc,
+        [v.box[1] .- ds_max, v.box[2] .+ ds_max],
+        v.search_radius*ds,
+    )
 end
 
 """
@@ -127,17 +150,23 @@ struct TriangleKDT
     triangle_edges::Vector{Vector{SVector{3,Float64}}} # Accessed by id of mesh.faces
 end
 function TriangleKDT(mesh::Mesh)
-    centers = zeros(3,length(mesh.faces))
+    centers = zeros(3, length(mesh.faces))
     for i in eachindex(mesh.faces)
         vertices = mesh.position[mesh.faces[i]]
-        for j in 1:3
-            for k in 1:3
-                centers[j,i] += vertices[k][j]/3.0
+        for j = 1:3
+            for k = 1:3
+                centers[j, i] += vertices[k][j]/3.0
             end
         end
     end
-    kdt = KDTree(centers;leafsize = 24)
-    return TriangleKDT(kdt,mesh,triangle_box_table(kdt,mesh),triangle_recs(mesh),triangle_edges(mesh))
+    kdt = KDTree(centers; leafsize = 24)
+    return TriangleKDT(
+        kdt,
+        mesh,
+        triangle_box_table(kdt, mesh),
+        triangle_recs(mesh),
+        triangle_edges(mesh),
+    )
 end
 
 """
@@ -152,19 +181,37 @@ struct Triangles{T<:AbstractBoundCondType} <: AbstractBoundaryType
 end
 """
 $(TYPEDSIGNATURES)
-- `file` is the path to the `.stl` file.
+
+  - `file` is the path to the `.stl` file.
 """
-function Triangles(::Type{T},file::String,solid,search_radius,bc) where{T<:AbstractBoundCondType}
+function Triangles(
+    ::Type{T},
+    file::String,
+    solid,
+    search_radius,
+    bc,
+) where {T<:AbstractBoundCondType}
     mesh = load(file)
     tkdt = TriangleKDT(mesh)
-    return Triangles{T}(solid,bc,search_radius,tkdt)
+    return Triangles{T}(solid, bc, search_radius, tkdt)
 end
-function Triangles(::Type{T},solid::Bool,search_radius,bc,tkdt::TriangleKDT,config) where{T<:AbstractBoundCondType}
-    ds = norm([(config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i]/2^config[:AMR_PS_MAXLEVEL] for i in 1:config[:DIM]])
-    return Triangles{T}(solid,bc,search_radius*ds,tkdt)
+function Triangles(
+    ::Type{T},
+    solid::Bool,
+    search_radius,
+    bc,
+    tkdt::TriangleKDT,
+    config,
+) where {T<:AbstractBoundCondType}
+    ds = norm([
+        (
+            config[:geometry][2i]-config[:geometry][2i-1]
+        )/config[:trees_num][i]/2^config[:AMR_PS_MAXLEVEL] for i = 1:config[:DIM]
+    ])
+    return Triangles{T}(solid, bc, search_radius*ds, tkdt)
 end
-function Triangles(ib::Triangles{T},config) where{T}
-    return Triangles(T,ib.solid,ib.search_radius,ib.bc,ib.tkdt,config)
+function Triangles(ib::Triangles{T}, config) where {T}
+    return Triangles(T, ib.solid, ib.search_radius, ib.bc, ib.tkdt, config)
 end
 
 
@@ -176,9 +223,9 @@ mutable struct SolidCells{DIM,NDF}
     quadids provide the information of solidcells on other processors. Only after this, the exchange of IB nodes can be executeable.
     =#
 end
-function SolidCells(ps_datas::Vector{PS_Data{DIM,NDF}}) where{DIM,NDF}
+function SolidCells(ps_datas::Vector{PS_Data{DIM,NDF}}) where {DIM,NDF}
     quadids = [x.quadid for x in ps_datas]
-    return SolidCells{DIM,NDF}(ps_datas,quadids)
+    return SolidCells{DIM,NDF}(ps_datas, quadids)
 end
 mutable struct GhostIBVSData{DIM,NDF} <: AbstractVsData{DIM,NDF}
     vs_num::Int
@@ -198,8 +245,8 @@ mutable struct IBCells{DIM,NDF}
     IB_nodes::Vector{Vector{AbstractIBNodes{DIM,NDF}}} # SolidCells{IBNodes{}}
     templates::Vector{Vector{Vector{Int}}} # Available templates indices
 end
-function IBCells(IB_nodes::Vector{Vector{AbstractIBNodes{DIM,NDF}}}) where{DIM,NDF}
-    return IBCells{DIM,NDF}(IB_nodes,Vector{Vector{Vector{Int}}}(undef,length(IB_nodes)))
+function IBCells(IB_nodes::Vector{Vector{AbstractIBNodes{DIM,NDF}}}) where {DIM,NDF}
+    return IBCells{DIM,NDF}(IB_nodes, Vector{Vector{Vector{Int}}}(undef, length(IB_nodes)))
 end
 mutable struct IBTransferData
     solid_cell_indices::Matrix{Int}
@@ -223,13 +270,14 @@ mutable struct Corner_Target_Neighbor_Transport
     ghost_datas::Vector{Vector{Float64}}
     ghost_ps_datas::Vector{Ghost_PS_Data}
     ranks_ghost_ids::Vector{Vector{Int}} # rank{ghost_datas' id}
-    Corner_Target_Neighbor_Transport() = (n = new();
+    Corner_Target_Neighbor_Transport() = (
+        n = new();
         n.mirror_ps_datas = SolidNeighbor[];
-        n.ranks_mirror_ids = [Int[] for _ in 1:MPI.Comm_size(MPI.COMM_WORLD)];
+        n.ranks_mirror_ids = [Int[] for _ = 1:MPI.Comm_size(MPI.COMM_WORLD)];
         n.ghost_ps_datas = Ghost_PS_Data[];
-        n.ranks_ghost_ids = [Int[] for _ in 1:MPI.Comm_size(MPI.COMM_WORLD)];
-        n.mirror_datas = Vector{Vector{Float64}}(undef,MPI.Comm_size(MPI.COMM_WORLD));
-        n.ghost_datas = Vector{Vector{Float64}}(undef,MPI.Comm_size(MPI.COMM_WORLD));
+        n.ranks_ghost_ids = [Int[] for _ = 1:MPI.Comm_size(MPI.COMM_WORLD)];
+        n.mirror_datas = Vector{Vector{Float64}}(undef, MPI.Comm_size(MPI.COMM_WORLD));
+        n.ghost_datas = Vector{Vector{Float64}}(undef, MPI.Comm_size(MPI.COMM_WORLD));
         n
     )
 end

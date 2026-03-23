@@ -97,8 +97,8 @@ function reshape_solutions(
     itp = scipy[].interpolate.CloughTocher2DInterpolator(midpoints, z)
     dx = (xmax - xmin) / Nx / 2^global_data.config.solver.AMR_PS_MAXLEVEL
     dy = (ymax - ymin) / Ny / 2^global_data.config.solver.AMR_PS_MAXLEVEL
-    X = collect(xmin+EPS+dx/2:dx:xmax-EPS-dx/2)
-    Y = collect(ymin+EPS+dy/2:dy:ymax-EPS-dy/2)
+    X = collect((xmin+EPS+dx/2):dx:(xmax-EPS-dx/2))
+    Y = collect((ymin+EPS+dy/2):dy:(ymax-EPS-dy/2))
     pyZ = np[].zeros((length(X), length(Y)))
     for i in eachindex(X)
         for j in eachindex(Y)
@@ -125,19 +125,24 @@ function reshape_solutions(
     dx = (xmax - xmin) / Nx / 2^global_data.config.solver.AMR_PS_MAXLEVEL
     dy = (ymax - ymin) / Ny / 2^global_data.config.solver.AMR_PS_MAXLEVEL
     dz = (zmax - zmin) / Nz / 2^global_data.config.solver.AMR_PS_MAXLEVEL
-    Xs = collect(xmin+EPS+dx/2:dx:xmax-EPS-dx/2)
-    Ys = collect(ymin+EPS+dy/2:dy:ymax-EPS-dy/2)
-    Zs = collect(zmin+EPS+dz/2:dz:zmax-EPS-dz/2)
-    mx = pybuiltins.slice(xmin+EPS+dx/2,xmax-EPS-dx/2,dx)
-    my = pybuiltins.slice(ymin+EPS+dy/2,ymax-EPS-dy/2,dy)
-    mz = pybuiltins.slice(zmin+EPS+dz/2,zmax-EPS-dz/2,dz)
-    grid = np[].mgrid[mx,my,mz]
+    Xs = collect((xmin+EPS+dx/2):dx:(xmax-EPS-dx/2))
+    Ys = collect((ymin+EPS+dy/2):dy:(ymax-EPS-dy/2))
+    Zs = collect((zmin+EPS+dz/2):dz:(zmax-EPS-dz/2))
+    mx = pybuiltins.slice(xmin+EPS+dx/2, xmax-EPS-dx/2, dx)
+    my = pybuiltins.slice(ymin+EPS+dy/2, ymax-EPS-dy/2, dy)
+    mz = pybuiltins.slice(zmin+EPS+dz/2, zmax-EPS-dz/2, dz)
+    grid = np[].mgrid[mx, my, mz]
     grid_x = grid[0]
     grid_y = grid[1]
     grid_z = grid[2]
-    Z = scipy[].interpolate.griddata(midpoints, sol, (grid_x,grid_y,grid_z), method="nearest")
-    Zj = pyconvert(Array{Float64},Z)  
-    return Xs,Ys,Zs,Zj
+    Z = scipy[].interpolate.griddata(
+        midpoints,
+        sol,
+        (grid_x, grid_y, grid_z),
+        method = "nearest",
+    )
+    Zj = pyconvert(Array{Float64}, Z)
+    return Xs, Ys, Zs, Zj
 end
 
 function collect_mesh(amr::KitAMR_Data)
@@ -147,10 +152,16 @@ function collect_mesh(amr::KitAMR_Data)
     return meshes
 end
 function mesh_plot(x::AbstractVector, y::AbstractVector, ax::Axis)
-    for i = 1:Int(length(x) / 2)
+    for i = 1:Int(length(x)/2)
         # x1 = x[2*i-1];x2 = x[2*i]
         # y1 = y[2*i-1];y2 = y[2*i]
-        lines!(ax, @view(x[2*i-1:2*i]), @view(y[2*i-1:2*i]), color = :red, linewidth = 0.5)
+        lines!(
+            ax,
+            @view(x[(2*i-1):(2*i)]),
+            @view(y[(2*i-1):(2*i)]),
+            color = :red,
+            linewidth = 0.5,
+        )
     end
 end
 # function communicate_mesh(mesh_points::T, num_faces) where {T}
@@ -200,7 +211,12 @@ end
 #         return num_faces
 #     end
 # end
-function collect_mesh_points_kernal!(::Val{1}, ps_data::AbstractPsData, x::AbstractVector, y::AbstractVector)
+function collect_mesh_points_kernal!(
+    ::Val{1},
+    ps_data::AbstractPsData,
+    x::AbstractVector,
+    y::AbstractVector,
+)
     x1 = ps_data.midpoint[1] - 0.5 * ps_data.ds[1]
     x2 = ps_data.midpoint[1] - 0.5 * ps_data.ds[1]
     y1 = ps_data.midpoint[2] - 0.5 * ps_data.ds[2]
@@ -208,7 +224,12 @@ function collect_mesh_points_kernal!(::Val{1}, ps_data::AbstractPsData, x::Abstr
     push!(x, x1, x2)
     push!(y, y1, y2)
 end
-function collect_mesh_points_kernal!(::Val{2}, ps_data::AbstractPsData, x::AbstractVector, y::AbstractVector)
+function collect_mesh_points_kernal!(
+    ::Val{2},
+    ps_data::AbstractPsData,
+    x::AbstractVector,
+    y::AbstractVector,
+)
     x1 = ps_data.midpoint[1] + 0.5 * ps_data.ds[1]
     x2 = ps_data.midpoint[1] + 0.5 * ps_data.ds[1]
     y1 = ps_data.midpoint[2] - 0.5 * ps_data.ds[2]
@@ -216,7 +237,12 @@ function collect_mesh_points_kernal!(::Val{2}, ps_data::AbstractPsData, x::Abstr
     push!(x, x1, x2)
     push!(y, y1, y2)
 end
-function collect_mesh_points_kernal!(::Val{3}, ps_data::AbstractPsData, x::AbstractVector, y::AbstractVector)
+function collect_mesh_points_kernal!(
+    ::Val{3},
+    ps_data::AbstractPsData,
+    x::AbstractVector,
+    y::AbstractVector,
+)
     x1 = ps_data.midpoint[1] - 0.5 * ps_data.ds[1]
     x2 = ps_data.midpoint[1] + 0.5 * ps_data.ds[1]
     y1 = ps_data.midpoint[2] - 0.5 * ps_data.ds[2]
@@ -224,7 +250,12 @@ function collect_mesh_points_kernal!(::Val{3}, ps_data::AbstractPsData, x::Abstr
     push!(x, x1, x2)
     push!(y, y1, y2)
 end
-function collect_mesh_points_kernal!(::Val{4}, ps_data::AbstractPsData, x::AbstractVector, y::AbstractVector)
+function collect_mesh_points_kernal!(
+    ::Val{4},
+    ps_data::AbstractPsData,
+    x::AbstractVector,
+    y::AbstractVector,
+)
     x1 = ps_data.midpoint[1] - 0.5 * ps_data.ds[1]
     x2 = ps_data.midpoint[1] + 0.5 * ps_data.ds[1]
     y1 = ps_data.midpoint[2] + 0.5 * ps_data.ds[2]
@@ -323,7 +354,7 @@ end
 
 function read_results(name::String, comm_size::Int)
     results = JLD2.load_object(name * "_0.jld")
-    for i = 1:comm_size-1
+    for i = 1:(comm_size-1)
         append!(results, JLD2.load_object(name * "_" * string(i) * ".jld"))
     end
     return results
@@ -339,7 +370,13 @@ end
 #     scipy.interpolate.CloughTocher2DInterpolator(points,values)
 # end
 
-function collect_vs_mesh_points_kernal!(::Val{1}, midpoint::AbstractVector, ds::AbstractVector, x::AbstractVector, y::AbstractVector)
+function collect_vs_mesh_points_kernal!(
+    ::Val{1},
+    midpoint::AbstractVector,
+    ds::AbstractVector,
+    x::AbstractVector,
+    y::AbstractVector,
+)
     x1 = midpoint[1] - 0.5 * ds[1]
     x2 = midpoint[1] - 0.5 * ds[1]
     y1 = midpoint[2] - 0.5 * ds[2]
@@ -347,7 +384,13 @@ function collect_vs_mesh_points_kernal!(::Val{1}, midpoint::AbstractVector, ds::
     push!(x, x1, x2)
     push!(y, y1, y2)
 end
-function collect_vs_mesh_points_kernal!(::Val{2}, midpoint::AbstractVector, ds::AbstractVector, x::AbstractVector, y::AbstractVector)
+function collect_vs_mesh_points_kernal!(
+    ::Val{2},
+    midpoint::AbstractVector,
+    ds::AbstractVector,
+    x::AbstractVector,
+    y::AbstractVector,
+)
     x1 = midpoint[1] + 0.5 * ds[1]
     x2 = midpoint[1] + 0.5 * ds[1]
     y1 = midpoint[2] - 0.5 * ds[2]
@@ -355,7 +398,13 @@ function collect_vs_mesh_points_kernal!(::Val{2}, midpoint::AbstractVector, ds::
     push!(x, x1, x2)
     push!(y, y1, y2)
 end
-function collect_vs_mesh_points_kernal!(::Val{3}, midpoint::AbstractVector, ds::AbstractVector, x::AbstractVector, y::AbstractVector)
+function collect_vs_mesh_points_kernal!(
+    ::Val{3},
+    midpoint::AbstractVector,
+    ds::AbstractVector,
+    x::AbstractVector,
+    y::AbstractVector,
+)
     x1 = midpoint[1] - 0.5 * ds[1]
     x2 = midpoint[1] + 0.5 * ds[1]
     y1 = midpoint[2] - 0.5 * ds[2]
@@ -363,7 +412,13 @@ function collect_vs_mesh_points_kernal!(::Val{3}, midpoint::AbstractVector, ds::
     push!(x, x1, x2)
     push!(y, y1, y2)
 end
-function collect_vs_mesh_points_kernal!(::Val{4}, midpoint::AbstractVector, ds::AbstractVector, x::AbstractVector, y::AbstractVector)
+function collect_vs_mesh_points_kernal!(
+    ::Val{4},
+    midpoint::AbstractVector,
+    ds::AbstractVector,
+    x::AbstractVector,
+    y::AbstractVector,
+)
     x1 = midpoint[1] - 0.5 * ds[1]
     x2 = midpoint[1] + 0.5 * ds[1]
     y1 = midpoint[2] + 0.5 * ds[2]
@@ -371,12 +426,21 @@ function collect_vs_mesh_points_kernal!(::Val{4}, midpoint::AbstractVector, ds::
     push!(x, x1, x2)
     push!(y, y1, y2)
 end
-function collect_vs_mesh_points!(midpoint::AbstractVector, ds::AbstractVector, x::AbstractVector, y::AbstractVector)
+function collect_vs_mesh_points!(
+    midpoint::AbstractVector,
+    ds::AbstractVector,
+    x::AbstractVector,
+    y::AbstractVector,
+)
     for i = 1:4
         collect_vs_mesh_points_kernal!(Val(i), midpoint, ds, x, y)
     end
 end
-function collect_vs_mesh(ds::AbstractVector, midpoint::AbstractMatrix, level::AbstractVector)
+function collect_vs_mesh(
+    ds::AbstractVector,
+    midpoint::AbstractMatrix,
+    level::AbstractVector,
+)
     x = Vector{Float64}(undef, 0)
     y = Vector{Float64}(undef, 0)
     for i in axes(midpoint, 1)
@@ -508,7 +572,7 @@ function read_result_at_index!(
     fields = Vector{Field}(undef, 0)
     mesh_x = Vector{Float64}(undef, 0)
     mesh_y = Vector{Float64}(undef, 0)
-    for j = 0:mpi_size-1
+    for j = 0:(mpi_size-1)
         PS_results = JLD2.load_object(
             "./result/PS_result/" * string(index) * "/" * string(j) * ".jld",
         )
@@ -542,15 +606,19 @@ end
 #     x, y, _ = reshape_solutions(fields,global_data,:prim,4)
 #     return x,y
 # end
-function reshape_solutions_vs(midpoint::AbstractMatrix, df::AbstractMatrix, global_data::Global_Data{2})
+function reshape_solutions_vs(
+    midpoint::AbstractMatrix,
+    df::AbstractMatrix,
+    global_data::Global_Data{2},
+)
     Nx, Ny = global_data.vs_trees_num
     xmin, xmax, ymin, ymax = global_data.quadrature
     z = @view(df[:, 1])
     itp = scipy[].interpolate.CloughTocher2DInterpolator(midpoint, PyArray(z))
     dx = (xmax - xmin) / Nx / 2^AMR_VS_MAXLEVEL
     dy = (ymax - ymin) / Ny / 2^AMR_VS_MAXLEVEL
-    X = collect(xmin+EPS+dx/2:dx:xmax-EPS-dx/2)
-    Y = collect(ymin+EPS+dy/2:dy:ymax-EPS-dy/2)
+    X = collect((xmin+EPS+dx/2):dx:(xmax-EPS-dx/2))
+    Y = collect((ymin+EPS+dy/2):dy:(ymax-EPS-dy/2))
     pyZ = np[].zeros((length(X), length(Y)))
     for i in eachindex(X)
         for j in eachindex(Y)
@@ -565,7 +633,7 @@ function read_vs_result(global_data::Global_Data{2}, nframes::Int, mpi_size::Int
     mesh_ys = Vector{Vector{Float64}}(undef, 0)
     hs = Vector{Matrix{Float64}}(undef, 0)
     x, y, _ = read_vs_result_at_index!(0, global_data, mesh_xs, mesh_ys, hs, mpi_size)
-    for i = 1:nframes-1
+    for i = 1:(nframes-1)
         read_vs_result_at_index!(i, global_data, mesh_xs, mesh_ys, hs, mpi_size)
     end
     return x, y, mesh_xs, mesh_ys, hs
@@ -612,7 +680,7 @@ function vsresult2animation()
         mesh_y = mesh_ys[$index+1]
         mesh_plot(mesh_x, mesh_y, ax)
     end
-    index_iter = 0:nframes-1
+    index_iter = 0:(nframes-1)
 
     record(f, "VS_field.mp4", index_iter; framerate = framerate) do i
         index[] = i
@@ -637,7 +705,7 @@ function mat_3d()
     mesh_v = Vector{Float64}(undef, 0)
     mesh_x = Vector{Float64}(undef, 0)
     dir_path = "./result/VS_result/end"
-    for i = 0:mpi_size-1
+    for i = 0:(mpi_size-1)
         vs_results = JLD2.load_object(dir_path * "/" * string(i) * ".jld")
         isempty(vs_results) && continue
         for j in eachindex(vs_results)
@@ -651,13 +719,13 @@ function mat_3d()
     Nx, _ = global_data.config.trees_num
     xmin, xmax, _, _ = global_data.config.geometry
     dx = (xmax - xmin) / Nx / 2^global_data.config.solver.AMR_PS_MAXLEVEL
-    gridX = collect(xmin+dx/2:dx:xmax-dx/2)
+    gridX = collect((xmin+dx/2):dx:(xmax-dx/2))
     Nu, Nv = global_data.vs_trees_num
     umin, umax, vmin, vmax = global_data.quadrature
     du = (umax - umin) / Nu / 2^AMR_VS_MAXLEVEL
     dv = (vmax - vmin) / Nv / 2^AMR_VS_MAXLEVEL
-    gridU = collect(umin+du/2:du:umax-du/2)
-    gridV = collect(vmin+dv/2:dv:vmax-dv/2)
+    gridU = collect((umin+du/2):du:(umax-du/2))
+    gridV = collect((vmin+dv/2):dv:(vmax-dv/2))
     file = matopen("mat_3d.mat", "w")
     write(file, "u", u)
     write(file, "v", v)
@@ -690,7 +758,18 @@ function collect_mesh_3d!(vs_result, ds, mesh_x, mesh_y, mesh_z)
         end
     end
 end
-function collect_mesh_3d!(::Val{1}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
+function collect_mesh_3d!(
+    ::Val{1},
+    x::Float64,
+    y,
+    z,
+    dx,
+    dy,
+    dz,
+    X::AbstractVector,
+    Y::AbstractVector,
+    Z::AbstractVector,
+)
     x1 = x - 0.5 * dx
     x2 = x + 0.5 * dx
     y1 = y - 0.5 * dy
@@ -701,7 +780,18 @@ function collect_mesh_3d!(::Val{1}, x::Float64, y, z, dx, dy, dz, X::AbstractVec
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{2}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
+function collect_mesh_3d!(
+    ::Val{2},
+    x::Float64,
+    y,
+    z,
+    dx,
+    dy,
+    dz,
+    X::AbstractVector,
+    Y::AbstractVector,
+    Z::AbstractVector,
+)
     x1 = x + 0.5 * dx
     x2 = x + 0.5 * dx
     y1 = y - 0.5 * dy
@@ -712,7 +802,18 @@ function collect_mesh_3d!(::Val{2}, x::Float64, y, z, dx, dy, dz, X::AbstractVec
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{3}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
+function collect_mesh_3d!(
+    ::Val{3},
+    x::Float64,
+    y,
+    z,
+    dx,
+    dy,
+    dz,
+    X::AbstractVector,
+    Y::AbstractVector,
+    Z::AbstractVector,
+)
     x1 = x - 0.5 * dx
     x2 = x + 0.5 * dx
     y1 = y + 0.5 * dy
@@ -723,7 +824,18 @@ function collect_mesh_3d!(::Val{3}, x::Float64, y, z, dx, dy, dz, X::AbstractVec
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{4}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
+function collect_mesh_3d!(
+    ::Val{4},
+    x::Float64,
+    y,
+    z,
+    dx,
+    dy,
+    dz,
+    X::AbstractVector,
+    Y::AbstractVector,
+    Z::AbstractVector,
+)
     x1 = x - 0.5 * dx
     x2 = x - 0.5 * dx
     y1 = y - 0.5 * dy
@@ -734,7 +846,18 @@ function collect_mesh_3d!(::Val{4}, x::Float64, y, z, dx, dy, dz, X::AbstractVec
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{5}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
+function collect_mesh_3d!(
+    ::Val{5},
+    x::Float64,
+    y,
+    z,
+    dx,
+    dy,
+    dz,
+    X::AbstractVector,
+    Y::AbstractVector,
+    Z::AbstractVector,
+)
     x1 = x - 0.5 * dx
     x2 = x + 0.5 * dx
     y1 = y - 0.5 * dy
@@ -745,7 +868,18 @@ function collect_mesh_3d!(::Val{5}, x::Float64, y, z, dx, dy, dz, X::AbstractVec
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{6}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
+function collect_mesh_3d!(
+    ::Val{6},
+    x::Float64,
+    y,
+    z,
+    dx,
+    dy,
+    dz,
+    X::AbstractVector,
+    Y::AbstractVector,
+    Z::AbstractVector,
+)
     x1 = x + 0.5 * dx
     x2 = x + 0.5 * dx
     y1 = y - 0.5 * dy
@@ -756,7 +890,18 @@ function collect_mesh_3d!(::Val{6}, x::Float64, y, z, dx, dy, dz, X::AbstractVec
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{7}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
+function collect_mesh_3d!(
+    ::Val{7},
+    x::Float64,
+    y,
+    z,
+    dx,
+    dy,
+    dz,
+    X::AbstractVector,
+    Y::AbstractVector,
+    Z::AbstractVector,
+)
     x1 = x - 0.5 * dx
     x2 = x + 0.5 * dx
     y1 = y + 0.5 * dy
@@ -767,7 +912,18 @@ function collect_mesh_3d!(::Val{7}, x::Float64, y, z, dx, dy, dz, X::AbstractVec
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{8}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
+function collect_mesh_3d!(
+    ::Val{8},
+    x::Float64,
+    y,
+    z,
+    dx,
+    dy,
+    dz,
+    X::AbstractVector,
+    Y::AbstractVector,
+    Z::AbstractVector,
+)
     x1 = x - 0.5 * dx
     x2 = x - 0.5 * dx
     y1 = y - 0.5 * dy
@@ -778,7 +934,18 @@ function collect_mesh_3d!(::Val{8}, x::Float64, y, z, dx, dy, dz, X::AbstractVec
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{9}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
+function collect_mesh_3d!(
+    ::Val{9},
+    x::Float64,
+    y,
+    z,
+    dx,
+    dy,
+    dz,
+    X::AbstractVector,
+    Y::AbstractVector,
+    Z::AbstractVector,
+)
     x1 = x - 0.5 * dx
     x2 = x - 0.5 * dx
     y1 = y - 0.5 * dy
@@ -789,7 +956,18 @@ function collect_mesh_3d!(::Val{9}, x::Float64, y, z, dx, dy, dz, X::AbstractVec
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{10}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
+function collect_mesh_3d!(
+    ::Val{10},
+    x::Float64,
+    y,
+    z,
+    dx,
+    dy,
+    dz,
+    X::AbstractVector,
+    Y::AbstractVector,
+    Z::AbstractVector,
+)
     x1 = x + 0.5 * dx
     x2 = x + 0.5 * dx
     y1 = y - 0.5 * dy
@@ -800,7 +978,18 @@ function collect_mesh_3d!(::Val{10}, x::Float64, y, z, dx, dy, dz, X::AbstractVe
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{11}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
+function collect_mesh_3d!(
+    ::Val{11},
+    x::Float64,
+    y,
+    z,
+    dx,
+    dy,
+    dz,
+    X::AbstractVector,
+    Y::AbstractVector,
+    Z::AbstractVector,
+)
     x1 = x + 0.5 * dx
     x2 = x + 0.5 * dx
     y1 = y + 0.5 * dy
@@ -811,7 +1000,18 @@ function collect_mesh_3d!(::Val{11}, x::Float64, y, z, dx, dy, dz, X::AbstractVe
     push!(Y, y1, y2)
     push!(Z, z1, z2)
 end
-function collect_mesh_3d!(::Val{12}, x::Float64, y, z, dx, dy, dz, X::AbstractVector, Y::AbstractVector, Z::AbstractVector)
+function collect_mesh_3d!(
+    ::Val{12},
+    x::Float64,
+    y,
+    z,
+    dx,
+    dy,
+    dz,
+    X::AbstractVector,
+    Y::AbstractVector,
+    Z::AbstractVector,
+)
     x1 = x - 0.5 * dx
     x2 = x - 0.5 * dx
     y1 = y + 0.5 * dy

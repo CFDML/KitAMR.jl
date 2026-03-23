@@ -1,4 +1,4 @@
-NeighborQuad{DIM,NDF} = Union{AbstractPsData{DIM,NDF}, Nothing}
+NeighborQuad{DIM,NDF} = Union{AbstractPsData{DIM,NDF},Nothing}
 
 ChildNum = Union{Val{4},Val{8}}
 NeighborNum = Union{Val{2},Val{4}}
@@ -15,17 +15,19 @@ $(TYPEDFIELDS)
 mutable struct Neighbor{DIM,NDF}
     data::Vector{Vector{NeighborQuad{DIM,NDF}}}
     state::Vector{Int}
-    Neighbor(DIM,NDF) = (n = new{DIM,NDF}();
-    n.data = Vector{Vector{NeighborQuad{DIM,NDF}}}(undef, 2*DIM);
-    n.state = zeros(Int8, 2*DIM);
-    n)
+    Neighbor(DIM, NDF) = (
+        n = new{DIM,NDF}();
+        n.data = Vector{Vector{NeighborQuad{DIM,NDF}}}(undef, 2*DIM);
+        n.state = zeros(Int8, 2*DIM);
+        n
+    )
 end
 
 """
 $(TYPEDEF)
 $(TYPEDFIELDS)
 """
-mutable struct SolidNeighbor{DIM,NDF} <:AbstractPsData{DIM,NDF}
+mutable struct SolidNeighbor{DIM,NDF} <: AbstractPsData{DIM,NDF}
     bound_enc::Int
     "Index of the face of the donor cell corresponding to this SolidNeighbor."
     faceid::Int # The faceid through which the neighbor is the solidneighbor.
@@ -74,26 +76,43 @@ mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
     vs_data::VS_Data{DIM,NDF}
     "Neighbor of the cell."
     neighbor::Neighbor{DIM,NDF}
-    PS_Data(DIM,NDF;kwargs...)=(n = new{DIM,NDF}();
-        n.quadid = haskey(kwargs,:quadid) ? kwargs[:quadid] : 0;
-        n.bound_enc = haskey(kwargs,:bound_enc) ? kwargs[:bound_enc] : 0;
-        n.solid_cell_index = haskey(kwargs,:solid_cell_index) ? kwargs[:solid_cell_index] : zeros(SOLID_CELL_ID_NUM);
-        n.ds = haskey(kwargs,:ds) ? kwargs[:ds] : zeros(DIM);
-        n.midpoint = haskey(kwargs,:midpoint) ? kwargs[:midpoint] : zeros(DIM);
-        n.qf = haskey(kwargs,:qf) ? kwargs[:qf] : zeros(DIM);
-        n.w = haskey(kwargs,:w) ? kwargs[:w] : zeros(DIM+2);
-        n.sw = haskey(kwargs,:sw) ? kwargs[:sw] : zeros(DIM+2, DIM);
-        n.prim = haskey(kwargs,:prim) ? kwargs[:prim] : zeros(DIM+2);
-        n.flux = haskey(kwargs,:flux) ? kwargs[:flux] : zeros(DIM+2);
-        if haskey(kwargs,:vs_data)
-           n.vs_data = kwargs[:vs_data]
+    PS_Data(
+        DIM,
+        NDF;
+        kwargs...,
+    )=(
+        n = new{DIM,NDF}();
+        n.quadid = haskey(kwargs, :quadid) ? kwargs[:quadid] : 0;
+        n.bound_enc = haskey(kwargs, :bound_enc) ? kwargs[:bound_enc] : 0;
+        n.solid_cell_index = haskey(kwargs, :solid_cell_index) ? kwargs[:solid_cell_index] :
+                             zeros(SOLID_CELL_ID_NUM);
+        n.ds = haskey(kwargs, :ds) ? kwargs[:ds] : zeros(DIM);
+        n.midpoint = haskey(kwargs, :midpoint) ? kwargs[:midpoint] : zeros(DIM);
+        n.qf = haskey(kwargs, :qf) ? kwargs[:qf] : zeros(DIM);
+        n.w = haskey(kwargs, :w) ? kwargs[:w] : zeros(DIM+2);
+        n.sw = haskey(kwargs, :sw) ? kwargs[:sw] : zeros(DIM+2, DIM);
+        n.prim = haskey(kwargs, :prim) ? kwargs[:prim] : zeros(DIM+2);
+        n.flux = haskey(kwargs, :flux) ? kwargs[:flux] : zeros(DIM+2);
+        if haskey(kwargs, :vs_data)
+            n.vs_data = kwargs[:vs_data]
         end;
-        n.neighbor = haskey(kwargs,:neighbor) ? kwargs[:neighbor] : Neighbor(DIM,NDF);
+        n.neighbor = haskey(kwargs, :neighbor) ? kwargs[:neighbor] : Neighbor(DIM, NDF);
         n
     )
-    PS_Data(ps_data::PS_Data{DIM,NDF};kwargs...) where{DIM,NDF}=(n = new{DIM,NDF}();
+    PS_Data(
+        ps_data::PS_Data{DIM,NDF};
+        kwargs...,
+    ) where {
+        DIM,
+        NDF,
+    }=(
+        n = new{DIM,NDF}();
         for field in fieldnames(PS_Data{DIM,NDF})
-            setfield!(n,field,haskey(kwargs,field) ? kwargs[field] : getfield(ps_data,field))
+            setfield!(
+                n,
+                field,
+                haskey(kwargs, field) ? kwargs[field] : getfield(ps_data, field),
+            )
         end;
         n
     )
@@ -190,5 +209,5 @@ mutable struct MeshData
     is_ghost_cell::Bool
 end
 function MeshData()
-    return MeshData(0,false,0,false)
+    return MeshData(0, false, 0, false)
 end
