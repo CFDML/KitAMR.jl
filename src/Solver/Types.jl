@@ -47,21 +47,45 @@ struct Solver{DIM,NDF}
     AMR_DYNAMIC_PS_MAXLEVEL::Int
     "Maximum level of the AMR in velocity space. **Mandatory**."
     AMR_VS_MAXLEVEL::Int
-    "The numerical flux type. **Mandatory**."
+    "Numerical flux type. **Mandatory**."
     flux::Type{Tf} where {Tf<:AbstractFluxType}
-    "The time-marching scheme. **Mandatory**."
+    "Time-marching scheme. **Mandatory**."
     time_marching::Type{Tt} where {Tt<:AbstractTimeMarchingType}
-    "The dynamic AMR in physical space is open or not. Default is `true`."
+    "Dynamic AMR in physical space is open or not. Default is `true`."
     PS_DYNAMIC_AMR::Bool
-    "The dynamic AMR in velocity space is open or not. Default is `true`."
+    "Dynamic AMR in velocity space is open or not. Default is `true`."
     VS_DYNAMIC_AMR::Bool
+    "Redundancy coefficient of AMR in physical space. Default is `0.25`."
+    ADAPT_COEFFI_PS::Float64
+    "Redundancy coefficient of AMR in velocity space. Default is `0.125`."
+    ADAPT_COEFFI_VS_GLOBAL::Float64
+    "Proportion that a refinement-required velocity cell contributes to the macroscopic quantities in a local physical cell. Default is `0.01`."
+    ADAPT_COEFFI_VS_LOCAL::Float64
+    "Tolerance for convergence judgement. Default is `1e-6`."
+    TOLERANCE::Float64
+    "Number of steps between two checks of status. Default is `100`."
+    ST_CHECK_INTERVAL::Int
+    "Number of redundant steps after convergence criterion has been satisfied. Default is `100`."
+    REDUNDANT_STEPS_NUM::Int
 end
 function Solver(config::Dict)
+    ADAPT_COEFFI_PS = haskey(config,:ADAPT_COEFFI_PS) ? config[:ADAPT_COEFFI_PS] : 0.25
+    ADAPT_COEFFI_VS_GLOBAL = haskey(config,:ADAPT_COEFFI_VS_GLOBAL) ? config[:ADAPT_COEFFI_VS_GLOBAL] : 0.125
+    ADAPT_COEFFI_VS_LOCAL = haskey(config,:ADAPT_COEFFI_VS_LOCAL) ? config[:ADAPT_COEFFI_VS_LOCAL] : 1e-2
+    TOLERANCE = haskey(config,:TOLERANCE) ? config[:TOLERANCE] : 1e-6
+    ST_CHECK_INTERVAL = haskey(config,:ST_CHECK_INTERVAL) ? config[:ST_CHECK_INTERVAL] : 100
+    REDUNDANT_STEPS_NUM = haskey(config,:REDUNDANT_STEPS_NUM) ? config[:REDUNDANT_STEPS_NUM] : 100
     return Solver{config[:DIM],config[:NDF]}(config[:CFL],config[:AMR_PS_MAXLEVEL],
         haskey(config,:AMR_DYNAMIC_PS_MAXLEVEL) ? config[:AMR_DYNAMIC_PS_MAXLEVEL] : config[:AMR_PS_MAXLEVEL],
         config[:AMR_VS_MAXLEVEL],config[:flux],config[:time_marching],
         (haskey(config,:PS_DYNAMIC_AMR) ? config[:PS_DYNAMIC_AMR] : true),
         (haskey(config,:VS_DYNAMIC_AMR) ? config[:VS_DYNAMIC_AMR] : true),
+        ADAPT_COEFFI_PS,
+        ADAPT_COEFFI_VS_GLOBAL,
+        ADAPT_COEFFI_VS_LOCAL,
+        TOLERANCE,
+        ST_CHECK_INTERVAL,
+        REDUNDANT_STEPS_NUM
         )
 end
 function Solver(;kwargs...)
@@ -69,10 +93,22 @@ function Solver(;kwargs...)
     AMR_DYNAMIC_PS_MAXLEVEL = haskey(kwargs,:AMR_DYNAMIC_PS_MAXLEVEL) ? kwargs[:AMR_DYNAMIC_PS_MAXLEVEL] : kwargs[:AMR_PS_MAXLEVEL]
     PS_DYNAMIC_AMR = haskey(kwargs,:PS_DYNAMIC_AMR) ? kwargs[:PS_DYNAMIC_AMR] : true
     VS_DYNAMIC_AMR = haskey(kwargs,:VS_DYNAMIC_AMR) ? kwargs[:VS_DYNAMIC_AMR] : true
+    ADAPT_COEFFI_PS = haskey(kwargs,:ADAPT_COEFFI_PS) ? kwargs[:ADAPT_COEFFI_PS] : 0.25
+    ADAPT_COEFFI_VS_GLOBAL = haskey(config,:ADAPT_COEFFI_VS_GLOBAL) ? config[:ADAPT_COEFFI_VS_GLOBAL] : 0.125
+    ADAPT_COEFFI_VS_LOCAL = haskey(config,:ADAPT_COEFFI_VS_LOCAL) ? config[:ADAPT_COEFFI_VS_LOCAL] : 1e-2
+    TOLERANCE = haskey(kwargs,:TOLERANCE) ? kwargs[:TOLERANCE] : 1e-6
+    ST_CHECK_INTERVAL = haskey(kwargs,:ST_CHECK_INTERVAL) ? kwargs[:ST_CHECK_INTERVAL] : 100
+    REDUNDANT_STEPS_NUM = haskey(kwargs,:REDUNDANT_STEPS_NUM) ? kwargs[:REDUNDANT_STEPS_NUM] : 100
     return Solver{kwargs[:DIM],kwargs[:NDF]}(
         CFL,kwargs[:AMR_PS_MAXLEVEL],AMR_DYNAMIC_PS_MAXLEVEL,
         kwargs[:AMR_VS_MAXLEVEL],kwargs[:flux],kwargs[:time_marching],
-        PS_DYNAMIC_AMR,VS_DYNAMIC_AMR
+        PS_DYNAMIC_AMR,VS_DYNAMIC_AMR,
+        ADAPT_COEFFI_PS,
+        ADAPT_COEFFI_VS_GLOBAL,
+        ADAPT_COEFFI_VS_LOCAL,
+        TOLERANCE,
+        ST_CHECK_INTERVAL,
+        REDUNDANT_STEPS_NUM
         )
 end
 

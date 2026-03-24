@@ -1,9 +1,9 @@
 """
 $(SIGNATURES)
-Perform a check procedure. Simulation status will be output every `RES_CHECK_INTERVAL` steps.
+Perform a check procedure. Simulation status will be output every `ST_CHECK_INTERVAL` steps.
 """
 function check!(i,ps4est,amr)
-    if amr.global_data.status.residual.step%RES_CHECK_INTERVAL==0
+    if amr.global_data.status.residual.step%amr.global_data.config.solver.ST_CHECK_INTERVAL==0
         max_vs_num,total_phase_num = check_vs_num(amr)
         if MPI.Comm_rank(MPI.COMM_WORLD) == 0
             i+=1

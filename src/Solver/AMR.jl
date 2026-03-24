@@ -4,7 +4,7 @@ $(TYPEDSIGNATURES)
 function adaptive_mesh_refinement!(ps4est::P_pxest_t,amr::KitAMR_Data;ps_interval=40,vs_interval=80,partition_interval=40)
     amr.global_data.status.residual.redundant_step>0&&(return nothing)
     res = maximum(amr.global_data.status.residual.residual)
-    converge_ratio = res/TOLERANCE>100 ? 1 : Int(floor(100*TOLERANCE/res))
+    converge_ratio = res/amr.global_data.config.solver.TOLERANCE>100 ? 1 : Int(floor(100*amr.global_data.config.solver.TOLERANCE/res))
     flag = false
     if amr.global_data.config.solver.PS_DYNAMIC_AMR&&amr.global_data.status.ps_adapt_step > ps_interval*converge_ratio
         ps_adaptive_mesh_refinement!(ps4est,amr)

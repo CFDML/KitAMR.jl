@@ -4,7 +4,7 @@ Update residuals.
 """
 function residual_check!(ps_data::PS_Data,prim::Vector{Float64},global_data::Global_Data)
     Res = global_data.status.residual
-    Res.step%RES_CHECK_INTERVAL!=0&&(return nothing)
+    Res.step%global_data.config.solver.ST_CHECK_INTERVAL!=0&&(return nothing)
     @. Res.sumRes+=(prim-ps_data.prim).^2
     @. Res.sumAvg+=abs(prim)
     return nothing
@@ -13,7 +13,7 @@ function residual_comm!(global_data::Global_Data)
     Res = global_data.status.residual
     fp = PointerWrapper(global_data.forest.p4est)
     N = fp.global_num_quadrants[]
-    Res.step%RES_CHECK_INTERVAL!=0&&(return nothing)
+    Res.step%global_data.config.solver.ST_CHECK_INTERVAL!=0&&(return nothing)
     MPI.Reduce!(Res.sumRes,(x,y)->x.+y,0,MPI.COMM_WORLD)
     MPI.Reduce!(Res.sumAvg,(x,y)->x.+y,0,MPI.COMM_WORLD)
     if MPI.Comm_rank(MPI.COMM_WORLD)==0
@@ -27,8 +27,8 @@ $(SIGNATURES)
 Check whether the `residual` and `redundant_step` in [`Status`](@ref) satisfies the convergence criterion.
 """
 function check_for_convergence(amr::KitAMR_Data)
-    maximum(amr.global_data.status.residual.residual)<TOLERANCE&&(amr.global_data.status.residual.redundant_step+=1)
-    return amr.global_data.status.residual.redundant_step>REDUNDANT_STEPS_NUM
+    maximum(amr.global_data.status.residual.residual)<amr.global_data.config.solver.TOLERANCE&&(amr.global_data.status.residual.redundant_step+=1)
+    return amr.global_data.status.residual.redundant_step>amr.global_data.config.solver.REDUNDANT_STEPS_NUM
 end
 
 
