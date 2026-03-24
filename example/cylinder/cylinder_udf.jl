@@ -5,14 +5,14 @@ function shock_wave_region(midpoint,ds,global_data,level)
     end
     return false
 end
-function amr_region(;ps_data,kwargs...)
+function amr_region(ps_data,level,amr)
     midpoint = ps_data.midpoint
     if midpoint[1]>-5.0&&midpoint[1]<5.0&&midpoint[2]<5.0&&midpoint[2]>-5.0&&√sum(midpoint.^2)>1.0
         return true
     end
     return false
 end
-function cylinder_buffer_IC(midpoint::Vector{Float64})
+function cylinder_buffer_IC(midpoint::Vector{Float64},::Global_Data)
     r = norm(midpoint)
     Ma = 5.0
     Tw = 1.0

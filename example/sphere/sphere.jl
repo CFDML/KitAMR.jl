@@ -58,7 +58,7 @@ for i in 1:nt
     iterate!(amr) 
     data_exchange!(ps4est, amr)
     check_for_convergence(amr)&&break
-    check!(i,ps4est,amr)
+    check!(ps4est,amr)
 end
 save_result(ps4est,amr)
 finalize!(ps4est,amr)

@@ -94,8 +94,8 @@ function Solver(;kwargs...)
     PS_DYNAMIC_AMR = haskey(kwargs,:PS_DYNAMIC_AMR) ? kwargs[:PS_DYNAMIC_AMR] : true
     VS_DYNAMIC_AMR = haskey(kwargs,:VS_DYNAMIC_AMR) ? kwargs[:VS_DYNAMIC_AMR] : true
     ADAPT_COEFFI_PS = haskey(kwargs,:ADAPT_COEFFI_PS) ? kwargs[:ADAPT_COEFFI_PS] : 0.25
-    ADAPT_COEFFI_VS_GLOBAL = haskey(config,:ADAPT_COEFFI_VS_GLOBAL) ? config[:ADAPT_COEFFI_VS_GLOBAL] : 0.125
-    ADAPT_COEFFI_VS_LOCAL = haskey(config,:ADAPT_COEFFI_VS_LOCAL) ? config[:ADAPT_COEFFI_VS_LOCAL] : 1e-2
+    ADAPT_COEFFI_VS_GLOBAL = haskey(kwargs,:ADAPT_COEFFI_VS_GLOBAL) ? kwargs[:ADAPT_COEFFI_VS_GLOBAL] : 0.125
+    ADAPT_COEFFI_VS_LOCAL = haskey(kwargs,:ADAPT_COEFFI_VS_LOCAL) ? kwargs[:ADAPT_COEFFI_VS_LOCAL] : 1e-2
     TOLERANCE = haskey(kwargs,:TOLERANCE) ? kwargs[:TOLERANCE] : 1e-6
     ST_CHECK_INTERVAL = haskey(kwargs,:ST_CHECK_INTERVAL) ? kwargs[:ST_CHECK_INTERVAL] : 100
     REDUNDANT_STEPS_NUM = haskey(kwargs,:REDUNDANT_STEPS_NUM) ? kwargs[:REDUNDANT_STEPS_NUM] : 100
@@ -123,9 +123,9 @@ $(TYPEDFIELDS)
 
 """
 mutable struct UDF
-    "The static AMR flag in physical space."
+    "The static AMR flag in physical space. (midpoint::Vector{Float64},ds::Vector{Float64},global_data::[`Global_Data`](@ref),level::Int)->Bool"
     static_ps_refine_flag::Function
-    "The dynamic AMR flag in physical space."
+    "The dynamic AMR flag in physical space. (ps_data::[`AbstractPsData`](@ref),level::Int,amr::[`KitAMR_Data`](@ref))->Bool"
     dynamic_ps_refine_flag::Function
     "The static AMR flag in velocity space."
     static_vs_refine_flag::Function 
@@ -314,8 +314,6 @@ $(TYPEDEF)
 $(TYPEDFIELDS)
 """
 mutable struct Residual
-    "Current step number."
-    step::Int
     "Residual of primary variables, is updated by [`residual_check!`](@ref)."
     residual::Vector{Float64}
     "Summation of residuals."
@@ -326,7 +324,7 @@ mutable struct Residual
     redundant_step::Int
 end
 function Residual(DIM::Int)
-    return Residual(1,ones(DIM+2),zeros(DIM+2),zeros(DIM+2),0)
+    return Residual(ones(DIM+2),zeros(DIM+2),zeros(DIM+2),0)
 end
 
 """
@@ -353,6 +351,8 @@ mutable struct Status
     Δt_ξ::Float64
     "Dimensionless simulation time."
     sim_time::Float64
+    "Number of steps that have been marched."
+    step::Int
     "Number of steps after last AMR in physical space."
     ps_adapt_step::Int
     "Number of steps after last AMR in velocity space."
@@ -375,7 +375,7 @@ function Status(config::Dict)
         (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
         2^config[:AMR_VS_MAXLEVEL] / 2 for i in 1:DIM] : [maximum(abs.(quadrature.vcoords)) for _ in 1:DIM]
     Δt_ξ = config[:CFL]*minimum(ds ./ U)
-    return Status(0,zeros(DIM+2),zeros(DIM+2), zeros(DIM+2), Δt_ξ,Δt_ξ,0.,1,1,1,Residual(DIM),Ref(false))
+    return Status(0,zeros(DIM+2),zeros(DIM+2), zeros(DIM+2), Δt_ξ,Δt_ξ,0.,0,1,1,1,Residual(DIM),Ref(false))
 end
 function Status(config::Configure{DIM,NDF}) where{DIM,NDF}
     trees_num = config.trees_num
@@ -387,7 +387,7 @@ function Status(config::Configure{DIM,NDF}) where{DIM,NDF}
         (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
         2^config.solver.AMR_VS_MAXLEVEL / 2 for i in 1:DIM] : [maximum(abs.(quadrature.vcoords)) for _ in 1:DIM]
     Δt_ξ = config.solver.CFL*minimum(ds ./ U)
-    return Status(0,zeros(DIM+2),zeros(DIM+2), zeros(DIM+2), Δt_ξ,Δt_ξ,0.,1,1,1,Residual(DIM),Ref(false))
+    return Status(0,zeros(DIM+2),zeros(DIM+2), zeros(DIM+2), Δt_ξ,Δt_ξ,0.,0,1,1,1,Residual(DIM),Ref(false))
 end
 
 """

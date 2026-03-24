@@ -56,7 +56,7 @@ for i in 1:nt
     iterate!(amr) 
     data_exchange!(ps4est, amr)
     check_for_convergence(amr)&&break
-    check!(i,ps4est,amr)
+    check!(ps4est,amr)
     # KitAMR.check_for_animsave!(ps4est,amr)
     # if amr.global_data.status.sim_time>3.0
     #     break

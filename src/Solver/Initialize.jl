@@ -222,8 +222,8 @@ end
 function initial_prim(ic::Uniform;kwargs...)
     return ic.ic
 end
-function initial_prim(ic::PCoordFn;midpoint::AbstractVector{Float64},kwargs...)
-    return ic.PCIC_fn(midpoint;kwargs...)
+function initial_prim(ic::PCoordFn;midpoint::AbstractVector{Float64},global_data::Global_Data)
+    return ic.PCIC_fn(midpoint,global_data)
 end
 function init_solid_midpoints_kernel(ip, data, dp)
     global_data, solid_midpoints = unsafe_pointer_to_objref(data)
@@ -263,7 +263,7 @@ function init_ps_p4est_kernel(ip, data, dp)
         ps_data.quadid = global_quadid(ip)
         ps_data.ds .= ds
         ps_data.midpoint .= midpoint
-        ps_data.prim .= initial_prim(ic;midpoint = ps_data.midpoint)
+        ps_data.prim .= initial_prim(ic;midpoint = ps_data.midpoint,global_data = global_data)
         ps_data.w .= get_conserved(ps_data, global_data)
         ps_data.vs_data = init_vs(ps_data.prim, global_data)
         for i in eachindex(solid_cell_flags)

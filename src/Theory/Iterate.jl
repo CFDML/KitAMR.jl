@@ -6,10 +6,10 @@ function iterate!(amr::KitAMR_Data)
     time_marching = amr.global_data.config.solver.time_marching
     iterate!(time_marching,amr)
     residual_comm!(amr.global_data)
+    amr.global_data.status.step += 1
     amr.global_data.status.ps_adapt_step += 1
     amr.global_data.status.vs_adapt_step += 1
     amr.global_data.status.partition_step += 1
-    amr.global_data.status.residual.step += 1
     amr.global_data.status.sim_time+=amr.global_data.status.Δt
     return nothing
 end

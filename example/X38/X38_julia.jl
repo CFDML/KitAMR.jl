@@ -68,7 +68,7 @@ for i in 1:nt
     iterate!(amr) # Collision process and time marching.
     data_exchange!(ps4est, amr) # Update variables in ghost cells by MPI communication.
     check_for_convergence(amr)&&break # Check for convergence.
-    check!(i,ps4est,amr) # Check for save and output simulation status to `stdout`.
+    check!(ps4est,amr) # Check for save and output simulation status to `stdout`.
 end
 
 save_result(ps4est,amr) # Save converging results.

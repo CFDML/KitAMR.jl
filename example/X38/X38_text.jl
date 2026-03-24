@@ -20,7 +20,7 @@ for i in 1:nt
     KitAMR.iterate!(amr) 
     KitAMR.data_exchange!(ps4est, amr)
     KitAMR.check_for_convergence(amr)&&break
-    KitAMR.check!(i,ps4est,amr)
+    KitAMR.check!(ps4est,amr)
 end
 KitAMR.save_result(ps4est,amr)
 KitAMR.finalize!(ps4est,amr)

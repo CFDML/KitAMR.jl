@@ -2,25 +2,27 @@
 $(SIGNATURES)
 Perform a check procedure. Simulation status will be output every `ST_CHECK_INTERVAL` steps.
 """
-function check!(i,ps4est,amr)
-    if amr.global_data.status.residual.step%amr.global_data.config.solver.ST_CHECK_INTERVAL==0
-        max_vs_num,total_phase_num = check_vs_num(amr)
-        if MPI.Comm_rank(MPI.COMM_WORLD) == 0
-            i+=1
-            println("Iteration: $i")
-            sim_time = amr.global_data.status.sim_time
-            println("Simulation time: $sim_time")
-            res = maximum(amr.global_data.status.residual.residual)
-            println("Residual: $res")
-            ref_vs_num = amr.global_data.status.max_vs_num
-            println("MPI buffer size: $ref_vs_num")
-            println("Maximum number of velocity grids: $max_vs_num")
-            pp = PointerWrapper(ps4est)
-            global_num_quadrants = pp.global_num_quadrants[]
-            println("Total number of physical grids: $global_num_quadrants")
-            println("Total number of phase grids: $total_phase_num")
-        end
+function check!(ps4est,amr)
+    if amr.global_data.status.step%amr.global_data.config.solver.ST_CHECK_INTERVAL==0
+        execute_check(ps4est,amr)
         check_for_save!(ps4est,amr)
+    end
+end
+function execute_check(ps4est,amr)
+    max_vs_num,total_phase_num = check_vs_num(amr)
+    if MPI.Comm_rank(MPI.COMM_WORLD) == 0
+        println("Iteration: $(amr.global_data.status.step)")
+        sim_time = amr.global_data.status.sim_time
+        println("Simulation time: $sim_time")
+        res = maximum(amr.global_data.status.residual.residual)
+        println("Residual: $res")
+        ref_vs_num = amr.global_data.status.max_vs_num
+        println("MPI buffer size: $ref_vs_num")
+        println("Maximum number of velocity grids: $max_vs_num")
+        pp = PointerWrapper(ps4est)
+        global_num_quadrants = pp.global_num_quadrants[]
+        println("Total number of physical grids: $global_num_quadrants")
+        println("Total number of phase grids: $total_phase_num")
     end
 end
 """
@@ -175,7 +177,6 @@ function check_vs_num(amr::KitAMR_Data)
     for tree in trees
         for ps_data in tree
             isa(ps_data,InsideSolidData)&&continue
-            ps_data.bound_enc<0&&continue
             vs_num = ps_data.vs_data.vs_num
             buffer[1] = max(buffer[1],vs_num)
             buffer[2] += vs_num

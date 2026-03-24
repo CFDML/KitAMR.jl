@@ -8,7 +8,7 @@ function shock_wave_region(midpoint,ds,global_data,level)
     end
     return false
 end
-function sphere_buffer_IC(midpoint::Vector{Float64};kwargs...)
+function sphere_buffer_IC(midpoint::Vector{Float64},::Global_Data)
     r = norm(midpoint)
     Ma = 3.834
     Tw = 1.0+(5/3-1)*0.5*Ma^2
