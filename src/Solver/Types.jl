@@ -465,7 +465,6 @@ mutable struct Field{DIM,NDF}
     trees::PS_Trees{DIM,NDF}
     "Mapping between faces and cells. The element type is defined by [`AbstractFace`](@ref)."
     faces::Vector{AbstractFace}
-    immersed_boundary::ImmersedBoundary
 end
 
 """

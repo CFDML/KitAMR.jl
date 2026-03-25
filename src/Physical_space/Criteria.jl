@@ -12,7 +12,7 @@ function ps_refine_flag(
     end
     qp.level[]>global_data.config.solver.AMR_DYNAMIC_PS_MAXLEVEL-1&&return Cint(0)
     global_data.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,global_data,qp.level[]) && return Cint(1)
-    dflag = global_data.config.user_defined.dynamic_ps_refine_flag(ps_data,level,amr)
+    dflag = global_data.config.user_defined.dynamic_ps_refine_flag(ps_data,qp.level[],amr)
     !dflag&&return Cint(0)
     agrad = zeros(DIM+2)
     gradmax = global_data.status.gradmax

@@ -21,7 +21,8 @@ using StructArrays
 BLAS.set_num_threads(1)
 
 include("../lib/P4est/src/P4est.jl")
-@reexport using .P4est
+# @reexport using .P4est
+using .P4est
 include("../lib/P4estTypes/src/P4estTypes.jl")
 using .P4estTypes
 include("../lib/KitCore/KitCore.jl")
