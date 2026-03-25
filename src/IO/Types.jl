@@ -3,9 +3,9 @@ struct ConfigureForSave{DIM,NDF}
     trees_num::Vector{Int64}
     quadrature::Union{Vector{Float64},AbstractQuadrature}
     vs_trees_num::Vector{Int64}
-    IC::AbstractInitCondType
+    IC::AbstractInitCond
     domain::Vector{Domain}
-    IB::Vector{AbstractBoundaryType}
+    IB::Vector{AbstractBoundary}
     gas::Gas
     solver::Solver
     user_defined::UDF
@@ -53,7 +53,7 @@ struct Boundary_PS_Solution
     qf::Vector{Float64}
     p::Vector{Float64}
 end
-function PS_Solution(ps_data::PS_Data{DIM}) where{DIM}
+function PS_Solution(ps_data::PsData{DIM}) where{DIM}
     if ps_data.bound_enc<0
         prim = Vector{Float64}(undef,DIM+2);prim.=NaN
         qf = Vector{Float64}(undef,DIM);qf.=NaN

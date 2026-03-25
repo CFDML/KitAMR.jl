@@ -4,15 +4,15 @@ function fieldvalues_fn(ps_data)
     return [1/ps_data.prim[end]]
 end
 
-write_VTK(ps4est,"testT",["T"],fieldvalues_fn)
+write_VTK(p4est,"testT",["T"],fieldvalues_fn)
 =#
-function write_VTK(ps4est::Ptr{p4est_t},filename::String,fieldnames::Vector{String},fieldvalues_fn)
-    p4est_geo = p4est_geometry_new_connectivity(pointer(PointerWrapper(ps4est).connectivity))
-    cont = p4est_vtk_context_new(ps4est,filename)
+function write_VTK(p4est::Ptr{p4est_t},filename::String,fieldnames::Vector{String},fieldvalues_fn)
+    p4est_geo = p4est_geometry_new_connectivity(pointer(PointerWrapper(p4est).connectivity))
+    cont = p4est_vtk_context_new(p4est,filename)
     p4est_vtk_context_set_geom(cont,p4est_geo)
     p4est_vtk_context_set_continuous(cont,1)
     cont = p4est_vtk_write_header(cont)
-    fp = PointerWrapper(ps4est)
+    fp = PointerWrapper(p4est)
     num_quads = fp.local_num_quadrants[]
     ps = Vector{Ptr{Nothing}}(undef,length(fieldnames))
     pas = Vector{Vector{Cdouble}}(undef,length(fieldnames))
@@ -32,12 +32,12 @@ function write_VTK(ps4est::Ptr{p4est_t},filename::String,fieldnames::Vector{Stri
         end
     end
     function init_cell_data(info,data)
-        AMR_volume_iterate(info, data, P4est_PS_Data, init_cell_data_kernel)
+        AMR_volume_iterate(info, data, P4estPsData, init_cell_data_kernel)
     end
     ppas = pointer_from_objref(pas)
     cfn = @cfunction($init_cell_data, Cvoid, (Ptr{p4est_iter_volume_info}, Ptr{Nothing})) # explicit cfn to avoid closure error on Windows and MacOS platforms.
-    GC.@preserve ps4est ppas pas p4est_iterate(
-        ps4est,
+    GC.@preserve p4est ppas pas p4est_iterate(
+        p4est,
         C_NULL,
         ppas,
         cfn,
@@ -57,13 +57,13 @@ function write_VTK(ps4est::Ptr{p4est_t},filename::String,fieldnames::Vector{Stri
         sc_free(P4est.package_id(),ps[i])
     end
 end
-function write_VTK(ps4est::Ptr{p8est_t},filename::String,fieldnames::Vector{String},fieldvalues_fn)
-    p4est_geo = p8est_geometry_new_connectivity(pointer(PointerWrapper(ps4est).connectivity))
-    cont = p8est_vtk_context_new(ps4est,filename)
+function write_VTK(p4est::Ptr{p8est_t},filename::String,fieldnames::Vector{String},fieldvalues_fn)
+    p4est_geo = p8est_geometry_new_connectivity(pointer(PointerWrapper(p4est).connectivity))
+    cont = p8est_vtk_context_new(p4est,filename)
     p8est_vtk_context_set_geom(cont,p4est_geo)
     p8est_vtk_context_set_continuous(cont,1)
     cont = p8est_vtk_write_header(cont)
-    fp = PointerWrapper(ps4est)
+    fp = PointerWrapper(p4est)
     num_quads = fp.local_num_quadrants[]
     ps = Vector{Ptr{Nothing}}(undef,length(fieldnames))
     pas = Vector{Vector{Cdouble}}(undef,length(fieldnames))
@@ -83,12 +83,12 @@ function write_VTK(ps4est::Ptr{p8est_t},filename::String,fieldnames::Vector{Stri
         end
     end
     function init_cell_data(info,data)
-        AMR_volume_iterate(info, data, P4est_PS_Data, init_cell_data_kernel)
+        AMR_volume_iterate(info, data, P4estPsData, init_cell_data_kernel)
     end
     ppas = pointer_from_objref(pas)
     cfn = @cfunction($init_cell_data, Cvoid, (Ptr{p8est_iter_volume_info}, Ptr{Nothing})) # explicit cfn to avoid closure error on Windows and MacOS platforms.
-    GC.@preserve ps4est ppas pas p8est_iterate(
-        ps4est,
+    GC.@preserve p4est ppas pas p8est_iterate(
+        p4est,
         C_NULL,
         ppas,
         cfn,
@@ -110,11 +110,11 @@ function write_VTK(ps4est::Ptr{p8est_t},filename::String,fieldnames::Vector{Stri
     end
 end
 
-function vtk_data(vs_data::VS_Data{2,NDF},amr,::Type{T}) where{NDF,T<:Pixel}
-    global_data = amr.global_data
-    xmin,xmax,ymin,ymax = global_data.config.quadrature
-    Nx,Ny = global_data.config.vs_trees_num
-    AMR_VS_MAXLEVEL = global_data.config.solver.AMR_VS_MAXLEVEL
+function vtk_data(vs_data::VsData{2,NDF},ka,::Type{T}) where{NDF,T<:Pixel}
+    kinfo = ka.kinfo
+    xmin,xmax,ymin,ymax = kinfo.config.quadrature
+    Nx,Ny = kinfo.config.vs_trees_num
+    AMR_VS_MAXLEVEL = kinfo.config.solver.AMR_VS_MAXLEVEL
     dx = (xmax - xmin) / Nx/2^AMR_VS_MAXLEVEL
     dy = (ymax - ymin) / Ny/2^AMR_VS_MAXLEVEL
     D = [dx,dy]
@@ -135,15 +135,15 @@ function vtk_data(vs_data::VS_Data{2,NDF},amr,::Type{T}) where{NDF,T<:Pixel}
 end
 #=
 example:
-function fieldvalues_fn(vs_data::VS_Data{3})
+function fieldvalues_fn(vs_data::VsData{3})
     return [vs_data.df[:,1],vs_data.level]
 end
 =#
-function write_vs_VTK(vs_data::AbstractVsData{2,2},amr::KitAMR_Data{2,2},filename::String,fieldnames::Vector{String},fieldvalues_fn)
-    global_data = amr.global_data
-    xmin,xmax,ymin,ymax = global_data.config.quadrature
-    Nx,Ny = global_data.config.vs_trees_num
-    AMR_VS_MAXLEVEL = global_data.config.solver.AMR_VS_MAXLEVEL
+function write_vs_VTK(vs_data::AbstractVsData{2,2},ka::KA{2,2},filename::String,fieldnames::Vector{String},fieldvalues_fn)
+    kinfo = ka.kinfo
+    xmin,xmax,ymin,ymax = kinfo.config.quadrature
+    Nx,Ny = kinfo.config.vs_trees_num
+    AMR_VS_MAXLEVEL = kinfo.config.solver.AMR_VS_MAXLEVEL
     dx = (xmax - xmin) / Nx/2^AMR_VS_MAXLEVEL
     dy = (ymax - ymin) / Ny/2^AMR_VS_MAXLEVEL
     D = [dx,dy]
@@ -165,11 +165,11 @@ function write_vs_VTK(vs_data::AbstractVsData{2,2},amr::KitAMR_Data{2,2},filenam
         end
     end
 end
-function write_vs_VTK(df::AbstractMatrix,vs_data::AbstractVsData{2,2},amr::KitAMR_Data{2,2},filename::String,fieldnames::Vector{String},fieldvalues_fn)
-    global_data = amr.global_data
-    xmin,xmax,ymin,ymax = global_data.config.quadrature
-    Nx,Ny = global_data.config.vs_trees_num
-    AMR_VS_MAXLEVEL = global_data.config.solver.AMR_VS_MAXLEVEL
+function write_vs_VTK(df::AbstractMatrix,vs_data::AbstractVsData{2,2},ka::KA{2,2},filename::String,fieldnames::Vector{String},fieldvalues_fn)
+    kinfo = ka.kinfo
+    xmin,xmax,ymin,ymax = kinfo.config.quadrature
+    Nx,Ny = kinfo.config.vs_trees_num
+    AMR_VS_MAXLEVEL = kinfo.config.solver.AMR_VS_MAXLEVEL
     dx = (xmax - xmin) / Nx/2^AMR_VS_MAXLEVEL
     dy = (ymax - ymin) / Ny/2^AMR_VS_MAXLEVEL
     D = [dx,dy]
@@ -191,11 +191,11 @@ function write_vs_VTK(df::AbstractMatrix,vs_data::AbstractVsData{2,2},amr::KitAM
         end
     end
 end
-function write_vs_VTK(df::AbstractMatrix,vs_data::AbstractVsData{3,1},amr::KitAMR_Data{3,1},filename::String,fieldnames::Vector{String},fieldvalues_fn)
-    global_data = amr.global_data
-    xmin,xmax,ymin,ymax,zmin,zmax = global_data.config.quadrature
-    Nx,Ny,Nz = global_data.config.vs_trees_num
-    AMR_VS_MAXLEVEL = global_data.config.solver.AMR_VS_MAXLEVEL
+function write_vs_VTK(df::AbstractMatrix,vs_data::AbstractVsData{3,1},ka::KA{3,1},filename::String,fieldnames::Vector{String},fieldvalues_fn)
+    kinfo = ka.kinfo
+    xmin,xmax,ymin,ymax,zmin,zmax = kinfo.config.quadrature
+    Nx,Ny,Nz = kinfo.config.vs_trees_num
+    AMR_VS_MAXLEVEL = kinfo.config.solver.AMR_VS_MAXLEVEL
     dx = (xmax - xmin) / Nx/2^AMR_VS_MAXLEVEL
     dy = (ymax - ymin) / Ny/2^AMR_VS_MAXLEVEL
     dz = (zmax - zmin) / Nz/2^AMR_VS_MAXLEVEL
@@ -218,20 +218,20 @@ function write_vs_VTK(df::AbstractMatrix,vs_data::AbstractVsData{3,1},amr::KitAM
         end
     end
 end
-function neighbor_num(ps_data::PS_Data,::P_pxest_t,::KitAMR_Data,::Integer)
+function neighbor_num(ps_data::PsData,::P_pxest_t,::KA,::Integer)
     return abs.(ps_data.neighbor.state)
 end
-function neighbor_num(::InsideSolidData,ps4est::P_pxest_t,amr::KitAMR_Data{DIM},quadid::Integer) where {DIM}
+function neighbor_num(::InsideSolidData,p4est::P_pxest_t,ka::KA{DIM},quadid::Integer) where {DIM}
     neighbor_num = Vector{Int}(undef,2*DIM)
-    global_data = amr.global_data
-    ghost = global_data.forest.ghost
-    mesh = global_data.forest.mesh
+    kinfo = ka.kinfo
+    ghost = kinfo.forest.ghost
+    mesh = kinfo.forest.mesh
     for dir = 1:2*DIM
         neighbor_quads = sc_array_new(sizeof(P_pxest_quadrant_t))
         neighbor_encs = sc_array_new(sizeof(Cint))
         neighbor_qid = sc_array_new(sizeof(Cint))
-        GC.@preserve dir ps4est ghost mesh quadid neighbor_encs neighbor_qid neighbor_quads p4est_mesh_get_neighbors(
-            ps4est,
+        GC.@preserve dir p4est ghost mesh quadid neighbor_encs neighbor_qid neighbor_quads p4est_mesh_get_neighbors(
+            p4est,
             ghost,
             mesh,
             quadid,
@@ -247,10 +247,10 @@ function neighbor_num(::InsideSolidData,ps4est::P_pxest_t,amr::KitAMR_Data{DIM},
     end
     return neighbor_num
 end
-function save_vs_result(amr::KitAMR_Data{DIM,NDF};dir_path) where{DIM,NDF}
+function save_vs_result(ka::KA{DIM,NDF};dir_path) where{DIM,NDF}
     vs_solutions = VS_Solution[]
     vs_path = dir_path*"vs_result_"*string(MPI.Comm_rank(MPI.COMM_WORLD))*".jld2"
-    for tree in amr.field.trees.data
+    for tree in ka.kdata.field.trees.data
         for ps_data in tree
             (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0)&&continue
             x,y = ps_data.midpoint
@@ -276,22 +276,22 @@ end
 $(TYPEDSIGNATURES)
 Save all results to `dir_path`. If `isempty(dir_path)` is `true`, a folder named `result<yyyy-mm-dd_HH-MM>` will be made in current path.
 """
-function save_result(ps4est::Ptr{p4est_t},amr::KitAMR_Data{DIM,NDF};dir_path="") where{DIM,NDF}
-    update_slope!(amr)
-    slope_exchange!(ps4est,amr)
-    update_solid_cell!(amr)
-    data_exchange!(ps4est,amr)
-    fp = PointerWrapper(ps4est)
+function save_result(p4est::Ptr{p4est_t},ka::KA{DIM,NDF};dir_path="") where{DIM,NDF}
+    update_slope!(ka)
+    slope_exchange!(p4est,ka)
+    update_solid_cell!(ka)
+    data_exchange!(p4est,ka)
+    fp = PointerWrapper(p4est)
     ps_solution = Vector{PS_Solution}(undef,fp.local_num_quadrants[])
     neighbor_nums = Vector{Vector{Int}}(undef,fp.local_num_quadrants[])
-    trees = amr.field.trees.data
-    config = amr.global_data.config
+    trees = ka.kdata.field.trees.data
+    config = ka.kinfo.config
     index = 1
     for i in eachindex(trees)
         for j in eachindex(trees[i])
             ps_data = trees[i][j]
             ps_solution[index] = PS_Solution(ps_data)
-            neighbor_nums[index] = neighbor_num(ps_data,ps4est,amr,index-1)
+            neighbor_nums[index] = neighbor_num(ps_data,p4est,ka,index-1)
             index+=1
         end
     end
@@ -322,7 +322,7 @@ function save_result(ps4est::Ptr{p4est_t},amr::KitAMR_Data{DIM,NDF};dir_path="")
     MPI.Barrier(MPI.COMM_WORLD)
     pro_path = pwd()
     cd(dir_path)
-    p4est_save_ext("p",ps4est,Cint(0),Cint(0))
+    p4est_save_ext("p",p4est,Cint(0),Cint(0))
     cd(pro_path)
     if rank==0
         size = MPI.Comm_size(MPI.COMM_WORLD)
@@ -330,20 +330,20 @@ function save_result(ps4est::Ptr{p4est_t},amr::KitAMR_Data{DIM,NDF};dir_path="")
         save_object(dir_path * "solverset.jld2", solverset)
     end
     save_object(dir_path * "result_"*string(rank)*".jld2", result)
-    save_pvtu(dir_path*"vtk/field",ps4est,amr,amr.global_data.config.output.vtk_celltype)
-    save_vs_result(amr;dir_path)
-    save_boundary_result(dir_path,amr)
+    save_pvtu(dir_path*"vtk/field",p4est,ka,ka.kinfo.config.output.vtk_celltype)
+    save_vs_result(ka;dir_path)
+    save_boundary_result(dir_path,ka)
 end
-function save_result(ps4est::Ptr{p8est_t},amr::KitAMR_Data{DIM,NDF};dir_path="") where{DIM,NDF}
-    update_slope!(amr)
-    slope_exchange!(ps4est,amr)
-    update_solid_cell!(amr)
-    data_exchange!(ps4est,amr)
-    fp = PointerWrapper(ps4est)
+function save_result(p4est::Ptr{p8est_t},ka::KA{DIM,NDF};dir_path="") where{DIM,NDF}
+    update_slope!(ka)
+    slope_exchange!(p4est,ka)
+    update_solid_cell!(ka)
+    data_exchange!(p4est,ka)
+    fp = PointerWrapper(p4est)
     ps_solution = Vector{PS_Solution}(undef,fp.local_num_quadrants[])
     neighbor_nums = Vector{Vector{Int}}(undef,fp.local_num_quadrants[])
-    trees = amr.field.trees.data
-    config = amr.global_data.config
+    trees = ka.kdata.field.trees.data
+    config = ka.kinfo.config
     index = 1
     for i in eachindex(trees)
         for j in eachindex(trees[i])
@@ -379,18 +379,18 @@ function save_result(ps4est::Ptr{p8est_t},amr::KitAMR_Data{DIM,NDF};dir_path="")
     MPI.Barrier(MPI.COMM_WORLD)
     pro_path = pwd()
     cd(dir_path)
-    p4est_save_ext("p",ps4est,Cint(0),Cint(0))
+    p4est_save_ext("p",p4est,Cint(0),Cint(0))
     cd(pro_path)
     if rank==0
         size = MPI.Comm_size(MPI.COMM_WORLD)
         solverset = SolverSet(ConfigureForSave(config),size)
         save_object(dir_path * "solverset.jld2", solverset)
     end
-    save_pvtu(dir_path*"vtk/field",ps4est,amr,amr.global_data.config.output.vtk_celltype)
+    save_pvtu(dir_path*"vtk/field",p4est,ka,ka.kinfo.config.output.vtk_celltype)
     save_object(dir_path * "result_"*string(rank)*".jld2", result)
-    save_boundary_result(dir_path,amr)
+    save_boundary_result(dir_path,ka)
 end
-function save_pvtu(dir_path::String,p4est::Ptr{p4est_t},amr,celltype)
+function save_pvtu(dir_path::String,p4est::Ptr{p4est_t},ka,celltype)
     pp = PointerWrapper(p4est)
     gfq = Base.unsafe_wrap(
         Vector{Int},
@@ -399,7 +399,7 @@ function save_pvtu(dir_path::String,p4est::Ptr{p4est_t},amr,celltype)
     )
     nums = [gfq[i]-gfq[i-1] for i in 2:MPI.Comm_size(MPI.COMM_WORLD)+1]
     nparts = length(findall(x->x>0,nums));part = length(findall(x->x>0,nums[1:MPI.Comm_rank(MPI.COMM_WORLD)+1]))
-    vertices,cells,point_solutions,solutions = pvtu_data(p4est,amr,celltype)
+    vertices,cells,point_solutions,solutions = pvtu_data(p4est,ka,celltype)
     ranks = ones(Int,size(solutions,1))*MPI.Comm_rank(MPI.COMM_WORLD)
     if length(ranks)>0
         pvtk_grid(dir_path,vertices,cells;part = part,nparts = nparts) do pvtk
@@ -415,7 +415,7 @@ function save_pvtu(dir_path::String,p4est::Ptr{p4est_t},amr,celltype)
         end
     end
 end
-function save_pvtu(dir_path::String,p4est::Ptr{p8est_t},amr,celltype)
+function save_pvtu(dir_path::String,p4est::Ptr{p8est_t},ka,celltype)
     pp = PointerWrapper(p4est)
     gfq = Base.unsafe_wrap(
         Vector{Int},
@@ -424,7 +424,7 @@ function save_pvtu(dir_path::String,p4est::Ptr{p8est_t},amr,celltype)
     )
     nums = [gfq[i]-gfq[i-1] for i in 2:MPI.Comm_size(MPI.COMM_WORLD)+1]
     nparts = length(findall(x->x>0,nums));part = length(findall(x->x>0,nums[1:MPI.Comm_rank(MPI.COMM_WORLD)+1]))
-    vertices,cells,point_solutions,solutions = pvtu_data(p4est,amr,celltype)
+    vertices,cells,point_solutions,solutions = pvtu_data(p4est,ka,celltype)
     ranks = ones(Int,size(solutions,1))*MPI.Comm_rank(MPI.COMM_WORLD)
     if size(solutions,1)>0
         pvtk_grid(dir_path,vertices,cells;part = part,nparts = nparts) do pvtk
@@ -440,7 +440,7 @@ function save_pvtu(dir_path::String,p4est::Ptr{p8est_t},amr,celltype)
         end
     end
 end
-function pvtu_data(p4est,amr,::Type{T}) where{T<:Triangle}
+function pvtu_data(p4est,ka,::Type{T}) where{T<:Triangle}
     N = PointerWrapper(p4est).local_num_quadrants[]
     tb = Vector{SVector{2,Float64}}(undef,4)
     tb[1] = @SVector [-1.,-1.];tb[2] = @SVector [1.,-1.];tb[3] = @SVector [1.,1.];tb[4] = @SVector [-1.,1.]
@@ -475,7 +475,7 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Triangle}
     point_solutions = Matrix{Float64}(undef,5*N,6)
     # bound_encs = Vector{Float64}(undef,N)
     index = 1
-    for tree in amr.field.trees.data
+    for tree in ka.kdata.field.trees.data
         for ps_data in tree
             if isa(ps_data,InsideSolidData)||ps_data.bound_enc<0
                 solutions[4*(index-1)+1:4*index,:].=NaN
@@ -496,9 +496,9 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Triangle}
                     sdf = vs_data.sdf
                     dx = 0.5*ps_data.ds.*tb[i]
                     point_df .= @views df+[β[i,j]*dot(sdf[i,j,:],dx) for i in axes(df,1), j in axes(df,2)]
-                    w = calc_w0(vs_data.midpoint,point_df,vs_data.weight,amr.global_data)
-                    prim = get_prim(w,amr.global_data)
-                    qf = calc_qf(vs_data.midpoint,point_df,vs_data.weight,prim,amr.global_data)
+                    w = calc_w0(vs_data.midpoint,point_df,vs_data.weight,ka.kinfo)
+                    prim = get_prim(w,ka.kinfo)
+                    qf = calc_qf(vs_data.midpoint,point_df,vs_data.weight,prim,ka.kinfo)
                     point_solutions[5*(index-1)+i,1] = prim[1]
                     @views point_solutions[5*(index-1)+i,2:3] .= prim[2:3]
                     point_solutions[5*(index-1)+i,4] = 1.0/prim[end]
@@ -514,7 +514,7 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Triangle}
     end
     return vertices,cells,point_solutions,solutions
 end
-function pvtu_data(p4est,amr,::Type{T}) where{T<:Pixel}
+function pvtu_data(p4est,ka,::Type{T}) where{T<:Pixel}
     N = PointerWrapper(p4est).local_num_quadrants[]
     tb = Vector{SVector{2,Float64}}(undef,4)
     tb[1] = @SVector [-1.,-1.];tb[2] = @SVector [1.,-1.];tb[3] = @SVector [-1.,1.];tb[4] = @SVector [1.,1.]
@@ -543,7 +543,7 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Pixel}
     solutions = Matrix{Float64}(undef,N,6)
     point_solutions = Matrix{Float64}(undef,4*N,6)
     index = 1
-    for tree in amr.field.trees.data
+    for tree in ka.kdata.field.trees.data
         for ps_data in tree
             if isa(ps_data,InsideSolidData)||ps_data.bound_enc<0
                 solutions[index,:].=NaN
@@ -565,7 +565,7 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Pixel}
     end
     return vertices,cells,point_solutions,solutions
 end
-function pvtu_data(p4est,amr,::Type{T}) where{T<:Tetra}
+function pvtu_data(p4est,ka,::Type{T}) where{T<:Tetra}
     N = PointerWrapper(p4est).local_num_quadrants[]
     tb = Vector{SVector{3,Float64}}(undef,14)
     tb[1] = @SVector [-1.,-1.,-1.];tb[2] = @SVector [1.,-1.,-1.];tb[3] = @SVector [1.,1.,-1.];tb[4] = @SVector [-1.,1.,-1.]
@@ -609,7 +609,7 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Tetra}
     solutions = Matrix{Float64}(undef,nc*N,8)
     point_solutions = Matrix{Float64}(undef,nv*N,8)
     index = 1
-    for tree in amr.field.trees.data
+    for tree in ka.kdata.field.trees.data
         for ps_data in tree
             if isa(ps_data,InsideSolidData)||ps_data.bound_enc<0
                 solutions[nc*(index-1)+1:nc*index,:].=NaN
@@ -630,9 +630,9 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Tetra}
                     sdf = vs_data.sdf
                     dx = 0.5*ps_data.ds.*tb[i]
                     point_df .= @views df+[β[i,j]*dot(sdf[i,j,:],dx) for i in axes(df,1), j in axes(df,2)]
-                    w = calc_w0(vs_data.midpoint,point_df,vs_data.weight,amr.global_data)
-                    prim = get_prim(w,amr.global_data)
-                    qf = calc_qf(vs_data.midpoint,point_df,vs_data.weight,prim,amr.global_data)
+                    w = calc_w0(vs_data.midpoint,point_df,vs_data.weight,ka.kinfo)
+                    prim = get_prim(w,ka.kinfo)
+                    qf = calc_qf(vs_data.midpoint,point_df,vs_data.weight,prim,ka.kinfo)
                     point_solutions[nv*(index-1)+i,1] = prim[1]
                     @views point_solutions[nv*(index-1)+i,2:4] .= prim[2:4]
                     point_solutions[nv*(index-1)+i,5] = 1.0/prim[end]
@@ -648,7 +648,7 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Tetra}
     end
     return vertices,cells,point_solutions,solutions
 end
-function pvtu_data(p4est,amr,::Type{T}) where{T<:Voxel}
+function pvtu_data(p4est,ka,::Type{T}) where{T<:Voxel}
     N = PointerWrapper(p4est).local_num_quadrants[]
     tb = Vector{SVector{3,Float64}}(undef,8)
     tb[1] = @SVector [-1.,-1.,-1.];tb[2] = @SVector [1.,-1.,-1.];tb[3] = @SVector [-1.,1.,-1.];tb[4] = @SVector [1.,1.,-1.]
@@ -678,7 +678,7 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Voxel}
     solutions = Matrix{Float64}(undef,N,8)
     point_solutions = Matrix{Float64}(undef,8*N,8)
     index = 1
-    for tree in amr.field.trees.data
+    for tree in ka.kdata.field.trees.data
         for ps_data in tree
             if isa(ps_data,InsideSolidData)||ps_data.bound_enc<0
                 solutions[index,:].=NaN
@@ -700,10 +700,10 @@ function pvtu_data(p4est,amr,::Type{T}) where{T<:Voxel}
     end
     return vertices,cells,point_solutions,solutions
 end
-function save_surfaces_pvtu(::String,::Vector{Boundary_Solution},amr::KitAMR_Data{2})
+function save_surfaces_pvtu(::String,::Vector{Boundary_Solution},ka::KA{2})
     return nothing
 end
-function save_surfaces_pvtu(dir_path::String,boundary_results::Vector{Boundary_Solution},amr::KitAMR_Data{3})
+function save_surfaces_pvtu(dir_path::String,boundary_results::Vector{Boundary_Solution},ka::KA{3})
     np = MPI.Comm_size(MPI.COMM_WORLD)
     rflags = [Ref(false) for _ in 1:np]
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
@@ -751,8 +751,8 @@ function save_surfaces_pvtu(dir_path::String,boundary_results::Vector{Boundary_S
     end
     return nothing
 end
-function save_boundary_result(dir_path::String,amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
-    ibs = amr.global_data.config.IB
+function save_boundary_result(dir_path::String,ka::KA{DIM,NDF}) where{DIM,NDF}
+    ibs = ka.kinfo.config.IB
     boundary_results = [Boundary_Solution(Vector{Float64}[],Vector{Float64}[],Boundary_PS_Solution[]) for _ in eachindex(ibs)]
     for i in eachindex(ibs)
         if MPI.Comm_rank(MPI.COMM_WORLD)==0
@@ -761,16 +761,16 @@ function save_boundary_result(dir_path::String,amr::KitAMR_Data{DIM,NDF}) where{
         end
     end
     MPI.Barrier(MPI.COMM_WORLD)
-    for tree in amr.field.trees.data
+    for tree in ka.kdata.field.trees.data
         for ps_data in tree
             (isa(ps_data,InsideSolidData)||ps_data.bound_enc<=0)&&continue
             ib = ibs[ps_data.bound_enc]
-            save_boundary_result!(ib,ps_data,boundary_results,amr;dir_path = dir_path*"/boundary_vs_"*string(ps_data.bound_enc))
+            save_boundary_result!(ib,ps_data,boundary_results,ka;dir_path = dir_path*"/boundary_vs_"*string(ps_data.bound_enc))
         end
     end
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
     save_object(dir_path*"boundary_result_"*string(rank)*".jld2",boundary_results)
-    save_surfaces_pvtu(dir_path,boundary_results,amr)
+    save_surfaces_pvtu(dir_path,boundary_results,ka)
 end
 function boundary_write_csv(csvname,results,config::ConfigureForSave{2})
     for i in eachindex(config.IB)
@@ -834,7 +834,7 @@ function result2vtk(dirname::String,vtkname::String)
         cnn = Ptr{Ptr{p4est_connectivity_t}}(Libc.malloc(sizeof(Ptr{Ptr{p4est_connectivity_t}})))
         pro_path = pwd()
         cd(dirname)
-        ps4est = p4est_load_ext("p",MPI.COMM_WORLD,Cint(0),Cint(0),Cint(1),Cint(0),C_NULL,cnn)
+        p4est = p4est_load_ext("p",MPI.COMM_WORLD,Cint(0),Cint(0),Cint(1),Cint(0),C_NULL,cnn)
         cd(pro_path)
         result = nothing
         ranks = nothing
@@ -870,7 +870,7 @@ function result2vtk(dirname::String,vtkname::String)
             push!(data,el)
         end
         p_data = pointer_from_objref(data)
-        GC.@preserve data AMR_corner_iterate(ps4est;user_data = p_data) do ip,data
+        GC.@preserve data AMR_corner_iterate(p4est;user_data = p_data) do ip,data
             points,vtk_cnn,neighbor_nums = unsafe_pointer_to_objref(data)
             DIM=isa(ip,PointerWrapper{p4est_iter_corner_info_t}) ? 2 : 3
             for i in 1:ip.sides.elem_count[]
@@ -891,7 +891,7 @@ function result2vtk(dirname::String,vtkname::String)
             end
             return nothing
         end
-        GC.@preserve data AMR_face_iterate(ps4est;user_data = p_data) do ip,data
+        GC.@preserve data AMR_face_iterate(p4est;user_data = p_data) do ip,data
             points,vtk_cnn,neighbor_nums = unsafe_pointer_to_objref(data)
             DIM=isa(ip,PointerWrapper{p4est_iter_face_info_t}) ? 2 : 3
             ip.sides.elem_count[]==1&&return nothing
@@ -946,9 +946,9 @@ function result2vtk(dirname::String,vtkname::String)
                 [0. for _ in result.solution.ps_solutions])
             vtk["mpi_rank"] = ranks
         end
-		fp = PointerWrapper(ps4est)
+		fp = PointerWrapper(p4est)
         p4est_connectivity_destroy(pointer(fp.connectivity))
-        p4est_destroy(ps4est)
+        p4est_destroy(p4est)
     else
         @error "Only support 2D now"
     end

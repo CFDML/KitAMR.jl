@@ -483,7 +483,7 @@ function unsafe_wrap_sc(::Type{T}, sc_array_pw::PointerWrapper{sc_array}) where 
     return unsafe_wrap(Vector{T}, Ptr{T}(pointer(array)), elem_count)
 end
 
-function AMR_volume_iterate(f::Function,forest::Ptr{p4est_t};ghost=C_NULL,user_data=C_NULL,data_type = P4est_PS_Data)
+function AMR_volume_iterate(f::Function,forest::Ptr{p4est_t};ghost=C_NULL,user_data=C_NULL,data_type = P4estPsData)
     function iter_fn(info,data)
         GC.@preserve info data data_type begin
             ip = PointerWrapper(info)
@@ -501,7 +501,7 @@ function AMR_volume_iterate(f::Function,forest::Ptr{p4est_t};ghost=C_NULL,user_d
         C_NULL,
     )
 end
-function AMR_volume_iterate(f::Function,forest::Ptr{p8est_t};ghost=C_NULL,user_data=C_NULL,data_type = P4est_PS_Data)
+function AMR_volume_iterate(f::Function,forest::Ptr{p8est_t};ghost=C_NULL,user_data=C_NULL,data_type = P4estPsData)
     function iter_fn(info,data)
         GC.@preserve info data data_type begin
             ip = PointerWrapper(info)

@@ -1,13 +1,13 @@
 
-function init_vs(prim::AbstractVector,global_data::Global_Data)
-    quadrature = global_data.config.quadrature
-    init_vs(prim,global_data,quadrature)
+function init_vs(prim::AbstractVector,kinfo::KInfo)
+    quadrature = kinfo.config.quadrature
+    init_vs(prim,kinfo,quadrature)
 end
-function init_vs(vs_data::VS_Data)
+function init_vs(vs_data::VsData)
     return deepcopy(vs_data)
 end
-function init_vs(prim::AbstractVector,global_data::Global_Data{DIM,NDF},quadrature::Vector{Float64}) where{DIM,NDF}
-    trees_num = global_data.config.vs_trees_num
+function init_vs(prim::AbstractVector,kinfo::KInfo{DIM,NDF},quadrature::Vector{Float64}) where{DIM,NDF}
+    trees_num = kinfo.config.vs_trees_num
     vs_num = reduce(*, trees_num)
     midpoint = zeros(vs_num, DIM)
     ds = zeros(DIM)
@@ -25,15 +25,15 @@ function init_vs(prim::AbstractVector,global_data::Global_Data{DIM,NDF},quadratu
         midpoint[index,:] .= point
         index += 1
     end
-    df = discrete_maxwell(midpoint, prim, global_data)
+    df = discrete_maxwell(midpoint, prim, kinfo)
     sdf = zeros(vs_num, NDF, DIM)
     flux = zeros(vs_num, NDF)
-    return VS_Data{DIM,NDF}(vs_num, zeros(Int, vs_num), weight, midpoint, df, sdf, flux)
+    return VsData{DIM,NDF}(vs_num, zeros(Int, vs_num), weight, midpoint, df, sdf, flux)
 end
 
-function init_vs(prim::AbstractVector,global_data::Global_Data{2,NDF},quadrature::Gauss_Hermite{NP};kwargs...) where{NDF,NP}
+function init_vs(prim::AbstractVector,kinfo::KInfo{2,NDF},quadrature::Gauss_Hermite{NP};kwargs...) where{NDF,NP}
     DIM = 2
-    trees_num = global_data.config.vs_trees_num
+    trees_num = kinfo.config.vs_trees_num
     vs_num = reduce(*, trees_num)
     index = 1;midpoint = Matrix{Float64}(undef,vs_num,DIM);weight = Vector{Float64}(undef,vs_num)
     vcoords = quadrature.vcoords;weights = quadrature.weights
@@ -44,8 +44,8 @@ function init_vs(prim::AbstractVector,global_data::Global_Data{2,NDF},quadrature
             index += 1
         end
     end 
-    df = haskey(kwargs,:df) ? kwargs[:df] : discrete_maxwell(midpoint, prim, global_data)
+    df = haskey(kwargs,:df) ? kwargs[:df] : discrete_maxwell(midpoint, prim, kinfo)
     sdf = zeros(vs_num, NDF, DIM)
     flux = zeros(vs_num, NDF)
-    return VS_Data{DIM,NDF}(vs_num, zeros(Int, vs_num), weight, midpoint, df, sdf, flux)
+    return VsData{DIM,NDF}(vs_num, zeros(Int, vs_num), weight, midpoint, df, sdf, flux)
 end

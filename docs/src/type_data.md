@@ -3,11 +3,15 @@
 All of the data in KitAMR.jl are organized as follows:
 
 ```@docs
-KitAMR_Data
+KA
 ```
 
 ```@docs
-Global_Data
+KInfo
+```
+
+```@docs
+KData
 ```
 
 ```@docs
@@ -27,7 +31,7 @@ Ghost
 ```
 
 ```@docs
-Ghost_Exchange
+GhostPointers
 ```
 
 ```@docs
@@ -35,5 +39,5 @@ Field
 ```
 
 ```@docs
-PS_Trees
+PsTrees
 ```

@@ -44,8 +44,8 @@ function Cartesian_connectivity(Nx,Ny,Nz,xmin,xmax,ymin,ymax,zmin,zmax)
     cells = reshape(cell2ver, :)
     connectivity = GC.@preserve vertices cells Connectivity{8}(vertices, cells)
 end
-function set_connectivity(global_data::Global_Data{DIM}) where{DIM}
-    domain = global_data.config.domain
+function set_connectivity(kinfo::KInfo{DIM}) where{DIM}
+    domain = kinfo.config.domain
 
     periodic_dirs = ntuple(i -> begin
         first_boundary = (i-1)*2 + 1  # 1, 3, 5 for i = 1, 2, 3
@@ -55,16 +55,16 @@ function set_connectivity(global_data::Global_Data{DIM}) where{DIM}
     end, DIM)
     
     if periodic_dirs != ntuple(_ -> false, DIM)
-        connectivity_ps = set_periodic_connectivity(global_data, periodic_dirs)
+        connectivity_ps = set_periodic_connectivity(kinfo, periodic_dirs)
     else
-        connectivity_ps = Cartesian_connectivity(global_data.config.trees_num..., global_data.config.geometry...)
+        connectivity_ps = Cartesian_connectivity(kinfo.config.trees_num..., kinfo.config.geometry...)
     end
     return connectivity_ps
 end
 
 import ..P4estTypes.unsafe_vertices
-function set_periodic_connectivity(global_data::Global_Data{DIM}, periodic_dirs) where{DIM}
-    geometry = global_data.config.geometry
+function set_periodic_connectivity(kinfo::KInfo{DIM}, periodic_dirs) where{DIM}
+    geometry = kinfo.config.geometry
     bounds = if DIM == 2
         ntuple(i -> begin
             if i <= 2
@@ -84,7 +84,7 @@ function set_periodic_connectivity(global_data::Global_Data{DIM}, periodic_dirs)
     end
     
     connectivity_ps = P4estTypes.brick(
-        Tuple(global_data.config.trees_num),
+        Tuple(kinfo.config.trees_num),
         periodic_dirs
     )
     vertices = unsafe_vertices(connectivity_ps)
@@ -93,7 +93,7 @@ function set_periodic_connectivity(global_data::Global_Data{DIM}, periodic_dirs)
         
         vertices[i] = ntuple(j -> begin
             if j <= DIM
-                normalized_coords[j] * (bounds[j][2] - bounds[j][1])/global_data.config.trees_num[j] + bounds[j][1]
+                normalized_coords[j] * (bounds[j][2] - bounds[j][1])/kinfo.config.trees_num[j] + bounds[j][1]
             else
                 0.0
             end

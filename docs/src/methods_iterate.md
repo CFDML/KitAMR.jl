@@ -15,12 +15,12 @@ In this type, time derivative is dicretized with backward Euler method, exhibiti
 Here are the related functions:
 
 ```@docs
-iterate!(::KitAMR_Data)
+iterate!(::KA)
 ```
 ---
 
 Developer may hope to define their own collision process.
 As an example, the method for [`CAIDVM_Marching`](@ref) is defined as
 ```@docs
-iterate!(::Type{CAIDVM_Marching},::KitAMR_Data)
+iterate!(::Type{CAIDVM_Marching},::KA)
 ```

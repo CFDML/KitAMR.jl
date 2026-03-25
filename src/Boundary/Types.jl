@@ -9,7 +9,7 @@ Structure of domain boundary.
 $(TYPEDFIELDS)
 
 """
-struct Domain{T<:AbstractBoundCondType} <: AbstractBoundaryType
+struct Domain{T<:AbstractBoundCond} <: AbstractBoundary
     "Index of the domain boundary. From 1 to 6, it represents the boundary of `xmin`, `xmax`, `ymin`, `ymax`, `zmin`, `zmax`."
     id::Int
     "Whether refine at the domain boundary. Default is `false`."
@@ -29,7 +29,7 @@ struct DomainFace{DIM,NDF,T}<:BoundaryFace
     direction::Int
     midpoint::Vector{Float64}
     domain::Domain{T}
-    ps_data::PS_Data{DIM,NDF}
+    ps_data::PsData{DIM,NDF}
 end
 
 # Immersed boundary
@@ -37,7 +37,7 @@ end
 $(TYPEDEF)
 $(TYPEDFIELDS)
 """
-struct Circle{T<:AbstractBoundCondType} <: AbstractBoundaryType
+struct Circle{T<:AbstractBoundCond} <: AbstractBoundary
     "Center of the circle."
     center::Vector
     "Radius of the circle."
@@ -50,8 +50,8 @@ struct Circle{T<:AbstractBoundCondType} <: AbstractBoundaryType
     bc::AbstractBCType
     "Maximum distance of the refinement region from the boundary."
     search_radius::Real
-    Circle(::Type{T},center::Vector,radius,solid,search_coeffi,bc) where{T<:AbstractBoundCondType} = new{T}(center,radius,solid,search_coeffi,bc)
-    Circle(c::Circle{T},ds::Float64) where{T<:AbstractBoundCondType} = new{T}(c.center,
+    Circle(::Type{T},center::Vector,radius,solid,search_coeffi,bc) where{T<:AbstractBoundCond} = new{T}(center,radius,solid,search_coeffi,bc)
+    Circle(c::Circle{T},ds::Float64) where{T<:AbstractBoundCond} = new{T}(c.center,
         c.radius,
         c.solid,
         c.search_coeffi,
@@ -63,15 +63,15 @@ end
 $(TYPEDEF)
 $(TYPEDFIELDS)
 """
-struct Sphere{T<:AbstractBoundCondType} <: AbstractBoundaryType # 3D circle
+struct Sphere{T<:AbstractBoundCond} <: AbstractBoundary # 3D circle
     center::Vector
     radius::Real
     solid::Bool
     search_coeffi::Real
     bc::AbstractBCType
     search_radius::Real
-    Sphere(::Type{T},center::Vector,radius,solid,search_coeffi,bc) where{T<:AbstractBoundCondType} = new{T}(center,radius,solid,search_coeffi,bc)
-    Sphere(c::Sphere{T},ds::Float64) where{T<:AbstractBoundCondType} = new{T}(c.center,
+    Sphere(::Type{T},center::Vector,radius,solid,search_coeffi,bc) where{T<:AbstractBoundCond} = new{T}(center,radius,solid,search_coeffi,bc)
+    Sphere(c::Sphere{T},ds::Float64) where{T<:AbstractBoundCond} = new{T}(c.center,
         c.radius,
         c.solid,
         c.search_coeffi,
@@ -85,7 +85,7 @@ const AbstractCircle = Union{Circle,Sphere}
 $(TYPEDEF)
 $(TYPEDFIELDS)
 """
-struct Vertices{DIM,T<:AbstractBoundCondType} <: AbstractBoundaryType
+struct Vertices{DIM,T<:AbstractBoundCond} <: AbstractBoundary
     "Vertices of the boundary, sorted in clockwise or counterclockwise order. "
     vertices::Vector{Vector{Float64}}
     solid::Bool # Is solid inside the boundary?
@@ -99,7 +99,7 @@ end
 $(TYPEDSIGNATURES)
 - `file` is the path to the `.csv` file.
 """
-function Vertices(::Type{T},file::String,solid,refine_coeffi,bc) where{T<:AbstractBoundCondType}
+function Vertices(::Type{T},file::String,solid,refine_coeffi,bc) where{T<:AbstractBoundCond}
     s = CSV.read(file,DataFrame;header=true)
     DIM = length(names(s))
     vertices = [[s.x[i],s.y[i]] for i in eachindex(s.x)]
@@ -109,7 +109,7 @@ function Vertices(::Type{T},file::String,solid,refine_coeffi,bc) where{T<:Abstra
     box = [[minimum(s.x),minimum(s.y)],[maximum(s.x),maximum(s.y)]]
     return Vertices{DIM,T}(vertices,solid,bc,box,refine_coeffi)
 end
-function Vertices(v::Vertices{DIM,T},config) where{DIM,T<:AbstractBoundCondType}
+function Vertices(v::Vertices{DIM,T},config) where{DIM,T<:AbstractBoundCond}
     ds_max = maximum([(config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i] for i in 1:config[:DIM]])
     ds = norm([(config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i]/2^config[:AMR_PS_MAXLEVEL] for i in 1:config[:DIM]])
     return Vertices{DIM,T}(v.vertices,v.solid,v.bc,[v.box[1].-ds_max,v.box[2].+ds_max],v.search_radius*ds)
@@ -144,7 +144,7 @@ end
 $(TYPEDEF)
 $(TYPEDFIELDS)
 """
-struct Triangles{T<:AbstractBoundCondType} <: AbstractBoundaryType
+struct Triangles{T<:AbstractBoundCond} <: AbstractBoundary
     solid::Bool
     bc::AbstractBCType
     search_radius::Real
@@ -154,12 +154,12 @@ end
 $(TYPEDSIGNATURES)
 - `file` is the path to the `.stl` file.
 """
-function Triangles(::Type{T},file::String,solid,search_radius,bc) where{T<:AbstractBoundCondType}
+function Triangles(::Type{T},file::String,solid,search_radius,bc) where{T<:AbstractBoundCond}
     mesh = load(file)
     tkdt = TriangleKDT(mesh)
     return Triangles{T}(solid,bc,search_radius,tkdt)
 end
-function Triangles(::Type{T},solid::Bool,search_radius,bc,tkdt::TriangleKDT,config) where{T<:AbstractBoundCondType}
+function Triangles(::Type{T},solid::Bool,search_radius,bc,tkdt::TriangleKDT,config) where{T<:AbstractBoundCond}
     ds = norm([(config[:geometry][2i]-config[:geometry][2i-1])/config[:trees_num][i]/2^config[:AMR_PS_MAXLEVEL] for i in 1:config[:DIM]])
     return Triangles{T}(solid,bc,search_radius*ds,tkdt)
 end
@@ -170,13 +170,13 @@ end
 
 
 mutable struct SolidCells{DIM,NDF}
-    ps_datas::Vector{PS_Data{DIM,NDF}}
+    ps_datas::Vector{PsData{DIM,NDF}}
     quadids::Vector{Cint} # A better choice: store all quadid of SolidCells to avoid extensive comparing iteration. Are only needed to be updated before partition.
     #=
     quadids provide the information of solidcells on other processors. Only after this, the exchange of IB nodes can be executeable.
     =#
 end
-function SolidCells(ps_datas::Vector{PS_Data{DIM,NDF}}) where{DIM,NDF}
+function SolidCells(ps_datas::Vector{PsData{DIM,NDF}}) where{DIM,NDF}
     quadids = [x.quadid for x in ps_datas]
     return SolidCells{DIM,NDF}(ps_datas,quadids)
 end

@@ -109,7 +109,7 @@ end
 $(TYPEDSIGNATURES)
 """
 function update_slope_inner_ps!(
-    ps_data::PS_Data{DIM,NDF}, 
+    ps_data::PsData{DIM,NDF}, 
     Ldata::AbstractVector, 
     Rdata::AbstractVector, 
     dsL::Float64, 
@@ -134,7 +134,7 @@ end
 $(TYPEDSIGNATURES)
 """
 function update_slope_bound_ps!(
-    ps_data::PS_Data{DIM,NDF}, 
+    ps_data::PsData{DIM,NDF}, 
     Ldata::AbstractVector, 
     dsL::Float64, 
     dir::Int,
@@ -157,8 +157,8 @@ $(TYPEDSIGNATURES)
 function update_slope!(
     ::Val{1},
     ::Val{1},
-    ps_data::PS_Data,
-    global_data::Global_Data{DIM,NDF},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
@@ -186,8 +186,8 @@ $(TYPEDSIGNATURES)
 function update_slope!(
     ::Val{1},
     ::NeighborNum,
-    ps_data::PS_Data,
-    global_data::Global_Data{DIM,NDF},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
@@ -202,8 +202,8 @@ $(TYPEDSIGNATURES)
 function update_slope!(
     ::NeighborNum,
     ::Val{1},
-    ps_data::PS_Data,
-    global_data::Global_Data{DIM,NDF},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
@@ -218,8 +218,8 @@ $(TYPEDSIGNATURES)
 function update_slope!(
     ::NeighborNum,
     ::NeighborNum,
-    ps_data::PS_Data,
-    global_data::Global_Data{DIM,NDF},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
@@ -234,8 +234,8 @@ $(TYPEDSIGNATURES)
 function update_slope!(
     ::Val{-1},
     ::Val{-1},
-    ps_data::PS_Data,
-    global_data::Global_Data{DIM,NDF},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
@@ -250,8 +250,8 @@ $(TYPEDSIGNATURES)
 function update_slope!(
     ::Val{1},
     ::Val{-1},
-    ps_data::PS_Data,
-    global_data::Global_Data{DIM,NDF},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
@@ -266,8 +266,8 @@ $(TYPEDSIGNATURES)
 function update_slope!(
     ::Val{-1},
     ::Val{1},
-    ps_data::PS_Data,
-    global_data::Global_Data{DIM,NDF},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
@@ -282,8 +282,8 @@ $(TYPEDSIGNATURES)
 function update_slope!(
     ::NeighborNum,
     ::Val{-1},
-    ps_data::PS_Data,
-    global_data::Global_Data{DIM,NDF},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
@@ -298,8 +298,8 @@ $(TYPEDSIGNATURES)
 function update_slope!(
     ::Val{-1},
     ::NeighborNum,
-    ps_data::PS_Data,
-    global_data::Global_Data{DIM,NDF},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
@@ -316,8 +316,8 @@ $(TYPEDSIGNATURES)
 function update_slope!(
     ::Val{0},
     ::Val{1},
-    ps_data::PS_Data,
-    global_data::Global_Data{DIM,NDF},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
@@ -333,8 +333,8 @@ $(TYPEDSIGNATURES)
 function update_slope!(
     ::Val{1},
     ::Val{0},
-    ps_data::PS_Data,
-    global_data::Global_Data{DIM,NDF},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
@@ -350,8 +350,8 @@ $(TYPEDSIGNATURES)
 function update_slope!(
     ::NeighborNum,
     ::Val{0},
-    ps_data::PS_Data,
-    global_data::Global_Data{DIM,NDF},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
@@ -366,8 +366,8 @@ $(TYPEDSIGNATURES)
 function update_slope!(
     ::Val{0},
     ::NeighborNum,
-    ps_data::PS_Data,
-    global_data::Global_Data{DIM,NDF},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
@@ -382,8 +382,8 @@ $(TYPEDSIGNATURES)
 function update_slope!(
     ::Val{0},
     ::Val{-1},
-    ps_data::PS_Data,
-    global_data::Global_Data{DIM,NDF},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
@@ -398,8 +398,8 @@ $(TYPEDSIGNATURES)
 function update_slope!(
     ::Val{-1},
     ::Val{0},
-    ps_data::PS_Data,
-    global_data::Global_Data{DIM,NDF},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
@@ -412,9 +412,9 @@ end
 """
 $(TYPEDSIGNATURES)
 """
-function update_slope!(amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
-    trees = amr.field.trees
-    global_data = amr.global_data
+function update_slope!(ka::KA{DIM,NDF}) where{DIM,NDF}
+    trees = ka.kdata.field.trees
+    kinfo = ka.kinfo
     @inbounds for i in eachindex(trees.data)
         @inbounds for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
@@ -428,7 +428,7 @@ function update_slope!(amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
                     Val(neighbor.state[iL]),
                     Val(neighbor.state[iR]),
                     ps_data,
-                    global_data,
+                    kinfo,
                     neighbor.data[iL],
                     neighbor.data[iR],
                     dir,

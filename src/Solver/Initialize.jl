@@ -2,32 +2,32 @@
 """
 $(TYPEDSIGNATURES)
 """
-function initialize_faces!(ps4est::Ptr{p4est_t},amr::KitAMR_Data)
-    global_data = amr.global_data
-    p_data = pointer_from_objref(amr)
-    GC.@preserve amr AMR_face_iterate(ps4est;user_data = p_data,ghost = global_data.forest.ghost) do ip,data
-        amr = unsafe_pointer_to_objref(data)
+function initialize_faces!(p4est::Ptr{p4est_t},ka::KA)
+    kinfo = ka.kinfo
+    p_data = pointer_from_objref(ka)
+    GC.@preserve  ka AMR_face_iterate(p4est;user_data = p_data,ghost = kinfo.forest.ghost) do ip,data
+        ka = unsafe_pointer_to_objref(data)
         if ip.sides.elem_count[]==1
-            initialize_domain_face!(iPointerWrapper(ip.sides,p4est_iter_face_side_t,0),amr)
+            initialize_domain_face!(iPointerWrapper(ip.sides,p4est_iter_face_side_t,0),ka)
         else
             Aside = iPointerWrapper(ip.sides,p4est_iter_face_side_t,0)
             Bside = iPointerWrapper(ip.sides,p4est_iter_face_side_t,1)
             if Aside.is_hanging[]==0
                 if Aside.is.full.is_ghost[]==0
                     if Bside.is_hanging[]==0
-                        initialize_full_face!(Aside,amr)
+                        initialize_full_face!(Aside,ka)
                     else
-                        initialize_hanging_face!(Aside,amr)
+                        initialize_hanging_face!(Aside,ka)
                     end
                 elseif Bside.is_hanging[]==0
-                    initialize_full_face!(Bside,amr)
+                    initialize_full_face!(Bside,ka)
                 else
-                    initialize_back_hanging_face!(Bside,amr)
+                    initialize_back_hanging_face!(Bside,ka)
                 end
             elseif Bside.is.full.is_ghost[]==0
-                initialize_hanging_face!(Bside,amr)
+                initialize_hanging_face!(Bside,ka)
             else
-                initialize_back_hanging_face!(Aside,amr)
+                initialize_back_hanging_face!(Aside,ka)
             end
         end
     end
@@ -35,17 +35,17 @@ end
 
 function solid_full_face_check(base_quad,faceid)
     neighbor = base_quad.neighbor.data[faceid][1]
-    (!isa(neighbor,PS_Data)||neighbor.bound_enc<0) && return true
+    (!isa(neighbor,PsData)||neighbor.bound_enc<0) && return true
     return false
 end
 function solid_hanging_face_check(base_quad,faceid)
-    ids = findall(x->(isa(x,PS_Data)&&x.bound_enc>=0),base_quad.neighbor.data[faceid])
+    ids = findall(x->(isa(x,PsData)&&x.bound_enc>=0),base_quad.neighbor.data[faceid])
     return ids
 end
-function initialize_domain_face!(side::PW_pxest_iter_face_side_t,amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
-    faces = amr.field.faces
+function initialize_domain_face!(side::PW_pxest_iter_face_side_t,ka::KA{DIM,NDF}) where{DIM,NDF}
+    faces = ka.kdata.field.faces
     base_quad = 
-        unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data,
+        unsafe_pointer_to_objref(pointer(PointerWrapper(P4estPsData,
             side.is.full.quad.p.user_data[]).ps_data))
     isa(base_quad,InsideSolidData) && return nothing
     faceid = side.face[]+1
@@ -53,14 +53,14 @@ function initialize_domain_face!(side::PW_pxest_iter_face_side_t,amr::KitAMR_Dat
     rot = get_rot(faceid)
     midpoint = copy(base_quad.midpoint)
     midpoint[direction] -= 0.5*rot*base_quad.ds[direction]
-    domain = amr.global_data.config.domain[faceid]
+    domain = ka.kinfo.config.domain[faceid]
     push!(faces,DomainFace{DIM,NDF,typeof(domain).parameters[1]}(rot,direction,midpoint,domain,base_quad))
     return nothing
 end
-function initialize_full_face!(side::PW_pxest_iter_face_side_t,amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
-    faces = amr.field.faces
+function initialize_full_face!(side::PW_pxest_iter_face_side_t,ka::KA{DIM,NDF}) where{DIM,NDF}
+    faces = ka.kdata.field.faces
     base_quad =
-        unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data,
+        unsafe_pointer_to_objref(pointer(PointerWrapper(P4estPsData,
             side.is.full.quad.p.user_data[]).ps_data))
     isa(base_quad,InsideSolidData) && return nothing
     faceid = side.face[] + 1
@@ -73,8 +73,8 @@ function initialize_full_face!(side::PW_pxest_iter_face_side_t,amr::KitAMR_Data{
     rot = get_rot(faceid)
     midpoint = copy(base_quad.midpoint)
     midpoint[direction] -= 0.5*rot*base_quad.ds[direction]
-    global_data = amr.global_data
-    if midpoint[direction] == global_data.config.geometry[2*direction-1]||midpoint[direction] == global_data.config.geometry[2*direction]
+    kinfo = ka.kinfo
+    if midpoint[direction] == kinfo.config.geometry[2*direction-1]||midpoint[direction] == kinfo.config.geometry[2*direction]
         there_midpoint = copy(midpoint);there_midpoint[direction] -= 0.5*rot*base_quad.ds[direction]
         push!(faces,FullFace{DIM,NDF}(rot,direction,midpoint,base_quad,periodic_ghost_cell(there_midpoint,base_quad.neighbor.data[faceid][1])))
     else
@@ -82,10 +82,10 @@ function initialize_full_face!(side::PW_pxest_iter_face_side_t,amr::KitAMR_Data{
     end
     return nothing
 end
-function initialize_hanging_face!(side::PW_pxest_iter_face_side_t,amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
-    faces = amr.field.faces
+function initialize_hanging_face!(side::PW_pxest_iter_face_side_t,ka::KA{DIM,NDF}) where{DIM,NDF}
+    faces = ka.kdata.field.faces
     base_quad =
-        unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data,
+        unsafe_pointer_to_objref(pointer(PointerWrapper(P4estPsData,
             side.is.full.quad.p.user_data[]).ps_data))
     isa(base_quad,InsideSolidData) && return nothing
     faceid = side.face[] + 1
@@ -110,8 +110,8 @@ function initialize_hanging_face!(side::PW_pxest_iter_face_side_t,amr::KitAMR_Da
     for i in eachindex(neighbor)
         midpoint[i][direction] += 0.5*rot*neighbor[i].ds[direction]
     end
-    global_data = amr.global_data
-    if  midpoint[1][direction] == global_data.config.geometry[2*direction-1]||midpoint[1][direction] == global_data.config.geometry[2*direction]
+    kinfo = ka.kinfo
+    if  midpoint[1][direction] == kinfo.config.geometry[2*direction-1]||midpoint[1][direction] == kinfo.config.geometry[2*direction]
         periodic_midpoints = [copy(x) for x in midpoint]
         for i in eachindex(periodic_midpoints)
             periodic_midpoints[i][direction] .+= 0.5*rot*neighbor[i].ds[direction]
@@ -122,8 +122,8 @@ function initialize_hanging_face!(side::PW_pxest_iter_face_side_t,amr::KitAMR_Da
     end
     return nothing
 end
-function initialize_back_hanging_face!(side::PointerWrapper{p4est_iter_face_side_t},amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
-    faces = amr.field.faces
+function initialize_back_hanging_face!(side::PointerWrapper{p4est_iter_face_side_t},ka::KA{DIM,NDF}) where{DIM,NDF}
+    faces = ka.kdata.field.faces
     is_ghost = Base.unsafe_wrap(
         Vector{Int8},
         Ptr{Int8}(pointer(side.is.hanging.is_ghost)),
@@ -131,12 +131,12 @@ function initialize_back_hanging_face!(side::PointerWrapper{p4est_iter_face_side
     )
     ids = findall(x->x==0,is_ghost).-1
     faceid = side.face[]+1
-    here_data = Vector{PS_Data{DIM,NDF}}()
+    here_data = Vector{PsData{DIM,NDF}}()
     for i in ids
         qp = PointerWrapper(iPointerWrapper(side.is.hanging.quad, Ptr{p4est_quadrant_t}, i)[])
         base_quad =
-            unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
-        (!isa(base_quad,PS_Data)||base_quad.bound_enc<0) && continue
+            unsafe_pointer_to_objref(pointer(PointerWrapper(P4estPsData, qp.p.user_data[]).ps_data))
+        (!isa(base_quad,PsData)||base_quad.bound_enc<0) && continue
         push!(here_data,base_quad)
     end
     isempty(here_data)&&return nothing
@@ -146,8 +146,8 @@ function initialize_back_hanging_face!(side::PointerWrapper{p4est_iter_face_side
     for i in eachindex(midpoint)
         midpoint[i][direction] -= 0.5*rot*here_data[i].ds[direction]
     end
-    global_data = amr.global_data
-    if midpoint[1][direction] == global_data.config.geometry[2*direction-1]||midpoint[1][direction] == global_data.config.geometry[2*direction]
+    kinfo = ka.kinfo
+    if midpoint[1][direction] == kinfo.config.geometry[2*direction-1]||midpoint[1][direction] == kinfo.config.geometry[2*direction]
         there_midpoint = copy(first(here_data).neighbor.data[faceid][1].midpoint)
         there_midpoint[direction] = midpoint[1][direction] -= 0.5*rot*here_data[i].ds[direction]
         push!(faces,BackHangingFace{DIM,NDF}(rot,direction,midpoint,here_data,periodic_ghost_cell(there_midpoint,base_quad.neighbor.data[faceid][1])))
@@ -161,38 +161,38 @@ end
 """
 $(TYPEDSIGNATURES)
 """
-function initialize_faces!(ps4est::Ptr{p8est_t},amr::KitAMR_Data)
-    global_data = amr.global_data
-    p_data = pointer_from_objref(amr)
-    GC.@preserve amr AMR_face_iterate(ps4est;user_data = p_data,ghost = global_data.forest.ghost) do ip,data
-        amr = unsafe_pointer_to_objref(data)
+function initialize_faces!(p4est::Ptr{p8est_t},ka::KA)
+    kinfo = ka.kinfo
+    p_data = pointer_from_objref(ka)
+    GC.@preserve  ka AMR_face_iterate(p4est;user_data = p_data,ghost = kinfo.forest.ghost) do ip,data
+        ka = unsafe_pointer_to_objref(data)
         if ip.sides.elem_count[]==1
-            initialize_domain_face!(iPointerWrapper(ip.sides,p8est_iter_face_side_t,0),amr)
+            initialize_domain_face!(iPointerWrapper(ip.sides,p8est_iter_face_side_t,0),ka)
         else
             Aside = iPointerWrapper(ip.sides,p8est_iter_face_side_t,0)
             Bside = iPointerWrapper(ip.sides,p8est_iter_face_side_t,1)
             if Aside.is_hanging[]==0
                 if Aside.is.full.is_ghost[]==0
                     if Bside.is_hanging[]==0
-                        initialize_full_face!(Aside,amr)
+                        initialize_full_face!(Aside,ka)
                     else
-                        initialize_hanging_face!(Aside,amr)
+                        initialize_hanging_face!(Aside,ka)
                     end
                 elseif Bside.is_hanging[]==0
-                    initialize_full_face!(Bside,amr)
+                    initialize_full_face!(Bside,ka)
                 else
-                    initialize_back_hanging_face!(Bside,amr)
+                    initialize_back_hanging_face!(Bside,ka)
                 end
             elseif Bside.is.full.is_ghost[]==0
-                initialize_hanging_face!(Bside,amr)
+                initialize_hanging_face!(Bside,ka)
             else
-                initialize_back_hanging_face!(Aside,amr)
+                initialize_back_hanging_face!(Aside,ka)
             end
         end
     end
 end
-function initialize_back_hanging_face!(side::PointerWrapper{p8est_iter_face_side_t},amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
-    faces = amr.field.faces
+function initialize_back_hanging_face!(side::PointerWrapper{p8est_iter_face_side_t},ka::KA{DIM,NDF}) where{DIM,NDF}
+    faces = ka.kdata.field.faces
     is_ghost = Base.unsafe_wrap(
         Vector{Int8},
         Ptr{Int8}(pointer(side.is.hanging.is_ghost)),
@@ -200,12 +200,12 @@ function initialize_back_hanging_face!(side::PointerWrapper{p8est_iter_face_side
     )
     ids = findall(x->x==0,is_ghost).-1
     faceid = side.face[]+1
-    here_data = Vector{PS_Data{DIM,NDF}}()
+    here_data = Vector{PsData{DIM,NDF}}()
     for i in ids
         qp = PointerWrapper(iPointerWrapper(side.is.hanging.quad, Ptr{p8est_quadrant_t}, i)[])
         base_quad =
-            unsafe_pointer_to_objref(pointer(PointerWrapper(P4est_PS_Data, qp.p.user_data[]).ps_data))
-        (!isa(base_quad,PS_Data)||base_quad.bound_enc<0) && continue
+            unsafe_pointer_to_objref(pointer(PointerWrapper(P4estPsData, qp.p.user_data[]).ps_data))
+        (!isa(base_quad,PsData)||base_quad.bound_enc<0) && continue
         push!(here_data,base_quad)
     end
     isempty(here_data)&&return nothing
@@ -222,50 +222,50 @@ end
 function initial_prim(ic::Uniform;kwargs...)
     return ic.ic
 end
-function initial_prim(ic::PCoordFn;midpoint::AbstractVector{Float64},global_data::Global_Data)
-    return ic.PCIC_fn(midpoint,global_data)
+function initial_prim(ic::PCoordFn;midpoint::AbstractVector{Float64},kinfo::KInfo)
+    return ic.PCIC_fn(midpoint,kinfo)
 end
 function init_solid_midpoints_kernel(ip, data, dp)
-    global_data, solid_midpoints = unsafe_pointer_to_objref(data)
-    boundaries = global_data.config.IB
+    kinfo, solid_midpoints = unsafe_pointer_to_objref(data)
+    boundaries = kinfo.config.IB
     ds, midpoint = quad_to_cell(ip.p4est, ip.treeid[], ip.quad)
     for i in eachindex(boundaries)
         inside = solid_flag(boundaries[i],midpoint)
-        solid_cell_flag(boundaries[i],midpoint,ds,global_data,inside)&&push!(solid_midpoints[i],midpoint)
+        solid_cell_flag(boundaries[i],midpoint,ds,kinfo,inside)&&push!(solid_midpoints[i],midpoint)
     end
 end
 function init_solid_midpoints(info, data)
-    AMR_volume_iterate(info, data, P4est_PS_Data, init_solid_midpoints_kernel)
+    AMR_volume_iterate(info, data, P4estPsData, init_solid_midpoints_kernel)
 end
 
 function init_ps_p4est_kernel(ip, data, dp)
-    global_data, trees = unsafe_pointer_to_objref(data)
-    boundaries = global_data.config.IB
+    kinfo, trees = unsafe_pointer_to_objref(data)
+    boundaries = kinfo.config.IB
     ds, midpoint = quad_to_cell(ip.p4est, ip.treeid[], ip.quad)
     flag = true # need to be initialized?
-    solid_cell_flags = Vector{Bool}(undef,length(global_data.config.IB))
-    target_cell_flags = Vector{Bool}(undef,length(global_data.config.IB))
+    solid_cell_flags = Vector{Bool}(undef,length(kinfo.config.IB))
+    target_cell_flags = Vector{Bool}(undef,length(kinfo.config.IB))
     for i in eachindex(boundaries)
         boundary = boundaries[i]
         inside = solid_flag(boundary,midpoint)
-        bf = boundary_flag(boundary,midpoint,ds,global_data)
-	    solid_cell_flags[i] = (bf && inside)&&ip.quad.level[]==global_data.config.solver.AMR_PS_MAXLEVEL
-        target_cell_flags[i] = (bf && !inside)&&ip.quad.level[]==global_data.config.solver.AMR_PS_MAXLEVEL
+        bf = boundary_flag(boundary,midpoint,ds,kinfo)
+	    solid_cell_flags[i] = (bf && inside)&&ip.quad.level[]==kinfo.config.solver.AMR_PS_MAXLEVEL
+        target_cell_flags[i] = (bf && !inside)&&ip.quad.level[]==kinfo.config.solver.AMR_PS_MAXLEVEL
         flag = flag&&(!inside||solid_cell_flags[i])
         !flag&&break
     end
     treeid = ip.treeid[] - trees.offset # local treeid
     if flag
-        ps_data = PS_Data(typeof(global_data).parameters...)
+        ps_data = PsData(typeof(kinfo).parameters...)
         push!(trees.data[treeid], ps_data)
-        dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
-        ic = global_data.config.IC
+        dp[] = P4estPsData(pointer_from_objref(ps_data))
+        ic = kinfo.config.IC
         ps_data.quadid = global_quadid(ip)
         ps_data.ds .= ds
         ps_data.midpoint .= midpoint
-        ps_data.prim .= initial_prim(ic;midpoint = ps_data.midpoint,global_data = global_data)
-        ps_data.w .= get_conserved(ps_data, global_data)
-        ps_data.vs_data = init_vs(ps_data.prim, global_data)
+        ps_data.prim .= initial_prim(ic;midpoint = ps_data.midpoint,kinfo = kinfo)
+        ps_data.w .= get_conserved(ps_data, kinfo)
+        ps_data.vs_data = init_vs(ps_data.prim, kinfo)
         for i in eachindex(solid_cell_flags)
             if solid_cell_flags[i]
                 ps_data.bound_enc<0&&(@error `The solid cell is shared!`)
@@ -277,62 +277,62 @@ function init_ps_p4est_kernel(ip, data, dp)
             end
         end
     else
-        inside_quad = InsideSolidData{typeof(global_data).parameters...}()
-        dp[] = P4est_PS_Data(pointer_from_objref(inside_quad))
+        inside_quad = InsideSolidData{typeof(kinfo).parameters...}()
+        dp[] = P4estPsData(pointer_from_objref(inside_quad))
         push!(trees.data[treeid],inside_quad)
     end
 end
 function init_ps_p4est(info, data)
-    AMR_volume_iterate(info, data, P4est_PS_Data, init_ps_p4est_kernel)
+    AMR_volume_iterate(info, data, P4estPsData, init_ps_p4est_kernel)
 end
 
-function re_init_vs4est!(trees, global_data)
+function re_init_vs4est!(trees, kinfo)
     for i in eachindex(trees.data)
         for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
             isa(ps_data,InsideSolidData)&&continue
             # ps_data.bound_enc<0 && continue
             ps_data.vs_data.df .=
-                discrete_maxwell(ps_data, global_data)
+                discrete_maxwell(ps_data, kinfo)
         end
     end
 end
-function init_aux_points(global_data::Global_Data,solid_midpoints::Vector)
-    calc_intersect_point(global_data.config.IB,solid_midpoints)
+function init_aux_points(kinfo::KInfo,solid_midpoints::Vector)
+    calc_intersect_point(kinfo.config.IB,solid_midpoints)
 end
 
 """
 $(TYPEDSIGNATURES)
 """
-function pre_refine!(ps4est::Ptr{p4est_t},global_data::Global_Data)
-    pre_ps_refine!(ps4est,global_data)
-    pre_ps_balance!(ps4est)
-    solid_midpoints = Vector{Vector{Vector{Float64}}}(undef,length(global_data.config.IB)) # boundaries{solidcells{midpoints{}}}
+function pre_refine!(p4est::Ptr{p4est_t},kinfo::KInfo)
+    pre_ps_refine!(p4est,kinfo)
+    pre_ps_balance!(p4est)
+    solid_midpoints = Vector{Vector{Vector{Float64}}}(undef,length(kinfo.config.IB)) # boundaries{solidcells{midpoints{}}}
     for i in eachindex(solid_midpoints)
         solid_midpoints[i] = Vector{Float64}[]
     end
-    data = [global_data, solid_midpoints]
+    data = [kinfo, solid_midpoints]
     p_data = pointer_from_objref(data)
-    GC.@preserve data AMR_4est_volume_iterate(ps4est, p_data, init_solid_midpoints)
-    solid_midpoints = broadcast_boundary_midpoints!(solid_midpoints,global_data)
-    data = [global_data,solid_midpoints]
-    PointerWrapper(ps4est).user_pointer = pointer_from_objref(data)
+    GC.@preserve data AMR_4est_volume_iterate(p4est, p_data, init_solid_midpoints)
+    solid_midpoints = broadcast_boundary_midpoints!(solid_midpoints,kinfo)
+    data = [kinfo,solid_midpoints]
+    PointerWrapper(p4est).user_pointer = pointer_from_objref(data)
     GC.@preserve data begin 
-        IB_pre_ps_refine!(ps4est,global_data)
-        pre_ps_coarsen!(ps4est;recursive=1)
+        IB_pre_ps_refine!(p4est,kinfo)
+        pre_ps_coarsen!(p4est;recursive=1)
     end
-    AMR_partition(ps4est)
-    pre_ps_balance!(ps4est)
+    AMR_partition(p4est)
+    pre_ps_balance!(p4est)
 end
 """
 $(TYPEDSIGNATURES)
 """
-function pre_refine!(ps4est::Ptr{p8est_t},global_data::Global_Data)
-    user_defined_ps_refine!(ps4est,global_data)
-    AMR_partition(ps4est) do p4est,which_tree,quadrant
+function pre_refine!(p4est::Ptr{p8est_t},kinfo::KInfo)
+    user_defined_ps_refine!(p4est,kinfo)
+    AMR_partition(p4est) do p4est,which_tree,quadrant
         fp = PointerWrapper(p4est)
-        global_data = unsafe_pointer_to_objref(pointer(fp.user_pointer))
-        ibs = global_data.config.IB
+        kinfo = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        ibs = kinfo.config.IB
         qp = PointerWrapper(quadrant)
         ds,midpoint = quad_to_cell(fp,which_tree,qp)
         for ib in ibs
@@ -342,75 +342,75 @@ function pre_refine!(ps4est::Ptr{p8est_t},global_data::Global_Data)
         end
         return Cint(0)
     end
-    trees = initialize_MeshData!(ps4est,global_data)
-    data = [global_data,trees]
-    PointerWrapper(ps4est).user_pointer = pointer_from_objref(data)
+    trees = initialize_MeshData!(p4est,kinfo)
+    data = [kinfo,trees]
+    PointerWrapper(p4est).user_pointer = pointer_from_objref(data)
     GC.@preserve data begin
-        search_radius_refine!(ps4est,global_data)
-        cell_type_decision!(ps4est)
-        pre_ps_coarsen!(ps4est)
-        pre_ps_balance!(ps4est)
-        meshed_partition!(ps4est,trees)
+        search_radius_refine!(p4est,kinfo)
+        cell_type_decision!(p4est)
+        pre_ps_coarsen!(p4est)
+        pre_ps_balance!(p4est)
+        meshed_partition!(p4est,trees)
     end
-    PointerWrapper(ps4est).user_pointer = pointer_from_objref(global_data)
+    PointerWrapper(p4est).user_pointer = pointer_from_objref(kinfo)
     return trees
 end
 
 """
 $(TYPEDSIGNATURES)
 """
-function initialize_ps!(ps4est::Ptr{p4est_t},global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
-    fp = PointerWrapper(ps4est)
+function initialize_ps!(p4est::Ptr{p4est_t},kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
+    fp = PointerWrapper(p4est)
     trees_data =
         Vector{Vector{AbstractPsData{DIM,NDF}}}(undef, fp.last_local_tree[] - fp.first_local_tree[] + 1)
     for i in eachindex(trees_data)
         trees_data[i] = AbstractPsData{DIM,NDF}[]
     end
-    trees = PS_Trees{DIM,NDF}(trees_data, fp.first_local_tree[] - 1)
-    data = [global_data,trees]
+    trees = PsTrees{DIM,NDF}(trees_data, fp.first_local_tree[] - 1)
+    data = [kinfo,trees]
     p_data = pointer_from_objref(data)
-    GC.@preserve data AMR_4est_volume_iterate(ps4est, p_data, init_ps_p4est)
-    pre_vs_refine!(trees, global_data)
-    re_init_vs4est!(trees, global_data)
+    GC.@preserve data AMR_4est_volume_iterate(p4est, p_data, init_ps_p4est)
+    pre_vs_refine!(trees, kinfo)
+    re_init_vs4est!(trees, kinfo)
     return trees
 end
 
 """
 $(TYPEDSIGNATURES)
 """
-function initialize_ps!(p4est::Ptr{p8est_t},global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+function initialize_ps!(p4est::Ptr{p8est_t},kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
     fp = PointerWrapper(p4est)
     trees_data = [AbstractPsData{DIM,NDF}[] for _ in 1:fp.last_local_tree[] - fp.first_local_tree[] + 1]
-    trees = PS_Trees{DIM,NDF}(trees_data, fp.first_local_tree[] - 1)
-    data = [global_data,trees]
+    trees = PsTrees{DIM,NDF}(trees_data, fp.first_local_tree[] - 1)
+    data = [kinfo,trees]
     p_data = pointer_from_objref(data)
     GC.@preserve data AMR_volume_iterate(p4est;user_data = p_data) do ip,data,dp
-        global_data, trees = unsafe_pointer_to_objref(data)
+        kinfo, trees = unsafe_pointer_to_objref(data)
         ds, midpoint = quad_to_cell(ip.p4est, ip.treeid[], ip.quad)
         mesh_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
         treeid = ip.treeid[] - trees.offset # local treeid
         if !mesh_data.in_solid||mesh_data.is_ghost_cell
-            ps_data = PS_Data(typeof(global_data).parameters...)
+            ps_data = PsData(typeof(kinfo).parameters...)
             push!(trees.data[treeid], ps_data)
-            dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
-            ic = global_data.config.IC
+            dp[] = P4estPsData(pointer_from_objref(ps_data))
+            ic = kinfo.config.IC
             ps_data.quadid = global_quadid(ip)
             ps_data.ds .= ds
             ps_data.midpoint .= midpoint
-            ps_data.prim .= initial_prim(ic;midpoint = ps_data.midpoint,global_data)
-            ps_data.w .= get_conserved(ps_data, global_data)
-            ps_data.vs_data = init_vs(ps_data.prim, global_data)
+            ps_data.prim .= initial_prim(ic;midpoint = ps_data.midpoint,kinfo)
+            ps_data.w .= get_conserved(ps_data, kinfo)
+            ps_data.vs_data = init_vs(ps_data.prim, kinfo)
             if mesh_data.is_ghost_cell
                 ps_data.bound_enc = -mesh_data.in_search_radius
             end
         else
-            inside_quad = InsideSolidData{typeof(global_data).parameters...}()
-            dp[] = P4est_PS_Data(pointer_from_objref(inside_quad))
+            inside_quad = InsideSolidData{typeof(kinfo).parameters...}()
+            dp[] = P4estPsData(pointer_from_objref(inside_quad))
             push!(trees.data[treeid],inside_quad)
         end
     end
-    pre_vs_refine!(trees, global_data)
-    re_init_vs4est!(trees, global_data)
+    pre_vs_refine!(trees, kinfo)
+    re_init_vs4est!(trees, kinfo)
     return trees
 end
 
@@ -418,19 +418,19 @@ end
 $(TYPEDSIGNATURES)
 Initialize field for 2D case.
 """
-function initialize_field!(global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
-    GC.@preserve global_data begin
-        connectivity_ps = set_connectivity(global_data)
-        ps4est = AMR_4est_new(
+function initialize_trees!(kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
+    GC.@preserve kinfo begin
+        connectivity_ps = set_connectivity(kinfo)
+        p4est = AMR_4est_new(
             MPI.COMM_WORLD,
             connectivity_ps.pointer,
-            P4est_PS_Data,
-            pointer_from_objref(global_data),
+            P4estPsData,
+            pointer_from_objref(kinfo),
         )
-        global_data.forest.p4est = ps4est
-        pre_refine!(ps4est,global_data)
-        trees = initialize_ps!(ps4est,global_data)
-        return trees, ps4est
+        kinfo.forest.p4est = p4est
+        pre_refine!(p4est,kinfo)
+        trees = initialize_ps!(p4est,kinfo)
+        return p4est, trees
     end
 end
 
@@ -438,21 +438,21 @@ end
 $(TYPEDSIGNATURES)
 Initialize field for 3D case.
 """
-function initialize_field!(global_data::Global_Data{3,NDF}) where{NDF}
-    GC.@preserve global_data begin
-        connectivity_ps = set_connectivity(global_data)
-        ps4est = AMR_4est_new(
+function initialize_trees!(kinfo::KInfo{3,NDF}) where{NDF}
+    GC.@preserve kinfo begin
+        connectivity_ps = set_connectivity(kinfo)
+        p4est = AMR_4est_new(
             MPI.COMM_WORLD,
             connectivity_ps.pointer,
-            P4est_PS_Data,
-            pointer_from_objref(global_data),
+            P4estPsData,
+            pointer_from_objref(kinfo),
         )
-        global_data.forest.p4est = ps4est
-        mesh_tree = pre_refine!(ps4est,global_data)
+        kinfo.forest.p4est = p4est
+        mesh_tree = pre_refine!(p4est,kinfo)
         GC.@preserve mesh_tree begin
-            trees = initialize_ps!(ps4est,global_data)
+            trees = initialize_ps!(p4est,kinfo)
         end
-        return trees, ps4est
+        return p4est, trees
     end
 end
 
@@ -460,10 +460,24 @@ end
 $(TYPEDSIGNATURES)
 Initialize [`Ghost`](@ref) structure.
 """
-function initialize_ghost(p4est::P_pxest_t,global_data::Global_Data)
-    ghost_exchange = initialize_ghost_exchange(p4est,global_data)
-    ghost_wrap = initialize_ghost_wrap(global_data,ghost_exchange)
-    return Ghost(ghost_exchange,ghost_wrap)
+function initialize_ghost(p4est::P_pxest_t,kinfo::KInfo)
+    ghost_pointers = initialize_ghost_pointers(p4est,kinfo)
+    ghost_wrap = initialize_ghost_wrap(kinfo,ghost_pointers)
+    return Ghost(ghost_pointers,ghost_wrap)
+end
+
+function initialize_forest!(p4est,kinfo::KInfo)
+    kinfo.forest.p4est = p4est
+    ghost_ps = AMR_ghost_new(p4est)
+    mesh_ps = AMR_mesh_new(p4est, ghost_ps)
+    kinfo.forest.ghost = ghost_ps
+    kinfo.forest.mesh = mesh_ps
+end
+
+function initialize_kdata!(kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
+    p4est, trees = initialize_trees!(kinfo)
+    field = Field{DIM,NDF}(trees,Vector{AbstractFace}(undef,0))
+
 end
 
 """
@@ -471,42 +485,30 @@ $(TYPEDSIGNATURES)
 Initialize everthing according to `config` dictionary.
 """
 function initialize_KitAMR(config::Dict)
-    global_data = Global_Data(config)
-    trees, ps4est = initialize_field!(global_data)
-    field = Field{config[:DIM],config[:NDF]}(trees,Vector{AbstractFace}(undef,0),ImmersedBoundary())
-    MPI.Barrier(MPI.COMM_WORLD)
-    amr = KitAMR_Data(
-        global_data,field
-    )
-    PointerWrapper(ps4est).user_pointer = pointer_from_objref(amr)
-    ps_partition!(ps4est, amr)
-    ghost_ps = AMR_ghost_new(ps4est)
-    mesh_ps = AMR_mesh_new(ps4est, ghost_ps)
-    global_data.forest.ghost = ghost_ps
-    global_data.forest.mesh = mesh_ps
-    amr.ghost = initialize_ghost(ps4est, global_data)
-    initialize_neighbor_data!(ps4est, amr)
-    initialize_solid_neighbor!(amr)
-    initialize_faces!(ps4est, amr)
-    return ps4est,amr
+    kinfo = KInfo(config)
+    p4est, trees = initialize_trees!(kinfo)
+    kdata = KData(trees)
+    ka = KA(kinfo,kdata)
+    PointerWrapper(p4est).user_pointer = pointer_from_objref(ka)
+    ps_partition!(p4est, ka)
+    initialize_forest!(p4est,kinfo)
+    kdata.ghost = initialize_ghost(p4est, kinfo)
+    initialize_neighbor_data!(p4est, ka)
+    initialize_solid_neighbor!(ka)
+    initialize_faces!(p4est, ka)
+    return p4est,ka
 end
 function initialize_KitAMR(config::Configure{DIM,NDF}) where{DIM,NDF}
-    global_data = Global_Data(config)
-    trees, ps4est = initialize_field!(global_data)
-    field = Field{DIM,NDF}(trees,Vector{AbstractFace}(undef,0),ImmersedBoundary())
-    MPI.Barrier(MPI.COMM_WORLD)
-    amr = KitAMR_Data(
-        global_data,field
-    )
-    PointerWrapper(ps4est).user_pointer = pointer_from_objref(amr)
-    ps_partition!(ps4est, amr)
-    ghost_ps = AMR_ghost_new(ps4est)
-    mesh_ps = AMR_mesh_new(ps4est, ghost_ps)
-    global_data.forest.ghost = ghost_ps
-    global_data.forest.mesh = mesh_ps
-    amr.ghost = initialize_ghost(ps4est, global_data)
-    initialize_neighbor_data!(ps4est, amr)
-    initialize_solid_neighbor!(amr)
-    initialize_faces!(ps4est, amr)
-    return ps4est,amr
+    kinfo = KInfo(config)
+    p4est, trees = initialize_trees!(kinfo)
+    kdata = KData(trees)
+    ka = KA(kinfo,kdata)
+    PointerWrapper(p4est).user_pointer = pointer_from_objref(ka)
+    ps_partition!(p4est, ka)
+    initialize_forest!(p4est,kinfo)
+    kdata.ghost = initialize_ghost(p4est, kinfo)
+    initialize_neighbor_data!(p4est, ka)
+    initialize_solid_neighbor!(ka)
+    initialize_faces!(p4est, ka)
+    return p4est,ka
 end

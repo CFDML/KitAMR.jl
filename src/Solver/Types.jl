@@ -8,7 +8,7 @@ Uniform initial condition. The field will be initialized with the Maxwellian dis
 $(TYPEDFIELDS)
 
 """
-struct Uniform<:AbstractInitCondType 
+struct Uniform<:AbstractInitCond 
     ic::AbstractVector
 end
 """
@@ -22,7 +22,7 @@ The function will return primary macroscopic variables vector according to the i
 $(TYPEDFIELDS)
 
 """
-struct PCoordFn<:AbstractInitCondType # A function that accepts physical coordinates and returns initial primary variable at the position.
+struct PCoordFn<:AbstractInitCond # A function that accepts physical coordinates and returns initial primary variable at the position.
     PCIC_fn::Function
 end
 
@@ -123,9 +123,9 @@ $(TYPEDFIELDS)
 
 """
 mutable struct UDF
-    "The static AMR flag in physical space. (midpoint::Vector{Float64},ds::Vector{Float64},global_data::[`Global_Data`](@ref),level::Int)->Bool"
+    "The static AMR flag in physical space. (`midpoint`::Vector{Float64},`ds`::Vector{Float64},`kinfo`::[`KInfo`](@ref),`level`::Int)->Bool"
     static_ps_refine_flag::Function
-    "The dynamic AMR flag in physical space. (ps_data::[`AbstractPsData`](@ref),level::Int,amr::[`KitAMR_Data`](@ref))->Bool"
+    "The dynamic AMR flag in physical space. (`ps_data`::[`AbstractPsData`](@ref),`level`::Int,`ka`::[`KA`](@ref))->Bool"
     dynamic_ps_refine_flag::Function
     "The static AMR flag in velocity space."
     static_vs_refine_flag::Function 
@@ -210,12 +210,12 @@ struct Configure{DIM,NDF}
     quadrature::Union{AbstractQuadrature,Vector{Float64}}
     "Number of tree roots for each dimension in velocity space."
     vs_trees_num::Vector{Int64}
-    "Initial condition defined by [`AbstractInitCondType`](@ref)."
-    IC::AbstractInitCondType
+    "Initial condition defined by [`AbstractInitCond`](@ref)."
+    IC::AbstractInitCond
     "Types of the domain boundary. For 2D case, the vector should catain 4 elements corresponding to the 4 domain boundaries. The element type is defined by [`Domain`](@ref)."
     domain::Vector{Domain}
-    "Immersed boundary. Multiple boundaries are supported. The element type is defined by [`AbstractBoundaryType`](@ref)"
-    IB::Vector{AbstractBoundaryType}
+    "Immersed boundary. Multiple boundaries are supported. The element type is defined by [`AbstractBoundary`](@ref)"
+    IB::Vector{AbstractBoundary}
     "Properties of the simulated gas defined by [`Gas`](@ref)."
     gas::Gas
     "Setup of the solver defined by [`Solver`](@ref)."
@@ -395,28 +395,30 @@ $(TYPEDEF)
 Structure of required information during a simulation.
 $(TYPEDFIELDS)
 """
-mutable struct Global_Data{DIM,NDF}
+mutable struct KInfo{DIM,NDF}
     "Defined by [`Configure`](@ref)."
     config::Configure{DIM,NDF}
     "Defined by [`Forest`](@ref)."
     forest::Forest{DIM}
     "Defined by [`Status`](@ref)."
     status::Status
-    Global_Data(config::Dict) = (n = new{config[:DIM],config[:NDF]}();
-    n.config = Configure(config);
-    n.forest = Forest(config[:DIM]);
-    n.status = Status(config);
-    n
+end
+function KInfo(config::Dict)
+    return KInfo{config[:DIM],config[:NDF]}(
+        Configure(config),
+        Forest(config[:DIM]),
+        Status(config)
     )
-    Global_Data(config::Configure{DIM,NDF}) where{DIM,NDF} = (n = new{DIM,NDF}();
-    n.config = config;
-    n.forest = Forest(DIM);
-    n.status = Status(config);
-    n
+end
+function KInfo(config::Configure{DIM,NDF}) where{DIM,NDF}
+    return KInfo{DIM,NDF}(
+        config,
+        Forest(DIM),
+        Status(config)
     )
 end
 
-mutable struct P4est_PS_Data
+mutable struct P4estPsData
     ps_data::Ptr{Nothing}
 end
 
@@ -425,13 +427,13 @@ $(TYPEDEF)
 Structure of ghost data and pointers used by `p4est`.
 $(TYPEDFIELDS)
 """
-mutable struct Ghost_Exchange
-    ghost_datas
-    ghost_slopes
-    ghost_structures
-    mirror_data_pointers
-    mirror_slope_pointers
-    mirror_structure_pointers
+mutable struct GhostPointers
+    ghost_datas::Ptr{Cdouble}
+    ghost_slopes::Ptr{Cdouble}
+    ghost_structures::Ptr{Cdouble}
+    mirror_data_pointers::Vector{Ptr{Cdouble}}
+    mirror_slope_pointers::Vector{Ptr{Cdouble}}
+    mirror_structure_pointers::Vector{Ptr{Cdouble}}
 end
 
 """
@@ -439,7 +441,7 @@ $(TYPEDEF)
 Structure of cells data managed by `Julia`.
 $(TYPEDFIELDS)
 """
-mutable struct PS_Trees{DIM,NDF} 
+mutable struct PsTrees{DIM,NDF} 
     data::Vector{Vector{AbstractPsData{DIM,NDF}}}
     "Offset of treeid used in partition."
     offset::Int
@@ -451,7 +453,7 @@ Structure of ghost layer for communication between processors.
 $(TYPEDFIELDS)
 """
 mutable struct Ghost
-    ghost_exchange::Ghost_Exchange
+    ghost_pointers::GhostPointers
     ghost_wrap::Vector{AbstractGhostPsData}
 end
 
@@ -461,10 +463,24 @@ Structure of fields data.
 $(TYPEDFIELDS)
 """
 mutable struct Field{DIM,NDF}
-    "Cells data defined by [`PS_Trees`](@ref)."
-    trees::PS_Trees{DIM,NDF}
+    "Cells data defined by [`PsTrees`](@ref)."
+    trees::PsTrees{DIM,NDF}
     "Mapping between faces and cells. The element type is defined by [`AbstractFace`](@ref)."
     faces::Vector{AbstractFace}
+end
+
+"""
+$(TYPEDEF)
+Structure of computed data.
+$(TYPEDFIELDS)
+"""
+mutable struct KData{DIM,NDF}
+    field::Field{DIM,NDF}
+    ghost::Ghost
+    KData(trees::PsTrees{DIM,NDF}) where{DIM,NDF} = (n = new{DIM,NDF}();
+        n.field = Field{DIM,NDF}(trees,Vector{AbstractFace}(undef,0));
+        n
+    )
 end
 
 """
@@ -472,27 +488,23 @@ $(TYPEDEF)
 Structure that collects all of the data.
 $(TYPEDFIELDS)
 """
-mutable struct KitAMR_Data{DIM,NDF}
-    global_data::Global_Data
-    ghost::Ghost
-    field::Field{DIM,NDF}
-    KitAMR_Data(global_data::Global_Data{DIM,NDF},field) where{DIM,NDF} = (n = new{DIM,NDF}();
-        n.global_data = global_data;
-        n.field = field;
-        n
-    )
+mutable struct KA{DIM,NDF}
+    kinfo::KInfo
+    kdata::KData
+end
+function KA(kinfo::KInfo{DIM,NDF},kdata::KData{DIM,NDF}) where{DIM,NDF}
+    return KA{DIM,NDF}(kinfo,kdata)
 end
 # partition
-
-struct Transfer_Data{DIM,NDF}
+struct TransferData{DIM,NDF}
     encs::Vector{Int}
     w::Vector{Float64}
     vs_levels::Vector{Int8}
     vs_midpoints::Vector{Float64}
     vs_df::Vector{Float64}
 end
-function Transfer_Data(DIM::Integer,NDF::Integer,ps_num::Integer,total_vs_num::Integer)
-    return Transfer_Data{DIM,NDF}(
+function TransferData(DIM::Integer,NDF::Integer,ps_num::Integer,total_vs_num::Integer)
+    return TransferData{DIM,NDF}(
         Vector{Int}(undef, (SOLID_CELL_ID_NUM+1)*ps_num),
         Vector{Float64}(undef, (DIM+2) * ps_num),
         Vector{Int8}(undef, total_vs_num),
@@ -501,7 +513,7 @@ function Transfer_Data(DIM::Integer,NDF::Integer,ps_num::Integer,total_vs_num::I
     )
 end
 
-mutable struct Transfer_Init
+mutable struct TransferInit
     up_num::Int
     down_num::Int
     up_data::Vector

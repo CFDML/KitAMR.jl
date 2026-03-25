@@ -1,5 +1,5 @@
 using LinearAlgebra
-function amr_region(ps_data,level,amr) # dynamic
+function amr_region(ps_data,level,ka) # dynamic
     midpoint = ps_data.midpoint
     ds = ps_data.ds
     L = 1.0
@@ -8,9 +8,9 @@ function amr_region(ps_data,level,amr) # dynamic
     end
     return false
 end
-function X38_buffer_IC(midpoint::Vector{Float64},::Global_Data)
-    global_data = kwargs[:global_data]
-    ib = global_data.config.IB[1]
+function X38_buffer_IC(midpoint::Vector{Float64},::KInfo)
+    kinfo = kwargs[:kinfo]
+    ib = kinfo.config.IB[1]
     Ma = 8.
     T0 = 1.0
     Tw = 300/56

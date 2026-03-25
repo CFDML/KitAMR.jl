@@ -1,41 +1,41 @@
 """
 $(TYPEDSIGNATURES)
 """
-function adaptive_mesh_refinement!(ps4est::P_pxest_t,amr::KitAMR_Data;ps_interval=40,vs_interval=80,partition_interval=40)
-    amr.global_data.status.residual.redundant_step>0&&(return nothing)
-    res = maximum(amr.global_data.status.residual.residual)
-    converge_ratio = res/amr.global_data.config.solver.TOLERANCE>100 ? 1 : Int(floor(100*amr.global_data.config.solver.TOLERANCE/res))
+function adaptive_mesh_refinement!(p4est::P_pxest_t,ka::KA;ps_interval=40,vs_interval=80,partition_interval=40)
+    ka.kinfo.status.residual.redundant_step>0&&(return nothing)
+    res = maximum(ka.kinfo.status.residual.residual)
+    converge_ratio = res/ka.kinfo.config.solver.TOLERANCE>100 ? 1 : Int(floor(100*ka.kinfo.config.solver.TOLERANCE/res))
     flag = false
-    if amr.global_data.config.solver.PS_DYNAMIC_AMR&&amr.global_data.status.ps_adapt_step > ps_interval*converge_ratio
-        ps_adaptive_mesh_refinement!(ps4est,amr)
-        flag = true;amr.global_data.status.ps_adapt_step = 0
+    if ka.kinfo.config.solver.PS_DYNAMIC_AMR&&ka.kinfo.status.ps_adapt_step > ps_interval*converge_ratio
+        ps_adaptive_mesh_refinement!(p4est,ka)
+        flag = true;ka.kinfo.status.ps_adapt_step = 0
     end
-    if amr.global_data.config.solver.VS_DYNAMIC_AMR&&amr.global_data.status.vs_adapt_step > vs_interval*converge_ratio
-        vs_adaptive_mesh_refinement!(amr)
-        flag = true;amr.global_data.status.vs_adapt_step=0
+    if ka.kinfo.config.solver.VS_DYNAMIC_AMR&&ka.kinfo.status.vs_adapt_step > vs_interval*converge_ratio
+        vs_adaptive_mesh_refinement!(ka)
+        flag = true;ka.kinfo.status.vs_adapt_step=0
     end
-    if (amr.global_data.config.solver.PS_DYNAMIC_AMR||amr.global_data.config.solver.VS_DYNAMIC_AMR)&&amr.global_data.status.partition_step>partition_interval*converge_ratio
-        ps_partition!(ps4est, amr)
-        flag = true;amr.global_data.status.partition_step = 0
+    if (ka.kinfo.config.solver.PS_DYNAMIC_AMR||ka.kinfo.config.solver.VS_DYNAMIC_AMR)&&ka.kinfo.status.partition_step>partition_interval*converge_ratio
+        ps_partition!(p4est, ka)
+        flag = true;ka.kinfo.status.partition_step = 0
     end
     if flag
-        amr_recover!(ps4est,amr)        
+        amr_recover!(p4est,ka)        
     end
     return nothing
 end
-function update_faces!(p4est::P_pxest_t, amr::KitAMR_Data)
-    amr.field.faces = Vector{AbstractFace}(undef, 0)
-    initialize_faces!(p4est, amr)
+function update_faces!(p4est::P_pxest_t, ka::KA)
+    ka.kdata.field.faces = Vector{AbstractFace}(undef, 0)
+    initialize_faces!(p4est, ka)
 end
 
 """
 $(TYPEDSIGNATURES)
 Recover the ghost layers, neighbor relations, immersed boundaries, and faces after an AMR or partition process.
 """
-function amr_recover!(ps4est::P_pxest_t,amr::KitAMR_Data)
-    update_ghost!(ps4est, amr)
-    update_neighbor!(ps4est, amr)
-    update_solid!(amr)
-    update_faces!(ps4est, amr)
+function amr_recover!(p4est::P_pxest_t,ka::KA)
+    update_ghost!(p4est, ka)
+    update_neighbor!(p4est, ka)
+    update_solid!(ka)
+    update_faces!(p4est, ka)
     return nothing
 end

@@ -1,17 +1,17 @@
 # access_neighbor_w(data::PointerWrapper) = data.w[]
-# access_neighbor_w(data::PS_Data_2D) = data.w
+# access_neighbor_w(data::PsData_2D) = data.w
 function access_neighbor(
     p4est::Ptr{p4est_t},
     quadid::p4est_locidx_t,
-    global_data::Global_Data{DIM,NDF},
+    kinfo::KInfo{DIM,NDF},
     ghost_wrap::Array{AbstractGhostPsData},
     dir::Integer,
 ) where{DIM,NDF}
     neighbor_quads = sc_array_new(sizeof(Ptr{p4est_quadrant_t}))
     neighbor_encs = sc_array_new(sizeof(Cint))
     neighbor_qid = sc_array_new(sizeof(Cint))
-    ghost = global_data.forest.ghost
-    mesh = global_data.forest.mesh
+    ghost = kinfo.forest.ghost
+    mesh = kinfo.forest.mesh
     GC.@preserve p4est ghost mesh quadid dir neighbor_encs neighbor_qid neighbor_quads begin
         p4est_mesh_get_neighbors(
             p4est,
@@ -33,7 +33,7 @@ function access_neighbor(
                 pq = PointerWrapper(
                     iPointerWrapper(neighbor_quads, Ptr{p4est_quadrant_t}, i - 1)[],
                 )
-                dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
+                dp = PointerWrapper(P4estPsData, pq.p.user_data[])
                 neighbor[i] = unsafe_pointer_to_objref(pointer(dp.ps_data))
                 state = 1
             elseif encs[i] > -9 && encs[i] < 0
@@ -43,14 +43,14 @@ function access_neighbor(
                 pq = PointerWrapper(
                     iPointerWrapper(neighbor_quads, Ptr{p4est_quadrant_t}, i - 1)[],
                 )
-                dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
+                dp = PointerWrapper(P4estPsData, pq.p.user_data[])
                 neighbor[i] = unsafe_pointer_to_objref(pointer(dp.ps_data))
                 state = -1
             elseif encs[i] > 24
                 pq = PointerWrapper(
                     iPointerWrapper(neighbor_quads, Ptr{p4est_quadrant_t}, i - 1)[],
                 )
-                dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
+                dp = PointerWrapper(P4estPsData, pq.p.user_data[])
                 neighbor[i] = unsafe_pointer_to_objref(pointer(dp.ps_data))
                 state = 2^(DIM - 1)
             elseif encs[i] > -25 && encs[i] < -8
@@ -70,15 +70,15 @@ end
 function access_neighbor(
     p4est::Ptr{p8est_t},
     quadid::p4est_locidx_t,
-    global_data::Global_Data{DIM,NDF},
+    kinfo::KInfo{DIM,NDF},
     ghost_wrap::Array{AbstractGhostPsData},
     dir::Integer,
 ) where{DIM,NDF}
     neighbor_quads = sc_array_new(sizeof(Ptr{p8est_quadrant_t}))
     neighbor_encs = sc_array_new(sizeof(Cint))
     neighbor_qid = sc_array_new(sizeof(Cint))
-    ghost = global_data.forest.ghost
-    mesh = global_data.forest.mesh
+    ghost = kinfo.forest.ghost
+    mesh = kinfo.forest.mesh
     GC.@preserve p4est ghost mesh quadid dir neighbor_encs neighbor_qid neighbor_quads begin
         p8est_mesh_get_neighbors(
             p4est,
@@ -100,7 +100,7 @@ function access_neighbor(
                 pq = PointerWrapper(
                     iPointerWrapper(neighbor_quads, Ptr{p8est_quadrant_t}, i - 1)[],
                 )
-                dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
+                dp = PointerWrapper(P4estPsData, pq.p.user_data[])
                 neighbor[i] = unsafe_pointer_to_objref(pointer(dp.ps_data))
                 state = 1
             elseif encs[i] > -25 && encs[i] < 0
@@ -110,14 +110,14 @@ function access_neighbor(
                 pq = PointerWrapper(
                     iPointerWrapper(neighbor_quads, Ptr{p8est_quadrant_t}, i - 1)[],
                 )
-                dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
+                dp = PointerWrapper(P4estPsData, pq.p.user_data[])
                 neighbor[i] = unsafe_pointer_to_objref(pointer(dp.ps_data))
                 state = -1
             elseif encs[i] > 120
                 pq = PointerWrapper(
                     iPointerWrapper(neighbor_quads, Ptr{p8est_quadrant_t}, i - 1)[],
                 )
-                dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
+                dp = PointerWrapper(P4estPsData, pq.p.user_data[])
                 neighbor[i] = unsafe_pointer_to_objref(pointer(dp.ps_data))
                 state = 2^(DIM - 1)
             elseif encs[i] > -121 && encs[i] < -24
@@ -139,15 +139,15 @@ end
 $(TYPEDSIGNATURES)
 """
 function initialize_neighbor_data!(ip::PointerWrapper{p4est_iter_volume_info_t}, data, dp)
-    amr = unsafe_pointer_to_objref(data)
+    ka = unsafe_pointer_to_objref(data)
     ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
     isa(ps_data,InsideSolidData) && return nothing
     for i = 1:face_num_2d
         ps_data.neighbor.data[i], ps_data.neighbor.state[i] = access_neighbor(
             pointer(ip.p4est),
             local_quadid(ip),
-            amr.global_data,
-            amr.ghost.ghost_wrap,
+            ka.kinfo,
+            ka.kdata.ghost.ghost_wrap,
             i - 1,
         )
     end
@@ -156,8 +156,8 @@ function initialize_neighbor_data!(ip::PointerWrapper{p4est_iter_volume_info_t},
             data,state = access_neighbor(
                 pointer(ip.p4est),
                 local_quadid(ip),
-                amr.global_data,
-                amr.ghost.ghost_wrap,
+                ka.kinfo,
+                ka.kdata.ghost.ghost_wrap,
                 i,
             )
             push!(ps_data.neighbor.data,data);push!(ps_data.neighbor.state,state)
@@ -170,15 +170,15 @@ end
 $(TYPEDSIGNATURES)
 """
 function initialize_neighbor_data!(ip::PointerWrapper{p8est_iter_volume_info_t}, data, dp)
-    amr = unsafe_pointer_to_objref(data)
+    ka = unsafe_pointer_to_objref(data)
     ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
     isa(ps_data,InsideSolidData) && return nothing
     for i = 1:face_num_3d
         ps_data.neighbor.data[i], ps_data.neighbor.state[i] = access_neighbor(
             pointer(ip.p4est),
             local_quadid(ip),
-            amr.global_data,
-            amr.ghost.ghost_wrap,
+            ka.kinfo,
+            ka.kdata.ghost.ghost_wrap,
             i - 1,
         )
     end
@@ -187,8 +187,8 @@ function initialize_neighbor_data!(ip::PointerWrapper{p8est_iter_volume_info_t},
             data,state = access_neighbor(
                 pointer(ip.p4est),
                 local_quadid(ip),
-                amr.global_data,
-                amr.ghost.ghost_wrap,
+                ka.kinfo,
+                ka.kdata.ghost.ghost_wrap,
                 i,
             )
             push!(ps_data.neighbor.data,data);push!(ps_data.neighbor.state,state)
@@ -201,17 +201,17 @@ end
 $(TYPEDSIGNATURES)
 """
 function initialize_neighbor_data!(info, data)
-    AMR_volume_iterate(info, data, P4est_PS_Data, initialize_neighbor_data!)
+    AMR_volume_iterate(info, data, P4estPsData, initialize_neighbor_data!)
 end
 """
 $(TYPEDSIGNATURES)
 """
-function initialize_neighbor_data!(ps4est::P_pxest_t, amr::KitAMR_Data)
-    p_amr = pointer_from_objref(amr)
-    GC.@preserve amr AMR_4est_volume_iterate(
-        ps4est,
-        amr.global_data.forest.ghost,
-        p_amr,
+function initialize_neighbor_data!(p4est::P_pxest_t, ka::KA)
+    p_ka = pointer_from_objref(ka)
+    GC.@preserve  ka AMR_4est_volume_iterate(
+        p4est,
+        ka.kinfo.forest.ghost,
+        p_ka,
         initialize_neighbor_data!,
     )
 end
@@ -220,15 +220,15 @@ end
 face_micro_nums: 1->4时记1，只需在state=-1时+0.25即可
 =#
 function update_neighbor_kernel!(ip::PointerWrapper{p4est_iter_volume_info_t}, data, dp)
-    amr = unsafe_pointer_to_objref(data)
+    ka = unsafe_pointer_to_objref(data)
     ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
     isa(ps_data,InsideSolidData) && return nothing
     for i = 1:face_num_2d
         ps_data.neighbor.data[i], ps_data.neighbor.state[i] = access_neighbor(
             pointer(ip.p4est),
             local_quadid(ip),
-            amr.global_data,
-            amr.ghost.ghost_wrap,
+            ka.kinfo,
+            ka.kdata.ghost.ghost_wrap,
             i - 1,
         )
     end
@@ -237,8 +237,8 @@ function update_neighbor_kernel!(ip::PointerWrapper{p4est_iter_volume_info_t}, d
             ps_data.neighbor.data[i+1],ps_data.neighbor.state[i+1] = access_neighbor(
                 pointer(ip.p4est),
                 local_quadid(ip),
-                amr.global_data,
-                amr.ghost.ghost_wrap,
+                ka.kinfo,
+                ka.kdata.ghost.ghost_wrap,
                 i,
             )
         end
@@ -247,8 +247,8 @@ function update_neighbor_kernel!(ip::PointerWrapper{p4est_iter_volume_info_t}, d
             data,state = access_neighbor(
                 pointer(ip.p4est),
                 local_quadid(ip),
-                amr.global_data,
-                amr.ghost.ghost_wrap,
+                ka.kinfo,
+                ka.kdata.ghost.ghost_wrap,
                 i,
             )
             push!(ps_data.neighbor.data,data);push!(ps_data.neighbor.state,state)
@@ -257,15 +257,15 @@ function update_neighbor_kernel!(ip::PointerWrapper{p4est_iter_volume_info_t}, d
     return nothing
 end
 function update_neighbor_kernel!(ip::PointerWrapper{p8est_iter_volume_info_t}, data, dp)
-    amr = unsafe_pointer_to_objref(data)
+    ka = unsafe_pointer_to_objref(data)
     ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
     isa(ps_data,InsideSolidData) && return nothing
     for i = 1:face_num_3d
         ps_data.neighbor.data[i], ps_data.neighbor.state[i] = access_neighbor(
             pointer(ip.p4est),
             local_quadid(ip),
-            amr.global_data,
-            amr.ghost.ghost_wrap,
+            ka.kinfo,
+            ka.kdata.ghost.ghost_wrap,
             i - 1,
         )
     end
@@ -274,8 +274,8 @@ function update_neighbor_kernel!(ip::PointerWrapper{p8est_iter_volume_info_t}, d
             ps_data.neighbor.data[i+1],ps_data.neighbor.state[i+1] = access_neighbor(
                 pointer(ip.p4est),
                 local_quadid(ip),
-                amr.global_data,
-                amr.ghost.ghost_wrap,
+                ka.kinfo,
+                ka.kdata.ghost.ghost_wrap,
                 i,
             )
         end
@@ -284,8 +284,8 @@ function update_neighbor_kernel!(ip::PointerWrapper{p8est_iter_volume_info_t}, d
             data,state = access_neighbor(
                 pointer(ip.p4est),
                 local_quadid(ip),
-                amr.global_data,
-                amr.ghost.ghost_wrap,
+                ka.kinfo,
+                ka.kdata.ghost.ghost_wrap,
                 i,
             )
             push!(ps_data.neighbor.data,data);push!(ps_data.neighbor.state,state)
@@ -294,29 +294,29 @@ function update_neighbor_kernel!(ip::PointerWrapper{p8est_iter_volume_info_t}, d
     return nothing
 end
 function update_neighbor_kernel!(info, data)
-    AMR_volume_iterate(info, data, P4est_PS_Data, update_neighbor_kernel!)
+    AMR_volume_iterate(info, data, P4estPsData, update_neighbor_kernel!)
 end
-function update_neighbor_kernel!(ps4est::P_pxest_t, amr::KitAMR_Data)
-    p_amr = pointer_from_objref(amr)
+function update_neighbor_kernel!(p4est::P_pxest_t, ka::KA)
+    p_ka = pointer_from_objref(ka)
     MPI.Barrier(MPI.COMM_WORLD)
-    GC.@preserve amr AMR_4est_volume_iterate(
-        ps4est,
-        amr.global_data.forest.ghost,
-        p_amr,
+    GC.@preserve  ka AMR_4est_volume_iterate(
+        p4est,
+        ka.kinfo.forest.ghost,
+        p_ka,
         update_neighbor_kernel!,
     )
 end
-function update_neighbor!(p4est::Ptr{p4est_t}, amr::KitAMR_Data)
-    global_data = amr.global_data
-    p4est_mesh_destroy(global_data.forest.mesh)
-    global_data.forest.mesh =
-        p4est_mesh_new_ext(p4est, global_data.forest.ghost, 1, 1,  P4EST_CONNECT_FULL)
-    update_neighbor_kernel!(p4est, amr)
+function update_neighbor!(p4est::Ptr{p4est_t}, ka::KA)
+    kinfo = ka.kinfo
+    p4est_mesh_destroy(kinfo.forest.mesh)
+    kinfo.forest.mesh =
+        p4est_mesh_new_ext(p4est, kinfo.forest.ghost, 1, 1,  P4EST_CONNECT_FULL)
+    update_neighbor_kernel!(p4est, ka)
 end
-function update_neighbor!(p4est::Ptr{p8est_t}, amr::KitAMR_Data)
-    global_data = amr.global_data
-    p8est_mesh_destroy(global_data.forest.mesh)
-    global_data.forest.mesh =
-        p8est_mesh_new_ext(p4est, global_data.forest.ghost, 1, 1, P8EST_CONNECT_FULL)
-    update_neighbor_kernel!(p4est, amr)
+function update_neighbor!(p4est::Ptr{p8est_t}, ka::KA)
+    kinfo = ka.kinfo
+    p8est_mesh_destroy(kinfo.forest.mesh)
+    kinfo.forest.mesh =
+        p8est_mesh_new_ext(p4est, kinfo.forest.ghost, 1, 1, P8EST_CONNECT_FULL)
+    update_neighbor_kernel!(p4est, ka)
 end

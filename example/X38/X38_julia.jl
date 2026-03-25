@@ -48,30 +48,30 @@ config = Configure(solver;
 )
 # ----------------------------------------------------------------------------------------------------
 
-ps4est,amr = initialize_KitAMR(config) # Initialization for `KitAMR_Data`.
+p4est,ka = initialize_KitAMR(config) # Initialization for `KitAMR_Data`.
 listen_for_save!() # Start listening for `save` input from `stdin`.
 max_sim_time = 20. # Maximum simulation time.
-nt = max_sim_time/amr.global_data.status.Δt+1.0 |> floor |> Int # Maximum number of time marching steps.
+nt = max_sim_time/ka.kinfo.status.Δt+1.0 |> floor |> Int # Maximum number of time marching steps.
 
 
 #=
 Main loop.
 =#
 for i in 1:nt
-    adaptive_mesh_refinement!(ps4est,amr;ps_interval = 40, vs_interval=40, partition_interval=40) # AMR.
-    update_slope!(amr) # Update `sdf` in `VS_Data` and `sw` in `PS_Data`.
-    slope_exchange!(ps4est, amr) # Update `sdf` in `Ghost_VS_Data` by MPI communication.
-    update_solid_cell!(amr) # Update variables in solid cells in immersed boundaries.
-    solid_exchange!(ps4est, amr) # Update variables in ghost solid cells by MPI communication.
-    update_solid_neighbor!(amr) # Update variables in SolidNeighbor by IBM.
-    flux!(amr) # Compute numerical fluxes.
-    iterate!(amr) # Collision process and time marching.
-    data_exchange!(ps4est, amr) # Update variables in ghost cells by MPI communication.
-    check_for_convergence(amr)&&break # Check for convergence.
-    check!(ps4est,amr) # Check for save and output simulation status to `stdout`.
+    adaptive_mesh_refinement!(p4est,ka;ps_interval = 40, vs_interval=40, partition_interval=40) # AMR.
+    update_slope!(ka) # Update `sdf` in `VsData` and `sw` in `PsData`.
+    slope_exchange!(p4est, ka) # Update `sdf` in `Ghost_VsData` by MPI communication.
+    update_solid_cell!(ka) # Update variables in solid cells in immersed boundaries.
+    solid_exchange!(p4est, ka) # Update variables in ghost solid cells by MPI communication.
+    update_solid_neighbor!(ka) # Update variables in SolidNeighbor by IBM.
+    flux!(ka) # Compute numerical fluxes.
+    iterate!(ka) # Collision process and time marching.
+    data_exchange!(p4est, ka) # Update variables in ghost cells by MPI communication.
+    check_for_convergence(ka)&&break # Check for convergence.
+    check!(p4est,ka) # Check for save and output simulation status to `stdout`.
 end
 
-save_result(ps4est,amr) # Save converging results.
-finalize!(ps4est,amr) # Finalize `p4est` things. Release the memory managed by `C`.
+save_result(p4est,ka) # Save converging results.
+finalize!(p4est,ka) # Finalize `p4est` things. Release the memory managed by `C`.
 MPI.Finalize() # MPI finalization. Mandatory for a paralleled program using MPI.
 

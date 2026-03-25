@@ -1,8 +1,8 @@
-function pre_ps_refine_flag(boundary::Vertices,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data) # Circle type IB boundary flag
+function pre_ps_refine_flag(boundary::Vertices,midpoint::AbstractVector,ds::AbstractVector,kinfo::KInfo) # Circle type IB boundary flag
     boundary.box[1][1]<midpoint[1]&&boundary.box[2][1]>midpoint[1]&&boundary.box[1][2]<midpoint[2]&&boundary.box[2][2]>midpoint[2] && return true
     return false
 end
-function boundary_flag(boundary::Vertices,midpoint::AbstractVector,ds::AbstractVector,::Global_Data) # Circle type IB boundary flag
+function boundary_flag(boundary::Vertices,midpoint::AbstractVector,ds::AbstractVector,::KInfo) # Circle type IB boundary flag
     # (boundary.box[1][1]>midpoint[1]||boundary.box[2][1]<midpoint[1]||boundary.box[1][2]>midpoint[2]||boundary.box[2][2]<midpoint[2]) && return false
     flag = 0
     for i = 1:4
@@ -11,8 +11,8 @@ function boundary_flag(boundary::Vertices,midpoint::AbstractVector,ds::AbstractV
     abs(flag)==4 && return false
     return true
 end
-function solid_cell_flag(boundary::Vertices,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data,inside::Bool) # Ghost nodes, those are inside solid domain and immediately adjacent the boundary.
-    (boundary_flag(boundary,midpoint,ds,global_data) && inside) && return true
+function solid_cell_flag(boundary::Vertices,midpoint::AbstractVector,ds::AbstractVector,kinfo::KInfo,inside::Bool) # Ghost nodes, those are inside solid domain and immediately adjacent the boundary.
+    (boundary_flag(boundary,midpoint,ds,kinfo) && inside) && return true
     return false
 end
 function solid_flag(boundary::Vertices,midpoint::AbstractVector) # Does midpoint locate at solid?

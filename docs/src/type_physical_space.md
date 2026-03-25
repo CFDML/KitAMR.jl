@@ -4,10 +4,10 @@ Information in physical space are organized as following.
 AbstractPsData
 ```
 ```@docs
-PS_Data
+PsData
 ```
 ```@docs
-Ghost_PS_Data
+GhostPsData
 ```
 ```@docs
 InsideSolidData

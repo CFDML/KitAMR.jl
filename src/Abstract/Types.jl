@@ -43,7 +43,7 @@ PW_pxest_iter_face_side_t = Union{PointerWrapper{p4est_iter_face_side_t},Pointer
 """
 $(TYPEDEF)
 """
-abstract type AbstractInitCondType end
+abstract type AbstractInitCond end
 
 abstract type AbstractVTKCellType end
 """
@@ -112,39 +112,39 @@ abstract type AbstractGas end
 """
 $(TYPEDEF)
 """
-abstract type AbstractBoundaryType end
+abstract type AbstractBoundary end
 """
 $(TYPEDEF)
 """
-abstract type AbstractBoundCondType end
+abstract type AbstractBoundCond end
 
 """
 $(TYPEDEF)
 Fully diffused Maxwellian gas-surface interaction model.
 """
-abstract type Maxwellian<:AbstractBoundCondType end
+abstract type Maxwellian<:AbstractBoundCond end
 
 """
 $(TYPEDEF)
 """
-abstract type SuperSonicInflow <: AbstractBoundCondType end
+abstract type SuperSonicInflow <: AbstractBoundCond end
 """
 $(TYPEDEF)
 """
-abstract type SuperSonicOutflow <: AbstractBoundCondType end
+abstract type SuperSonicOutflow <: AbstractBoundCond end
 """
 $(TYPEDEF)
 """
-abstract type UniformOutflow <: AbstractBoundCondType end
+abstract type UniformOutflow <: AbstractBoundCond end
 """
 $(TYPEDEF)
 """
-abstract type InterpolatedOutflow <: AbstractBoundCondType end
-abstract type AxisSymmetric <: AbstractBoundCondType end
+abstract type InterpolatedOutflow <: AbstractBoundCond end
+abstract type AxisSymmetric <: AbstractBoundCond end
 """
 $(TYPEDEF)
 """
-abstract type Period <: AbstractBoundCondType end
+abstract type Period <: AbstractBoundCond end
 const AbstractBCType = Union{Vector,Function}
 
 """
@@ -162,7 +162,7 @@ include("../Solver/Types.jl")
 include("../IO/Types.jl")
 
 export SuperSonicInflow, SuperSonicOutflow, UniformOutflow, InterpolatedOutflow, Period, Maxwellian
-export AbstractInitCondType, AbstractBoundCondType, AbstractBoundaryType
+export AbstractInitCond, AbstractBoundCond, AbstractBoundary
 export Pixel, Voxel, Triangle, Tetra
 export AbstractPsData, AbstractFace
 export AbstractVsData

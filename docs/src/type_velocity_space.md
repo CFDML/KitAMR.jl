@@ -4,13 +4,13 @@ In kinetic methods, variables are also discretized in velocity space. Informatio
 AbstractVsData
 ```
 ```@docs
-VS_Data
+VsData
 ```
 ```@docs
-Ghost_VS_Data
+Ghost_VsData
 ```
 ```@docs
-Face_VS_Data
+FaceVsData
 ```
 ```@docs
 CuttedVelocityCells

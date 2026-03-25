@@ -287,17 +287,17 @@ end
 
 function cell_type_decision!(p4est::Ptr{p8est_t})
     AMR_volume_iterate(p4est) do ip,data,dp
-        global_data,_ = unsafe_pointer_to_objref(pointer(ip.p4est.user_pointer))
+        kinfo,_ = unsafe_pointer_to_objref(pointer(ip.p4est.user_pointer))
         mesh_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
         ds,midpoint = quad_to_cell(ip.p4est,ip.treeid[],ip.quad)
         if mesh_data.in_box!=0
-            ib = global_data.config.IB[mesh_data.in_box]
+            ib = kinfo.config.IB[mesh_data.in_box]
             mesh_data.in_solid = solid_flag(ib,midpoint)
             if mesh_data.in_search_radius!=0&&mesh_data.in_solid
                 mesh_data.is_ghost_cell = ghost_cell_flag(ib,midpoint,ds)
             end
         else
-            ibs = global_data.config.IB
+            ibs = kinfo.config.IB
             if isempty(ibs)
                 mesh_data.in_solid = false
             else

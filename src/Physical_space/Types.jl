@@ -43,14 +43,14 @@ mutable struct SolidNeighbor{DIM,NDF} <:AbstractPsData{DIM,NDF}
     sw::Matrix{Float64}
     "Struct containing information of cut cell in velocity space."
     cvc::CuttedVelocityCells
-    vs_data::VS_Data{DIM,NDF}
+    vs_data::VsData{DIM,NDF}
 end
 """
 $(TYPEDEF)
 $(TYPEDFIELDS)
 """
-mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
-    "Index of the quadrant corresponding to `PS_Data`."
+mutable struct PsData{DIM,NDF} <: AbstractPsData{DIM,NDF}
+    "Index of the quadrant corresponding to `PsData`."
     quadid::Cint # The unique identification of the ps_data, is currently used for SolidCells and IB nodes' partition. Only need to be updated before partition. Can be negative for SolidCells/IB nodes for the convenience of boundary_flag
     "Encoding of the cell type. `0`:fluid cell;`>0`: donor cell of `bound_enc` th immersed boundary;`<0`: solid cell (or solid neighbor) of `bound_enc` th boundary."
     bound_enc::Int # 0:fluid_cell;>0:bound_enc th boundary's IB_cell;<0: bound_enc th boundary's solid_cell;
@@ -71,10 +71,10 @@ mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
     "Conserved flux."
     flux::Vector{Float64}
     "Data of the velocity space."
-    vs_data::VS_Data{DIM,NDF}
+    vs_data::VsData{DIM,NDF}
     "Neighbor of the cell."
     neighbor::Neighbor{DIM,NDF}
-    PS_Data(DIM,NDF;kwargs...)=(n = new{DIM,NDF}();
+    PsData(DIM,NDF;kwargs...)=(n = new{DIM,NDF}();
         n.quadid = haskey(kwargs,:quadid) ? kwargs[:quadid] : 0;
         n.bound_enc = haskey(kwargs,:bound_enc) ? kwargs[:bound_enc] : 0;
         n.solid_cell_index = haskey(kwargs,:solid_cell_index) ? kwargs[:solid_cell_index] : zeros(SOLID_CELL_ID_NUM);
@@ -91,8 +91,8 @@ mutable struct PS_Data{DIM,NDF} <: AbstractPsData{DIM,NDF}
         n.neighbor = haskey(kwargs,:neighbor) ? kwargs[:neighbor] : Neighbor(DIM,NDF);
         n
     )
-    PS_Data(ps_data::PS_Data{DIM,NDF};kwargs...) where{DIM,NDF}=(n = new{DIM,NDF}();
-        for field in fieldnames(PS_Data{DIM,NDF})
+    PsData(ps_data::PsData{DIM,NDF};kwargs...) where{DIM,NDF}=(n = new{DIM,NDF}();
+        for field in fieldnames(PsData{DIM,NDF})
             setfield!(n,field,haskey(kwargs,field) ? kwargs[field] : getfield(ps_data,field))
         end;
         n
@@ -103,7 +103,7 @@ end
 $(TYPEDEF)
 $(TYPEDFIELDS)
 """
-mutable struct Ghost_PS_Data{DIM,NDF}<:AbstractGhostPsData{DIM,NDF}
+mutable struct GhostPsData{DIM,NDF}<:AbstractGhostPsData{DIM,NDF}
     owner_rank::Int
     quadid::Int # Not continuous! Only provide an order among ghost_datas from the same owner rank.
     bound_enc::Int
@@ -111,7 +111,7 @@ mutable struct Ghost_PS_Data{DIM,NDF}<:AbstractGhostPsData{DIM,NDF}
     midpoint::Vector{Cdouble}
     w::Vector{Cdouble}
     sw::Matrix{Cdouble}
-    vs_data::Ghost_VS_Data{DIM,NDF}
+    vs_data::Ghost_VsData{DIM,NDF}
 end
 
 """
@@ -137,8 +137,8 @@ struct FullFace{DIM,NDF}<:InnerFace
     direction::Int
     "Coordinates of the face's center."
     midpoint::Vector{Float64}
-    "`PS_Data` on one side of the face. It is guaranteed to be local."
-    here_data::PS_Data{DIM,NDF}
+    "`PsData` on one side of the face. It is guaranteed to be local."
+    here_data::PsData{DIM,NDF}
     "`AbstractPsData` on the other side of the face. It can be a ghost one."
     there_data::AbstractPsData{DIM,NDF}
 end
@@ -152,7 +152,7 @@ struct HangingFace{DIM,NDF}<:InnerFace
     rot::Float64
     direction::Int
     midpoint::Vector{Vector{Float64}}
-    here_data::PS_Data{DIM,NDF}
+    here_data::PsData{DIM,NDF}
     "`AbstractPsData`s with higher refinement level."
     there_data::Vector{AbstractPsData{DIM,NDF}}
 end
@@ -166,7 +166,7 @@ struct BackHangingFace{DIM,NDF}<:InnerFace
     rot::Float64
     direction::Int
     midpoint::Vector{Vector{Float64}}
-    here_data::Vector{PS_Data{DIM,NDF}}
+    here_data::Vector{PsData{DIM,NDF}}
     there_data::AbstractPsData{DIM,NDF}
 end
 

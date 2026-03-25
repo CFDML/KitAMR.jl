@@ -2,7 +2,7 @@
 $(TYPEDEF)
 $(TYPEDFIELDS)
 """
-mutable struct VS_Data{DIM,NDF} <: AbstractVsData{DIM,NDF}
+mutable struct VsData{DIM,NDF} <: AbstractVsData{DIM,NDF}
     "Number of velocity cells."
     vs_num::Int
     "Refinement level of velocity cells."
@@ -23,7 +23,7 @@ end
 $(TYPEDEF)
 $(TYPEDFIELDS)
 """
-mutable struct Ghost_VS_Data{DIM,NDF} <: AbstractVsData{DIM,NDF}
+mutable struct Ghost_VsData{DIM,NDF} <: AbstractVsData{DIM,NDF}
     vs_num::Int
     level::Vector{Int8} # vs_num
     weight::Vector{Float64} # vs_num
@@ -37,7 +37,7 @@ $(TYPEDEF)
 Information of the velocity space corresponding to the face during the calculation of numerical flux.
 $(TYPEDFIELDS)
 """
-struct Face_VS_Data{DIM,NDF} # different sides of the face combining the face-velocity-space
+struct FaceVsData{DIM,NDF} # different sides of the face combining the face-velocity-space
     "Upwinding flags. Upwinding velocities are set to `true`."
     heavi::Vector{Bool}
     weight::AbstractVector{Float64}
@@ -47,8 +47,8 @@ struct Face_VS_Data{DIM,NDF} # different sides of the face combining the face-ve
     df::AbstractMatrix{Float64}
     sdf::AbstractArray{Float64}
 end
-function Face_VS_Data(fvd::Face_VS_Data{DIM,NDF},df::AbstractMatrix) where{DIM,NDF}
-    return Face_VS_Data{DIM,NDF}(fvd.heavi,fvd.weight,fvd.midpoint,fvd.vn,df,fvd.sdf)
+function FaceVsData(fvd::FaceVsData{DIM,NDF},df::AbstractMatrix) where{DIM,NDF}
+    return FaceVsData{DIM,NDF}(fvd.heavi,fvd.weight,fvd.midpoint,fvd.vn,df,fvd.sdf)
 end
 struct VelocityTemplates
     indices::Vector{Int} # Indices of the templates
@@ -61,7 +61,7 @@ Structure for cut cell in velocity space used in immersed boundaries.
 $(TYPEDFIELDS)
 """
 mutable struct CuttedVelocityCells
-    "Indices of cut cells in [`SolidNeighbor`](@ref)'s [`VS_Data`](@ref)."
+    "Indices of cut cells in [`SolidNeighbor`](@ref)'s [`VsData`](@ref)."
     indices::Vector{Int}
     "Quadrature weight of velocity cells. Specially, the weight of cut cells is set to 0."
     weight::Vector{Float64}

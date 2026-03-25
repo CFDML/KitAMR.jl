@@ -33,17 +33,17 @@ Balance mesh in physical space after refinement and coarsening. It ensures that 
 ---
 In an AMR process, it is crucial to construct variables in newly generated cell (a larger one or a smaller one). Related methods are
 ```@docs
-ps_replace!(::Val{1},out_quad,in_quads,which_tree,amr::KitAMR_Data{DIM}) where{DIM}
-ps_replace!(::KitAMR.ChildNum,out_quads,in_quads,which_tree,amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
+ps_replace!(::Val{1},out_quad,in_quads,which_tree,ka::KA{DIM}) where{DIM}
+ps_replace!(::KitAMR.ChildNum,out_quads,in_quads,which_tree,ka::KA{DIM,NDF}) where{DIM,NDF}
 ```
 ---
 
 AMR criteria in physical space are defined by
 ```@docs
-ps_refine_flag(::PS_Data{DIM},::KitAMR_Data{DIM},qp::KitAMR.PW_pxest_quadrant_t) where{DIM}
+ps_refine_flag(::PsData{DIM},::KA{DIM},qp::KitAMR.PW_pxest_quadrant_t) where{DIM}
 ```
 ```@docs
-ps_coarsen_flag(::Vector{PS_Data},::Vector{Int},::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
+ps_coarsen_flag(::Vector{PsData},::Vector{Int},::KA{DIM,NDF}) where{DIM,NDF}
 ```
 
 Currently, KitAMR.jl decides according to the relative macroscopic gradient. To compute this, a globally maximum gradient is obtained by

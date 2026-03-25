@@ -1,4 +1,4 @@
-function vs_merge!(sdf::AbstractArray,sdf_n::AbstractArray,level::Vector,level_n::Vector,::KitAMR_Data{DIM}) where{DIM}
+function vs_merge!(sdf::AbstractArray,sdf_n::AbstractArray,level::Vector,level_n::Vector,::KA{DIM}) where{DIM}
     j = 1
     flag = 0.0
     for i in axes(sdf,1)
@@ -22,7 +22,7 @@ function vs_merge!(sdf::AbstractArray,sdf_n::AbstractArray,level::Vector,level_n
         end
     end
 end
-function vs_merge!(sdf::AbstractMatrix,sdf_n::AbstractMatrix,level::Vector,level_n::Vector,::KitAMR_Data{DIM}) where{DIM}
+function vs_merge!(sdf::AbstractMatrix,sdf_n::AbstractMatrix,level::Vector,level_n::Vector,::KA{DIM}) where{DIM}
     j = 1
     flag = 0.0
     for i in axes(sdf,1)
@@ -52,21 +52,21 @@ function user_defined_ps_refine_flag(forest::P_pxest_t,which_tree,quadrant)
     GC.@preserve forest which_tree quadrant begin
         fp = PointerWrapper(forest)
         qp = PointerWrapper(quadrant)
-        global_data = unsafe_pointer_to_objref(pointer(fp.user_pointer))
-        refine_fn = global_data.config.user_defined.static_ps_refine_flag
+        kinfo = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        refine_fn = kinfo.config.user_defined.static_ps_refine_flag
         ds, midpoint = quad_to_cell(fp, which_tree, qp)
-        if refine_fn(midpoint, ds, global_data, qp.level[])
+        if refine_fn(midpoint, ds, kinfo, qp.level[])
             return Cint(1)
         else
             return Cint(0)
         end
     end
 end
-function user_defined_ps_refine!(p4est::Ptr{p8est_t},global_data::Global_Data)
+function user_defined_ps_refine!(p4est::Ptr{p8est_t},kinfo::KInfo)
     p8est_refine_ext(
         p4est,
         1,
-        global_data.config.solver.AMR_PS_MAXLEVEL,
+        kinfo.config.solver.AMR_PS_MAXLEVEL,
         @cfunction(
             user_defined_ps_refine_flag,
             Cint,
@@ -77,14 +77,14 @@ function user_defined_ps_refine!(p4est::Ptr{p8est_t},global_data::Global_Data)
     )
 end
 
-function initialize_MeshData!(p4est::P_pxest_t,global_data::Global_Data)
+function initialize_MeshData!(p4est::P_pxest_t,kinfo::KInfo)
     fp = PointerWrapper(p4est)
     trees = [MeshData[] for _ in 1:fp.last_local_tree[]-fp.first_local_tree[]+1]
     p_data = pointer_from_objref(trees)
     GC.@preserve trees AMR_volume_iterate(p4est;user_data = p_data) do ip,data,dp
         treeid = ip.treeid[]-ip.p4est.first_local_tree[]+1
         mesh_data = MeshData()
-        dp[] = P4est_PS_Data(pointer_from_objref(mesh_data))
+        dp[] = P4estPsData(pointer_from_objref(mesh_data))
         trees = unsafe_pointer_to_objref(data)
         push!(trees[treeid],mesh_data)
     end   
@@ -94,11 +94,11 @@ end
 function search_radius_refine_flag!(forest::P_pxest_t,which_tree,quadrant)
     GC.@preserve forest which_tree quadrant begin
         fp = PointerWrapper(forest)
-        global_data,_ = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        kinfo,_ = unsafe_pointer_to_objref(pointer(fp.user_pointer))
         qp = PointerWrapper(quadrant)
-        dp = PointerWrapper(P4est_PS_Data,qp.p.user_data[])
+        dp = PointerWrapper(P4estPsData,qp.p.user_data[])
         mesh_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
-        ibs = global_data.config.IB
+        ibs = kinfo.config.IB
         ds, midpoint = quad_to_cell(fp, which_tree, qp)
         for i in eachindex(ibs)
             search_radius_refine_flag!(i,ibs[i],midpoint,ds,mesh_data) && return Cint(1)
@@ -109,18 +109,18 @@ end
 function search_radius_refine_replace(forest::P_pxest_t,which_tree,num_out,out_quads::Ptr{T},num_in,in_quads) where{T}
     GC.@preserve forest which_tree num_out out_quads num_in in_quads begin
         fp = PointerWrapper(forest)
-        global_data,trees = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        kinfo,trees = unsafe_pointer_to_objref(pointer(fp.user_pointer))
         out_quads_wrap = unsafe_wrap(Vector{T}, out_quads, num_out)
         in_quads_wrap = unsafe_wrap(Vector{T}, in_quads, num_in)
-        search_radius_refine_replace(forest, out_quads_wrap, in_quads_wrap, which_tree, trees, global_data)
+        search_radius_refine_replace(forest, out_quads_wrap, in_quads_wrap, which_tree, trees, kinfo)
         return nothing
     end
 end
-function search_radius_refine!(p4est::Ptr{p8est_t},global_data::Global_Data)
+function search_radius_refine!(p4est::Ptr{p8est_t},kinfo::KInfo)
     p8est_refine_ext(
         p4est,
         1,
-        global_data.config.solver.AMR_PS_MAXLEVEL,
+        kinfo.config.solver.AMR_PS_MAXLEVEL,
         @cfunction(
             search_radius_refine_flag!,
             Cint,
@@ -142,70 +142,70 @@ function search_radius_refine!(p4est::Ptr{p8est_t},global_data::Global_Data)
     )
 end
 
-function search_radius_refine_replace(p4est, out_quads,in_quads,which_tree,trees,global_data)
+function search_radius_refine_replace(p4est, out_quads,in_quads,which_tree,trees,kinfo)
     fp = PointerWrapper(p4est)
     out_qp = PointerWrapper(out_quads[1])
-    dp = PointerWrapper(P4est_PS_Data,out_qp.p.user_data[])
+    dp = PointerWrapper(P4estPsData,out_qp.p.user_data[])
     mesh_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
-    ib = global_data.config.IB[mesh_data.in_search_radius]
+    ib = kinfo.config.IB[mesh_data.in_search_radius]
     treeid = which_tree - fp.first_local_tree[]+1
     datas = trees[treeid]
     index = findfirst(x->x===mesh_data,datas)
     deleteat!(datas, index)
-    if out_qp.level[]==global_data.config.solver.AMR_PS_MAXLEVEL-1
+    if out_qp.level[]==kinfo.config.solver.AMR_PS_MAXLEVEL-1
         for i in eachindex(in_quads)
             qp = PointerWrapper(in_quads[i])
-            dp = PointerWrapper(P4est_PS_Data,qp.p.user_data[])
+            dp = PointerWrapper(P4estPsData,qp.p.user_data[])
             mesh_data_i = deepcopy(mesh_data)
-            dp[] = P4est_PS_Data(pointer_from_objref(mesh_data_i))
+            dp[] = P4estPsData(pointer_from_objref(mesh_data_i))
             insert!(datas, index - 1 + i, mesh_data_i)
         end
     else
         for i in eachindex(in_quads)
             qp = PointerWrapper(in_quads[i])
-            dp = PointerWrapper(P4est_PS_Data,qp.p.user_data[])
+            dp = PointerWrapper(P4estPsData,qp.p.user_data[])
             mesh_data_i = MeshData()
-            dp[] = P4est_PS_Data(pointer_from_objref(mesh_data_i))
+            dp[] = P4estPsData(pointer_from_objref(mesh_data_i))
             insert!(datas, index - 1 + i, mesh_data_i)
         end
     end
 end
-# function boundary_flag(::Domain,::AbstractVector,::AbstractVector,::Global_Data) # Domain boundary flag
+# function boundary_flag(::Domain,::AbstractVector,::AbstractVector,::KInfo) # Domain boundary flag
 #     return false
 # end
-function boundary_flag(boundary::Domain,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data) # Domain boundary flag
+function boundary_flag(boundary::Domain,midpoint::AbstractVector,ds::AbstractVector,kinfo::KInfo) # Domain boundary flag
     !boundary.refine && return false
     index = Int(floor((boundary.id-1)/2))+1
-    abs(midpoint[index] - global_data.config.geometry[boundary.id]) < ds[index] && return true
+    abs(midpoint[index] - kinfo.config.geometry[boundary.id]) < ds[index] && return true
 end
-function domain_flag(global_data::Global_Data,midpoint::AbstractVector,ds::AbstractVector) # domain flag for physical space dynamic adaptive
-    domains = global_data.config.domain
+function domain_flag(kinfo::KInfo,midpoint::AbstractVector,ds::AbstractVector) # domain flag for physical space dynamic adaptive
+    domains = kinfo.config.domain
     for domain in domains
-        boundary_flag(domain,midpoint,ds,global_data) && return true
+        boundary_flag(domain,midpoint,ds,kinfo) && return true
     end
     return false
 end
-function boundary_flag(midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data) # Is the cell at midpoint 
-    domain = global_data.config.domain
-    boundary = global_data.config.IB
+function boundary_flag(midpoint::AbstractVector,ds::AbstractVector,kinfo::KInfo) # Is the cell at midpoint 
+    domain = kinfo.config.domain
+    boundary = kinfo.config.IB
     for i in eachindex(domain)
-        boundary_flag(domain[i],midpoint,ds,global_data) && return true
+        boundary_flag(domain[i],midpoint,ds,kinfo) && return true
     end
-    return solid_cell_flag(boundary,midpoint,ds,global_data)
+    return solid_cell_flag(boundary,midpoint,ds,kinfo)
 end
-function pre_ps_refine_flag(midpoint,ds,global_data::Global_Data{DIM}) where{DIM}
-    domain = global_data.config.domain
-    boundary = global_data.config.IB
+function pre_ps_refine_flag(midpoint,ds,kinfo::KInfo{DIM}) where{DIM}
+    domain = kinfo.config.domain
+    boundary = kinfo.config.IB
     for i in eachindex(domain)
-        boundary_flag(domain[i],midpoint,ds,global_data) && return true
+        boundary_flag(domain[i],midpoint,ds,kinfo) && return true
     end
     for i in eachindex(boundary)
-        pre_ps_refine_flag(boundary[i],midpoint,ds,global_data) && return true
+        pre_ps_refine_flag(boundary[i],midpoint,ds,kinfo) && return true
     end
     return false
 end
-function ps_copy(data::PS_Data{DIM,NDF}) where{DIM,NDF}
-    p = PS_Data(DIM,NDF;
+function ps_copy(data::PsData{DIM,NDF}) where{DIM,NDF}
+    p = PsData(DIM,NDF;
         ds=copy(data.ds),
         midpoint=copy(data.midpoint),
         w=copy(data.w),
@@ -217,18 +217,18 @@ function ps_copy(data::PS_Data{DIM,NDF}) where{DIM,NDF}
     )
     return p
 end
-function ps_merge(Odatas::Vector,index::Int,global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
+function ps_merge(Odatas::Vector,index::Int,kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
     data = Odatas[index]
     vs_data = data.vs_data;vs_num = vs_data.vs_num
     w_new = [sum([x.w[i] for x in Odatas]) for i in 1:DIM+2]./2^DIM
-    p = PS_Data(DIM,NDF;
+    p = PsData(DIM,NDF;
             ds = data.ds *2.0,
             midpoint = data.midpoint - 0.5 * data.ds .* RMT[DIM][index],
             w = w_new,
-            prim = get_prim(w_new,global_data),
+            prim = get_prim(w_new,kinfo),
             sw = [sum([x.sw[i,j] for x in Odatas]) for i in 1:DIM+2,j in 1:DIM]./2^DIM,
             flux = [sum([x.flux[i] for x in Odatas]) for i in 1:DIM+2]./2^DIM,
-            vs_data = VS_Data{DIM,NDF}(vs_num,copy(vs_data.level),copy(vs_data.weight),copy(vs_data.midpoint),
+            vs_data = VsData{DIM,NDF}(vs_num,copy(vs_data.level),copy(vs_data.weight),copy(vs_data.midpoint),
                 zeros(vs_num,NDF),zeros(vs_num,NDF,DIM),zeros(vs_num,NDF))
         )
     p.neighbor.state[1] = BALANCE_FLAG
@@ -237,7 +237,7 @@ function ps_merge(Odatas::Vector,index::Int,global_data::Global_Data{DIM,NDF}) w
 end
 function ps_refine_flag(
     ::InsideSolidData,
-    ::KitAMR_Data,
+    ::KA,
     ::PW_pxest_quadrant_t,
 )
     Cint(0)
@@ -246,10 +246,10 @@ function ps_refine_flag(forest::P_pxest_t, which_tree, quadrant)
     GC.@preserve forest which_tree quadrant begin
         fp = PointerWrapper(forest)
         qp = PointerWrapper(quadrant)
-        dp = PointerWrapper(P4est_PS_Data, qp.p.user_data[])
+        dp = PointerWrapper(P4estPsData, qp.p.user_data[])
         ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
-        amr = unsafe_pointer_to_objref(pointer(fp.user_pointer))
-        ps_refine_flag(ps_data, amr, qp)
+        ka = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        ps_refine_flag(ps_data, ka, qp)
     end
 end
 
@@ -257,20 +257,20 @@ end
 $(TYPEDSIGNATURES)
 Replacement function in a refinement process.
 """
-function ps_replace!(::Val{1}, out_quad, in_quads, which_tree, amr::KitAMR_Data{DIM}) where{DIM}# refine replace
-    trees = amr.field.trees
+function ps_replace!(::Val{1}, out_quad, in_quads, which_tree, ka::KA{DIM}) where{DIM}# refine replace
+    trees = ka.kdata.field.trees
     treeid = Int(which_tree) - trees.offset
     datas = trees.data[treeid]
     pw_out_quad = PointerWrapper(out_quad[1])
     Odata = unsafe_pointer_to_objref(
-        pointer(PointerWrapper(P4est_PS_Data, pw_out_quad.p.user_data[]).ps_data),
+        pointer(PointerWrapper(P4estPsData, pw_out_quad.p.user_data[]).ps_data),
     )
     index = findfirst(x -> x === Odata, datas)
     deleteat!(datas, index)
     flag = Odata.neighbor.state[1]==BALANCE_FLAG
     for i = 1:2^DIM
         pw_in_quad = PointerWrapper(in_quads[i])
-        dp = PointerWrapper(P4est_PS_Data, pw_in_quad.p.user_data[])
+        dp = PointerWrapper(P4estPsData, pw_in_quad.p.user_data[])
         if flag
             ps_data = Odata.neighbor.data[1][i]
         else
@@ -282,14 +282,14 @@ function ps_replace!(::Val{1}, out_quad, in_quads, which_tree, amr::KitAMR_Data{
                 @. vs_data.df += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(vs_data.sdf[:, :, j])
             end
             ps_data.w = calc_w0(ps_data)
-            ps_data.prim = get_prim(ps_data.w,amr.global_data)
+            ps_data.prim = get_prim(ps_data.w,ka.kinfo)
             if i==1
                 ps_data.neighbor.state[2] = BALANCE_FLAG
                 ps_data.neighbor.data[2] = [Odata]
             end
         end
         insert!(datas, index - 1 + i, ps_data)
-        dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
+        dp[] = P4estPsData(pointer_from_objref(ps_data))
     end
     return nothing
 end
@@ -297,17 +297,17 @@ end
 $(TYPEDSIGNATURES)
 Replacement function in a coarsening process.
 """
-function ps_replace!(::ChildNum, out_quad, in_quads, which_tree, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF} # coarsen replace, average or interpolate? Currently interpolation strategy is adopted. If my memory serves me right, problems came out with average most likely due to the iterative balance process.
-    trees = amr.field.trees
+function ps_replace!(::ChildNum, out_quad, in_quads, which_tree, ka::KA{DIM,NDF}) where{DIM,NDF} # coarsen replace, average or interpolate? Currently interpolation strategy is adopted. If my memory serves me right, problems came out with average most likely due to the iterative balance process.
+    trees = ka.kdata.field.trees
     treeid = Int(which_tree) - trees.offset
     datas = trees.data[treeid]
     pw_in_quad = PointerWrapper(in_quads[1])
-    dp = PointerWrapper(P4est_PS_Data, pw_in_quad.p.user_data[])
+    dp = PointerWrapper(P4estPsData, pw_in_quad.p.user_data[])
     Odatas = Vector{AbstractPsData{DIM,NDF}}(undef, 2^DIM)
     for i = 1:2^DIM
         pw_out_quad = PointerWrapper(out_quad[i])
         Odatas[i] = unsafe_pointer_to_objref(
-            pointer(PointerWrapper(P4est_PS_Data, pw_out_quad.p.user_data[]).ps_data),
+            pointer(PointerWrapper(P4estPsData, pw_out_quad.p.user_data[]).ps_data),
         )
     end
     if any(x->x<0,[x.bound_enc for x in Odatas])
@@ -317,12 +317,12 @@ function ps_replace!(::ChildNum, out_quad, in_quads, which_tree, amr::KitAMR_Dat
         ps_data = first(Odatas[1].neighbor.data[2])
     else
         _,index = findmin([x.vs_data.vs_num for x in Odatas])
-        ps_data = ps_merge(Odatas,index,amr.global_data)
+        ps_data = ps_merge(Odatas,index,ka.kinfo)
         vs_data = ps_data.vs_data
         for i in eachindex(Odatas)
             vs_data_n = Odatas[i].vs_data
-            vs_merge!(vs_data.sdf,vs_data_n.sdf,vs_data.level,vs_data_n.level,amr)
-            vs_merge!(vs_data.df,vs_data_n.df,vs_data.level,vs_data_n.level,amr)
+            vs_merge!(vs_data.sdf,vs_data_n.sdf,vs_data.level,vs_data_n.level,ka)
+            vs_merge!(vs_data.df,vs_data_n.df,vs_data.level,vs_data_n.level,ka)
         end
         vs_data.df./=2^DIM;vs_data.sdf./=2^DIM
         Odatas[1].neighbor.state[2] = BALANCE_FLAG
@@ -331,16 +331,16 @@ function ps_replace!(::ChildNum, out_quad, in_quads, which_tree, amr::KitAMR_Dat
     index = findfirst(x -> x === Odatas[1], datas)
     deleteat!(datas, index:index+2^DIM-1)
     insert!(datas, index, ps_data)
-    dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
+    dp[] = P4estPsData(pointer_from_objref(ps_data))
     return nothing
 end
 function p4est_replace(forest::T1, which_tree, num_out, out_quads::Ptr{T2}, num_in, in_quads) where{T1<:P_pxest_t,T2<:P_pxest_quadrant_t}
     GC.@preserve forest which_tree num_out out_quads num_in in_quads begin
         fp = PointerWrapper(forest)
-        amr = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        ka = unsafe_pointer_to_objref(pointer(fp.user_pointer))
         out_quads_wrap = unsafe_wrap(Vector{T2}, out_quads, num_out)
         in_quads_wrap = unsafe_wrap(Vector{T2}, in_quads, num_in)
-        ps_replace!(Val(Int(num_out)), out_quads_wrap, in_quads_wrap, which_tree, amr)
+        ps_replace!(Val(Int(num_out)), out_quads_wrap, in_quads_wrap, which_tree, ka)
         return nothing
     end
 end
@@ -360,16 +360,16 @@ function pre_ps_replace(::Val{1}, p4est, out_quad, in_quads, which_tree, trees)#
     datas = trees[treeid]
     pw_out_quad = PointerWrapper(out_quad[1])
     Odata = unsafe_pointer_to_objref(
-        pointer(PointerWrapper(P4est_PS_Data, pw_out_quad.p.user_data[]).ps_data),
+        pointer(PointerWrapper(P4estPsData, pw_out_quad.p.user_data[]).ps_data),
     )
     index = findfirst(x -> x === Odata, datas)
     deleteat!(datas, index)
     for i in eachindex(in_quads)
         pw_in_quad = PointerWrapper(in_quads[i])
-        dp = PointerWrapper(P4est_PS_Data, pw_in_quad.p.user_data[])
+        dp = PointerWrapper(P4estPsData, pw_in_quad.p.user_data[])
         mesh_data = deepcopy(Odata)
         insert!(datas, index - 1 + i, mesh_data)
-        dp[] = P4est_PS_Data(pointer_from_objref(mesh_data))
+        dp[] = P4estPsData(pointer_from_objref(mesh_data))
     end
 end
 function pre_ps_replace(::ChildNum, p4est, out_quad, in_quads, which_tree, trees::Vector{Vector{T}}) where{T} # coarsen replace, average or interpolate? Currently interpolation strategy is adopted. If my memory serves me right, problems came out with average most likely due to the iterative balance process.
@@ -377,29 +377,29 @@ function pre_ps_replace(::ChildNum, p4est, out_quad, in_quads, which_tree, trees
     treeid = Int(which_tree) - fp.first_local_tree[]+1
     datas = trees[treeid]
     pw_in_quad = PointerWrapper(in_quads[1])
-    dp = PointerWrapper(P4est_PS_Data, pw_in_quad.p.user_data[])
+    dp = PointerWrapper(P4estPsData, pw_in_quad.p.user_data[])
     Odatas = Vector{T}(undef, length(out_quad))
     for i in eachindex(out_quad)
         pw_out_quad = PointerWrapper(out_quad[i])
         Odatas[i] = unsafe_pointer_to_objref(
-            pointer(PointerWrapper(P4est_PS_Data, pw_out_quad.p.user_data[]).ps_data),
+            pointer(PointerWrapper(P4estPsData, pw_out_quad.p.user_data[]).ps_data),
         )
     end
     mesh_data = deepcopy(Odatas[1])
     index = findfirst(x -> x === Odatas[1], datas)
     deleteat!(datas, index:index+length(out_quad)-1)
     insert!(datas, index, mesh_data)
-    dp[] = P4est_PS_Data(pointer_from_objref(mesh_data))
+    dp[] = P4estPsData(pointer_from_objref(mesh_data))
 end
 
 """
 $(TYPEDSIGNATURES)
 """
-function ps_refine!(p4est::Ptr{p4est_t},amr::KitAMR_Data; recursive = 0)
+function ps_refine!(p4est::Ptr{p4est_t},ka::KA; recursive = 0)
     p4est_refine_ext(
         p4est,
         recursive,
-        amr.global_data.config.solver.AMR_DYNAMIC_PS_MAXLEVEL,
+        ka.kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL,
         @cfunction(
             ps_refine_flag,
             Cint,
@@ -423,11 +423,11 @@ end
 """
 $(TYPEDSIGNATURES)
 """
-function ps_refine!(p4est::Ptr{p8est_t},amr::KitAMR_Data; recursive = 0)
+function ps_refine!(p4est::Ptr{p8est_t},ka::KA; recursive = 0)
     p8est_refine_ext(
         p4est,
         recursive,
-        amr.global_data.config.solver.AMR_PS_MAXLEVEL,
+        ka.kinfo.config.solver.AMR_PS_MAXLEVEL,
         @cfunction(
             ps_refine_flag,
             Cint,
@@ -454,18 +454,18 @@ function pre_IB_refine_flag(forest::P_pxest_t, which_tree, quadrant)
     GC.@preserve forest which_tree quadrant begin
         fp = PointerWrapper(forest)
         qp = PointerWrapper(quadrant)
-        global_data,aux_points = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        kinfo,aux_points = unsafe_pointer_to_objref(pointer(fp.user_pointer))
         ds,midpoint = quad_to_cell(fp,which_tree,qp)
-        global_data.config.user_defined.static_ps_refine_flag(midpoint,ds,global_data,qp.level[]) && return Cint(1)
-        IB_flag(aux_points,midpoint,ds,qp.level[],global_data) && return Cint(1)
+        kinfo.config.user_defined.static_ps_refine_flag(midpoint,ds,kinfo,qp.level[]) && return Cint(1)
+        IB_flag(aux_points,midpoint,ds,qp.level[],kinfo) && return Cint(1)
     end
     return Cint(0)
 end
-function IB_pre_ps_refine!(p4est::Ptr{p4est_t},global_data::Global_Data)
+function IB_pre_ps_refine!(p4est::Ptr{p4est_t},kinfo::KInfo)
     p4est_refine_ext(
         p4est,
         1,
-        global_data.config.solver.AMR_PS_MAXLEVEL,
+        kinfo.config.solver.AMR_PS_MAXLEVEL,
         @cfunction(
             pre_IB_refine_flag,
             Cint,
@@ -475,11 +475,11 @@ function IB_pre_ps_refine!(p4est::Ptr{p4est_t},global_data::Global_Data)
         C_NULL,
     )
 end
-function IB_pre_ps_refine!(p4est::Ptr{p8est_t},global_data::Global_Data)
+function IB_pre_ps_refine!(p4est::Ptr{p8est_t},kinfo::KInfo)
     p8est_refine_ext(
         p4est,
         1,
-        global_data.config.solver.AMR_PS_MAXLEVEL,
+        kinfo.config.solver.AMR_PS_MAXLEVEL,
         @cfunction(
             pre_IB_refine_flag,
             Cint,
@@ -494,13 +494,13 @@ function pre_ps_coarsen_flag(forest::Ptr{p4est_t},which_tree,quadrants)
         DIM = 2
         fp = PointerWrapper(forest)
         quadrants_wrap = unsafe_wrap(Vector{Ptr{p4est_quadrant_t}}, quadrants, 2^DIM)
-        global_data,aux_points = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        kinfo,aux_points = unsafe_pointer_to_objref(pointer(fp.user_pointer))
         for i = 1:2^DIM
             quadrants_wrap[i]==C_NULL&&break
             qp = PointerWrapper(quadrants_wrap[i])
             ds,midpoint = quad_to_cell(fp,which_tree,qp)
-            (global_data.config.user_defined.static_ps_refine_flag(midpoint,ds,global_data,qp.level[]-1)&&!solid_flag(midpoint,global_data)||
-                IB_flag(aux_points,midpoint,ds,qp.level[],global_data))&&return Cint(0)
+            (kinfo.config.user_defined.static_ps_refine_flag(midpoint,ds,kinfo,qp.level[]-1)&&!solid_flag(midpoint,kinfo)||
+                IB_flag(aux_points,midpoint,ds,qp.level[],kinfo))&&return Cint(0)
         end
         return Cint(1)
     end
@@ -510,13 +510,13 @@ function pre_ps_coarsen_flag(forest::Ptr{p8est_t},which_tree,quadrants)
         DIM = 3
         fp = PointerWrapper(forest)
         quadrants_wrap = unsafe_wrap(Vector{Ptr{p8est_quadrant_t}}, quadrants, 2^DIM)
-        global_data,_ = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        kinfo,_ = unsafe_pointer_to_objref(pointer(fp.user_pointer))
         for i = 1:2^DIM
             qp = PointerWrapper(quadrants_wrap[i])
-            dp = PointerWrapper(P4est_PS_Data,qp.p.user_data[])
+            dp = PointerWrapper(P4estPsData,qp.p.user_data[])
             mesh_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
             ds,midpoint = quad_to_cell(fp,which_tree,qp)
-            (global_data.config.user_defined.static_ps_refine_flag(midpoint,ds,global_data,qp.level[]-1)&&!mesh_data.in_solid
+            (kinfo.config.user_defined.static_ps_refine_flag(midpoint,ds,kinfo,qp.level[]-1)&&!mesh_data.in_solid
                 ||mesh_data.is_ghost_cell||(mesh_data.in_search_radius!=0&&!mesh_data.in_solid))&&return Cint(0)
         end
         return Cint(1)
@@ -568,17 +568,17 @@ function ps_coarsen_flag(forest::Ptr{p4est_t}, which_tree, quadrants)
         fp = PointerWrapper(forest)
         quadrants_wrap = unsafe_wrap(Vector{Ptr{p4est_quadrant_t}}, quadrants, 2^DIM)
         levels = Vector{Int}(undef, 2^DIM)
-        ps_datas = Vector{PS_Data}(undef, 2^DIM)
+        ps_datas = Vector{PsData}(undef, 2^DIM)
         for i = 1:2^DIM
             qp = PointerWrapper(quadrants_wrap[i])
-            dp = PointerWrapper(P4est_PS_Data, qp.p.user_data[])
+            dp = PointerWrapper(P4estPsData, qp.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
             isa(ps_data,InsideSolidData)&&return Cint(0)
             levels[i] = qp.level[]
             ps_datas[i] = ps_data
         end
-        amr = unsafe_pointer_to_objref(pointer(fp.user_pointer))
-        ps_coarsen_flag(ps_datas, levels, amr)
+        ka = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        ps_coarsen_flag(ps_datas, levels, ka)
     end
 end
 function ps_coarsen_flag(forest::Ptr{p8est_t}, which_tree, quadrants)
@@ -587,17 +587,17 @@ function ps_coarsen_flag(forest::Ptr{p8est_t}, which_tree, quadrants)
         fp = PointerWrapper(forest)
         quadrants_wrap = unsafe_wrap(Vector{Ptr{p8est_quadrant_t}}, quadrants, 2^DIM)
         levels = Vector{Int}(undef, 2^DIM)
-        ps_datas = Vector{PS_Data}(undef, 2^DIM)
+        ps_datas = Vector{PsData}(undef, 2^DIM)
         for i = 1:2^DIM
             qp = PointerWrapper(quadrants_wrap[i])
-            dp = PointerWrapper(P4est_PS_Data, qp.p.user_data[])
+            dp = PointerWrapper(P4estPsData, qp.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
             isa(ps_data,InsideSolidData)&&return Cint(0)
             levels[i] = qp.level[]
             ps_datas[i] = ps_data
         end
-        amr = unsafe_pointer_to_objref(pointer(fp.user_pointer))
-        ps_coarsen_flag(ps_datas, levels, amr)
+        ka = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        ps_coarsen_flag(ps_datas, levels, ka)
     end
 end
 """
@@ -701,20 +701,20 @@ function pre_ps_refine_flag(forest::P_pxest_t, which_tree, quadrant)
     GC.@preserve forest which_tree quadrant begin
         fp = PointerWrapper(forest)
         qp = PointerWrapper(quadrant)
-        global_data = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        kinfo = unsafe_pointer_to_objref(pointer(fp.user_pointer))
         ds, midpoint = quad_to_cell(fp, which_tree, qp)
-        if pre_ps_refine_flag(midpoint, ds, global_data)
+        if pre_ps_refine_flag(midpoint, ds, kinfo)
             return Cint(1)
         else
             return Cint(0)
         end
     end
 end
-function pre_ps_refine!(p4est::Ptr{p4est_t},global_data::Global_Data)
+function pre_ps_refine!(p4est::Ptr{p4est_t},kinfo::KInfo)
     p4est_refine_ext(
         p4est,
         1,
-        global_data.config.solver.AMR_PS_MAXLEVEL,
+        kinfo.config.solver.AMR_PS_MAXLEVEL,
         @cfunction(
             pre_ps_refine_flag,
             Cint,
@@ -724,11 +724,11 @@ function pre_ps_refine!(p4est::Ptr{p4est_t},global_data::Global_Data)
         C_NULL,
     )
 end
-function pre_ps_refine!(p4est::Ptr{p8est_t},global_data::Global_Data)
+function pre_ps_refine!(p4est::Ptr{p8est_t},kinfo::KInfo)
     p8est_refine_ext(
         p4est,
         1,
-        global_data.config.solver.AMR_PS_MAXLEVEL,
+        kinfo.config.solver.AMR_PS_MAXLEVEL,
         @cfunction(
             pre_ps_refine_flag,
             Cint,
@@ -763,12 +763,12 @@ end
 $(TYPEDSIGNATURES)
 Update the globally maximum gradients of conserved variables as a referrence of the AMR in physical space.
 """
-function update_gradmax!(amr::KitAMR_Data{DIM}) where{DIM}
-    gradmax = amr.global_data.status.gradmax 
-    wmax = amr.global_data.status.wmax
-    wmin = amr.global_data.status.wmin
+function update_gradmax!(ka::KA{DIM}) where{DIM}
+    gradmax = ka.kinfo.status.gradmax 
+    wmax = ka.kinfo.status.wmax
+    wmin = ka.kinfo.status.wmin
     gradmax .= 0.;wmax .= -Inf; wmin .= Inf
-    trees = amr.field.trees.data
+    trees = ka.kdata.field.trees.data
     for tree in trees
         for ps_data in tree
             isa(ps_data,InsideSolidData)&&continue
@@ -793,10 +793,10 @@ end
 $(TYPEDSIGNATURES)
 Outer function of AMR in physical space.
 """
-function ps_adaptive_mesh_refinement!(ps4est::P_pxest_t,amr::KitAMR_Data)
-    update_gradmax!(amr)
-    ps_refine!(ps4est,amr)
-    ps_coarsen!(ps4est)
-    ps_balance!(ps4est)
+function ps_adaptive_mesh_refinement!(p4est::P_pxest_t,ka::KA)
+    update_gradmax!(ka)
+    ps_refine!(p4est,ka)
+    ps_coarsen!(p4est)
+    ps_balance!(p4est)
     return nothing
 end

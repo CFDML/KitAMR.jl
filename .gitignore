@@ -18,4 +18,4 @@ animation
 *.jld2
 test*
 /docs/build
-/example/profile
+deprecated

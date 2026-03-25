@@ -39,24 +39,24 @@ config = Configure(solver;
     user_defined = udf
 )
 
-ps4est,amr = initialize_KitAMR(config)
+p4est,ka = initialize_KitAMR(config)
 listen_for_save!()
 max_sim_time = 20.
-nt = max_sim_time/amr.global_data.status.Δt+1.0 |> floor |> Int
+nt = max_sim_time/ka.kinfo.status.Δt+1.0 |> floor |> Int
 for i in 1:nt
-    adaptive_mesh_refinement!(ps4est,amr;partition_interval=160)
-    update_slope!(amr)
-    slope_exchange!(ps4est, amr) 
-    update_solid_cell!(amr)
-    solid_exchange!(ps4est, amr)
-    update_solid_neighbor!(amr)
-    flux!(amr) 
-    iterate!(amr) 
-    data_exchange!(ps4est, amr)
-    check_for_convergence(amr)&&break
-    check!(ps4est,amr)
+    adaptive_mesh_refinement!(p4est,ka;partition_interval=160)
+    update_slope!(ka)
+    slope_exchange!(p4est, ka) 
+    update_solid_cell!(ka)
+    solid_exchange!(p4est, ka)
+    update_solid_neighbor!(ka)
+    flux!(ka) 
+    iterate!(ka) 
+    data_exchange!(p4est, ka)
+    check_for_convergence(ka)&&break
+    check!(p4est,ka)
 end
-save_result(ps4est,amr)
-finalize!(ps4est,amr)
+save_result(p4est,ka)
+finalize!(p4est,ka)
 MPI.Finalize()
 

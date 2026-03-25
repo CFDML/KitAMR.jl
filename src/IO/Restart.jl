@@ -1,13 +1,13 @@
-function pause(ps4est,amr;path::String = "pause_data",kwargs...)
-    save_pause_data(ps4est,amr,path)
-    save_pause_p4est(ps4est;path)
+function pause(p4est,ka;path::String = "pause_data",kwargs...)
+    save_pause_data(p4est,ka,path)
+    save_pause_p4est(p4est;path)
 end
-function save_pause_data(ps4est,amr::KitAMR_Data{DIM,NDF},path::String) where{DIM,NDF}
-    fp = PointerWrapper(ps4est)
+function save_pause_data(p4est,ka::KA{DIM,NDF},path::String) where{DIM,NDF}
+    fp = PointerWrapper(p4est)
     N = fp.local_num_quadrants[];rank = MPI.Comm_rank(MPI.COMM_WORLD)
     vs_nums = Vector{Int}(undef,N);bound_encs = Vector{Int}(undef,N)
     index = 1
-    for tree in amr.field.trees.data
+    for tree in ka.kdata.field.trees.data
         for ps_data in tree
             if isa(ps_data,InsideSolidData)
                 vs_nums[index] = 0
@@ -24,7 +24,7 @@ function save_pause_data(ps4est,amr::KitAMR_Data{DIM,NDF},path::String) where{DI
     midpoints = Matrix{Float64}(undef,Nv,DIM)
     dfs = Matrix{FLoat64}(undef,Nv,NDF)
     index = 0
-    for tree in amr.field.trees.data
+    for tree in ka.kdata.field.trees.data
         for ps_data in tree
             if !isa(ps_data,InsideSolidData)
                 vs_data = ps_data.vs_data
@@ -47,8 +47,8 @@ function save_pause_data(ps4est,amr::KitAMR_Data{DIM,NDF},path::String) where{DI
     if rank==0
         jldopen(path*"pause_data_set.jld2","w") do f
             f["gfq"]=unsafe_wrap(Vector{Int},pointer(fp.global_first_quadrant),MPI.Comm_size(MPI.COMM_WORLD)+1)
-            f["config"]=amr.global_data.config
-            f["status"]=StatusForSave(amr.global_data.status)
+            f["config"]=ka.kinfo.config
+            f["status"]=StatusForSave(ka.kinfo.status)
         end
     end
 end
@@ -61,9 +61,9 @@ function save_pause_p4est(p4est::Ptr{p4est_t};path::String)
 end
 function restart(dirname::String)
     set = load(dirname*"paus_data_set.jld2")
-    global_data = recons_global_data(set[:config],set[:status])
-    ps4est = pxest_load(dirname,global_data)
-    pp = PointerWrapper(ps4est)
+    kinfo = recons_kinfo(set[:config],set[:status])
+    p4est = pxest_load(dirname,kinfo)
+    pp = PointerWrapper(p4est)
     gfq = Base.unsafe_wrap(
         Vector{Int},
         pointer(pp.global_first_quadrant),
@@ -93,21 +93,21 @@ function restart(dirname::String)
     midpoints = datas[1][:midpoints][first_vs_offset+1:end,:]
     
 end
-function recons_global_data(config::Configure{DIM,NDF},stat::StatusForSave) where{DIM,NDF}
-    global_data = Global_Data(config)
-    global_data.status = Status(stat)
-    return global_data
+function recons_kinfo(config::Configure{DIM,NDF},stat::StatusForSave) where{DIM,NDF}
+    kinfo = KInfo(config)
+    kinfo.status = Status(stat)
+    return kinfo
 end
-function pxest_load(dirname::String,global_data::Global_Data{DIM,NDF};kwargs...) where{DIM,NDF}
+function pxest_load(dirname::String,kinfo::KInfo{DIM,NDF};kwargs...) where{DIM,NDF}
     pro_path = pwd()
     cd(dirname)
     if DIM==2
         cnn = Ptr{Ptr{p4est_connectivity_t}}(Libc.malloc(sizeof(Ptr{Ptr{p4est_connectivity_t}})))
-        ps4est = GC.@preserve cnn p4est_load_ext("p",MPI.COMM_WORLD,Cint(0),Cint(0),Cint(1),Cint(0),C_NULL,cnn)
+        p4est = GC.@preserve cnn p4est_load_ext("p",MPI.COMM_WORLD,Cint(0),Cint(0),Cint(1),Cint(0),C_NULL,cnn)
     else
         cnn = Ptr{Ptr{p8est_connectivity_t}}(Libc.malloc(sizeof(Ptr{Ptr{p8est_connectivity_t}})))
-        ps4est = GC.@preserve cnn p8est_load_ext("p",MPI.COMM_WORLD,Cint(0),Cint(0),Cint(1),Cint(0),C_NULL,cnn)
+        p4est = GC.@preserve cnn p8est_load_ext("p",MPI.COMM_WORLD,Cint(0),Cint(0),Cint(1),Cint(0),C_NULL,cnn)
     end
     cd(pro_path)
-    return ps4est
+    return p4est
 end

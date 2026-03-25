@@ -2,18 +2,18 @@
 $(TYPEDSIGNATURES)
 Update residuals.
 """
-function residual_check!(ps_data::PS_Data,prim::Vector{Float64},global_data::Global_Data)
-    Res = global_data.status.residual
-    global_data.status.step%global_data.config.solver.ST_CHECK_INTERVAL!=0&&(return nothing)
+function residual_check!(ps_data::PsData,prim::Vector{Float64},kinfo::KInfo)
+    Res = kinfo.status.residual
+    kinfo.status.step%kinfo.config.solver.ST_CHECK_INTERVAL!=0&&(return nothing)
     @. Res.sumRes+=(prim-ps_data.prim).^2
     @. Res.sumAvg+=abs(prim)
     return nothing
 end
-function residual_comm!(global_data::Global_Data)
-    Res = global_data.status.residual
-    fp = PointerWrapper(global_data.forest.p4est)
+function residual_comm!(kinfo::KInfo)
+    Res = kinfo.status.residual
+    fp = PointerWrapper(kinfo.forest.p4est)
     N = fp.global_num_quadrants[]
-    global_data.status.step%global_data.config.solver.ST_CHECK_INTERVAL!=0&&(return nothing)
+    kinfo.status.step%kinfo.config.solver.ST_CHECK_INTERVAL!=0&&(return nothing)
     MPI.Reduce!(Res.sumRes,(x,y)->x.+y,0,MPI.COMM_WORLD)
     MPI.Reduce!(Res.sumAvg,(x,y)->x.+y,0,MPI.COMM_WORLD)
     if MPI.Comm_rank(MPI.COMM_WORLD)==0
@@ -26,55 +26,55 @@ end
 $(SIGNATURES)
 Check whether the `residual` and `redundant_step` in [`Status`](@ref) satisfies the convergence criterion.
 """
-function check_for_convergence(amr::KitAMR_Data)
-    maximum(amr.global_data.status.residual.residual)<amr.global_data.config.solver.TOLERANCE&&(amr.global_data.status.residual.redundant_step+=1)
-    return amr.global_data.status.residual.redundant_step>amr.global_data.config.solver.REDUNDANT_STEPS_NUM
+function check_for_convergence(ka::KA)
+    maximum(ka.kinfo.status.residual.residual)<ka.kinfo.config.solver.TOLERANCE&&(ka.kinfo.status.residual.redundant_step+=1)
+    return ka.kinfo.status.residual.redundant_step>ka.kinfo.config.solver.REDUNDANT_STEPS_NUM
 end
 
 
-function finalize_ghost!(ghost_exchange::Ghost_Exchange)
+function finalize_ghost!(ghost_pointers::GhostPointers)
     id = P4est.package_id()
-    sc_free(id, ghost_exchange.ghost_datas)
-    sc_free(id, ghost_exchange.ghost_slopes)
-    sc_free(id, ghost_exchange.ghost_structures)
-    for i in eachindex(ghost_exchange.mirror_data_pointers)
-        sc_free(id, ghost_exchange.mirror_data_pointers[i])
-        sc_free(id, ghost_exchange.mirror_slope_pointers[i])
-        sc_free(id, ghost_exchange.mirror_structure_pointers[i])
+    sc_free(id, ghost_pointers.ghost_datas)
+    sc_free(id, ghost_pointers.ghost_slopes)
+    sc_free(id, ghost_pointers.ghost_structures)
+    for i in eachindex(ghost_pointers.mirror_data_pointers)
+        sc_free(id, ghost_pointers.mirror_data_pointers[i])
+        sc_free(id, ghost_pointers.mirror_slope_pointers[i])
+        sc_free(id, ghost_pointers.mirror_structure_pointers[i])
     end
 end
-function finalize_p4est!(ps4est::Ptr{p4est_t}, amr::KitAMR_Data)
-    global_data = amr.global_data
-    p4est_ghost_destroy(global_data.forest.ghost)
-    p4est_mesh_destroy(global_data.forest.mesh)
-    pp = PointerWrapper(ps4est)
+function finalize_p4est!(p4est::Ptr{p4est_t}, ka::KA)
+    kinfo = ka.kinfo
+    p4est_ghost_destroy(kinfo.forest.ghost)
+    p4est_mesh_destroy(kinfo.forest.mesh)
+    pp = PointerWrapper(p4est)
     p4est_connectivity_destroy(pointer(pp.connectivity))
-    p4est_destroy(ps4est)
+    p4est_destroy(p4est)
 end
 
 """
 $(TYPEDSIGNATURES)
 """
-function finalize!(ps4est::Ptr{p4est_t}, amr::KitAMR_Data)
-    finalize_ghost!(amr.ghost.ghost_exchange)
-    finalize_p4est!(ps4est, amr)
+function finalize!(p4est::Ptr{p4est_t}, ka::KA)
+    finalize_ghost!(ka.kdata.ghost.ghost_pointers)
+    finalize_p4est!(p4est, ka)
     return nothing
 end
 
-function finalize_p4est!(ps4est::Ptr{p8est_t}, amr::KitAMR_Data)
-    global_data = amr.global_data
-    p8est_ghost_destroy(global_data.forest.ghost)
-    p8est_mesh_destroy(global_data.forest.mesh)
-    pp = PointerWrapper(ps4est)
+function finalize_p4est!(p4est::Ptr{p8est_t}, ka::KA)
+    kinfo = ka.kinfo
+    p8est_ghost_destroy(kinfo.forest.ghost)
+    p8est_mesh_destroy(kinfo.forest.mesh)
+    pp = PointerWrapper(p4est)
     p8est_connectivity_destroy(pointer(pp.connectivity))
-    p8est_destroy(ps4est)
+    p8est_destroy(p4est)
 end
 
 """
 $(TYPEDSIGNATURES)
 """
-function finalize!(ps4est::Ptr{p8est_t}, amr::KitAMR_Data)
-    finalize_ghost!(amr.ghost.ghost_exchange)
-    finalize_p4est!(ps4est, amr)
+function finalize!(p4est::Ptr{p8est_t}, ka::KA)
+    finalize_ghost!(ka.kdata.ghost.ghost_pointers)
+    finalize_p4est!(p4est, ka)
     return nothing
 end

@@ -1,7 +1,7 @@
-function pre_ps_refine_flag(boundary::AbstractCircle,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data) # Circle type IB boundary flag
-    boundary_flag(boundary,midpoint,ds,global_data)
+function pre_ps_refine_flag(boundary::AbstractCircle,midpoint::AbstractVector,ds::AbstractVector,kinfo::KInfo) # Circle type IB boundary flag
+    boundary_flag(boundary,midpoint,ds,kinfo)
 end
-function boundary_flag(boundary::Circle,midpoint::AbstractVector,ds::AbstractVector,::Global_Data) # Circle type IB boundary flag
+function boundary_flag(boundary::Circle,midpoint::AbstractVector,ds::AbstractVector,::KInfo) # Circle type IB boundary flag
     flag = 0
     for i = 1:4
         flag += norm(midpoint.+ds.*NMT[2][i].-boundary.center)>boundary.radius ? 1 : -1 # any neighbor cross boundary?
@@ -9,7 +9,7 @@ function boundary_flag(boundary::Circle,midpoint::AbstractVector,ds::AbstractVec
     abs(flag)==4 && return false
     return true
 end
-function boundary_flag(boundary::Sphere,midpoint::AbstractVector,ds::AbstractVector,::Global_Data) # Circle type IB boundary flag
+function boundary_flag(boundary::Sphere,midpoint::AbstractVector,ds::AbstractVector,::KInfo) # Circle type IB boundary flag
     flag = 0
     for i = 1:6
         flag += norm(midpoint.+ds.*NMT[3][i].-boundary.center)>boundary.radius ? 1 : -1 # any neighbor cross boundary?
@@ -20,8 +20,8 @@ end
 function solid_flag(boundary::AbstractCircle,midpoint::AbstractVector) # Does midpoint locate at solid?
     return xor(norm(midpoint.-boundary.center)>boundary.radius,boundary.solid)
 end
-function solid_cell_flag(boundary::AbstractCircle,midpoint::AbstractVector,ds::AbstractVector,global_data::Global_Data,inside::Bool) # Ghost nodes, those are inside solid domain and immediately adjacent the boundary.
-    (boundary_flag(boundary,midpoint,ds,global_data) && inside) && return true
+function solid_cell_flag(boundary::AbstractCircle,midpoint::AbstractVector,ds::AbstractVector,kinfo::KInfo,inside::Bool) # Ghost nodes, those are inside solid domain and immediately adjacent the boundary.
+    (boundary_flag(boundary,midpoint,ds,kinfo) && inside) && return true
     return false
 end
 function calc_IB_ρw(aux_point::AbstractVector,bound::Circle,midpoint::AbstractMatrix,weight::AbstractVector,df::AbstractMatrix,vn::AbstractVector,Θ::AbstractVector)

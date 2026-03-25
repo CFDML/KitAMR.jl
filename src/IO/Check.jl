@@ -2,24 +2,24 @@
 $(SIGNATURES)
 Perform a check procedure. Simulation status will be output every `ST_CHECK_INTERVAL` steps.
 """
-function check!(ps4est,amr)
-    if amr.global_data.status.step%amr.global_data.config.solver.ST_CHECK_INTERVAL==0
-        execute_check(ps4est,amr)
-        check_for_save!(ps4est,amr)
+function check!(p4est,ka)
+    if ka.kinfo.status.step%ka.kinfo.config.solver.ST_CHECK_INTERVAL==0
+        execute_check(p4est,ka)
+        check_for_save!(p4est,ka)
     end
 end
-function execute_check(ps4est,amr)
-    max_vs_num,total_phase_num = check_vs_num(amr)
+function execute_check(p4est,ka)
+    max_vs_num,total_phase_num = check_vs_num(ka)
     if MPI.Comm_rank(MPI.COMM_WORLD) == 0
-        println("Iteration: $(amr.global_data.status.step)")
-        sim_time = amr.global_data.status.sim_time
+        println("Iteration: $(ka.kinfo.status.step)")
+        sim_time = ka.kinfo.status.sim_time
         println("Simulation time: $sim_time")
-        res = maximum(amr.global_data.status.residual.residual)
+        res = maximum(ka.kinfo.status.residual.residual)
         println("Residual: $res")
-        ref_vs_num = amr.global_data.status.max_vs_num
+        ref_vs_num = ka.kinfo.status.max_vs_num
         println("MPI buffer size: $ref_vs_num")
         println("Maximum number of velocity grids: $max_vs_num")
-        pp = PointerWrapper(ps4est)
+        pp = PointerWrapper(p4est)
         global_num_quadrants = pp.global_num_quadrants[]
         println("Total number of physical grids: $global_num_quadrants")
         println("Total number of phase grids: $total_phase_num")
@@ -39,8 +39,8 @@ end
 $(SIGNATURES)
 Check whether `save` is input during the iteration. If the result is true, a saving process will be executed.
 """
-function check_for_save!(ps4est::P_pxest_t,amr;rank=0)
-    save_flag = amr.global_data.status.save_flag
+function check_for_save!(p4est::P_pxest_t,ka;rank=0)
+    save_flag = ka.kinfo.status.save_flag
     if MPI.Comm_rank(MPI.COMM_WORLD)==rank
         if bytesavailable(stdin)!=0
             input = readline(stdin)
@@ -52,17 +52,17 @@ function check_for_save!(ps4est::P_pxest_t,amr;rank=0)
     MPI.Bcast!(save_flag,rank,MPI.COMM_WORLD)
     if save_flag[] == true
         MPI.Comm_rank(MPI.COMM_WORLD)==rank&&println("saving...")
-        save_result(ps4est,amr)
+        save_result(p4est,ka)
         MPI.Comm_rank(MPI.COMM_WORLD)==rank&&println("done.")
         save_flag[] = false
     end
     return nothing
 end
-function check_for_animsave!(ps4est::Ptr{p4est_t},amr;path="./animation")
-    sim_time = amr.global_data.status.sim_time
-    output = amr.global_data.config.output
+function check_for_animsave!(p4est::Ptr{p4est_t},ka;path="./animation")
+    sim_time = ka.kinfo.status.sim_time
+    output = ka.kinfo.config.output
     if sim_time==0.
-        vertices,cells,point_solutions,solutions = pvtu_data(ps4est,amr,output.vtk_celltype)
+        vertices,cells,point_solutions,solutions = pvtu_data(p4est,ka,output.vtk_celltype)
         ranks = ones(Int,size(solutions,1))*MPI.Comm_rank(MPI.COMM_WORLD)
         step = output.anim_index
         if MPI.Comm_rank(MPI.COMM_WORLD)==0
@@ -95,13 +95,13 @@ function check_for_animsave!(ps4est::Ptr{p4est_t},amr;path="./animation")
             end
         end
         if output.vs_output_criterion!=null_udf
-            trees = amr.field.trees.data
+            trees = ka.kdata.field.trees.data
             for tree in trees
                 for ps_data in tree
                     (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0)&&continue
-                    id,flag = output.vs_output_criterion(;ps_data,amr)
+                    id,flag = output.vs_output_criterion(;ps_data,ka)
                     if flag
-                        vertices,cells,point_solutions,solutions = vtk_data(ps_data.vs_data,amr,output.vs_vtk_celltype)
+                        vertices,cells,point_solutions,solutions = vtk_data(ps_data.vs_data,ka,output.vs_vtk_celltype)
                         paraview_collection(path*"/id$(id)vs";append=step!=0) do pvd
                             vtk_grid(path*"/id$(id)step$(step)vs",vertices,cells) do vtk
                                 vtk["df"] = @views Tuple([v for v in eachcol(solutions)])
@@ -115,7 +115,7 @@ function check_for_animsave!(ps4est::Ptr{p4est_t},amr;path="./animation")
             end
         end
     elseif div(sim_time,output.anim_dt)==output.anim_index+1
-        vertices,cells,point_solutions,solutions = pvtu_data(ps4est,amr,output.vtk_celltype)
+        vertices,cells,point_solutions,solutions = pvtu_data(p4est,ka,output.vtk_celltype)
         ranks = ones(Int,size(solutions,1))*MPI.Comm_rank(MPI.COMM_WORLD)
         step = output.anim_index+1
         if MPI.Comm_rank(MPI.COMM_WORLD)==0
@@ -148,13 +148,13 @@ function check_for_animsave!(ps4est::Ptr{p4est_t},amr;path="./animation")
             end
         end
         if output.vs_output_criterion!=null_udf
-            trees = amr.field.trees.data
+            trees = ka.kdata.field.trees.data
             for tree in trees
                 for ps_data in tree
                     (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0)&&continue
-                    id,flag = output.vs_output_criterion(;ps_data,amr)
+                    id,flag = output.vs_output_criterion(;ps_data,ka)
                     if flag
-                        vertices,cells,point_solutions,solutions = vtk_data(ps_data.vs_data,amr,output.vs_vtk_celltype)
+                        vertices,cells,point_solutions,solutions = vtk_data(ps_data.vs_data,ka,output.vs_vtk_celltype)
                         paraview_collection(path*"/id$(id)vs";append=step!=1) do pvd
                             vtk_grid(path*"/id$(id)step$(step)vs",vertices,cells) do vtk
                                 vtk["df"] = @views Tuple([v for v in eachcol(solutions)])
@@ -171,8 +171,8 @@ function check_for_animsave!(ps4est::Ptr{p4est_t},amr;path="./animation")
     end
 end
 
-function check_vs_num(amr::KitAMR_Data)
-    trees = amr.field.trees.data
+function check_vs_num(ka::KA)
+    trees = ka.kdata.field.trees.data
     buffer = zeros(Int,2) # [max,total]
     for tree in trees
         for ps_data in tree

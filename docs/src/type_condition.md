@@ -5,7 +5,7 @@ To launch a simulation, initial and boundary conditions are necessary.
 ## Initial conditions
 The types of initial conditions are abstracted as 
 ```@docs
-AbstractInitCondType
+AbstractInitCond
 ```
 Currently, available options are
 ```@docs
@@ -19,7 +19,7 @@ PCoordFn
 ## Boundary conditions
 The type of the boundary conditions is determined by 
 ```@docs
-AbstractBoundCondType
+AbstractBoundCond
 ```
 Currently, available options are
 ```@docs
@@ -48,7 +48,7 @@ Period
 
 With these types of boundary conditions, 
 ```@docs
-AbstractBoundaryType
+AbstractBoundary
 ```
 can be constructed. There are two types of the boundary.
 ### Domain boundary
@@ -78,14 +78,14 @@ Vertices
 ```
 The most common constructor is
 ```@docs
-Vertices(::Type{T},file::String,solid,refine_coeffi,bc) where{T<:KitAMR.AbstractBoundCondType}
+Vertices(::Type{T},file::String,solid,refine_coeffi,bc) where{T<:KitAMR.AbstractBoundCond}
 ```
 ```@docs
 Triangles
 ```
 The most common constructor is
 ```@docs
-Triangles(::Type{T},file::String,solid,search_radius,bc) where{T<:KitAMR.AbstractBoundCondType}
+Triangles(::Type{T},file::String,solid,search_radius,bc) where{T<:KitAMR.AbstractBoundCond}
 ```
 `TriangleKDT` is a struct containing information related to K-D tree for efficient mesh generation:
 ```@docs

@@ -40,29 +40,29 @@ config = Configure(solver;
 )
 
 
-ps4est,amr = initialize_KitAMR(config);
+p4est,ka = initialize_KitAMR(config);
 listen_for_save!()
 max_sim_time = 20.
-nt = max_sim_time/amr.global_data.status.Δt+1.0 |> floor |> Int
+nt = max_sim_time/ka.kinfo.status.Δt+1.0 |> floor |> Int
 for i in 1:nt
-    adaptive_mesh_refinement!(ps4est,amr;partition_interval=160)
-    update_slope!(amr)
-    slope_exchange!(ps4est, amr) 
-    update_solid_cell!(amr)
-    solid_exchange!(ps4est, amr)
-    update_solid_neighbor!(amr)
-    slope_exchange!(ps4est, amr) 
-    flux!(amr) 
-    iterate!(amr) 
-    data_exchange!(ps4est, amr)
-    check_for_convergence(amr)&&break
-    check!(ps4est,amr)
-    # KitAMR.check_for_animsave!(ps4est,amr)
-    # if amr.global_data.status.sim_time>3.0
+    adaptive_mesh_refinement!(p4est,ka;partition_interval=160)
+    update_slope!(ka)
+    slope_exchange!(p4est, ka) 
+    update_solid_cell!(ka)
+    solid_exchange!(p4est, ka)
+    update_solid_neighbor!(ka)
+    slope_exchange!(p4est, ka) 
+    flux!(ka) 
+    iterate!(ka) 
+    data_exchange!(p4est, ka)
+    check_for_convergence(ka)&&break
+    check!(p4est,ka)
+    # KitAMR.check_for_animsave!(p4est,ka)
+    # if ka.kinfo.status.sim_time>3.0
     #     break
     # end
 end
-save_result(ps4est,amr)
-finalize!(ps4est,amr)
+save_result(p4est,ka)
+finalize!(p4est,ka)
 MPI.Finalize()
 

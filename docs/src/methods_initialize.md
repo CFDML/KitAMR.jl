@@ -8,7 +8,7 @@ initialize_ghost
 ```
 ---
 ```@docs
-initialize_field!
+initialize_trees!
 ```
 In this function, `p4est` is initialized. Mesh (in both physical and velocity space) is generated and adaptively refined. Field (in both physical and velocity space) is initialized according to initial conditions. Mapping between `Julia` data and `p4est` is established.
 Currently, realizations for 2D and 3D cases are different. The method for 3D case can be more complicated but more efficient. The method for 2D will be improved to be consistent with the 3D case.
@@ -17,7 +17,7 @@ Currently, realizations for 2D and 3D cases are different. The method for 3D cas
 ```@docs
 initialize_ps!
 ```
-Initialize [`PS_Data`](@ref) and establish the mapping between `Julia` data and `p4est`.
+Initialize [`PsData`](@ref) and establish the mapping between `Julia` data and `p4est`.
 
 ---
 ```@docs
@@ -49,7 +49,7 @@ Initialize the mesh in `p4est` that is used to look up the neighboring cell in p
 ```@docs
 initialize_neighbor_data!
 ```
-Initialize [`Neighbor`](@ref) in [`PS_Data`](@ref).
+Initialize [`Neighbor`](@ref) in [`PsData`](@ref).
 
 ---
 ```@docs

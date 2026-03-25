@@ -6,48 +6,48 @@ heaviside(x::Real) = ifelse(x >= 0, one(x), zero(x))
 $(TYPEDSIGNATURES)
 Get primary macroscopic variables from the conserved variables.
 """
-function get_prim(ps_data::PS_Data{2,NDF}, global_data::Global_Data{2,NDF}) where {NDF}
-    get_prim_2D(ps_data.w, global_data.config.gas.γ)
+function get_prim(ps_data::PsData{2,NDF}, kinfo::KInfo{2,NDF}) where {NDF}
+    get_prim_2D(ps_data.w, kinfo.config.gas.γ)
 end
-function get_prim(w::AbstractVector, global_data::Global_Data{2,NDF}) where {NDF}
-    get_prim_2D(w, global_data.config.gas.γ)
+function get_prim(w::AbstractVector, kinfo::KInfo{2,NDF}) where {NDF}
+    get_prim_2D(w, kinfo.config.gas.γ)
 end
-function get_prim(ps_data::PS_Data{3,NDF}, global_data::Global_Data{3,NDF}) where {NDF}
-    get_prim_3D(ps_data.w, global_data.config.gas.γ)
+function get_prim(ps_data::PsData{3,NDF}, kinfo::KInfo{3,NDF}) where {NDF}
+    get_prim_3D(ps_data.w, kinfo.config.gas.γ)
 end
-function get_prim(w::AbstractVector, global_data::Global_Data{3,NDF}) where {NDF}
-    get_prim_3D(w, global_data.config.gas.γ)
+function get_prim(w::AbstractVector, kinfo::KInfo{3,NDF}) where {NDF}
+    get_prim_3D(w, kinfo.config.gas.γ)
 end
 
 """
 $(TYPEDSIGNATURES)
 Get conserved macroscopic variables from the primary variables.
 """
-function get_conserved(ps_data::PS_Data{2,NDF}, global_data::Global_Data) where {NDF}
-    get_conserved_2D(ps_data.prim, global_data.config.gas.γ)
+function get_conserved(ps_data::PsData{2,NDF}, kinfo::KInfo) where {NDF}
+    get_conserved_2D(ps_data.prim, kinfo.config.gas.γ)
 end
-function get_conserved(ps_data::PS_Data{3,NDF}, global_data::Global_Data) where {NDF}
-    get_conserved_3D(ps_data.prim, global_data.config.gas.γ)
+function get_conserved(ps_data::PsData{3,NDF}, kinfo::KInfo) where {NDF}
+    get_conserved_3D(ps_data.prim, kinfo.config.gas.γ)
 end
 
-function get_conserved(prim::AbstractVector, global_data::Global_Data{2,NDF}) where {NDF}
-    get_conserved_2D(prim, global_data.config.gas.γ)
+function get_conserved(prim::AbstractVector, kinfo::KInfo{2,NDF}) where {NDF}
+    get_conserved_2D(prim, kinfo.config.gas.γ)
 end
-function get_conserved(prim::AbstractVector, global_data::Global_Data{3,NDF}) where {NDF}
-    get_conserved_3D(prim, global_data.config.gas.γ)
+function get_conserved(prim::AbstractVector, kinfo::KInfo{3,NDF}) where {NDF}
+    get_conserved_3D(prim, kinfo.config.gas.γ)
 end
 
 """
 $(TYPEDSIGNATURES)
 Caculate the discretized Maxwellian distribution according to the primary macroscopic variables.
 """
-function discrete_maxwell(ps_data::PS_Data, global_data::Global_Data)
-    discrete_maxwell(ps_data.vs_data.midpoint, ps_data.prim, global_data)
+function discrete_maxwell(ps_data::PsData, kinfo::KInfo)
+    discrete_maxwell(ps_data.vs_data.midpoint, ps_data.prim, kinfo)
 end
 function discrete_maxwell(
     midpoint::AbstractMatrix,
     prim::AbstractVector,
-    ::Global_Data{3,1},
+    ::KInfo{3,1},
 )
     discrete_maxwell_3D1F(
         @view(midpoint[:, 1]),
@@ -60,19 +60,19 @@ end
 function discrete_maxwell(
     midpoint::AbstractMatrix,
     prim::AbstractVector,
-    global_data::Global_Data{2,2},
+    kinfo::KInfo{2,2},
 )
     discrete_maxwell_2D2F(
         @view(midpoint[:, 1]),
         @view(midpoint[:, 2]),
         prim,
-        global_data.config.gas.K,
+        kinfo.config.gas.K,
     )
 end
 function discrete_maxwell(
     midpoint::AbstractVector,
     prim::AbstractVector,
-    ::Global_Data{3,1},
+    ::KInfo{3,1},
 )
     discrete_maxwell_3D1F(
         midpoint[1],
@@ -81,12 +81,12 @@ function discrete_maxwell(
         prim,
     )
 end
-function discrete_maxwell(midpoint::AbstractVector,prim::AbstractVector,global_data::Global_Data{2,2})
+function discrete_maxwell(midpoint::AbstractVector,prim::AbstractVector,kinfo::KInfo{2,2})
     discrete_maxwell_2D2F(
         midpoint[1],
         midpoint[2],
         prim,
-        global_data.config.gas.K,
+        kinfo.config.gas.K,
     )
 end
 
@@ -99,7 +99,7 @@ function shakhov_part(
     F::AbstractMatrix,
     prim::AbstractVector,
     qf::AbstractVector,
-    global_data::Global_Data{2,2},
+    kinfo::KInfo{2,2},
 )
     shakhov_part_2D2F(
         @view(midpoint[:, 1]),
@@ -108,8 +108,8 @@ function shakhov_part(
         @view(F[:, 2]),
         prim,
         qf,
-        global_data.config.gas.Pr,
-        global_data.config.gas.K,
+        kinfo.config.gas.Pr,
+        kinfo.config.gas.K,
     )
 end
 function shakhov_part(
@@ -117,7 +117,7 @@ function shakhov_part(
     F::T,
     prim::AbstractVector,
     qf::AbstractVector,
-    global_data::Global_Data{2,2},
+    kinfo::KInfo{2,2},
 ) where{T<:Union{Tuple,AbstractVector}}
     shakhov_part_2D2F(
         midpoint[1],
@@ -126,8 +126,8 @@ function shakhov_part(
         F[2],
         prim,
         qf,
-        global_data.config.gas.Pr,
-        global_data.config.gas.K,
+        kinfo.config.gas.Pr,
+        kinfo.config.gas.K,
     )
 end
 
@@ -136,7 +136,7 @@ function shakhov_part(
     F::AbstractMatrix,
     prim::AbstractVector,
     qf::AbstractVector,
-    global_data::Global_Data{3,1},
+    kinfo::KInfo{3,1},
 )
     @views shakhov_part_3D1F(
         midpoint[:, 1],
@@ -145,7 +145,7 @@ function shakhov_part(
         F[:,1],
         prim,
         qf,
-        global_data.config.gas.Pr,
+        kinfo.config.gas.Pr,
     )
 end
 
@@ -178,22 +178,22 @@ end
 $(TYPEDSIGNATURES)
 Calculate the conserved macroscopic variables according to the microscopic distribution.
 """
-function calc_w0(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{2,2})
+function calc_w0(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::KInfo{2,2})
     @views micro_to_macro_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],weight)
 end
-function calc_w0(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{3,1})
+function calc_w0(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::KInfo{3,1})
     @views micro_to_macro_3D1F(midpoint[:,1],midpoint[:,2],midpoint[:,3],df[:,1],weight)
 end
-function calc_qf(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,prim::AbstractVector,::Global_Data{2,2})
+function calc_qf(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,prim::AbstractVector,::KInfo{2,2})
     @views heat_flux_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],prim,weight)
 end
-function calc_qf(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,prim::AbstractVector,::Global_Data{3,1})
+function calc_qf(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,prim::AbstractVector,::KInfo{3,1})
     @views heat_flux_3D1F(midpoint[:,1],midpoint[:,2],midpoint[:,3],df[:,1],prim,weight)
 end
-function calc_pressure(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{2})
+function calc_pressure(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::KInfo{2})
     @views pressure_2D(midpoint[:,1],midpoint[:,2],df[:,1],weight)
 end
-function calc_pressure(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{3})
+function calc_pressure(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::KInfo{3})
     @views pressure_3D(midpoint[:,1],midpoint[:,2],midpoint[:,3],df[:,1],weight)
 end
 function calc_ρw(
@@ -204,7 +204,7 @@ function calc_ρw(
     there_vn::AbstractVector,
     here_weight,
     there_weight,
-    ::KitAMR_Data{2,2}
+    ::KA{2,2}
 )
     @inbounds @views SF = sum(@. here_weight * here_vn * here_df[:,1])
     @inbounds @views SG =
@@ -220,7 +220,7 @@ function calc_ρw(
     there_vn::AbstractVector,
     here_weight,
     there_weight,
-    ::KitAMR_Data{3,1}
+    ::KA{3,1}
 )
     @inbounds @views SF = sum(@. here_weight * here_vn * here_df[:,1])
     @inbounds @views SG =
@@ -229,7 +229,7 @@ function calc_ρw(
     return -SF / SG
 end
 function calc_ρw(
-    vs_data::VS_Data{2,2},
+    vs_data::VsData{2,2},
     df0::AbstractMatrix,
     prim0::AbstractVector,
     Θ::AbstractVector,
@@ -246,7 +246,7 @@ function calc_ρw(
     )
 end
 function calc_ρw(
-    vs_data::VS_Data{3,1},
+    vs_data::VsData{3,1},
     f0::AbstractMatrix,
     prim0::AbstractVector,
     Θ::AbstractVector,
@@ -264,7 +264,7 @@ function calc_ρw(
     )
 end
 
-function calc_fwb(vs_data::VS_Data{2,2}, F::AbstractMatrix, vn::AbstractVector)
+function calc_fwb(vs_data::VsData{2,2}, F::AbstractMatrix, vn::AbstractVector)
     @inbounds macro_flux_2D2F(
         @view(vs_data.midpoint[:, 1]),
         @view(vs_data.midpoint[:, 2]),
@@ -274,7 +274,7 @@ function calc_fwb(vs_data::VS_Data{2,2}, F::AbstractMatrix, vn::AbstractVector)
         vn,
     )
 end
-function calc_fwb(vs_data::VS_Data{3,1}, F::AbstractMatrix, vn::AbstractVector)
+function calc_fwb(vs_data::VsData{3,1}, F::AbstractMatrix, vn::AbstractVector)
     @inbounds macro_flux_3D1F(
         @view(vs_data.midpoint[:, 1]),
         @view(vs_data.midpoint[:, 2]),
@@ -313,34 +313,34 @@ function calc_a(
     cRw,
     dxL::Real,
     dxR,
-    global_data::Global_Data{DIM},
+    kinfo::KInfo{DIM},
     rot::Real,
 ) where {T,DIM}
     sw = Vector{T}(undef, DIM+2)
     @. sw = rot * (cLw - w0) / (0.5 * dxL)
-    aL = micro_slope(sw, prim0, global_data)
+    aL = micro_slope(sw, prim0, kinfo)
     @. sw = rot * (w0 - cRw) / (0.5 * dxR)
-    aR = micro_slope(sw, prim0, global_data)
+    aR = micro_slope(sw, prim0, kinfo)
     (aL, aR)
 end
 
-function micro_slope(sw::AbstractVector, prim::AbstractVector, global_data::Global_Data{2})
-    micro_slope_2D(sw, prim, global_data.config.gas.K)
+function micro_slope(sw::AbstractVector, prim::AbstractVector, kinfo::KInfo{2})
+    micro_slope_2D(sw, prim, kinfo.config.gas.K)
 end
-function micro_slope(sw::AbstractVector, prim::AbstractVector, global_data::Global_Data{3})
-    micro_slope_3D(sw, prim, global_data.config.gas.K)
+function micro_slope(sw::AbstractVector, prim::AbstractVector, kinfo::KInfo{3})
+    micro_slope_3D(sw, prim, kinfo.config.gas.K)
 end
 
 function moment_u(
     prim0::AbstractVector,
-    global_data::Global_Data{2,2},
+    kinfo::KInfo{2,2},
     ROT::Real,
     DIR::Integer,
 )
     @inbounds U = prim0[DIR+1]
     V = prim0[FAT[1][DIR]+1]
     λ = prim0[4]
-    Mu, Mv, Mξ, Mu_L, Mu_R = moment_u_2D2F(U, V, λ, 6, 4, global_data.config.gas.K)
+    Mu, Mv, Mξ, Mu_L, Mu_R = moment_u_2D2F(U, V, λ, 6, 4, kinfo.config.gas.K)
     if DIR == 1
         MU = Mu
         MV = Mv
@@ -351,7 +351,7 @@ function moment_u(
     ROT < 0 && return (MU, MV, Mξ, Mu_L, Mu_R)
     return (MU, MV, Mξ, Mu_R, Mu_L)
 end
-function moment_u(prim0::AbstractVector, ::Global_Data{3,1}, ROT::Real, DIR::Integer)
+function moment_u(prim0::AbstractVector, ::KInfo{3,1}, ROT::Real, DIR::Integer)
     @inbounds begin
         U = prim0[DIR+1]
         V = prim0[FAT[2][DIR][1]+1]
@@ -384,7 +384,7 @@ function calc_A(
     Mξ,
     Mu_L,
     Mu_R,
-    global_data::Global_Data{2,2},
+    kinfo::KInfo{2,2},
     dir::Int,
 )
     if dir == 1
@@ -395,7 +395,7 @@ function calc_A(
         Mau_R = moment_au_2D2F(aR, Mv, Mu_R, Mξ, 0, 1)
     end
     @inbounds sw = -prim[1] * (Mau_L + Mau_R)
-    micro_slope(sw, prim, global_data)
+    micro_slope(sw, prim, kinfo)
 end
 function calc_A(
     prim::AbstractVector,
@@ -406,7 +406,7 @@ function calc_A(
     Mw,
     Mu_L,
     Mu_R,
-    global_data::Global_Data{3,1},
+    kinfo::KInfo{3,1},
     dir::Int,
 )
     if dir == 1
@@ -420,7 +420,7 @@ function calc_A(
         Mau_R = moment_au_3D1F(aR, Mu, Mv, Mu_R, 0, 0, 1)
     end
     @inbounds sw = -prim[1] * (Mau_L + Mau_R)
-    micro_slope(sw, prim, global_data)
+    micro_slope(sw, prim, kinfo)
 end
 
 function calc_flux_f0_2D2F(prim,Mt,Mu,Mv,Mξ,a,A)
@@ -518,7 +518,7 @@ function calc_flux_f0_3D1F(u::AbstractVector{T}, v, w, f, sf, weight, F⁺, vn, 
 end
 
 
-function calc_unified_ft(midpoint::AbstractMatrix,df::AbstractMatrix,sdf::AbstractMatrix,F::AbstractMatrix,F⁺::AbstractMatrix,ax,at,Mξ,Mt,dir,::Global_Data{2,2})
+function calc_unified_ft(midpoint::AbstractMatrix,df::AbstractMatrix,sdf::AbstractMatrix,F::AbstractMatrix,F⁺::AbstractMatrix,ax,at,Mξ,Mt,dir,::KInfo{2,2})
     f = similar(df);vn = @views midpoint[:,dir]
     u = @views midpoint[:,1];v = @views midpoint[:,2];h = @views df[:,1];b = @views df[:,2]
     sh = @views sdf[:,1]; sb = @views sdf[:,2]

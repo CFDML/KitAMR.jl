@@ -1,7 +1,7 @@
 function pre_partition_box_weight(p4est::P_pxest_t,which_tree,quadrant)
     fp = PointerWrapper(p4est)
-    global_data = unsafe_pointer_to_objref(pointer(fp.user_pointer))
-    ibs = global_data.config.IB
+    kinfo = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+    ibs = kinfo.config.IB
     qp = PointerWrapper(quadrant)
     ds,midpoint = quad_to_cell(p4est,which_tree,qp)
     for ib in ibs
@@ -19,7 +19,7 @@ function meshed_partition!(p4est::P_pxest_t,trees_data)
     up_datas, down_datas =
         static_data_partition_transfer(sends, s_datas, receives, receive_nums)
     up_ps_datas,down_ps_datas = static_data_unpack_data(up_datas,down_datas)
-    ti_data = Transfer_Init(
+    ti_data = TransferInit(
         length(up_ps_datas),
         length(down_ps_datas),
         up_ps_datas,
@@ -68,7 +68,7 @@ end
 function static_data_init_up_quadrants!(ip,dp,ti_data,tree_datas)
     ti_data.up_index > ti_data.up_num && return nothing
     ps_data = ti_data.up_data[ti_data.up_index]
-    dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
+    dp[] = P4estPsData(pointer_from_objref(ps_data))
     if ip.treeid[] < ti_data.old_flt||ti_data.old_flt==-1 # For empty processor, flt=-1 and llt = -2.
         push!(tree_datas, ps_data)
     else
@@ -82,7 +82,7 @@ function static_data_init_down_quadrants!(ip,dp,ti_data,tree_datas)
     local_quadid(ip) < (ip.p4est.local_num_quadrants[] - ti_data.down_num) &&
         return nothing
     ps_data = ti_data.down_data[ti_data.down_index]
-    dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
+    dp[] = P4estPsData(pointer_from_objref(ps_data))
     push!(tree_datas, ps_data)
     ti_data.down_index += 1
     return nothing
@@ -212,7 +212,7 @@ $(TYPEDSIGNATURES)
 """
 function partition_weight(p4est::P_pxest_t,which_tree,quadrant::P_pxest_quadrant_t)
     qp = PointerWrapper(quadrant)
-    dp = PointerWrapper(P4est_PS_Data,qp.p.user_data[])
+    dp = PointerWrapper(P4estPsData,qp.p.user_data[])
     ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
     isa(ps_data,InsideSolidData)&&return Cint(0)
     # ps_data.bound_enc>0&&return Cint(2*ps_data.vs_data.vs_num)
@@ -312,7 +312,7 @@ function get_receive_send(src_gfq::Vector, dest_gfq::Vector)
     return receives, sends, receive_nums, send_nums
 end
 function up_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::Vector)
-    s_datas = Vector{Transfer_Data{DIM,NDF}}(undef, 0)
+    s_datas = Vector{TransferData{DIM,NDF}}(undef, 0)
     s_vs_numss = Vector{Vector{Int}}(undef, 0)
     send_index = 1
     index = 1
@@ -343,7 +343,7 @@ function up_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::Vec
             end
             index += 1
             if index > send_nums[send_index]
-                push!(s_datas, Transfer_Data{DIM,NDF}(encs, ws, vs_levels, vs_midpoints, vs_df))
+                push!(s_datas, TransferData{DIM,NDF}(encs, ws, vs_levels, vs_midpoints, vs_df))
                 push!(s_vs_numss, s_vs_nums)
                 index = 1
                 send_index += 1
@@ -362,7 +362,7 @@ function up_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::Vec
     return s_vs_numss, s_datas
 end
 function down_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::Vector)
-    s_datas = Vector{Transfer_Data{DIM,NDF}}(undef, 0)
+    s_datas = Vector{TransferData{DIM,NDF}}(undef, 0)
     s_vs_numss = Vector{Vector{Int}}(undef, 0)
     send_index = length(sends)
     index = send_nums[send_index]
@@ -392,7 +392,7 @@ function down_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::V
             end
             index -= 1
             if index < 1
-                pushfirst!(s_datas, Transfer_Data{DIM,NDF}(encs, ws, vs_levels, vs_midpoints, vs_df))
+                pushfirst!(s_datas, TransferData{DIM,NDF}(encs, ws, vs_levels, vs_midpoints, vs_df))
                 pushfirst!(s_vs_numss, s_vs_nums)
                 send_index -= 1
                 send_index < 1 && break
@@ -410,9 +410,9 @@ function down_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::V
     end
     return s_vs_numss, s_datas
 end
-function transfer_wrap(sends::Vector, send_nums::Vector, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
-    isempty(sends) && return Vector{Vector{Int}}(undef, 0), Vector{Transfer_Data{DIM,NDF}}(undef, 0)
-    trees = amr.field.trees.data
+function transfer_wrap(sends::Vector, send_nums::Vector, ka::KA{DIM,NDF}) where{DIM,NDF}
+    isempty(sends) && return Vector{Vector{Int}}(undef, 0), Vector{TransferData{DIM,NDF}}(undef, 0)
+    trees = ka.kdata.field.trees.data
     up_vs_numss, up_datas = up_transfer_wrap(DIM,NDF,sends, send_nums, trees)
     down_vs_numss, down_datas = down_transfer_wrap(DIM,NDF,sends, send_nums, trees)
     append!(up_vs_numss, down_vs_numss)
@@ -491,7 +491,7 @@ function pre_transfer(
 end
 function transfer(
     sends::Vector{Int},
-    s_datas::Vector{Transfer_Data{DIM,NDF}},
+    s_datas::Vector{TransferData{DIM,NDF}},
     receives::Vector{Int},
     receive_nums::Vector{Int},
     r_vs_numss::Vector,
@@ -534,10 +534,10 @@ function transfer(
         )
         push!(reqs, sreq)
     end
-    r_datas = Vector{Transfer_Data{DIM,NDF}}(undef, 0)
+    r_datas = Vector{TransferData{DIM,NDF}}(undef, 0)
     for i in eachindex(receives)
         total_vs_num = sum(r_vs_numss[i])
-        r_data = Transfer_Data(DIM,NDF,receive_nums[i], total_vs_num)
+        r_data = TransferData(DIM,NDF,receive_nums[i], total_vs_num)
         rreq = MPI.Irecv!(
             r_data.encs,
             MPI.COMM_WORLD;
@@ -587,17 +587,17 @@ end
 function partition_transfer(
     sends::Vector{Int},
     s_vs_numss::Vector,
-    s_datas::Vector{Transfer_Data{DIM,NDF}},
+    s_datas::Vector{TransferData{DIM,NDF}},
     receives::Vector{Int},
     receive_nums::Vector{Int},
 )where{DIM,NDF}
     r_vs_numss = pre_transfer(sends, s_vs_numss, receives, receive_nums)
     transfer(sends, s_datas, receives, receive_nums, r_vs_numss)
 end
-function unpack_data(vs_nums, data, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
+function unpack_data(vs_nums, data, ka::KA{DIM,NDF}) where{DIM,NDF}
     transfer_ps_datas = Vector{AbstractPsData{DIM,NDF}}(undef, length(vs_nums))
-    quadrature = amr.global_data.config.quadrature
-    vs_trees_num = reduce(*, amr.global_data.config.vs_trees_num)
+    quadrature = ka.kinfo.config.quadrature
+    vs_trees_num = reduce(*, ka.kinfo.config.vs_trees_num)
     vs_space = 1.0
     for i = 1:DIM
         vs_space *= quadrature[2*i] - quadrature[2*i-1]
@@ -611,13 +611,13 @@ function unpack_data(vs_nums, data, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
         else
             encs = data.encs[(SOLID_CELL_ID_NUM+1)*(i-1)+1:(SOLID_CELL_ID_NUM+1)*i]
             w = data.w[(DIM+2)*(i-1)+1:(DIM+2)*i]
-            prim = get_prim(w,amr.global_data)
+            prim = get_prim(w,ka.kinfo)
             vs_levels = data.vs_levels[offset+1:offset+vs_num]
             vs_midpoints =
                 reshape(data.vs_midpoints[DIM*offset+1:DIM*(offset+vs_num)], vs_num, DIM)
             vs_df = reshape(data.vs_df[NDF*offset+1:NDF*(offset+vs_num)], vs_num, NDF)
             vs_weight = @. tree_weight / 2.0^(DIM * vs_levels)
-            vs_data = VS_Data{DIM,NDF}(
+            vs_data = VsData{DIM,NDF}(
                 vs_num,
                 vs_levels,
                 vs_weight,
@@ -626,30 +626,30 @@ function unpack_data(vs_nums, data, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
                 zeros(vs_num, NDF, DIM),
                 zeros(vs_num, NDF),
             )
-            transfer_ps_datas[i] = PS_Data(DIM,NDF;bound_enc=encs[1],solid_cell_index=encs[2:SOLID_CELL_ID_NUM+1],w, prim, vs_data)
+            transfer_ps_datas[i] = PsData(DIM,NDF;bound_enc=encs[1],solid_cell_index=encs[2:SOLID_CELL_ID_NUM+1],w, prim, vs_data)
         end
         offset += vs_num
     end
     return transfer_ps_datas
 end
-function unpack_data(up_vs_numss, down_vs_numss, up_datas, down_datas, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
+function unpack_data(up_vs_numss, down_vs_numss, up_datas, down_datas, ka::KA{DIM,NDF}) where{DIM,NDF}
     up_ps_datas = Vector{AbstractPsData{DIM,NDF}}(undef, 0)
     down_ps_datas = Vector{AbstractPsData{DIM,NDF}}(undef, 0)
     for i in eachindex(up_vs_numss)
-        append!(up_ps_datas, unpack_data(up_vs_numss[i], up_datas[i], amr))
+        append!(up_ps_datas, unpack_data(up_vs_numss[i], up_datas[i], ka))
     end
     for i in eachindex(down_vs_numss)
-        append!(down_ps_datas, unpack_data(down_vs_numss[i], down_datas[i], amr))
+        append!(down_ps_datas, unpack_data(down_vs_numss[i], down_datas[i], ka))
     end
     return up_ps_datas, down_ps_datas
 end
-function init_up_quadrants!(ip, dp, ti_data::Transfer_Init, treeid::Integer, tree_datas)
+function init_up_quadrants!(ip, dp, ti_data::TransferInit, treeid::Integer, tree_datas)
     ti_data.up_index > ti_data.up_num && return nothing
     ps_data = ti_data.up_data[ti_data.up_index]
     if !isa(ps_data,InsideSolidData)
         ps_data.ds, ps_data.midpoint = quad_to_cell(ip.p4est, treeid, ip.quad)
     end
-    dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
+    dp[] = P4estPsData(pointer_from_objref(ps_data))
     if treeid < ti_data.old_flt||ti_data.old_flt==-1
         push!(tree_datas, ps_data)
     else
@@ -659,32 +659,32 @@ function init_up_quadrants!(ip, dp, ti_data::Transfer_Init, treeid::Integer, tre
     ti_data.up_index += 1
     return nothing
 end
-function init_down_quadrants!(ip, dp, ti_data::Transfer_Init, treeid::Integer, tree_datas)
+function init_down_quadrants!(ip, dp, ti_data::TransferInit, treeid::Integer, tree_datas)
     local_quadid(ip) < (ip.p4est.local_num_quadrants[] - ti_data.down_num) &&
         return nothing
     ps_data = ti_data.down_data[ti_data.down_index]
     if !isa(ps_data,InsideSolidData)
         ps_data.ds, ps_data.midpoint = quad_to_cell(ip.p4est, treeid, ip.quad)
     end
-    dp[] = P4est_PS_Data(pointer_from_objref(ps_data))
+    dp[] = P4estPsData(pointer_from_objref(ps_data))
     push!(tree_datas, ps_data)
     ti_data.down_index += 1
     return nothing
 end
 function init_transferred_quadrant!(ip, data, dp)
     ti_data = unsafe_pointer_to_objref(data)
-    amr = unsafe_pointer_to_objref(pointer(ip.p4est.user_pointer))
-    trees = amr.field.trees
+    ka = unsafe_pointer_to_objref(pointer(ip.p4est.user_pointer))
+    trees = ka.kdata.field.trees
     treeid = ip.treeid[] - trees.offset
     tree_datas = trees.data[treeid]
     init_up_quadrants!(ip, dp, ti_data, ip.treeid[], tree_datas)
     init_down_quadrants!(ip, dp, ti_data, ip.treeid[], tree_datas)
 end
 function init_transferred_quadrant!(info, data)
-    AMR_volume_iterate(info, data, P4est_PS_Data, init_transferred_quadrant!)
+    AMR_volume_iterate(info, data, P4estPsData, init_transferred_quadrant!)
 end
-function init_transferred_quadrant!(p4est::P_pxest_t, ti_data::Transfer_Init, amr)
-    ghost = amr.global_data.forest.ghost
+function init_transferred_quadrant!(p4est::P_pxest_t, ti_data::TransferInit, ka)
+    ghost = ka.kinfo.forest.ghost
     p_data = pointer_from_objref(ti_data)
     GC.@preserve ti_data AMR_4est_volume_iterate(
         p4est,
@@ -693,12 +693,12 @@ function init_transferred_quadrant!(p4est::P_pxest_t, ti_data::Transfer_Init, am
         init_transferred_quadrant!,
     )
 end
-function init_transferred_ps!(p4est::P_pxest_t, ti_data::Transfer_Init, amr::KitAMR_Data)
-    insert_trees!(p4est, ti_data, amr)
-    init_transferred_quadrant!(p4est, ti_data, amr)
+function init_transferred_ps!(p4est::P_pxest_t, ti_data::TransferInit, ka::KA)
+    insert_trees!(p4est, ti_data, ka)
+    init_transferred_quadrant!(p4est, ti_data, ka)
 end
-function insert_trees!(p4est::P_pxest_t, ti_data::Transfer_Init, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
-    trees = amr.field.trees.data
+function insert_trees!(p4est::P_pxest_t, ti_data::TransferInit, ka::KA{DIM,NDF}) where{DIM,NDF}
+    trees = ka.kdata.field.trees.data
     pp = PointerWrapper(p4est)
     if !isempty(trees)
         if pp.first_local_tree[] < ti_data.old_flt
@@ -716,23 +716,23 @@ function insert_trees!(p4est::P_pxest_t, ti_data::Transfer_Init, amr::KitAMR_Dat
             push!(trees, Vector{AbstractPsData{DIM,NDF}}(undef, 0))
         end
     end
-    amr.field.trees.offset = pp.first_local_tree[] - 1
+    ka.kdata.field.trees.offset = pp.first_local_tree[] - 1
 end
 
 """
 $(TYPEDSIGNATURES)
 Re-partition grids in physical space to balance the computational load according to the weight function.
 """
-function ps_partition!(p4est::P_pxest_t, amr::KitAMR_Data)
+function ps_partition!(p4est::P_pxest_t, ka::KA)
     src_gfq, dest_gfq, src_flt, src_llt = partition!(p4est)
     receives, sends, receive_nums, send_nums = get_receive_send(src_gfq, dest_gfq)
-    s_vs_numss, s_datas = transfer_wrap(sends, send_nums, amr)
-    transfer_pop!(sends, send_nums, amr.field.trees.data)
+    s_vs_numss, s_datas = transfer_wrap(sends, send_nums, ka)
+    transfer_pop!(sends, send_nums, ka.kdata.field.trees.data)
     up_vs_numss, down_vs_numss, up_datas, down_datas =
         partition_transfer(sends, s_vs_numss, s_datas, receives, receive_nums)
     up_ps_datas, down_ps_datas =
-        unpack_data(up_vs_numss, down_vs_numss, up_datas, down_datas, amr)
-    ti_data = Transfer_Init(
+        unpack_data(up_vs_numss, down_vs_numss, up_datas, down_datas, ka)
+    ti_data = TransferInit(
         length(up_ps_datas),
         length(down_ps_datas),
         up_ps_datas,
@@ -743,5 +743,5 @@ function ps_partition!(p4est::P_pxest_t, amr::KitAMR_Data)
         1,
         1,
     )
-    init_transferred_ps!(p4est, ti_data, amr)
+    init_transferred_ps!(p4est, ti_data, ka)
 end

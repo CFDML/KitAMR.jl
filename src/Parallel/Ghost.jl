@@ -30,14 +30,14 @@ function get_vs_num(pp::PW_pxest_t, gp::PW_pxest_ghost_t)
     vs_num = 0
     for i = 1:gp.mirrors.elem_count[]
         pq = pw_mirror_quadrant(pp,gp,i)
-        dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
+        dp = PointerWrapper(P4estPsData, pq.p.user_data[])
         ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
         isa(ps_data,InsideSolidData)&&continue
         vs_num = max(vs_num, ps_data.vs_data.vs_num)
     end
     vs_num = MPI.Allreduce(vs_num, max, MPI.COMM_WORLD)
 end
-function get_mirror_data_inner!(ps_data::PS_Data{DIM,NDF}, vs_temp::AbstractVector) where{DIM,NDF}
+function get_mirror_data_inner!(ps_data::PsData{DIM,NDF}, vs_temp::AbstractVector) where{DIM,NDF}
     vs_data = ps_data.vs_data
     vs_num = vs_data.vs_num
     vs_temp[1:NDF*vs_num] .= reshape(vs_data.df, vs_num * NDF)
@@ -45,15 +45,15 @@ end
 # function get_mirror_data_inner!(::InsideSolidData,vs_temp::AbstractVector)
 #     vs_temp[1] = EPS # Flag indicating InsideSolidData
 # end
-function get_mirror_data(ps4est, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
-    GC.@preserve ps4est global_data begin
-        gp = PointerWrapper(global_data.forest.ghost)
-        pp = PointerWrapper(ps4est)
-        global_data.status.max_vs_num = vs_num = get_vs_num(pp, gp)
+function get_mirror_data(p4est, kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
+    GC.@preserve p4est kinfo begin
+        gp = PointerWrapper(kinfo.forest.ghost)
+        pp = PointerWrapper(p4est)
+        kinfo.status.max_vs_num = vs_num = get_vs_num(pp, gp)
         mirror_data_pointers = Array{Ptr{Cdouble}}(undef, gp.mirrors.elem_count[])
         for i = 1:gp.mirrors.elem_count[]
             pq = pw_mirror_quadrant(pp,gp,i)
-            dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
+            dp = PointerWrapper(P4estPsData, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
             p = Ptr{Cdouble}(sc_malloc(P4est.package_id(), (3 * DIM + 4 + NDF * vs_num) * sizeof(Cdouble)))
             ap = Base.unsafe_wrap(Vector{Cdouble}, p, 3 * DIM + 4 + NDF * vs_num)
@@ -74,7 +74,7 @@ function get_mirror_data(ps4est, global_data::Global_Data{DIM,NDF}) where{DIM,ND
     end
     return mirror_data_pointers
 end
-function get_mirror_slope_inner!(ps_data::PS_Data{DIM,NDF}, vs_temp::AbstractVector) where{DIM,NDF}
+function get_mirror_slope_inner!(ps_data::PsData{DIM,NDF}, vs_temp::AbstractVector) where{DIM,NDF}
     vs_data = ps_data.vs_data
     vs_num = size(vs_data.weight, 1)
     vs_temp[1:(vs_num*NDF*DIM)] .= reshape(vs_data.sdf, vs_num * NDF * DIM)
@@ -83,15 +83,15 @@ end
 function get_mirror_slope_inner!(::InsideSolidData, vs_temp::AbstractVector) 
     vs_temp[1] = EPS
 end
-function get_mirror_slope(ps4est, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
-    GC.@preserve ps4est global_data begin
-        gp = PointerWrapper(global_data.forest.ghost)
-        pp = PointerWrapper(ps4est)
-        vs_num = global_data.status.max_vs_num
+function get_mirror_slope(p4est, kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
+    GC.@preserve p4est kinfo begin
+        gp = PointerWrapper(kinfo.forest.ghost)
+        pp = PointerWrapper(p4est)
+        vs_num = kinfo.status.max_vs_num
         mirror_slope_pointers = Array{Ptr{Cdouble}}(undef, gp.mirrors.elem_count[])
         for i = 1:gp.mirrors.elem_count[]
             pq = pw_mirror_quadrant(pp,gp,i)
-            dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
+            dp = PointerWrapper(P4estPsData, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
             p = Ptr{Cdouble}(sc_malloc(P4est.package_id(), (vs_num * DIM * NDF+DIM*(DIM+2)) * sizeof(Cdouble)))
             ap = Base.unsafe_wrap(Vector{Cdouble}, p, vs_num * DIM * NDF+DIM*(DIM+2))
@@ -101,7 +101,7 @@ function get_mirror_slope(ps4est, global_data::Global_Data{DIM,NDF}) where{DIM,N
     end
     return mirror_slope_pointers
 end
-function get_mirror_structure_inner!(ps_data::PS_Data{DIM}, weight_temp, level_temp, midpoint_temp) where{DIM}
+function get_mirror_structure_inner!(ps_data::PsData{DIM}, weight_temp, level_temp, midpoint_temp) where{DIM}
     vs_data = ps_data.vs_data
     vs_num = vs_data.vs_num
     weight_temp[1:vs_num] .= vs_data.weight
@@ -113,15 +113,15 @@ function get_mirror_structure_inner!(::InsideSolidData, weight_temp, level_temp,
     level_temp[1] = EPS
     midpoint_temp[1] = EPS
 end
-function get_mirror_structure(ps4est, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
-    GC.@preserve ps4est global_data begin
-        gp = PointerWrapper(global_data.forest.ghost)
-        pp = PointerWrapper(ps4est)
-        vs_num = global_data.status.max_vs_num
+function get_mirror_structure(p4est, kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
+    GC.@preserve p4est kinfo begin
+        gp = PointerWrapper(kinfo.forest.ghost)
+        pp = PointerWrapper(p4est)
+        vs_num = kinfo.status.max_vs_num
         mirror_structure_pointers = Array{Ptr{Cdouble}}(undef, gp.mirrors.elem_count[])
         for i = 1:gp.mirrors.elem_count[]
             pq = pw_mirror_quadrant(pp,gp,i)
-            dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
+            dp = PointerWrapper(P4estPsData, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
             p = Ptr{Cdouble}(sc_malloc(P4est.package_id(), vs_num * (DIM + 2) * sizeof(Cdouble)))
             ap = Base.unsafe_wrap(Vector{Cdouble}, p, vs_num * (DIM + 2))
@@ -134,15 +134,15 @@ function get_mirror_structure(ps4est, global_data::Global_Data{DIM,NDF}) where{D
         return mirror_structure_pointers
     end
 end
-function update_mirror_data!(ps4est, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
-    GC.@preserve ps4est amr begin
-        mirror_data_pointers = amr.ghost.ghost_exchange.mirror_data_pointers
-        vs_num = amr.global_data.status.max_vs_num
-        gp = PointerWrapper(amr.global_data.forest.ghost)
-        pp = PointerWrapper(ps4est)
+function update_mirror_data!(p4est, ka::KA{DIM,NDF}) where{DIM,NDF}
+    GC.@preserve p4est ka begin
+        mirror_data_pointers = ka.kdata.ghost.ghost_pointers.mirror_data_pointers
+        vs_num = ka.kinfo.status.max_vs_num
+        gp = PointerWrapper(ka.kinfo.forest.ghost)
+        pp = PointerWrapper(p4est)
         for i in eachindex(mirror_data_pointers)
             pq = pw_mirror_quadrant(pp,gp,i)
-            dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
+            dp = PointerWrapper(P4estPsData, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
             isa(ps_data,InsideSolidData)&&continue
             ap = Base.unsafe_wrap(
@@ -156,15 +156,15 @@ function update_mirror_data!(ps4est, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
         end
     end
 end
-function update_solid_mirror_data!(ps4est,amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
-    GC.@preserve ps4est amr begin
-        mirror_data_pointers = amr.ghost.ghost_exchange.mirror_data_pointers
-        vs_num = amr.global_data.status.max_vs_num
-        gp = PointerWrapper(amr.global_data.forest.ghost)
-        pp = PointerWrapper(ps4est)
+function update_solid_mirror_data!(p4est,ka::KA{DIM,NDF}) where{DIM,NDF}
+    GC.@preserve p4est ka begin
+        mirror_data_pointers = ka.kdata.ghost.ghost_pointers.mirror_data_pointers
+        vs_num = ka.kinfo.status.max_vs_num
+        gp = PointerWrapper(ka.kinfo.forest.ghost)
+        pp = PointerWrapper(p4est)
         for i in eachindex(mirror_data_pointers)
             pq = pw_mirror_quadrant(pp,gp,i)
-            dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
+            dp = PointerWrapper(P4estPsData, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
             (isa(ps_data,InsideSolidData)||ps_data.bound_enc>=0)&&continue
             ap = Base.unsafe_wrap(
@@ -178,15 +178,15 @@ function update_solid_mirror_data!(ps4est,amr::KitAMR_Data{DIM,NDF}) where{DIM,N
         end
     end
 end
-function update_mirror_slope!(ps4est, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
-    GC.@preserve ps4est amr begin
-        mirror_slope_pointers = amr.ghost.ghost_exchange.mirror_slope_pointers
-        vs_num = amr.global_data.status.max_vs_num
-        gp = PointerWrapper(amr.global_data.forest.ghost)
-        pp = PointerWrapper(ps4est)
+function update_mirror_slope!(p4est, ka::KA{DIM,NDF}) where{DIM,NDF}
+    GC.@preserve p4est ka begin
+        mirror_slope_pointers = ka.kdata.ghost.ghost_pointers.mirror_slope_pointers
+        vs_num = ka.kinfo.status.max_vs_num
+        gp = PointerWrapper(ka.kinfo.forest.ghost)
+        pp = PointerWrapper(p4est)
         for i in eachindex(mirror_slope_pointers)
             pq = pw_mirror_quadrant(pp,gp,i)
-            dp = PointerWrapper(P4est_PS_Data, pq.p.user_data[])
+            dp = PointerWrapper(P4estPsData, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
             isa(ps_data,InsideSolidData)&&continue
             ap = Base.unsafe_wrap(
@@ -277,77 +277,77 @@ end
 
 """
 $(TYPEDSIGNATURES)
-Update `df` in [`Ghost_VS_Data`](@ref).
+Update `df` in [`Ghost_VsData`](@ref).
 """
-function data_exchange!(p4est::P_pxest_t, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
+function data_exchange!(p4est::P_pxest_t, ka::KA{DIM,NDF}) where{DIM,NDF}
     MPI.Comm_size(MPI.COMM_WORLD) == 1 && return nothing
-    update_mirror_data!(p4est, amr)
+    update_mirror_data!(p4est, ka)
     amr_exchange!(
         p4est,
-        amr.global_data.forest.ghost,
-        amr.ghost.ghost_exchange.ghost_datas,
-        amr.ghost.ghost_exchange.mirror_data_pointers,
-        size_Ghost_Data(amr.global_data.status.max_vs_num,DIM,NDF),
+        ka.kinfo.forest.ghost,
+        ka.kdata.ghost.ghost_pointers.ghost_datas,
+        ka.kdata.ghost.ghost_pointers.mirror_data_pointers,
+        size_Ghost_Data(ka.kinfo.status.max_vs_num,DIM,NDF),
     )
 end
 
 """
 $(TYPEDSIGNATURES)
-Update `df` in [`Ghost_VS_Data`](@ref) for the update of immersed boundaries. 
+Update `df` in [`Ghost_VsData`](@ref) for the update of immersed boundaries. 
     Currently, the communication occurs through all ghost layers. The difference between [`data_exchange!`](@ref) 
     is that only immersed-boundary-related ghost cells' `mirror_data` is updated.
 """
-function solid_exchange!(p4est::P_pxest_t, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
+function solid_exchange!(p4est::P_pxest_t, ka::KA{DIM,NDF}) where{DIM,NDF}
     MPI.Comm_size(MPI.COMM_WORLD) == 1 && return nothing
-    isempty(amr.global_data.config.IB) && return nothing
-    update_solid_mirror_data!(p4est, amr)
+    isempty(ka.kinfo.config.IB) && return nothing
+    update_solid_mirror_data!(p4est, ka)
     amr_exchange!(
         p4est,
-        amr.global_data.forest.ghost,
-        amr.ghost.ghost_exchange.ghost_datas,
-        amr.ghost.ghost_exchange.mirror_data_pointers,
-        size_Ghost_Data(amr.global_data.status.max_vs_num,DIM,NDF),
+        ka.kinfo.forest.ghost,
+        ka.kdata.ghost.ghost_pointers.ghost_datas,
+        ka.kdata.ghost.ghost_pointers.mirror_data_pointers,
+        size_Ghost_Data(ka.kinfo.status.max_vs_num,DIM,NDF),
     )
 end
 
 """
 $(TYPEDSIGNATURES)
-Update `sdf` in [`Ghost_VS_Data`](@ref).
+Update `sdf` in [`Ghost_VsData`](@ref).
 """
-function slope_exchange!(p4est::P_pxest_t, amr::KitAMR_Data{DIM,NDF}) where{DIM,NDF}
+function slope_exchange!(p4est::P_pxest_t, ka::KA{DIM,NDF}) where{DIM,NDF}
     MPI.Comm_size(MPI.COMM_WORLD) == 1 && return nothing
-    update_mirror_slope!(p4est, amr)
+    update_mirror_slope!(p4est, ka)
     amr_exchange!(
         p4est,
-        amr.global_data.forest.ghost,
-        amr.ghost.ghost_exchange.ghost_slopes,
-        amr.ghost.ghost_exchange.mirror_slope_pointers,
-        size_Ghost_Slope(amr.global_data.status.max_vs_num,DIM,NDF),
+        ka.kinfo.forest.ghost,
+        ka.kdata.ghost.ghost_pointers.ghost_slopes,
+        ka.kdata.ghost.ghost_pointers.mirror_slope_pointers,
+        size_Ghost_Slope(ka.kinfo.status.max_vs_num,DIM,NDF),
     )
 end
-function initialize_ghost_exchange(ps4est, global_data::Global_Data{DIM,NDF}) where{DIM,NDF}
-    mirror_data_pointers = get_mirror_data(ps4est, global_data)
+function initialize_ghost_pointers(p4est, kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
+    mirror_data_pointers = get_mirror_data(p4est, kinfo)
     ghost_datas = amr_exchange(
-        ps4est,
-        global_data.forest.ghost,
+        p4est,
+        kinfo.forest.ghost,
         mirror_data_pointers,
-        size_Ghost_Data(global_data.status.max_vs_num,DIM,NDF),
+        size_Ghost_Data(kinfo.status.max_vs_num,DIM,NDF),
     )
-    mirror_slope_pointers = get_mirror_slope(ps4est, global_data)
+    mirror_slope_pointers = get_mirror_slope(p4est, kinfo)
     ghost_slopes = amr_exchange(
-        ps4est,
-        global_data.forest.ghost,
+        p4est,
+        kinfo.forest.ghost,
         mirror_slope_pointers,
-        size_Ghost_Slope(global_data.status.max_vs_num,DIM,NDF),
+        size_Ghost_Slope(kinfo.status.max_vs_num,DIM,NDF),
     )
-    mirror_structure_pointers = get_mirror_structure(ps4est, global_data)
+    mirror_structure_pointers = get_mirror_structure(p4est, kinfo)
     ghost_structures = amr_exchange(
-        ps4est,
-        global_data.forest.ghost,
+        p4est,
+        kinfo.forest.ghost,
         mirror_structure_pointers,
-        size_Ghost_VS_Structure(global_data.status.max_vs_num,DIM),
+        size_Ghost_VS_Structure(kinfo.status.max_vs_num,DIM),
     )
-    return Ghost_Exchange(
+    return GhostPointers(
         ghost_datas,
         ghost_slopes,
         ghost_structures,
@@ -360,18 +360,18 @@ end
 function ghost_data_ptr(N::Int, ghost_data::Ptr{T}, qid::Integer) where {T}
     return Ptr{Cdouble}(ghost_data + qid * sizeof(T) * N)
 end
-function initialize_ghost_wrap(global_data::Global_Data{DIM,NDF}, ghost_exchange::Ghost_Exchange) where{DIM,NDF}
+function initialize_ghost_wrap(kinfo::KInfo{DIM,NDF}, ghost_pointers::GhostPointers) where{DIM,NDF}
     ghost_wrap =
-        Array{AbstractGhostPsData}(undef, PointerWrapper(global_data.forest.ghost).ghosts.elem_count[])
-    global_vs_num = global_data.status.max_vs_num
+        Array{AbstractGhostPsData}(undef, PointerWrapper(kinfo.forest.ghost).ghosts.elem_count[])
+    global_vs_num = kinfo.status.max_vs_num
     for i in eachindex(ghost_wrap)
-        pq = iPointerWrapper(PointerWrapper(global_data.forest.ghost).ghosts, p4est_quadrant_t, i - 1)
+        pq = iPointerWrapper(PointerWrapper(kinfo.forest.ghost).ghosts, p4est_quadrant_t, i - 1)
         owner_rank = pq.p.piggy1.owner_rank[]
         which_tree = pq.p.piggy3.which_tree[];local_num = pq.p.piggy3.local_num[]
-        quadid = which_tree*2^(DIM*global_data.config.solver.AMR_PS_MAXLEVEL)+local_num
+        quadid = which_tree*2^(DIM*kinfo.config.solver.AMR_PS_MAXLEVEL)+local_num
         p = ghost_data_ptr(
             size_Ghost_Data(global_vs_num,DIM,NDF),
-            ghost_exchange.ghost_datas,
+            ghost_pointers.ghost_datas,
             i - 1,
         )
         offset = 0
@@ -393,14 +393,14 @@ function initialize_ghost_wrap(global_data::Global_Data{DIM,NDF}, ghost_exchange
         df = Base.unsafe_wrap(Matrix{Cdouble}, p + offset * sizeof(Cdouble), (vs_num, NDF))
         p = ghost_data_ptr(
             size_Ghost_Slope(global_vs_num,DIM,NDF),
-            ghost_exchange.ghost_slopes,
+            ghost_pointers.ghost_slopes,
             i - 1,
         )
         sdf = Base.unsafe_wrap(Array{Cdouble}, p, (vs_num, NDF, DIM))
         sw = Base.unsafe_wrap(Matrix{Cdouble}, p + vs_num * NDF * DIM * sizeof(Cdouble), (DIM+2, DIM))
         p = ghost_data_ptr(
             size_Ghost_VS_Structure(global_vs_num,DIM),
-            ghost_exchange.ghost_structures,
+            ghost_pointers.ghost_structures,
             i - 1,
         )
         offset = 0
@@ -410,27 +410,27 @@ function initialize_ghost_wrap(global_data::Global_Data{DIM,NDF}, ghost_exchange
         offset += global_vs_num
         midpoint_vs =
             Base.unsafe_wrap(Matrix{Cdouble}, p + offset * sizeof(Cdouble), (vs_num, DIM))
-        vs_data = Ghost_VS_Data{DIM,NDF}(vs_num, Int8.(round.(level)), weight, midpoint_vs, df, sdf)
-        ghost_wrap[i] = Ghost_PS_Data{DIM,NDF}(owner_rank,quadid,bound_enc,ds, midpoint, w, sw, vs_data)
+        vs_data = Ghost_VsData{DIM,NDF}(vs_num, Int8.(round.(level)), weight, midpoint_vs, df, sdf)
+        ghost_wrap[i] = GhostPsData{DIM,NDF}(owner_rank,quadid,bound_enc,ds, midpoint, w, sw, vs_data)
     end
     return ghost_wrap
 end
 
-function update_ghost!(p4est::Ptr{p4est_t}, amr::KitAMR_Data)
-    ghost_exchange = amr.ghost.ghost_exchange
-    global_data = amr.global_data
-    finalize_ghost!(ghost_exchange)
-    p4est_ghost_destroy(global_data.forest.ghost)
-    global_data.forest.ghost = p4est_ghost_new(p4est, P4EST_CONNECT_FULL)
-    amr.ghost.ghost_exchange = initialize_ghost_exchange(p4est, global_data)
-    amr.ghost.ghost_wrap = initialize_ghost_wrap(global_data, amr.ghost.ghost_exchange)
+function update_ghost!(p4est::Ptr{p4est_t}, ka::KA)
+    ghost_pointers = ka.kdata.ghost.ghost_pointers
+    kinfo = ka.kinfo
+    finalize_ghost!(ghost_pointers)
+    p4est_ghost_destroy(kinfo.forest.ghost)
+    kinfo.forest.ghost = p4est_ghost_new(p4est, P4EST_CONNECT_FULL)
+    ka.kdata.ghost.ghost_pointers = initialize_ghost_pointers(p4est, kinfo)
+    ka.kdata.ghost.ghost_wrap = initialize_ghost_wrap(kinfo, ka.kdata.ghost.ghost_pointers)
 end
-function update_ghost!(p4est::Ptr{p8est_t}, amr::KitAMR_Data)
-    ghost_exchange = amr.ghost.ghost_exchange
-    global_data = amr.global_data
-    finalize_ghost!(ghost_exchange)
-    p8est_ghost_destroy(global_data.forest.ghost)
-    global_data.forest.ghost = p8est_ghost_new(p4est, P8EST_CONNECT_FULL)
-    amr.ghost.ghost_exchange = initialize_ghost_exchange(p4est, global_data)
-    amr.ghost.ghost_wrap = initialize_ghost_wrap(global_data, amr.ghost.ghost_exchange)
+function update_ghost!(p4est::Ptr{p8est_t}, ka::KA)
+    ghost_pointers = ka.kdata.ghost.ghost_pointers
+    kinfo = ka.kinfo
+    finalize_ghost!(ghost_pointers)
+    p8est_ghost_destroy(kinfo.forest.ghost)
+    kinfo.forest.ghost = p8est_ghost_new(p4est, P8EST_CONNECT_FULL)
+    ka.kdata.ghost.ghost_pointers = initialize_ghost_pointers(p4est, kinfo)
+    ka.kdata.ghost.ghost_wrap = initialize_ghost_wrap(kinfo, ka.kdata.ghost.ghost_pointers)
 end
