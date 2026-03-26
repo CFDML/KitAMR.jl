@@ -11,6 +11,10 @@ function contribution_coarsen_flag(w::AbstractVector, U::AbstractVector, midpoin
     return local_contribution_coarsen_flag(w,U,midpoint,df,weight,kinfo)&&global_contribution_coarsen_flag(U,midpoint,df,weight,vr,kinfo)
 end
 
+
+
+
+
 function local_contribution_refine_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, kinfo::KInfo{DIM,2}) where{DIM}
     max(abs(0.5 * (sum((U - midpoint) .^ 2) * df[1] + df[2])* weight) /
     (w[end]  - 0.5 * w[1] * sum((U) .^ 2)),df[1]*weight/w[1]) > kinfo.config.solver.ADAPT_COEFFI_VS_LOCAL ? true : false
@@ -18,12 +22,6 @@ end
 function local_contribution_refine_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, kinfo::KInfo{DIM,1}) where{DIM}
     max(abs(0.5 * sum((U - midpoint) .^ 2) * df[1]* weight) /
     (w[end] - 0.5 * w[1] * sum((U) .^ 2)),df[1]*weight/w[1]) > kinfo.config.solver.ADAPT_COEFFI_VS_LOCAL ? true : false
-end
-function global_contribution_refine_flag(U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, vr::Velocity_Resolution, kinfo::KInfo{DIM,2}) where{DIM}
-    df[1]*weight > kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL*vr.density || 0.5 * (sum((U - midpoint) .^ 2) * df[1] + df[2])* weight>vr.energy*kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL
-end
-function global_contribution_refine_flag(U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, vr::Velocity_Resolution, kinfo::KInfo{DIM,1}) where{DIM}
-    df[1]*weight > vr.density*kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL || 0.5 * (sum((U - midpoint) .^ 2) * df[1])* weight>vr.energy*kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL
 end
 function local_contribution_coarsen_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractMatrix, df::AbstractMatrix, weight::AbstractVector, kinfo::KInfo{DIM,2}) where{DIM}
     for i = 1:2^DIM
@@ -46,6 +44,17 @@ end
 function local_contribution_coarsen_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, kinfo::KInfo{DIM,1}) where{DIM}
     max(0.5 * (sum((U - midpoint) .^ 2) * df[1])* weight /
     (w[end] - 0.5 * w[1] * sum((U) .^ 2)),df[1]*weight/w[1]) < kinfo.config.solver.ADAPT_COEFFI_VS_LOCAL/ 2^DIM
+end
+
+
+
+
+
+function global_contribution_refine_flag(U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, vr::Velocity_Resolution, kinfo::KInfo{DIM,2}) where{DIM}
+    df[1]*weight > kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL*vr.density || 0.5 * (sum((U - midpoint) .^ 2) * df[1] + df[2])* weight>vr.energy*kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL
+end
+function global_contribution_refine_flag(U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, vr::Velocity_Resolution, kinfo::KInfo{DIM,1}) where{DIM}
+    df[1]*weight > vr.density*kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL || 0.5 * (sum((U - midpoint) .^ 2) * df[1])* weight>vr.energy*kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL
 end
 
 function global_contribution_coarsen_flag(U::AbstractVector, midpoint::AbstractMatrix, df::AbstractMatrix, weight::AbstractVector, vr::Velocity_Resolution, kinfo::KInfo{DIM,2}) where{DIM}

@@ -22,7 +22,7 @@ function ps_refine_flag(
         end
     end
     rgrad = maximum(agrad./gradmax)
-    if rgrad > 2.0^((qp.level[] - kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL)) * kinfo.config.solver.ADAPT_COEFFI_PS # 2 for second-order scheme
+    if rgrad > 2.0^(2*(qp.level[] - kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL)) * kinfo.config.solver.ADAPT_COEFFI_PS # 2 for second-order scheme
         flag = Cint(1)
     else
         flag = Cint(0)
@@ -47,7 +47,7 @@ function ps_coarsen_flag(ps_datas::Vector{PsData}, levels::Vector{Int}, ka::KA{D
             end
         end
         rgrad = maximum(agrad./gradmax)
-        if rgrad > 2.0^((levels[i]-1 - kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL)) * kinfo.config.solver.ADAPT_COEFFI_PS # 2 for second-order scheme
+        if rgrad > 2.0^(2*(levels[i]-1 - kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL)) * kinfo.config.solver.ADAPT_COEFFI_PS # 2 for second-order scheme
             return Cint(0)
         end
         agrad.=0.

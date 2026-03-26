@@ -10,13 +10,14 @@ solver = Solver(;
     VS_DYNAMIC_AMR = true,
     flux = CAIDVM,
     time_marching = CAIDVM_Marching,
+    ADAPT_COEFFI_VS_LOCAL = 0.05
 )
 gas = Gas(;
     K = 0.0,
     Kn = 0.1,
     ω = 0.75,
     ωᵣ = 0.75,
-    μᵣ = 5.0*√π/16.0*0.03
+    μᵣ = 5.0*√π/16.0*0.1
 )
 output = Output(solver)
 udf = UDF(;
