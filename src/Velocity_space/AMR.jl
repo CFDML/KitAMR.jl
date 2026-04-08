@@ -436,12 +436,64 @@ end
 """
 $(TYPEDSIGNATURES)
 """
-function vs_adaptive_mesh_refinement!(ka)
+function vs_adaptive_mesh_refinement!(ka;vs_balance = false)
     vr = vs_resolution(ka)
     fp = PointerWrapper(ka.kinfo.forest.p4est)
     va_flags = zeros(Bool,fp.local_num_quadrants[])
     va_data = Velocity_Adaptive_Data(vr,va_flags)
     vs_refine!(va_data,ka)
     vs_coarsen!(va_data,ka)
+    if vs_balance
+        vs_balance!(ka)
+    end
     vs_conserved_correction!(va_data,ka)
 end
+
+function initial_vs_adaptive_mesh_refinement!(prim,vs_data,kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
+    ds = [(kinfo.config.quadrature[2*i] - kinfo.config.quadrature[2*i-1]) /
+        kinfo.config.vs_trees_num[i] for i in 1:DIM]
+    ddus = [ds./2^i for i in 0:kinfo.config.solver.AMR_VS_MAXLEVEL]
+    U = prim[2:1+DIM]
+    lnmidpoint = reshape(vs_data.midpoint, :)
+    lndf = reshape(vs_data.df, :)
+    lnsdf = reshape(vs_data.sdf, :)
+    lnflux = reshape(vs_data.flux, :)
+    index = 1
+    midpoint_index = Vector{Int}(undef, DIM)
+    df_index = Vector{Int}(undef, NDF)
+    while index < vs_data.vs_num + 1
+        @inbounds for i = 1:DIM
+            midpoint_index[i] = (i - 1) * (vs_data.vs_num) + index
+        end
+        @inbounds for i = 1:NDF
+            df_index[i] = (i - 1) * (vs_data.vs_num) + index
+        end
+        midpoint = @view(lnmidpoint[midpoint_index])
+        df = @view(lndf[df_index])
+        if vs_data.level[index] < kinfo.config.solver.AMR_VS_MAXLEVEL &&
+            maxwellian_refine_flag(midpoint,ddus[vs_data.level[index]+1],U,prim,kinfo)
+            midpoint_new = midpoint_refine(DIM,midpoint, vs_data.level[index], ds)
+            df_new = df_refine(DIM,midpoint, midpoint_new, df)
+            vs_data.vs_num += 2^DIM - 1
+            level_refine_replace!(DIM,vs_data.level, index)
+            weight_refine_replace!(DIM,vs_data.weight, index)
+            midpoint_refine_replace!(
+                DIM,
+                lnmidpoint,
+                midpoint_new,
+                vs_data.vs_num,
+                index,
+            )
+            df_refine_replace!(DIM,NDF,lndf, df_new, vs_data.vs_num, index)
+            sdf_refine_replace!(DIM,NDF,lnsdf)
+            flux_refine_replace!(DIM,NDF,lnflux)
+            index += 2^DIM - 1
+        end
+        index += 1
+    end
+    vs_data.midpoint = reshape(lnmidpoint, vs_data.vs_num, DIM)
+    vs_data.df = reshape(lndf, vs_data.vs_num, NDF)
+    vs_data.sdf = reshape(lnsdf, vs_data.vs_num, NDF, DIM)
+    vs_data.flux = reshape(lnflux, vs_data.vs_num, NDF)
+end
+

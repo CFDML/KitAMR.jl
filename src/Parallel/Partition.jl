@@ -5,7 +5,7 @@ function pre_partition_box_weight(p4est::P_pxest_t,which_tree,quadrant)
     qp = PointerWrapper(quadrant)
     ds,midpoint = quad_to_cell(p4est,which_tree,qp)
     for ib in ibs
-        if pre_partition_box_flag(midpoint,ds,ib)
+        if solid_box_flag(midpoint,ds,ib)
             return Cint(1)
         end
     end
@@ -328,7 +328,7 @@ function up_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::Vec
             sends[send_index] > MPI.Comm_rank(MPI.COMM_WORLD) + 1 && break
             ps_data = trees[i][j]
             if isa(ps_data,InsideSolidData)
-                push!(encs,0)
+                push!(encs,ps_data.bound_enc)
                 append!(encs,zeros(Int,SOLID_CELL_ID_NUM))
                 append!(ws,zeros(DIM+2))
                 s_vs_nums[index] = 0
@@ -377,8 +377,8 @@ function down_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::V
             sends[send_index] < MPI.Comm_rank(MPI.COMM_WORLD) + 1 && break
             ps_data = trees[i][j]
             if isa(ps_data,InsideSolidData)
-                pushfirst!(encs,0)
                 prepend!(encs,zeros(SOLID_CELL_ID_NUM))
+                pushfirst!(encs,ps_data.bound_enc)
                 prepend!(ws,zeros(DIM+2))
                 s_vs_nums[index] = 0
             else
@@ -607,7 +607,7 @@ function unpack_data(vs_nums, data, ka::KA{DIM,NDF}) where{DIM,NDF}
     for i in eachindex(vs_nums)
         vs_num = vs_nums[i]
         if vs_num==0
-            transfer_ps_datas[i] = InsideSolidData{DIM,NDF}()
+            transfer_ps_datas[i] = InsideSolidData(DIM,NDF;bound_enc = data.encs[(SOLID_CELL_ID_NUM+1)*(i-1)+1])
         else
             encs = data.encs[(SOLID_CELL_ID_NUM+1)*(i-1)+1:(SOLID_CELL_ID_NUM+1)*i]
             w = data.w[(DIM+2)*(i-1)+1:(DIM+2)*i]
@@ -646,9 +646,7 @@ end
 function init_up_quadrants!(ip, dp, ti_data::TransferInit, treeid::Integer, tree_datas)
     ti_data.up_index > ti_data.up_num && return nothing
     ps_data = ti_data.up_data[ti_data.up_index]
-    if !isa(ps_data,InsideSolidData)
-        ps_data.ds, ps_data.midpoint = quad_to_cell(ip.p4est, treeid, ip.quad)
-    end
+    ps_data.ds, ps_data.midpoint = quad_to_cell(ip.p4est, treeid, ip.quad)
     dp[] = P4estPsData(pointer_from_objref(ps_data))
     if treeid < ti_data.old_flt||ti_data.old_flt==-1
         push!(tree_datas, ps_data)
@@ -663,9 +661,7 @@ function init_down_quadrants!(ip, dp, ti_data::TransferInit, treeid::Integer, tr
     local_quadid(ip) < (ip.p4est.local_num_quadrants[] - ti_data.down_num) &&
         return nothing
     ps_data = ti_data.down_data[ti_data.down_index]
-    if !isa(ps_data,InsideSolidData)
-        ps_data.ds, ps_data.midpoint = quad_to_cell(ip.p4est, treeid, ip.quad)
-    end
+    ps_data.ds, ps_data.midpoint = quad_to_cell(ip.p4est, treeid, ip.quad)
     dp[] = P4estPsData(pointer_from_objref(ps_data))
     push!(tree_datas, ps_data)
     ti_data.down_index += 1

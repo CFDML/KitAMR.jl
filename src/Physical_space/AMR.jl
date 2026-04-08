@@ -91,7 +91,7 @@ function initialize_MeshData!(p4est::P_pxest_t,kinfo::KInfo)
     return trees
 end
 
-function search_radius_refine_flag!(forest::P_pxest_t,which_tree,quadrant)
+function search_radius_flag!(forest::P_pxest_t,which_tree,quadrant)
     GC.@preserve forest which_tree quadrant begin
         fp = PointerWrapper(forest)
         kinfo,_ = unsafe_pointer_to_objref(pointer(fp.user_pointer))
@@ -101,7 +101,7 @@ function search_radius_refine_flag!(forest::P_pxest_t,which_tree,quadrant)
         ibs = kinfo.config.IB
         ds, midpoint = quad_to_cell(fp, which_tree, qp)
         for i in eachindex(ibs)
-            search_radius_refine_flag!(i,ibs[i],midpoint,ds,mesh_data) && return Cint(1)
+            search_radius_flag!(i,ibs[i],midpoint,ds,mesh_data) && return Cint(1)
         end
         return Cint(0)
     end
@@ -122,7 +122,7 @@ function search_radius_refine!(p4est::Ptr{p8est_t},kinfo::KInfo)
         1,
         kinfo.config.solver.AMR_PS_MAXLEVEL,
         @cfunction(
-            search_radius_refine_flag!,
+            search_radius_flag!,
             Cint,
             (Ptr{p8est_t}, p4est_topidx_t, Ptr{p8est_quadrant_t})
         ),
@@ -278,15 +278,13 @@ function ps_replace!(::Val{1}, out_quad, in_quads, which_tree, ka::KA{DIM}) wher
             ps_data.ds .*= 0.5
             vs_data = ps_data.vs_data
             @. ps_data.midpoint += 0.5 * ps_data.ds * RMT[DIM][i]
-            for j = 1:DIM
-                @. vs_data.df += 0.5 * ps_data.ds[j] * RMT[DIM][i][j] * @view(vs_data.sdf[:, :, j])
+            for k in axes(vs_data.df,2)
+                for j in axes(vs_data.df,1)
+                   @views vs_data.df[j,k]+=min(abs(vs_data.df[j,k]/(dot(ps_data.ds,abs.(vs_data.sdf[j,k,:]))+EPS)),1.)*dot(vs_data.sdf[j,k,:],0.5 * ps_data.ds .* RMT[DIM][i])
+                end
             end
             ps_data.w = calc_w0(ps_data)
             ps_data.prim = get_prim(ps_data.w,ka.kinfo)
-            if i==1
-                ps_data.neighbor.state[2] = BALANCE_FLAG
-                ps_data.neighbor.data[2] = [Odata]
-            end
         end
         insert!(datas, index - 1 + i, ps_data)
         dp[] = P4estPsData(pointer_from_objref(ps_data))
@@ -313,21 +311,17 @@ function ps_replace!(::ChildNum, out_quad, in_quads, which_tree, ka::KA{DIM,NDF}
     if any(x->x<0,[x.bound_enc for x in Odatas])
         @error `solid_cells coarsen!`
     end
-    if Odatas[1].neighbor.state[2]==BALANCE_FLAG
-        ps_data = first(Odatas[1].neighbor.data[2])
-    else
-        _,index = findmin([x.vs_data.vs_num for x in Odatas])
-        ps_data = ps_merge(Odatas,index,ka.kinfo)
-        vs_data = ps_data.vs_data
-        for i in eachindex(Odatas)
-            vs_data_n = Odatas[i].vs_data
-            vs_merge!(vs_data.sdf,vs_data_n.sdf,vs_data.level,vs_data_n.level,ka)
-            vs_merge!(vs_data.df,vs_data_n.df,vs_data.level,vs_data_n.level,ka)
-        end
-        vs_data.df./=2^DIM;vs_data.sdf./=2^DIM
-        Odatas[1].neighbor.state[2] = BALANCE_FLAG
-        Odatas[1].neighbor.data[2] = [ps_data]
+    _,index = findmin([x.vs_data.vs_num for x in Odatas])
+    ps_data = ps_merge(Odatas,index,ka.kinfo)
+    vs_data = ps_data.vs_data
+    for i in eachindex(Odatas)
+        vs_data_n = Odatas[i].vs_data
+        vs_merge!(vs_data.sdf,vs_data_n.sdf,vs_data.level,vs_data_n.level,ka)
+        vs_merge!(vs_data.df,vs_data_n.df,vs_data.level,vs_data_n.level,ka)
     end
+    vs_data.df./=2^DIM;vs_data.sdf./=2^DIM
+    ps_data.neighbor.state[1] = BALANCE_FLAG
+    ps_data.neighbor.data[1] = Odatas
     index = findfirst(x -> x === Odatas[1], datas)
     deleteat!(datas, index:index+2^DIM-1)
     insert!(datas, index, ps_data)
@@ -765,9 +759,7 @@ Update the globally maximum gradients of conserved variables as a referrence of 
 """
 function update_gradmax!(ka::KA{DIM}) where{DIM}
     gradmax = ka.kinfo.status.gradmax 
-    wmax = ka.kinfo.status.wmax
-    wmin = ka.kinfo.status.wmin
-    gradmax .= 0.;wmax .= -Inf; wmin .= Inf
+    gradmax .= 0.
     trees = ka.kdata.field.trees.data
     for tree in trees
         for ps_data in tree
@@ -778,14 +770,9 @@ function update_gradmax!(ka::KA{DIM}) where{DIM}
                     gradmax[j] = max(gradmax[j],abs(ps_data.sw[j,i]))
                 end
             end
-            wmax .= max.(wmax,ps_data.w)
-            wmin .= min.(wmin,ps_data.w)
         end
     end
     gradmax .= MPI.Allreduce(gradmax, (x,y)->max.(x,y), MPI.COMM_WORLD)
-    wmax .= MPI.Allreduce(wmax, (x,y)->max.(x,y), MPI.COMM_WORLD)
-    wmin .= MPI.Allreduce(wmin, (x,y)->min.(x,y), MPI.COMM_WORLD)
-    gradmax ./= (wmax-wmin)
     return nothing
 end
 

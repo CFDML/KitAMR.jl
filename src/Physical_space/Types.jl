@@ -117,12 +117,27 @@ end
 """
 $(TYPEDEF)
 """
-mutable struct GhostInsideSolidData{DIM,NDF} <: AbstractGhostPsData{DIM,NDF} end
+mutable struct GhostInsideSolidData{DIM,NDF} <: AbstractGhostPsData{DIM,NDF} 
+    bound_enc::Int
+    midpoint::Vector{Float64}
+    ds::Vector{Float64}
+end
 
 """
 $(TYPEDEF)
 """
-mutable struct InsideSolidData{DIM,NDF} <: AbstractPsData{DIM,NDF} end
+mutable struct InsideSolidData{DIM,NDF} <: AbstractPsData{DIM,NDF} 
+    bound_enc::Int
+    midpoint::Vector{Float64}
+    ds::Vector{Float64}
+end
+function InsideSolidData(DIM,NDF;kwargs...)
+    return InsideSolidData{DIM,NDF}(
+        (haskey(kwargs,:bound_enc) ? kwargs[:bound_enc] : 0),
+        (haskey(kwargs,:midpoint) ? kwargs[:midpoint] : zeros(DIM)),
+        (haskey(kwargs,:ds) ? kwargs[:ds] : zeros(DIM)),
+    )
+end
 AbstractInsideSolidData = Union{InsideSolidData,GhostInsideSolidData}
 
 """

@@ -59,7 +59,11 @@ function get_mirror_data(p4est, kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
             ap = Base.unsafe_wrap(Vector{Cdouble}, p, 3 * DIM + 4 + NDF * vs_num)
             offset = 0
             if isa(ps_data,InsideSolidData)
-                ap[1] = EPS
+                ap[1:(offset+=DIM)] .= ps_data.ds
+                ap[offset+1:(offset+=DIM)] .= ps_data.midpoint
+                ap[offset+1:(offset+=DIM+2)] .= Inf
+                ap[offset+=1] = 0
+                ap[offset+=1] = ps_data.bound_enc
             else
                 ap[1:(offset+=DIM)] .= ps_data.ds
                 ap[offset+1:(offset+=DIM)] .= ps_data.midpoint
@@ -108,7 +112,7 @@ function get_mirror_structure_inner!(ps_data::PsData{DIM}, weight_temp, level_te
     level_temp[1:vs_num] .= vs_data.level
     midpoint_temp[1:(vs_num*DIM)] .= reshape(vs_data.midpoint, vs_num * DIM)
 end
-function get_mirror_structure_inner!(::InsideSolidData, weight_temp, level_temp, midpoint_temp)
+function get_mirror_structure_inner!(ps_data::InsideSolidData, weight_temp, level_temp, midpoint_temp)
     weight_temp[1] = EPS
     level_temp[1] = EPS
     midpoint_temp[1] = EPS
@@ -376,10 +380,6 @@ function initialize_ghost_wrap(kinfo::KInfo{DIM,NDF}, ghost_pointers::GhostPoint
         )
         offset = 0
         ds = Base.unsafe_wrap(Vector{Cdouble}, p + offset * sizeof(Cdouble), DIM)
-        if ds[1]==EPS
-            ghost_wrap[i] = GhostInsideSolidData{DIM,NDF}()
-            continue
-        end
         offset += DIM
         midpoint = Base.unsafe_wrap(Vector{Cdouble}, p + offset * sizeof(Cdouble), DIM)
         offset += DIM
@@ -388,6 +388,10 @@ function initialize_ghost_wrap(kinfo::KInfo{DIM,NDF}, ghost_pointers::GhostPoint
         vs_num = Int(Base.unsafe_load(p + offset * sizeof(Cdouble)))
         offset += 1
         bound_enc = Int(Base.unsafe_load(p + offset * sizeof(Cdouble)))
+        if w[1]==Inf
+            ghost_wrap[i] = GhostInsideSolidData{DIM,NDF}(bound_enc,midpoint,ds)
+            continue
+        end
         offset += 1
         # midpoint_vs = Base.unsafe_wrap(Matrix{Cdouble},Ptr{Cdouble}(pointer(ghost_data.micro)),(vs_num,DIM))
         df = Base.unsafe_wrap(Matrix{Cdouble}, p + offset * sizeof(Cdouble), (vs_num, NDF))

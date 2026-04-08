@@ -228,7 +228,7 @@ end
 $(TYPEDSIGNATURES)
 Whether a quadrant is overlap with the hyper_rec of the immersed boundary.
 """
-function pre_partition_box_flag(midpoint,ds,ib::Triangles)
+function solid_box_flag(midpoint,ds,ib::Triangles)
     r = ib.search_radius
     kdt = ib.tkdt.kdt
     triangle_rec = ib.tkdt.table[treeroot(kdt).index]
@@ -244,7 +244,7 @@ end
 $(TYPEDSIGNATURES)
 Whether a quadrant is inside the refine radius of the immersed boundary.
 """
-function search_radius_refine_flag!(i::Int,ib::Triangles,midpoint,ds,mesh_data)
+function search_radius_flag!(i::Int,ib::Triangles,midpoint,ds,mesh_data)
     r = ib.search_radius
     kdt = ib.tkdt.kdt
     triangle_rec = ib.tkdt.table[treeroot(kdt).index]
@@ -260,13 +260,28 @@ function search_radius_refine_flag!(i::Int,ib::Triangles,midpoint,ds,mesh_data)
     end
     return false
 end
+function search_radius_flag(ib::Triangles,midpoint,ds)
+    r = ib.search_radius
+    kdt = ib.tkdt.kdt
+    triangle_rec = ib.tkdt.table[treeroot(kdt).index]
+    hyper_rec = HyperRectangle(SVector{3,Float64}(triangle_rec.mins.-r),SVector{3,Float64}(triangle_rec.maxes.+r))
+    lower = midpoint-0.5*ds;upper = midpoint+0.5*ds
+    if overlap_test(lower,upper,hyper_rec)
+        _,distance = nn(kdt,midpoint)
+        if distance<r+0.5*norm(ds)
+            return true
+        end
+    end
+    return false
+end
 
 function solid_flag(ib::Triangles,midpoint)
-    ray_casting(ib,midpoint)
+    inside = ray_casting(ib,midpoint)
+    xor(!inside,ib.solid)
 end
 """
 $(TYPEDSIGNATURES)
-Whether a solid quadrant inside the search_radius is a ghost cell.
+Whether a solid quadrant inside the search_radius is a ghost cell. Only accurate for grids that have been refined to the same level (inside the search radius).
 """
 function ghost_cell_flag(ib::Triangles,midpoint,ds)
     intersect_ids = all_intersect_test(midpoint,2.0*ds,ib.tkdt)

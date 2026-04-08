@@ -111,6 +111,10 @@ function Solver(;kwargs...)
         REDUNDANT_STEPS_NUM
         )
 end
+function Solver(solver::Solver{DIM,NDF};kwargs...) where{DIM,NDF}
+    new_args = [get(kwargs,f,getfield(solver,f)) for f in fieldnames(Solver)]
+    return Solver{DIM,NDF}(new_args...)
+end
 
 """
 $(TYPEDEF)
@@ -293,6 +297,21 @@ function Configure(solver::Solver{DIM,NDF};kwargs...) where{DIM,NDF}
         kwargs[:user_defined]
     )
 end
+function Configure(solver::Solver,config::Configure{DIM,NDF};kwargs...)where{DIM,NDF}
+    return Configure(
+        solver;
+        geometry = haskey(kwargs,:geometry) ? kwargs[:geometry] : config.geometry,
+        trees_num = haskey(kwargs,:trees_num) ? kwargs[:trees_num] : config.trees_num,
+        quadrature = haskey(kwargs,:quadrature) ? kwargs[:quadrature] : config.quadrature,
+        vs_trees_num = haskey(kwargs,:vs_trees_num) ? kwargs[:vs_trees_num] : config.vs_trees_num,
+        IC = haskey(kwargs,:IC) ? kwargs[:IC] : config.IC,
+        domain = haskey(kwargs,:domain) ? kwargs[:domain] : config.domain,
+        IB = haskey(kwargs,:IB) ? kwargs[:IB] : config.IB,
+        gas = haskey(kwargs,:gas) ? kwargs[:gas] : config.gas,
+        output = haskey(kwargs,:output) ? kwargs[:output] : config.output,
+        user_defined = haskey(kwargs,:user_defined) ? kwargs[:user_defined] : config.user_defined
+    )
+end
 """
 $(TYPEDEF)
 Structure related to `p4est`.
@@ -341,10 +360,6 @@ mutable struct Status
     max_vs_num::Int # maximum vs_num among ghost quadrants
     "Maximum absolute value of the gradients of conserved variables."
     gradmax::Vector{Float64}
-    "Maximum value of conserved variables."
-    wmax::Vector{Float64}
-    "Minimum value of conserved variables."
-    wmin::Vector{Float64}
     "Time step size used in [`iterate!`](@ref)."
     Δt::Float64
     "Time step size constraint by grid size."
@@ -375,7 +390,7 @@ function Status(config::Dict)
         (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
         2^config[:AMR_VS_MAXLEVEL] / 2 for i in 1:DIM] : [maximum(abs.(quadrature.vcoords)) for _ in 1:DIM]
     Δt_ξ = config[:CFL]*minimum(ds ./ U)
-    return Status(0,zeros(DIM+2),zeros(DIM+2), zeros(DIM+2), Δt_ξ,Δt_ξ,0.,0,1,1,1,Residual(DIM),Ref(false))
+    return Status(0, zeros(DIM+2), Δt_ξ,Δt_ξ,0.,0,1,1,1,Residual(DIM),Ref(false))
 end
 function Status(config::Configure{DIM,NDF}) where{DIM,NDF}
     trees_num = config.trees_num
@@ -387,7 +402,7 @@ function Status(config::Configure{DIM,NDF}) where{DIM,NDF}
         (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
         2^config.solver.AMR_VS_MAXLEVEL / 2 for i in 1:DIM] : [maximum(abs.(quadrature.vcoords)) for _ in 1:DIM]
     Δt_ξ = config.solver.CFL*minimum(ds ./ U)
-    return Status(0,zeros(DIM+2),zeros(DIM+2), zeros(DIM+2), Δt_ξ,Δt_ξ,0.,0,1,1,1,Residual(DIM),Ref(false))
+    return Status(0, zeros(DIM+2), Δt_ξ,Δt_ξ,0.,0,1,1,1,Residual(DIM),Ref(false))
 end
 
 """
@@ -416,6 +431,31 @@ function KInfo(config::Configure{DIM,NDF}) where{DIM,NDF}
         Forest(DIM),
         Status(config)
     )
+end
+"""
+$(TYPEDSIGNATURES)
+Update information in [`KInfo`](@ref) to maintain self consistency.
+"""
+function KInfo!(kinfo::KInfo{DIM,NDF};kwargs...) where{DIM,NDF}
+    if haskey(kwargs,:solver)
+        solver = kwargs[:solver]
+        config = Configure(solver,kinfo.config)
+    else
+        config = haskey(kwargs,:config) ? kwargs[:config] : kinfo.config
+    end
+    trees_num = config.trees_num
+    geometry = config.geometry
+    vs_trees_num = config.vs_trees_num
+    quadrature = config.quadrature
+    ds = [(geometry[2*i]-geometry[2*i-1])/trees_num[i]/2^config.solver.AMR_PS_MAXLEVEL for i in 1:DIM]
+    U = isa(quadrature,Vector) ? [max(quadrature[2*i],abs(quadrature[2*i-1])) -
+        (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
+        2^config.solver.AMR_VS_MAXLEVEL / 2 for i in 1:DIM] : [maximum(abs.(quadrature.vcoords)) for _ in 1:DIM]
+    Δt_ξ = config.solver.CFL*minimum(ds ./ U)
+    kinfo.status.Δt = Δt_ξ;kinfo.status.Δt_ξ = Δt_ξ
+    kinfo.status.residual.redundant_step = 0
+    kinfo.status.residual.residual = Inf.*ones(DIM+2)
+    kinfo.config = config
 end
 
 mutable struct P4estPsData

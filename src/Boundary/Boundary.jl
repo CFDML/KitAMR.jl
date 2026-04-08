@@ -1,3 +1,4 @@
+include("AMR.jl")
 include("Circle.jl")
 include("Immersed_boundary.jl")
 include("Vertices.jl")

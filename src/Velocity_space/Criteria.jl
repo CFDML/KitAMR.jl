@@ -94,3 +94,20 @@ function macro_estimate_IB_refine_flag(prim,bc,U,midpoint,ds,level)
         return false
     end
 end
+
+"""
+$(SIGNATURES)
+Analytical integral of the Maxwellian distribution over a Cartesian grid.
+"""
+function maxwellian_dρ(midpoint,du,U,prim)
+    c = midpoint-U
+    dg = prim[1]
+    vth = 1.0/√prim[end]
+    for i in eachindex(midpoint)
+        dg*=0.5/vth*(erf((c[i]+0.5*du[i])/vth)-erf((c[i]-0.5*du[i])/vth))
+    end
+    return dg
+end
+function maxwellian_refine_flag(midpoint,du,U,prim,kinfo::KInfo{DIM}) where{DIM}
+    return maxwellian_dρ(midpoint,du,U,prim)> 1e-3*prim[1]
+end

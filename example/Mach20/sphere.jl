@@ -6,7 +6,7 @@ solver = Solver(;
     DIM = 3, NDF = 1,
     AMR_PS_MAXLEVEL = 4,
     AMR_DYNAMIC_PS_MAXLEVEL = 3,
-    AMR_VS_MAXLEVEL = 3,
+    AMR_VS_MAXLEVEL = 5,
     PS_DYNAMIC_AMR = true,
     VS_DYNAMIC_AMR = true,
     flux = CAIDVM,
@@ -17,10 +17,10 @@ solver = Solver(;
 )
 gas = Gas(;
     K = 0.0,
-    Kn = 0.1,
+    Kn = 1.0,
     ω = 0.75,
     ωᵣ = 0.75,
-    μᵣ = 5.0*√π/16.0*0.1
+    μᵣ = 5.0*√π/16.0*1.0
 )
 output = Output(solver)
 udf = UDF(;
@@ -29,15 +29,15 @@ udf = UDF(;
 config = Configure(solver;
     geometry = [-4.,4.,-4.,4.,-4.,4.],
     trees_num = [16,16,16],
-    quadrature = [-12.14,12.14,-12.14,12.14,-12.14,12.14], # 3σ: 3√Ts
+    quadrature = [-57.95,57.95,-57.95,57.95,-57.95,57.95], # 3σ: 3√Ts
     vs_trees_num = [8,8,8],
     IC = PCoordFn(sphere_buffer_IC),
     domain = [
-        Domain(SuperSonicInflow,1,[1.,3.834*sqrt(5/6),0.,0.,1.]),
+        Domain(SuperSonicInflow,1,[1.,20.0*sqrt(5/6),0.,0.,1.]),
         Domain(UniformOutflow,2),Domain(UniformOutflow,3),Domain(UniformOutflow,4),
         Domain(UniformOutflow,5),Domain(UniformOutflow,6)
     ],
-    IB = [Sphere(Maxwellian,[0.,0.,0.],0.5,true,1.5,[1.,0.,0.,0., 1.0/(1.0+(5/3-1)*0.5*3.834^2)])],
+    IB = [Sphere(Maxwellian,[0.,0.,0.],0.5,true,1.5,[1.,0.,0.,0.,1/(1.0+(5/3-1)*0.5*20.0^2)])],
     output = output,
     gas = gas,
     user_defined = udf
@@ -52,7 +52,11 @@ for i in 1:nt
     if MPI.Comm_rank(MPI.COMM_WORLD)==0
         @show i
     end
-    adaptive_mesh_refinement!(p4est,ka;ps_interval = 40, vs_interval = 40, partition_interval = 40)
+    if i <100
+        adaptive_mesh_refinement!(p4est,ka;ps_interval = 5, vs_interval = 5, partition_interval = 20, vs_balance = true)
+    else
+        adaptive_mesh_refinement!(p4est,ka;ps_interval = 20, vs_interval = 20, partition_interval = 40, vs_balance = true)
+    end
     update_slope!(ka)
     slope_exchange!(p4est, ka) 
     update_solid_cell!(ka)
@@ -63,7 +67,11 @@ for i in 1:nt
     data_exchange!(p4est, ka)
     check!(p4est,ka)
     check_for_convergence(ka)&&break
+    if i==650
+        save_result(p4est,ka)
+    end
 end
+KitAMR.execute_check(p4est,ka)
 save_result(p4est,ka)
 finalize!(p4est,ka)
 MPI.Finalize()

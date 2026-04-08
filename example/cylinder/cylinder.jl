@@ -5,9 +5,10 @@ MPI.Init()
 solver = Solver(;
     DIM = 2, NDF = 2,
     AMR_PS_MAXLEVEL = 7,
-    AMR_VS_MAXLEVEL = 0,
-    PS_DYNAMIC_AMR = false,
-    VS_DYNAMIC_AMR = false,
+    AMR_DYNAMIC_PS_MAXLEVEL = 4,
+    AMR_VS_MAXLEVEL = 3,
+    PS_DYNAMIC_AMR = true,
+    VS_DYNAMIC_AMR = true,
     flux = CAIDVM,
     time_marching = CAIDVM_Marching,
 )
@@ -21,13 +22,14 @@ output = Output(
     solver;
 )
 udf = UDF(;
-    static_ps_refine_flag = shock_wave_region
+    # static_ps_refine_flag = shock_wave_region
+    dynamic_ps_refine_flag = amr_region
 )
 config = Configure(solver;
     geometry = [-16.,16.,-16.,16.],
     trees_num = [25,25],
     quadrature = [-10.,10.,-10.,10.],
-    vs_trees_num = [60,60],
+    vs_trees_num = [16,16],
     IC = PCoordFn(cylinder_buffer_IC),
     domain = [
             Domain(SuperSonicInflow,1,[1.,5.0*sqrt(5/6),0.,1.]),Domain(UniformOutflow,2),
@@ -45,13 +47,12 @@ listen_for_save!()
 max_sim_time = 20.
 nt = max_sim_time/ka.kinfo.status.Δt+1.0 |> floor |> Int
 for i in 1:nt
-    adaptive_mesh_refinement!(p4est,ka;partition_interval=160)
+    adaptive_mesh_refinement!(p4est,ka;ps_interval = 4, partition_interval=40)
     update_slope!(ka)
     slope_exchange!(p4est, ka) 
     update_solid_cell!(ka)
     solid_exchange!(p4est, ka)
-    update_solid_neighbor!(ka)
-    slope_exchange!(p4est, ka) 
+    update_solid_neighbor!(ka) 
     flux!(ka) 
     iterate!(ka) 
     data_exchange!(p4est, ka)

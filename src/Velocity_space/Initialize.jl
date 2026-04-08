@@ -1,12 +1,12 @@
 
-function init_vs(prim::AbstractVector,kinfo::KInfo)
+function initialize_vs_data(prim::AbstractVector,kinfo::KInfo)
     quadrature = kinfo.config.quadrature
-    init_vs(prim,kinfo,quadrature)
+    initialize_vs_data(prim,kinfo,quadrature)
 end
-function init_vs(vs_data::VsData)
+function initialize_vs_data(vs_data::VsData)
     return deepcopy(vs_data)
 end
-function init_vs(prim::AbstractVector,kinfo::KInfo{DIM,NDF},quadrature::Vector{Float64}) where{DIM,NDF}
+function initialize_vs_data(prim::AbstractVector,kinfo::KInfo{DIM,NDF},quadrature::Vector{Float64}) where{DIM,NDF}
     trees_num = kinfo.config.vs_trees_num
     vs_num = reduce(*, trees_num)
     midpoint = zeros(vs_num, DIM)
@@ -28,10 +28,15 @@ function init_vs(prim::AbstractVector,kinfo::KInfo{DIM,NDF},quadrature::Vector{F
     df = discrete_maxwell(midpoint, prim, kinfo)
     sdf = zeros(vs_num, NDF, DIM)
     flux = zeros(vs_num, NDF)
-    return VsData{DIM,NDF}(vs_num, zeros(Int, vs_num), weight, midpoint, df, sdf, flux)
+    vs_data = VsData{DIM,NDF}(vs_num, zeros(Int, vs_num), weight, midpoint, df, sdf, flux)
+    for _ in 1:kinfo.config.solver.AMR_VS_MAXLEVEL
+        initial_vs_adaptive_mesh_refinement!(prim,vs_data,kinfo)
+    end
+    vs_data.df = discrete_maxwell(vs_data.midpoint, prim, kinfo)
+    return vs_data
 end
 
-function init_vs(prim::AbstractVector,kinfo::KInfo{2,NDF},quadrature::Gauss_Hermite{NP};kwargs...) where{NDF,NP}
+function initialize_vs_data(prim::AbstractVector,kinfo::KInfo{2,NDF},quadrature::Gauss_Hermite{NP};kwargs...) where{NDF,NP}
     DIM = 2
     trees_num = kinfo.config.vs_trees_num
     vs_num = reduce(*, trees_num)

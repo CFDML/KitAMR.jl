@@ -64,7 +64,7 @@ function calc_intersect(f_midpoint,s_midpoint,::Vector,::Int,circle::Sphere)
     return ap,n
 end
 
-function pre_partition_box_flag(midpoint,ds,ib::AbstractCircle)
+function solid_box_flag(midpoint,ds,ib::AbstractCircle)
     r = ib.search_radius
     hyper_rec = HyperRectangle(SVector{3,Float64}(ib.center.-ib.radius.-r),SVector{3,Float64}(ib.center.+ib.radius.+r))
     lower = midpoint-0.5*ds;upper = midpoint+0.5*ds
@@ -75,7 +75,7 @@ function pre_partition_box_flag(midpoint,ds,ib::AbstractCircle)
     end
 end
 
-function search_radius_refine_flag!(i::Int,ib::AbstractCircle,midpoint,ds,mesh_data)
+function search_radius_flag!(i::Int,ib::AbstractCircle,midpoint,ds,mesh_data)
     r = ib.search_radius
     hyper_rec = HyperRectangle(SVector{3,Float64}(ib.center.-ib.radius.-r),SVector{3,Float64}(ib.center.+ib.radius.+r))
     lower = midpoint-0.5*ds;upper = midpoint+0.5*ds
@@ -90,6 +90,10 @@ function search_radius_refine_flag!(i::Int,ib::AbstractCircle,midpoint,ds,mesh_d
     return false
 end
 
+"""
+$(TYPEDSIGNATURES)
+Only accurate for grids that have been refined to the same level (inside the search radius).
+"""
 function ghost_cell_flag(ib::Sphere,midpoint,ds)
     flag = 0
     for i = 1:6
@@ -97,4 +101,16 @@ function ghost_cell_flag(ib::Sphere,midpoint,ds)
     end
     abs(flag)==6 && return false
     return true
+end
+function search_radius_flag(ib::AbstractCircle,midpoint,ds)
+    r = ib.search_radius
+    hyper_rec = HyperRectangle(SVector{3,Float64}(ib.center.-ib.radius.-r),SVector{3,Float64}(ib.center.+ib.radius.+r))
+    lower = midpoint-0.5*ds;upper = midpoint+0.5*ds
+    if overlap_test(lower,upper,hyper_rec)
+        distance = abs(norm(midpoint-ib.center)-ib.radius)
+        if distance<r+0.5*norm(ds)
+            return true
+        end
+    end
+    return false
 end

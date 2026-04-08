@@ -101,25 +101,17 @@ function Vertical_Volume_Flux(points::AbstractVector{Vector{Float64}},midpoint::
     for i in eachindex(points)
         p1 = points[i%N+1];p2 = points[i]
         dx= abs.(p1-p2)
-        id = findall(x->x<3.0*eps(),dx)
-        if length(id)>1
-            if norm(dx)<6.0*eps()
-                continue
-            else
-                _,dir = findmin(dx)
-            end
-        else
-            dir = id[1]
-            vid = findall(x->abs(x[dir]-points[i][dir])<EPS,eachcol(vertices))
-            A = hcat(vertices[:,vid],p1,p2)
-            center = vec(mean(A,dims=2))
-            id1 = dir%3+1;id2 = (dir+1)%3+1
-            phi=@views [atan(x[id2]-center[id2],x[id1]-center[id1]) for x in eachcol(A)]
-            id_gauss = sortperm(phi)
-            H+=sign(p1[dir]-midpoint[dir])*p1[dir]/3.0*gaussian_area(@views A[[id1,id2],id_gauss])
-        # else
-        #     throw(`Cut-cube Error!`)
+        _,dir = findmin(dx)
+        if dx[dir]>1e-6
+            throw(`Cut-cube Error!`)
         end
+        vid = findall(x->abs(x[dir]-points[i][dir])<EPS,eachcol(vertices))
+        A = hcat(vertices[:,vid],p1,p2)
+        center = vec(mean(A,dims=2))
+        id1 = dir%3+1;id2 = (dir+1)%3+1
+        phi=@views [atan(x[id2]-center[id2],x[id1]-center[id1]) for x in eachcol(A)]
+        id_gauss = sortperm(phi)
+        H+=sign(p1[dir]-midpoint[dir])*p1[dir]/3.0*gaussian_area(@views A[[id1,id2],id_gauss])
     end
     return H
 end

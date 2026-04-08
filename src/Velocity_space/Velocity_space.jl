@@ -1,4 +1,5 @@
 include("AMR.jl")
+include("Balance.jl")
 include("Criteria.jl")
 include("Cut_cell.jl")
 include("Initialize.jl")

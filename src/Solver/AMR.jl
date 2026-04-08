@@ -1,7 +1,7 @@
 """
 $(TYPEDSIGNATURES)
 """
-function adaptive_mesh_refinement!(p4est::P_pxest_t,ka::KA;ps_interval=40,vs_interval=80,partition_interval=40)
+function adaptive_mesh_refinement!(p4est::P_pxest_t,ka::KA;ps_interval=40,vs_interval=80,partition_interval=40,vs_balance=false)
     ka.kinfo.status.residual.redundant_step>0&&(return nothing)
     res = maximum(ka.kinfo.status.residual.residual)
     converge_ratio = res/ka.kinfo.config.solver.TOLERANCE>100 ? 1 : Int(floor(100*ka.kinfo.config.solver.TOLERANCE/res))
@@ -11,7 +11,11 @@ function adaptive_mesh_refinement!(p4est::P_pxest_t,ka::KA;ps_interval=40,vs_int
         flag = true;ka.kinfo.status.ps_adapt_step = 0
     end
     if ka.kinfo.config.solver.VS_DYNAMIC_AMR&&ka.kinfo.status.vs_adapt_step > vs_interval*converge_ratio
-        vs_adaptive_mesh_refinement!(ka)
+        if vs_balance
+            update_ghost!(p4est,ka)
+            update_neighbor!(p4est,ka)
+        end
+        vs_adaptive_mesh_refinement!(ka;vs_balance)
         flag = true;ka.kinfo.status.vs_adapt_step=0
     end
     if (ka.kinfo.config.solver.PS_DYNAMIC_AMR||ka.kinfo.config.solver.VS_DYNAMIC_AMR)&&ka.kinfo.status.partition_step>partition_interval*converge_ratio
@@ -19,7 +23,8 @@ function adaptive_mesh_refinement!(p4est::P_pxest_t,ka::KA;ps_interval=40,vs_int
         flag = true;ka.kinfo.status.partition_step = 0
     end
     if flag
-        amr_recover!(p4est,ka)        
+        amr_recover!(p4est,ka)      
+        execute_check(p4est,ka)  
     end
     return nothing
 end

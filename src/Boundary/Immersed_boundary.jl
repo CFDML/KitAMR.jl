@@ -208,52 +208,6 @@ function IB_flag(aux_points::Vector{Vector{Vector{Float64}}},midpoint::AbstractV
     return false
 end
 
-function vs_extrapolate!(df::AbstractMatrix{Float64},sdf::AbstractMatrix{Float64},level::AbstractVector{Int8},dft::AbstractMatrix{Float64},levelt::Vector{Int8},dx::Float64,::KA{DIM,NDF}) where{DIM,NDF}
-    j = 1;flag = 0.0
-    @inbounds for i in axes(dft,1)
-        if levelt[i] == level[j]
-            @. dft[i, :] = @views df[j, :]+sdf[j,:]*dx
-            j += 1
-        elseif levelt[i] < level[j]
-            while flag != 1.0
-                @. dft[i, :] += @views (df[j, :]+sdf[j,:]*dx)/ 2^(DIM * (level[j] - levelt[i]))
-                flag += 1 / 2^(DIM * (level[j] - levelt[i]))
-                j += 1
-            end
-            flag = 0.0
-        else
-            @. dft[i, :] = @views df[j,:]+sdf[j,:]*dx
-            flag += 1 / 2^(DIM * (levelt[i] - level[j]))
-            if flag == 1.0
-                j += 1
-                flag = 0.0
-            end
-        end
-    end
-end
-function vs_extrapolate!(df::AbstractMatrix{Float64},sdf::AbstractMatrix{Float64},level::AbstractVector{Int8},dft::AbstractMatrix{Float64},levelt::Vector{Int8},dx::Float64,weight::AbstractVector{Float64},::KA{DIM,NDF}) where{DIM,NDF}
-    j = 1;flag = 0.0
-    @inbounds for i in axes(dft,1)
-        if levelt[i] == level[j]
-            @. dft[i, :] += @views (df[j, :]+sdf[j,:]*dx)*weight[i]
-            j += 1
-        elseif levelt[i] < level[j]
-            while flag != 1.0
-                @. dft[i, :] += @views (df[j, :]+sdf[j,:]*dx)/ 2^(DIM * (level[j] - levelt[i]))*weight[i]
-                flag += 1 / 2^(DIM * (level[j] - levelt[i]))
-                j += 1
-            end
-            flag = 0.0
-        else
-            @. dft[i, :] += @views (df[j,:]+sdf[j,:]*dx)*weight[i]
-            flag += 1 / 2^(DIM * (levelt[i] - level[j]))
-            if flag == 1.0
-                j += 1
-                flag = 0.0
-            end
-        end
-    end
-end
 function vs_extrapolate!(df::AbstractMatrix{Float64},sdf::AbstractArray{Float64},level::AbstractVector{Int8},dft::AbstractMatrix{Float64},levelt::Vector{Int8},dx::Vector{Float64},weight::AbstractVector{Float64},::KA{DIM,NDF}) where{DIM,NDF}
     ddf = @views [dot(sdf[i,j,:],dx) for i in axes(sdf,1), j in axes(sdf,2)]
     j = 1;flag = 0.0
@@ -302,6 +256,61 @@ function update_solid_cell!(ps_data::PsData{DIM,NDF},ka::KA{DIM,NDF}) where{DIM,
     fluid_dirs = findall(x->!isnothing(x[1])&&!isa(x[1],AbstractInsideSolidData)&&x[1].bound_enc>=0,ps_data.neighbor.data)
     fluid_cells = [ps_data.neighbor.data[i][1] for i in fluid_dirs]
     update_solid_cell!(ka.kinfo.config.solver.flux,ps_data,fluid_cells,ka)
+end
+
+
+
+function vs_translate!(df::AbstractMatrix{Float64},level::AbstractVector{Int8},dft::AbstractMatrix{Float64},levelt::Vector{Int8},weight::AbstractVector{Float64},::KA{DIM,NDF}) where{DIM,NDF}
+    j = 1;flag = 0.0
+    @inbounds for i in axes(dft,1)
+        if levelt[i] == level[j]
+            @. dft[i, :] += @views df[j, :]*weight[i]
+            j += 1
+        elseif levelt[i] < level[j]
+            while flag != 1.0
+                @. dft[i, :] += @views df[j, :]/ 2^(DIM * (level[j] - levelt[i]))*weight[i]
+                flag += 1 / 2^(DIM * (level[j] - levelt[i]))
+                j += 1
+            end
+            flag = 0.0
+        else
+            @. dft[i, :] += @views df[j,:]*weight[i]
+            flag += 1 / 2^(DIM * (levelt[i] - level[j]))
+            if flag == 1.0
+                j += 1
+                flag = 0.0
+            end
+        end
+    end
+end
+"""
+$(SIGNATURES)
+Filter the solid cell by fluid cells to guarantee the positivity of density and temperature.
+"""
+function filter_solid_cell!(ps_data::PsData{DIM,NDF},ka::KA{DIM,NDF}) where{DIM,NDF}
+    fluid_dirs = findall(x->!isnothing(x[1])&&!isa(x[1],AbstractInsideSolidData)&&x[1].bound_enc>=0,ps_data.neighbor.data)
+    fluid_cells = [ps_data.neighbor.data[i][1] for i in fluid_dirs]
+    filter_solid_cell!(ka.kinfo.config.solver.flux,ps_data,fluid_cells,ka)
+end
+function filter_solid_cell!(::Type{T},ps_data::PsData{DIM,NDF},fluid_cells::Vector,ka::KA{DIM,NDF}) where{DIM,NDF,T<:Union{DVM,CAIDVM,UGKS}}
+    vs_data = ps_data.vs_data;vs_data.df.=0.
+    weights = Matrix{Float64}(undef,vs_data.vs_num,length(fluid_cells))
+    for i in eachindex(fluid_cells)
+        l = ps_data.midpoint-fluid_cells[i].midpoint;l/=norm(l)
+        weights[:,i] .= [max(0.,dot(u,l)/norm(u))^2 for u in eachrow(vs_data.midpoint)]
+    end
+    weight_i = Vector{Float64}(undef,vs_data.vs_num)
+    weight_sum = sum(weights,dims=2)
+    for i in eachindex(fluid_cells)
+        f_vs_data = fluid_cells[i].vs_data
+        for j in eachindex(weight_i)
+            weight_i[j] = weight_sum[j]==0. ? 1.0/length(fluid_cells) : weights[j,i]/weight_sum[j]
+        end
+        fdf = f_vs_data.df
+        vs_translate!(fdf,f_vs_data.level,vs_data.df,vs_data.level,weight_i,ka)
+    end
+    ps_data.w = calc_w0(ps_data)
+    ps_data.prim = get_prim(ps_data,ka.kinfo)
 end
 
 """
@@ -389,6 +398,9 @@ function initialize_solid_neighbor!(ps_data::PsData{DIM,NDF},ka::KA{DIM,NDF}) wh
     vs_data = ps_data.vs_data
     for i in solid_dirs
         solid_cell = ps_data.neighbor.data[i][1]
+        if isa(solid_cell,AbstractInsideSolidData)
+            @show solid_cell.midpoint solid_cell.ds solid_cell.bound_enc ps_data.midpoint ps_data.ds ps_data.bound_enc i 
+        end
         ps_data.bound_enc = -solid_cell.bound_enc
         ib = ka.kinfo.config.IB[-solid_cell.bound_enc]
         aux_point,normal = calc_intersect(ps_data.midpoint,solid_cell.midpoint,ps_data.ds,get_dir(i),ib)
