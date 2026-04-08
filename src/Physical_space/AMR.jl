@@ -780,10 +780,10 @@ end
 $(TYPEDSIGNATURES)
 Outer function of AMR in physical space.
 """
-function ps_adaptive_mesh_refinement!(p4est::P_pxest_t,ka::KA)
+function ps_adaptive_mesh_refinement!(p4est::P_pxest_t,ka::KA;recursive = false)
     update_gradmax!(ka)
-    ps_refine!(p4est,ka)
-    ps_coarsen!(p4est)
+    ps_refine!(p4est,ka;recursive = recursive ? 1 : 0)
+    ps_coarsen!(p4est; recursive = recursive ? 1 : 0)
     ps_balance!(p4est)
     return nothing
 end

@@ -24,7 +24,7 @@ gas = Gas(;
 )
 output = Output(solver)
 udf = UDF(;
-    dynamic_ps_refine_flag = shock_wave_region
+    # dynamic_ps_refine_flag = shock_wave_region
 )
 config = Configure(solver;
     geometry = [-4.,4.,-4.,4.,-4.,4.],
