@@ -4,7 +4,6 @@ In current stage, KitAMR.jl has several noticeable limitations, including
 - Flows with volume forces (which will introduce derivatives with respect to velocity coordinates) are not supported.
 - Only translational non-equilibrium effects is introduced.
 - Only support fully diffuse Maxwellian gas-surface interaction model.
-- Sizes of buffer for ghost communications in different processors are unified to contain the largest velocity space in all of the ghost layers.
 - Restart is not supported in consideration of the enormous size of data in complete phase space.
 - Only support Euler method for time marching, which only exhibits first order accuracy. For transient problems, higher order time marching scheme is required to be consistent with spatial and quadrature accuracy.
 
