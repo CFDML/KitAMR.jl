@@ -577,23 +577,6 @@ end
 
 """
 $(TYPEDSIGNATURES)
-Update `df` in [`GhostVsData`](@ref) for immersed-boundary cells only.
-"""
-function solid_exchange!(p4est::P_pxest_t, ka::KA{DIM,NDF}) where{DIM,NDF}
-    MPI.Comm_size(MPI.COMM_WORLD) == 1 && return nothing
-    isempty(ka.kinfo.config.IB) && return nothing
-    update_solid_mirror_data!(p4est, ka)
-    gp_obj = ka.kdata.ghost.ghost_pointers
-    mirror_szs = [size_Ghost_Data(v, DIM, NDF) for v in gp_obj.mirror_vsnums]
-    ghost_szs  = [size_Ghost_Data(v, DIM, NDF) for v in gp_obj.ghost_vsnums]
-    amr_exchange_varsize!(
-        ka.kinfo.forest.ghost,
-        gp_obj.ghost_datas, gp_obj.ghost_data_offsets, ghost_szs,
-        gp_obj.mirror_data_pointers, mirror_szs, 51)
-end
-
-"""
-$(TYPEDSIGNATURES)
 Update `sdf` in [`GhostVsData`](@ref).
 """
 function slope_exchange!(p4est::P_pxest_t, ka::KA{DIM,NDF}) where{DIM,NDF}
