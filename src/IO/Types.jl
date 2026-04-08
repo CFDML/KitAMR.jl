@@ -11,7 +11,6 @@ struct ConfigureForSave{DIM,NDF}
     user_defined::UDF
 end
 struct StatusForSave
-    max_vs_num::Int
     gradmax::Vector{Float64}
     Δt::Float64
     Δt_ξ::Float64
@@ -30,13 +29,14 @@ function ConfigureForSave(config::Configure{DIM,NDF}) where{DIM,NDF}
     )
 end
 function StatusForSave(status::Status)
-    return StatusForSave(status.max_vs_num,status.gradmax,status.Δt,
+    return StatusForSave(
+        status.gradmax,status.Δt,
         status.Δt_ξ,status.sim_time,status.ps_adapt_step,
         status.vs_adapt_step,status.partition_step
     )
 end
-function Status(status::StatusForSave)
-    return Status(status.max_vs_num,status.gradmax,status.Δt,
+function Status(status::StatusForSave, DIM::Int)
+    return Status(status.gradmax,status.Δt,
         status.Δt_ξ,status.sim_time,status.ps_adapt_step,
         status.vs_adapt_step,status.partition_step,Residual(DIM),Ref(false),false)
 end

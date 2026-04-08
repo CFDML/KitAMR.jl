@@ -7,7 +7,7 @@ AbstractVsData
 VsData
 ```
 ```@docs
-Ghost_VsData
+GhostVsData
 ```
 ```@docs
 FaceVsData

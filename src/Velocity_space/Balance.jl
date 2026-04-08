@@ -237,8 +237,8 @@ function vs_ghost_exchange!(p4est::P_pxest_t, ka::KA{DIM,NDF}) where {DIM,NDF}
     old_ghost_wrap = ka.kdata.ghost.ghost_wrap
     # Free old C-level buffers (ghost_datas, ghost_slopes, ghost_structures, mirrors).
     finalize_ghost!(ka.kdata.ghost.ghost_pointers)
-    # Re-exchange: get_mirror_data internally calls get_vs_num which updates
-    # kinfo.status.max_vs_num via MPI_Allreduce, handling any increase in vs_num.
+    # Re-exchange: exchange_ghost_vsnums updates kinfo.status.max_vs_num via
+    # MPI_Allreduce, then variable-size buffers are allocated per actual vs_num.
     ka.kdata.ghost.ghost_pointers = initialize_ghost_pointers(p4est, kinfo)
     ka.kdata.ghost.ghost_wrap     = initialize_ghost_wrap(kinfo, ka.kdata.ghost.ghost_pointers)
     # Replace stale ghost references in neighbor.data with the new objects.

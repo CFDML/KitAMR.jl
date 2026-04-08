@@ -24,7 +24,6 @@ function adaptive_mesh_refinement!(p4est::P_pxest_t,ka::KA;ps_interval=40,vs_int
     end
     if flag
         amr_recover!(p4est,ka)      
-        execute_check(p4est,ka)  
     end
     return nothing
 end

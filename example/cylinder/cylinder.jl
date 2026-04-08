@@ -47,7 +47,7 @@ listen_for_save!()
 max_sim_time = 20.
 nt = max_sim_time/ka.kinfo.status.Δt+1.0 |> floor |> Int
 for i in 1:nt
-    adaptive_mesh_refinement!(p4est,ka;ps_interval = 4, partition_interval=40)
+    adaptive_mesh_refinement!(p4est,ka;ps_interval = 40, partition_interval=40)
     update_slope!(ka)
     slope_exchange!(p4est, ka) 
     update_solid_cell!(ka)

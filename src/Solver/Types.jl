@@ -356,8 +356,6 @@ Structure of simulation status. It contains the real time information, and is up
 $(TYPEDFIELDS)
 """
 mutable struct Status
-    "Maximum number of the velocity grids among ghost quadrants."
-    max_vs_num::Int # maximum vs_num among ghost quadrants
     "Maximum absolute value of the gradients of conserved variables."
     gradmax::Vector{Float64}
     "Time step size used in [`iterate!`](@ref)."
@@ -390,7 +388,7 @@ function Status(config::Dict)
         (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
         2^config[:AMR_VS_MAXLEVEL] / 2 for i in 1:DIM] : [maximum(abs.(quadrature.vcoords)) for _ in 1:DIM]
     Δt_ξ = config[:CFL]*minimum(ds ./ U)
-    return Status(0, zeros(DIM+2), Δt_ξ,Δt_ξ,0.,0,1,1,1,Residual(DIM),Ref(false))
+    return Status(zeros(DIM+2), Δt_ξ,Δt_ξ,0.,0,1,1,1,Residual(DIM),Ref(false))
 end
 function Status(config::Configure{DIM,NDF}) where{DIM,NDF}
     trees_num = config.trees_num
@@ -402,7 +400,7 @@ function Status(config::Configure{DIM,NDF}) where{DIM,NDF}
         (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
         2^config.solver.AMR_VS_MAXLEVEL / 2 for i in 1:DIM] : [maximum(abs.(quadrature.vcoords)) for _ in 1:DIM]
     Δt_ξ = config.solver.CFL*minimum(ds ./ U)
-    return Status(0, zeros(DIM+2), Δt_ξ,Δt_ξ,0.,0,1,1,1,Residual(DIM),Ref(false))
+    return Status(zeros(DIM+2), Δt_ξ,Δt_ξ,0.,0,1,1,1,Residual(DIM),Ref(false))
 end
 
 """
@@ -474,6 +472,16 @@ mutable struct GhostPointers
     mirror_data_pointers::Vector{Ptr{Cdouble}}
     mirror_slope_pointers::Vector{Ptr{Cdouble}}
     mirror_structure_pointers::Vector{Ptr{Cdouble}}
+    "vs_num of each ghost quadrant (length = n_ghosts)."
+    ghost_vsnums::Vector{Int}
+    "vs_num of each mirror quadrant (length = n_mirrors)."
+    mirror_vsnums::Vector{Int}
+    "Float64-element offset into ghost_datas for each ghost quadrant."
+    ghost_data_offsets::Vector{Int}
+    "Float64-element offset into ghost_slopes for each ghost quadrant."
+    ghost_slope_offsets::Vector{Int}
+    "Float64-element offset into ghost_structures for each ghost quadrant."
+    ghost_structure_offsets::Vector{Int}
 end
 
 """

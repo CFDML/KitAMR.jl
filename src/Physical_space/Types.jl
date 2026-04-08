@@ -111,7 +111,7 @@ mutable struct GhostPsData{DIM,NDF}<:AbstractGhostPsData{DIM,NDF}
     midpoint::Vector{Cdouble}
     w::Vector{Cdouble}
     sw::Matrix{Cdouble}
-    vs_data::Ghost_VsData{DIM,NDF}
+    vs_data::GhostVsData{DIM,NDF}
 end
 
 """

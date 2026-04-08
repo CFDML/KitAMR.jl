@@ -60,7 +60,7 @@ Main loop.
 for i in 1:nt
     adaptive_mesh_refinement!(p4est,ka;ps_interval = 40, vs_interval=40, partition_interval=40) # AMR.
     update_slope!(ka) # Update `sdf` in `VsData` and `sw` in `PsData`.
-    slope_exchange!(p4est, ka) # Update `sdf` in `Ghost_VsData` by MPI communication.
+    slope_exchange!(p4est, ka) # Update `sdf` in `GhostVsData` by MPI communication.
     update_solid_cell!(ka) # Update variables in solid cells in immersed boundaries.
     solid_exchange!(p4est, ka) # Update variables in ghost solid cells by MPI communication.
     update_solid_neighbor!(ka) # Update variables in SolidNeighbor by IBM.

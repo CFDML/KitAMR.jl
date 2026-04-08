@@ -23,7 +23,7 @@ end
 $(TYPEDEF)
 $(TYPEDFIELDS)
 """
-mutable struct Ghost_VsData{DIM,NDF} <: AbstractVsData{DIM,NDF}
+mutable struct GhostVsData{DIM,NDF} <: AbstractVsData{DIM,NDF}
     vs_num::Int
     level::Vector{Int8} # vs_num
     weight::Vector{Float64} # vs_num

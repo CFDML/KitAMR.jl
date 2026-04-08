@@ -16,8 +16,6 @@ function execute_check(p4est,ka)
         println("Simulation time: $sim_time")
         res = maximum(ka.kinfo.status.residual.residual)
         println("Residual: $res")
-        ref_vs_num = ka.kinfo.status.max_vs_num
-        println("MPI buffer size: $ref_vs_num")
         println("Maximum number of velocity grids: $max_vs_num")
         pp = PointerWrapper(p4est)
         global_num_quadrants = pp.global_num_quadrants[]
