@@ -4,7 +4,7 @@
         alt="KitAMR Logo" width="100">
   </img>
 
-  <font size="7"><b>KitAMR.jl</b></font>
+  # KitAMR.jl
   
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://cfdml.github.io/KitAMR.jl/dev/)
 ![CI](https://img.shields.io/github/actions/workflow/status/vavrines/KitBase.jl/ci.yml?branch=main)
