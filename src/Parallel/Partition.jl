@@ -318,10 +318,10 @@ function up_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::Vec
     index = 1
     up_num = length(sends)
     encs = Vector{Int}(undef, 0)
-    ws = Vector{Cdouble}(undef, 0)
+    ws = Vector{Float64}(undef, 0)
     vs_levels = Vector{Int8}(undef, 0)
-    vs_midpoints = Vector{Cdouble}(undef, 0)
-    vs_df = Vector{Cdouble}(undef, 0)
+    vs_midpoints = Vector{Float64}(undef, 0)
+    vs_df = Vector{Float64}(undef, 0)
     s_vs_nums = Vector{Int}(undef, send_nums[send_index])
     for i in eachindex(trees)
         for j in eachindex(trees[i])
@@ -349,10 +349,10 @@ function up_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::Vec
                 send_index += 1
                 send_index > up_num && break
                 encs = Vector{Int}(undef, 0)
-                ws = Vector{Cdouble}(undef, 0)
+                ws = Vector{Float64}(undef, 0)
                 vs_levels = Vector{Int8}(undef, 0)
-                vs_midpoints = Vector{Cdouble}(undef, 0)
-                vs_df = Vector{Cdouble}(undef, 0)
+                vs_midpoints = Vector{Float64}(undef, 0)
+                vs_df = Vector{Float64}(undef, 0)
                 s_vs_nums = Vector{Int}(undef, send_nums[send_index])
             end
         end
@@ -367,10 +367,10 @@ function down_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::V
     send_index = length(sends)
     index = send_nums[send_index]
     encs = Vector{Int}(undef, 0)
-    ws = Vector{Cdouble}(undef, 0)
+    ws = Vector{Float64}(undef, 0)
     vs_levels = Vector{Int8}(undef, 0)
-    vs_midpoints = Vector{Cdouble}(undef, 0)
-    vs_df = Vector{Cdouble}(undef, 0)
+    vs_midpoints = Vector{Float64}(undef, 0)
+    vs_df = Vector{Float64}(undef, 0)
     s_vs_nums = Vector{Int}(undef, send_nums[send_index])
     for i in reverse(eachindex(trees))
         for j in reverse(eachindex(trees[i]))
@@ -398,10 +398,10 @@ function down_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::V
                 send_index < 1 && break
                 index = send_nums[send_index]
                 encs = Vector{Int}(undef, 0)
-                ws = Vector{Cdouble}(undef, 0)
+                ws = Vector{Float64}(undef, 0)
                 vs_levels = Vector{Int8}(undef, 0)
-                vs_midpoints = Vector{Cdouble}(undef, 0)
-                vs_df = Vector{Cdouble}(undef, 0)
+                vs_midpoints = Vector{Float64}(undef, 0)
+                vs_df = Vector{Float64}(undef, 0)
                 s_vs_nums = Vector{Int}(undef, send_nums[send_index])
             end
         end

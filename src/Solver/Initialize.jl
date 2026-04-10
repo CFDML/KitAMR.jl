@@ -471,9 +471,9 @@ $(TYPEDSIGNATURES)
 Initialize [`Ghost`](@ref) structure.
 """
 function initialize_ghost(p4est::P_pxest_t,kinfo::KInfo)
-    ghost_pointers = initialize_ghost_pointers(p4est,kinfo)
-    ghost_wrap = initialize_ghost_wrap(kinfo,ghost_pointers)
-    return Ghost(ghost_pointers,ghost_wrap)
+    ghost_buffer, ghost_info = initialize_ghost_pool(p4est,kinfo)
+    ghost_wrap = initialize_ghost_wrap(kinfo, ghost_buffer, ghost_info)
+    return Ghost(ghost_buffer, ghost_wrap, ghost_info)
 end
 
 function initialize_forest!(p4est,kinfo::KInfo)

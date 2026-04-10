@@ -5,7 +5,7 @@ function calc_domain_flux(::Type{UGKS},here_vs::FaceVsData,face::DomainFace{2,2,
     gas = kinfo.config.gas
     Δt = kinfo.status.Δt
     vs_data = here_data.vs_data
-    nheavi = [!x for x in heavi]
+    nheavi = .!heavi
     there_mid = @views vs_data.midpoint[nheavi,:]
     there_weight = @views vs_data.weight[nheavi]
     there_vn = @views there_mid[:,direction]
@@ -13,8 +13,9 @@ function calc_domain_flux(::Type{UGKS},here_vs::FaceVsData,face::DomainFace{2,2,
     dx = midpoint-here_data.midpoint
     bc = get_bc(face.domain.bc)
     domain_w = get_conserved(bc,kinfo)
-    @inbounds @views begin
-        df = [here_df[i,j]+dot(dx,here_sdf[i,j,:]) for i in axes(here_df,1),j in axes(here_df,2)]
+    df = copy(here_df)
+    for k in axes(here_sdf, 3)
+        @views @. df += dx[k] * here_sdf[:, :, k]
     end
     ndf = Matrix{Float64}(undef,size(there_mid,1),2)
     @inbounds for i in axes(ndf,1)

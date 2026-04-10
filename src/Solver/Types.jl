@@ -462,16 +462,32 @@ end
 
 """
 $(TYPEDEF)
-Structure of ghost data and pointers used by `p4est`.
+Julia-managed MPI buffers for the ghost layer.  All memory is owned by the Julia
+GC; no manual `sc_free` is required.
 $(TYPEDFIELDS)
 """
-mutable struct GhostPointers
-    ghost_datas::Ptr{Cdouble}
-    ghost_slopes::Ptr{Cdouble}
-    ghost_structures::Ptr{Cdouble}
-    mirror_data_pointers::Vector{Ptr{Cdouble}}
-    mirror_slope_pointers::Vector{Ptr{Cdouble}}
-    mirror_structure_pointers::Vector{Ptr{Cdouble}}
+mutable struct GhostBuffer
+    "Flat receive buffer for ghost cell data (df, w, …)."
+    ghost_datas::Vector{Float64}
+    "Flat receive buffer for ghost cell slopes (sdf, sw)."
+    ghost_slopes::Vector{Float64}
+    "Flat receive buffer for ghost VS structure (weight, level, midpoint)."
+    ghost_structures::Vector{Float64}
+    "Per-mirror send buffer for data, one entry per mirror quadrant."
+    mirror_data_bufs::Vector{Vector{Float64}}
+    "Per-mirror send buffer for slopes, one entry per mirror quadrant."
+    mirror_slope_bufs::Vector{Vector{Float64}}
+    "Per-mirror send buffer for VS structure, one entry per mirror quadrant."
+    mirror_structure_bufs::Vector{Vector{Float64}}
+end
+
+"""
+$(TYPEDEF)
+Julia-managed metadata for the ghost layer: vs_nums, flat-buffer offsets, and
+pre-computed element-count arrays that are reused every time-step without reallocation.
+$(TYPEDFIELDS)
+"""
+struct GhostInfo
     "vs_num of each ghost quadrant (length = n_ghosts)."
     ghost_vsnums::Vector{Int}
     "vs_num of each mirror quadrant (length = n_mirrors)."
@@ -482,6 +498,14 @@ mutable struct GhostPointers
     ghost_slope_offsets::Vector{Int}
     "Float64-element offset into ghost_structures for each ghost quadrant."
     ghost_structure_offsets::Vector{Int}
+    "Cached Float64-element count of ghost data buffer per ghost quadrant."
+    ghost_data_szs::Vector{Int}
+    "Cached Float64-element count of ghost slope buffer per ghost quadrant."
+    ghost_slope_szs::Vector{Int}
+    "Cached Float64-element count of ghost data buffer per mirror quadrant."
+    mirror_data_szs::Vector{Int}
+    "Cached Float64-element count of ghost slope buffer per mirror quadrant."
+    mirror_slope_szs::Vector{Int}
 end
 
 """
@@ -501,8 +525,9 @@ Structure of ghost layer for communication between processors.
 $(TYPEDFIELDS)
 """
 mutable struct Ghost
-    ghost_pointers::GhostPointers
+    ghost_buffer::GhostBuffer
     ghost_wrap::Vector{AbstractGhostPsData}
+    ghost_info::GhostInfo
 end
 
 """

@@ -107,10 +107,10 @@ mutable struct GhostPsData{DIM,NDF}<:AbstractGhostPsData{DIM,NDF}
     owner_rank::Int
     quadid::Int # Not continuous! Only provide an order among ghost_datas from the same owner rank.
     bound_enc::Int
-    ds::Vector{Cdouble}
-    midpoint::Vector{Cdouble}
-    w::Vector{Cdouble}
-    sw::Matrix{Cdouble}
+    ds::Vector{Float64}
+    midpoint::Vector{Float64}
+    w::Vector{Float64}
+    sw::Matrix{Float64}
     vs_data::GhostVsData{DIM,NDF}
 end
 

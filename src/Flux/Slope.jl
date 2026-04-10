@@ -70,14 +70,18 @@ function update_slope_bound_vs!(
     neighbor_datas::AbstractVector,
     ds::Float64,
     dir::Int,
+    ws_sdf::Matrix{Float64},
 ) where{DIM,NDF}
-    sdf = zeros(Float64, vs_data.vs_num, NDF)
+    vsn = vs_data.vs_num
+    sdf = @view ws_sdf[1:vsn, :]
+    fill!(sdf, 0.0)
     N = length(neighbor_datas)
     for j = 1:N
         neighbor_data = neighbor_datas[j].vs_data
         diff_vs!(vs_data, neighbor_data, ds, sdf)
     end
-    vs_data.sdf[:, :, dir] .= sdf / N
+    sdf ./= N
+    vs_data.sdf[:, :, dir] .= sdf
     return nothing
 end
 """
@@ -90,10 +94,14 @@ function update_slope_inner_vs!(
     dsL::Float64,
     dsR::Float64,
     dir::Int,
+    ws_sL::Matrix{Float64},
+    ws_sR::Matrix{Float64},
 ) where{DIM,NDF}
-    sL = zeros(Float64, vs_data.vs_num, NDF)
-    sR = zeros(Float64, vs_data.vs_num, NDF)
-    nL = length(Ldata);nR = length(Rdata)
+    vsn = vs_data.vs_num
+    sL = @view ws_sL[1:vsn, :]
+    sR = @view ws_sR[1:vsn, :]
+    fill!(sL, 0.0); fill!(sR, 0.0)
+    nL = length(Ldata); nR = length(Rdata)
     for j in 1:nL
         L_data = Ldata[j].vs_data
         diff_vs!(vs_data, L_data, dsL, sL)
@@ -102,31 +110,34 @@ function update_slope_inner_vs!(
         R_data = Rdata[j].vs_data
         diff_vs!(vs_data, R_data, dsR, sR)
     end
-    vs_data.sdf[:, :, dir] .= vanleer(sL / nL, sR / nR)
+    sL ./= nL; sR ./= nR
+    @. vs_data.sdf[:, :, dir] = vanleer(sL, sR)
     return nothing
 end
 """
 $(TYPEDSIGNATURES)
 """
 function update_slope_inner_ps!(
-    ps_data::PsData{DIM,NDF}, 
-    Ldata::AbstractVector, 
-    Rdata::AbstractVector, 
-    dsL::Float64, 
-    dsR::Float64, 
+    ps_data::PsData{DIM,NDF},
+    Ldata::AbstractVector,
+    Rdata::AbstractVector,
+    dsL::Float64,
+    dsR::Float64,
     dir::Int,
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
 ) where{DIM,NDF}
-    swL = zeros(Float64,DIM+2);swR = zeros(Float64,DIM+2)
-    nL = length(Ldata);nR = length(Rdata)
+    fill!(ws_swL, 0.0); fill!(ws_swR, 0.0)
+    nL = length(Ldata); nR = length(Rdata)
     for j in 1:nL
-        @. swL += (ps_data.w-Ldata[j].w)/dsL
+        @. ws_swL += (ps_data.w - Ldata[j].w) / dsL
     end
     for j in 1:nR
-        @. swR += (ps_data.w-Rdata[j].w)/dsR
+        @. ws_swR += (ps_data.w - Rdata[j].w) / dsR
     end
-    swL/=nL;swR/=nR
-    for j in eachindex(swL)
-        ps_data.sw[j,dir] = abs(swL[j])>abs(swR[j]) ? swL[j] : swR[j]
+    ws_swL ./= nL; ws_swR ./= nR
+    for j in eachindex(ws_swL)
+        ps_data.sw[j, dir] = abs(ws_swL[j]) > abs(ws_swR[j]) ? ws_swL[j] : ws_swR[j]
     end
     return nothing
 end
@@ -134,18 +145,19 @@ end
 $(TYPEDSIGNATURES)
 """
 function update_slope_bound_ps!(
-    ps_data::PsData{DIM,NDF}, 
-    Ldata::AbstractVector, 
-    dsL::Float64, 
+    ps_data::PsData{DIM,NDF},
+    Ldata::AbstractVector,
+    dsL::Float64,
     dir::Int,
+    ws_swL::Vector{Float64},
 ) where{DIM,NDF}
-    swL = zeros(Float64,DIM+2)
+    fill!(ws_swL, 0.0)
     nL = length(Ldata)
     for j in 1:nL
-        @. swL += (ps_data.w-Ldata[j].w)/dsL
+        @. ws_swL += (ps_data.w - Ldata[j].w) / dsL
     end
-    swL/=nL
-    ps_data.sw[:,dir] .= swL
+    ws_swL ./= nL
+    ps_data.sw[:, dir] .= ws_swL
     return nothing
 end
 
@@ -162,21 +174,25 @@ function update_slope!(
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
+    ws_sL::Matrix{Float64},
+    ws_sR::Matrix{Float64},
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     if Ldata[1].bound_enc<0&&Rdata[1].bound_enc<0
         ps_data.vs_data.sdf[:,:,dir] .= 0.
     elseif Ldata[1].bound_enc<0
         ds = ps_data.midpoint[dir]-Rdata[1].midpoint[dir]
-        update_slope_bound_vs!(ps_data.vs_data,Rdata,ds,dir)
-        update_slope_bound_ps!(ps_data,Rdata,ds,dir)
+        update_slope_bound_vs!(ps_data.vs_data, Rdata, ds, dir, ws_sL)
+        update_slope_bound_ps!(ps_data, Rdata, ds, dir, ws_swL)
     elseif Rdata[1].bound_enc<0
         ds = ps_data.midpoint[dir]-Ldata[1].midpoint[dir]
-        update_slope_bound_vs!(ps_data.vs_data,Ldata,ds,dir)
-        update_slope_bound_ps!(ps_data,Ldata,ds,dir)
+        update_slope_bound_vs!(ps_data.vs_data, Ldata, ds, dir, ws_sL)
+        update_slope_bound_ps!(ps_data, Ldata, ds, dir, ws_swL)
     else
         ds = ps_data.ds[dir]
-        update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ds, -ds, dir)
-        update_slope_inner_ps!(ps_data, Ldata, Rdata, ds, -ds, dir)
+        update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ds, -ds, dir, ws_sL, ws_sR)
+        update_slope_inner_ps!(ps_data, Ldata, Rdata, ds, -ds, dir, ws_swL, ws_swR)
     end
     return nothing
 end
@@ -191,10 +207,14 @@ function update_slope!(
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
+    ws_sL::Matrix{Float64},
+    ws_sR::Matrix{Float64},
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.ds[dir]
-    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ds, -0.75 * ds, dir)
-    update_slope_inner_ps!(ps_data, Ldata, Rdata, ds, -0.75 * ds, dir)
+    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ds, -0.75 * ds, dir, ws_sL, ws_sR)
+    update_slope_inner_ps!(ps_data, Ldata, Rdata, ds, -0.75 * ds, dir, ws_swL, ws_swR)
 end
 """
 $(TYPEDSIGNATURES)
@@ -207,10 +227,14 @@ function update_slope!(
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
+    ws_sL::Matrix{Float64},
+    ws_sR::Matrix{Float64},
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.ds[dir]
-    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, -ds, dir)
-    update_slope_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, -ds, dir)
+    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, -ds, dir, ws_sL, ws_sR)
+    update_slope_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, -ds, dir, ws_swL, ws_swR)
 end
 """
 $(TYPEDSIGNATURES)
@@ -223,10 +247,14 @@ function update_slope!(
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
+    ws_sL::Matrix{Float64},
+    ws_sR::Matrix{Float64},
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.ds[dir]
-    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, -0.75 * ds, dir)
-    update_slope_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, -0.75 * ds, dir)
+    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, -0.75 * ds, dir, ws_sL, ws_sR)
+    update_slope_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, -0.75 * ds, dir, ws_swL, ws_swR)
 end
 """
 $(TYPEDSIGNATURES)
@@ -239,10 +267,14 @@ function update_slope!(
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
+    ws_sL::Matrix{Float64},
+    ws_sR::Matrix{Float64},
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.ds[dir]
-    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, -1.5 * ds, dir)
-    update_slope_inner_ps!(ps_data, Ldata, Rdata, 1.5 * ds, -1.5 * ds, dir)
+    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, -1.5 * ds, dir, ws_sL, ws_sR)
+    update_slope_inner_ps!(ps_data, Ldata, Rdata, 1.5 * ds, -1.5 * ds, dir, ws_swL, ws_swR)
 end
 """
 $(TYPEDSIGNATURES)
@@ -255,10 +287,14 @@ function update_slope!(
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
+    ws_sL::Matrix{Float64},
+    ws_sR::Matrix{Float64},
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.ds[dir]
-    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ds, -1.5 * ds, dir)
-    update_slope_inner_ps!(ps_data, Ldata, Rdata, ds, -1.5 * ds, dir)
+    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ds, -1.5 * ds, dir, ws_sL, ws_sR)
+    update_slope_inner_ps!(ps_data, Ldata, Rdata, ds, -1.5 * ds, dir, ws_swL, ws_swR)
 end
 """
 $(TYPEDSIGNATURES)
@@ -271,10 +307,14 @@ function update_slope!(
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
+    ws_sL::Matrix{Float64},
+    ws_sR::Matrix{Float64},
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.ds[dir]
-    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, -ds, dir)
-    update_slope_inner_ps!(ps_data, Ldata, Rdata, 1.5 * ds, -ds, dir)
+    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, -ds, dir, ws_sL, ws_sR)
+    update_slope_inner_ps!(ps_data, Ldata, Rdata, 1.5 * ds, -ds, dir, ws_swL, ws_swR)
 end
 """
 $(TYPEDSIGNATURES)
@@ -287,10 +327,14 @@ function update_slope!(
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
+    ws_sL::Matrix{Float64},
+    ws_sR::Matrix{Float64},
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.ds[dir]
-    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, -1.5 * ds, dir)
-    update_slope_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, -1.5 * ds, dir)
+    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, -1.5 * ds, dir, ws_sL, ws_sR)
+    update_slope_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, -1.5 * ds, dir, ws_swL, ws_swR)
 end
 """
 $(TYPEDSIGNATURES)
@@ -303,10 +347,14 @@ function update_slope!(
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
+    ws_sL::Matrix{Float64},
+    ws_sR::Matrix{Float64},
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.ds[dir]
-    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, -0.75 * ds, dir)
-    update_slope_inner_ps!(ps_data, Ldata, Rdata, 1.5 * ds, -0.75 * ds, dir)
+    update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, -0.75 * ds, dir, ws_sL, ws_sR)
+    update_slope_inner_ps!(ps_data, Ldata, Rdata, 1.5 * ds, -0.75 * ds, dir, ws_swL, ws_swR)
 end
 
 # Boundary
@@ -321,11 +369,15 @@ function update_slope!(
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
+    ws_sL::Matrix{Float64},
+    ws_sR::Matrix{Float64},
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.midpoint[dir]-Rdata[1].midpoint[dir]
     vs_data = ps_data.vs_data
-    update_slope_bound_vs!(vs_data, Rdata, ds, dir)
-    update_slope_bound_ps!(ps_data, Rdata, ds, dir)
+    update_slope_bound_vs!(vs_data, Rdata, ds, dir, ws_sL)
+    update_slope_bound_ps!(ps_data, Rdata, ds, dir, ws_swL)
 end
 """
 $(TYPEDSIGNATURES)
@@ -338,11 +390,15 @@ function update_slope!(
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
+    ws_sL::Matrix{Float64},
+    ws_sR::Matrix{Float64},
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.midpoint[dir]-Ldata[1].midpoint[dir]
     vs_data = ps_data.vs_data
-    update_slope_bound_vs!(vs_data, Ldata, ds, dir)
-    update_slope_bound_ps!(ps_data, Ldata, ds, dir)
+    update_slope_bound_vs!(vs_data, Ldata, ds, dir, ws_sL)
+    update_slope_bound_ps!(ps_data, Ldata, ds, dir, ws_swL)
 end
 """
 $(TYPEDSIGNATURES)
@@ -355,10 +411,14 @@ function update_slope!(
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
+    ws_sL::Matrix{Float64},
+    ws_sR::Matrix{Float64},
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.midpoint[dir]-Ldata[1].midpoint[dir]
-    update_slope_bound_vs!(ps_data.vs_data, Ldata, ds, dir)
-    update_slope_bound_ps!(ps_data, Ldata, ds, dir)
+    update_slope_bound_vs!(ps_data.vs_data, Ldata, ds, dir, ws_sL)
+    update_slope_bound_ps!(ps_data, Ldata, ds, dir, ws_swL)
 end
 """
 $(TYPEDSIGNATURES)
@@ -371,10 +431,14 @@ function update_slope!(
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
+    ws_sL::Matrix{Float64},
+    ws_sR::Matrix{Float64},
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.midpoint[dir]-Rdata[1].midpoint[dir]
-    update_slope_bound_vs!(ps_data.vs_data, Rdata, ds, dir)
-    update_slope_bound_ps!(ps_data, Rdata, ds, dir)
+    update_slope_bound_vs!(ps_data.vs_data, Rdata, ds, dir, ws_sL)
+    update_slope_bound_ps!(ps_data, Rdata, ds, dir, ws_swL)
 end
 """
 $(TYPEDSIGNATURES)
@@ -387,10 +451,14 @@ function update_slope!(
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
+    ws_sL::Matrix{Float64},
+    ws_sR::Matrix{Float64},
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.midpoint[dir]-Rdata[1].midpoint[dir]
-    update_slope_bound_vs!(ps_data.vs_data, Rdata, ds, dir)
-    update_slope_bound_ps!(ps_data, Rdata, ds, dir)
+    update_slope_bound_vs!(ps_data.vs_data, Rdata, ds, dir, ws_sL)
+    update_slope_bound_ps!(ps_data, Rdata, ds, dir, ws_swL)
 end
 """
 $(TYPEDSIGNATURES)
@@ -403,10 +471,14 @@ function update_slope!(
     Ldata::AbstractVector,
     Rdata::AbstractVector,
     dir::Integer,
+    ws_sL::Matrix{Float64},
+    ws_sR::Matrix{Float64},
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.midpoint[dir]-Ldata[1].midpoint[dir]
-    update_slope_bound_vs!(ps_data.vs_data, Ldata, ds, dir)
-    update_slope_bound_ps!(ps_data, Ldata, ds, dir)
+    update_slope_bound_vs!(ps_data.vs_data, Ldata, ds, dir, ws_sL)
+    update_slope_bound_ps!(ps_data, Ldata, ds, dir, ws_swL)
 end
 
 """
@@ -415,6 +487,22 @@ $(TYPEDSIGNATURES)
 function update_slope!(ka::KA{DIM,NDF}) where{DIM,NDF}
     trees = ka.kdata.field.trees
     kinfo = ka.kinfo
+
+    # Find max vs_num across all local cells that will be processed.
+    max_vsn = 1
+    for i in eachindex(trees.data)
+        for ps_data in trees.data[i]
+            isa(ps_data, InsideSolidData) && continue
+            ps_data.bound_enc < 0 && continue
+            max_vsn = max(max_vsn, ps_data.vs_data.vs_num)
+        end
+    end
+
+    ws_sL  = zeros(Float64, max_vsn, NDF)
+    ws_sR  = zeros(Float64, max_vsn, NDF)
+    ws_swL = zeros(Float64, DIM + 2)
+    ws_swR = zeros(Float64, DIM + 2)
+
     @inbounds for i in eachindex(trees.data)
         @inbounds for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
@@ -432,6 +520,7 @@ function update_slope!(ka::KA{DIM,NDF}) where{DIM,NDF}
                     neighbor.data[iL],
                     neighbor.data[iR],
                     dir,
+                    ws_sL, ws_sR, ws_swL, ws_swR,
                 )
             end
         end

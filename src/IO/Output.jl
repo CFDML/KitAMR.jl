@@ -15,11 +15,11 @@ function write_VTK(p4est::Ptr{p4est_t},filename::String,fieldnames::Vector{Strin
     fp = PointerWrapper(p4est)
     num_quads = fp.local_num_quadrants[]
     ps = Vector{Ptr{Nothing}}(undef,length(fieldnames))
-    pas = Vector{Vector{Cdouble}}(undef,length(fieldnames))
+    pas = Vector{Vector{Float64}}(undef,length(fieldnames))
     pscs = Vector{Ptr{sc_array_t}}(undef,length(fieldnames))
     for i in eachindex(fieldnames)
         ps[i] = sc_malloc(P4est.package_id(),num_quads*8)
-        pas[i] = unsafe_wrap(Vector{Cdouble},Ptr{Cdouble}(ps[i]),num_quads)
+        pas[i] = unsafe_wrap(Vector{Float64},Ptr{Float64}(ps[i]),num_quads)
         pscs[i] = sc_array_new_data(ps[i],8,num_quads)
     end
     function init_cell_data_kernel(ip,data,dp)
@@ -66,11 +66,11 @@ function write_VTK(p4est::Ptr{p8est_t},filename::String,fieldnames::Vector{Strin
     fp = PointerWrapper(p4est)
     num_quads = fp.local_num_quadrants[]
     ps = Vector{Ptr{Nothing}}(undef,length(fieldnames))
-    pas = Vector{Vector{Cdouble}}(undef,length(fieldnames))
+    pas = Vector{Vector{Float64}}(undef,length(fieldnames))
     pscs = Vector{Ptr{sc_array_t}}(undef,length(fieldnames))
     for i in eachindex(fieldnames)
         ps[i] = sc_malloc(P4est.package_id(),num_quads*8)
-        pas[i] = unsafe_wrap(Vector{Cdouble},Ptr{Cdouble}(ps[i]),num_quads)
+        pas[i] = unsafe_wrap(Vector{Float64},Ptr{Float64}(ps[i]),num_quads)
         pscs[i] = sc_array_new_data(ps[i],8,num_quads)
     end
     function init_cell_data_kernel(ip,data,dp)

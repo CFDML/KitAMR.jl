@@ -233,14 +233,13 @@ structures must be up-to-date for subsequent operations.
 function vs_ghost_exchange!(p4est::P_pxest_t, ka::KA{DIM,NDF}) where {DIM,NDF}
     kinfo = ka.kinfo
     # Hold a reference to the old ghost_wrap so that its objects stay alive (and their
-    # Julia objectid remains valid) after the C-level buffers are freed.
+    # Julia objectid remains valid) until after _patch_neighbor_ghost_refs! completes.
     old_ghost_wrap = ka.kdata.ghost.ghost_wrap
-    # Free old C-level buffers (ghost_datas, ghost_slopes, ghost_structures, mirrors).
-    finalize_ghost!(ka.kdata.ghost.ghost_pointers)
-    # Re-exchange: exchange_ghost_vsnums updates kinfo.status.max_vs_num via
-    # MPI_Allreduce, then variable-size buffers are allocated per actual vs_num.
-    ka.kdata.ghost.ghost_pointers = initialize_ghost_pointers(p4est, kinfo)
-    ka.kdata.ghost.ghost_wrap     = initialize_ghost_wrap(kinfo, ka.kdata.ghost.ghost_pointers)
+    # Re-exchange velocity-space structure; Julia GC handles old buffer cleanup.
+    new_gb, new_gi = initialize_ghost_pool(p4est, kinfo)
+    ka.kdata.ghost.ghost_buffer = new_gb
+    ka.kdata.ghost.ghost_info   = new_gi
+    ka.kdata.ghost.ghost_wrap   = initialize_ghost_wrap(kinfo, new_gb, new_gi)
     # Replace stale ghost references in neighbor.data with the new objects.
     _patch_neighbor_ghost_refs!(ka, old_ghost_wrap, ka.kdata.ghost.ghost_wrap)
     return nothing
@@ -283,9 +282,6 @@ function vs_balance!(ka::KA{DIM,NDF}) where {DIM,NDF}
 
     changed_global = true
     while changed_global
-        if MPI.Comm_rank(MPI.COMM_WORLD) == 0
-            @show "vs balance communication..."
-        end
         changed_local  = vs_balance_local!(ka)
         # Reduce across all ranks: any change on any rank keeps the loop going.
         changed_global = Bool(MPI.Allreduce(Int(changed_local), +, MPI.COMM_WORLD) > 0)

@@ -61,7 +61,12 @@ function get_mirror_structure_inner!(ps_data::PsData{DIM}, weight_temp, level_te
 end
 
 function ghost_data_alloc(N::Int, ghost::P_pxest_ghost_t)
-    Ptr{Cdouble}(sc_malloc(P4est.package_id(), sizeof(Cdouble) * N * PointerWrapper(ghost).ghosts.elem_count[]))
+    Ptr{Float64}(sc_malloc(P4est.package_id(), sizeof(Float64) * N * PointerWrapper(ghost).ghosts.elem_count[]))
+end
+
+# Julia-managed flat ghost receive buffer (replaces sc_malloc'd Ptr version).
+function ghost_vec_alloc(total_elems::Int)
+    Vector{Float64}(undef, max(total_elems, 1))
 end
 
 """
@@ -72,7 +77,7 @@ preliminary size-exchange step in [`exchange_ghost_vsnums`](@ref).
 function amr_exchange(
     p4est::Ptr{p4est_t},
     ghost::Ptr{p4est_ghost_t},
-    mirror_data_pointers::Array{Ptr{Cdouble}},
+    mirror_data_pointers::Array{Ptr{Float64}},
     N::Int,
 )
     GC.@preserve mirror_data_pointers ghost N begin
@@ -80,7 +85,7 @@ function amr_exchange(
         GC.@preserve ghost_datas p4est_ghost_exchange_custom(
             p4est,
             ghost,
-            sizeof(Cdouble) * N,
+            sizeof(Float64) * N,
             mirror_data_pointers,
             ghost_datas,
         )
@@ -90,7 +95,7 @@ end
 function amr_exchange(
     p4est::Ptr{p8est_t},
     ghost::Ptr{p8est_ghost_t},
-    mirror_data_pointers::Array{Ptr{Cdouble}},
+    mirror_data_pointers::Array{Ptr{Float64}},
     N::Int,
 )
     GC.@preserve mirror_data_pointers ghost N begin
@@ -98,7 +103,7 @@ function amr_exchange(
         GC.@preserve ghost_datas p8est_ghost_exchange_custom(
             p4est,
             ghost,
-            sizeof(Cdouble) * N,
+            sizeof(Float64) * N,
             mirror_data_pointers,
             ghost_datas,
         )
@@ -107,7 +112,7 @@ function amr_exchange(
 end
 
 function ghost_data_ptr(N::Int, ghost_data::Ptr{T}, qid::Integer) where {T}
-    return Ptr{Cdouble}(ghost_data + qid * sizeof(T) * N)
+    return Ptr{Float64}(ghost_data + qid * sizeof(T) * N)
 end
 
 # ---------------------------------------------------------------------------
@@ -156,14 +161,14 @@ function exchange_ghost_vsnums(p4est, kinfo::KInfo{DIM,NDF}) where {DIM,NDF}
         n_ghosts  = Int(gp.ghosts.elem_count[])
 
         mirror_vsnums = Vector{Int}(undef, n_mirrors)
-        size_ptrs = Array{Ptr{Cdouble}}(undef, n_mirrors)
+        size_ptrs = Array{Ptr{Float64}}(undef, n_mirrors)
         for i in 1:n_mirrors
             pq = pw_mirror_quadrant(pp, gp, i)
             dp = PointerWrapper(P4estPsData, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
             vsn = isa(ps_data, InsideSolidData) ? 0 : ps_data.vs_data.vs_num
             mirror_vsnums[i] = vsn
-            p = Ptr{Cdouble}(sc_malloc(P4est.package_id(), sizeof(Cdouble)))
+            p = Ptr{Float64}(sc_malloc(P4est.package_id(), sizeof(Float64)))
             Base.unsafe_store!(p, Float64(vsn))
             size_ptrs[i] = p
         end
@@ -195,10 +200,10 @@ given by `mirror_proc_mirrors`).
 """
 function _mpi_exchange_varsize!(
     ghost::P_pxest_ghost_t,
-    ghost_buffer::Ptr{Cdouble},
+    ghost_buffer::Vector{Float64},
     ghost_offsets::Vector{Int},
     ghost_elem_sizes::Vector{Int},
-    mirror_data_pointers::Vector{Ptr{Cdouble}},
+    mirror_data_bufs::Vector{Vector{Float64}},
     mirror_elem_sizes::Vector{Int},
     tag::Int,
 )
@@ -208,26 +213,25 @@ function _mpi_exchange_varsize!(
     comm = MPI.COMM_WORLD
 
     reqs      = Vector{MPI.Request}(undef, 0)
-    send_bufs = Vector{Vector{Cdouble}}(undef, 0)  # keep alive until Waitall
+    send_bufs = Vector{Vector{Float64}}(undef, 0)  # keep alive until Waitall
 
     # --- Post receives (grouped by source rank) ---
     for r in 0:mpisize-1
         r == myrank && continue
-        g_start = Int(proc_offsets[r+1]) + 1   # Julia 1-based ghost index
+        g_start = Int(proc_offsets[r+1]) + 1
         g_end   = Int(proc_offsets[r+2])
         g_start > g_end && continue
         recv_elems = 0
         for i in g_start:g_end; recv_elems += ghost_elem_sizes[i]; end
         recv_elems == 0 && continue
-        recv_ptr = ghost_buffer + ghost_offsets[g_start] * sizeof(Cdouble)
-        recv_buf = Base.unsafe_wrap(Vector{Cdouble}, recv_ptr, recv_elems, own = false)
-        push!(reqs, MPI.Irecv!(recv_buf, comm; source = r, tag = tag))
+        recv_view = @view ghost_buffer[ghost_offsets[g_start]+1 : ghost_offsets[g_start]+recv_elems]
+        push!(reqs, MPI.Irecv!(recv_view, comm; source = r, tag = tag))
     end
 
     # --- Post sends (grouped by destination rank via mirror_proc_mirrors) ---
     for r in 0:mpisize-1
         r == myrank && continue
-        mp_start = Int(mirror_proc_offsets[r+1]) + 1  # Julia 1-based index into mpm
+        mp_start = Int(mirror_proc_offsets[r+1]) + 1
         mp_end   = Int(mirror_proc_offsets[r+2])
         mp_start > mp_end && continue
         send_elems = 0
@@ -235,14 +239,13 @@ function _mpi_exchange_varsize!(
             send_elems += mirror_elem_sizes[Int(mirror_proc_mirrors[k]) + 1]
         end
         send_elems == 0 && continue
-        send_buf = Vector{Cdouble}(undef, send_elems)
+        send_buf = Vector{Float64}(undef, send_elems)
         off = 0
         for k in mp_start:mp_end
             m_idx = Int(mirror_proc_mirrors[k]) + 1
             sz = mirror_elem_sizes[m_idx]
             sz == 0 && continue
-            src = Base.unsafe_wrap(Vector{Cdouble}, mirror_data_pointers[m_idx], sz, own = false)
-            copyto!(send_buf, off + 1, src, 1, sz)
+            copyto!(send_buf, off + 1, mirror_data_bufs[m_idx], 1, sz)
             off += sz
         end
         push!(send_bufs, send_buf)
@@ -258,12 +261,12 @@ $(TYPEDSIGNATURES)
 Allocate a variable-size ghost receive buffer, perform the MPI exchange, and
 return `(ghost_buffer, ghost_offsets)`.
 
-- `ghost_buffer`: flat `sc_malloc`'d buffer holding all ghost data concatenated.
+- `ghost_buffer`: Julia-managed `Vector{Float64}` holding all ghost data concatenated.
 - `ghost_offsets[i]`: Float64-element offset of ghost `i`'s data within `ghost_buffer`.
 """
 function amr_exchange_varsize(
     ghost::P_pxest_ghost_t,
-    mirror_data_pointers::Vector{Ptr{Cdouble}},
+    mirror_data_bufs::Vector{Vector{Float64}},
     mirror_elem_sizes::Vector{Int},
     ghost_elem_sizes::Vector{Int},
     tag::Int,
@@ -275,11 +278,10 @@ function amr_exchange_varsize(
         ghost_offsets[i] = total_elems
         total_elems += ghost_elem_sizes[i]
     end
-    ghost_buffer = Ptr{Cdouble}(
-        sc_malloc(P4est.package_id(), max(total_elems, 1) * sizeof(Cdouble)))
+    ghost_buffer = ghost_vec_alloc(total_elems)
     if MPI.Comm_size(MPI.COMM_WORLD) > 1
         _mpi_exchange_varsize!(ghost, ghost_buffer, ghost_offsets, ghost_elem_sizes,
-                               mirror_data_pointers, mirror_elem_sizes, tag)
+                               mirror_data_bufs, mirror_elem_sizes, tag)
     end
     return ghost_buffer, ghost_offsets
 end
@@ -292,16 +294,16 @@ without reallocating.
 """
 function amr_exchange_varsize!(
     ghost::P_pxest_ghost_t,
-    ghost_buffer::Ptr{Cdouble},
+    ghost_buffer::Vector{Float64},
     ghost_offsets::Vector{Int},
     ghost_elem_sizes::Vector{Int},
-    mirror_data_pointers::Vector{Ptr{Cdouble}},
+    mirror_data_bufs::Vector{Vector{Float64}},
     mirror_elem_sizes::Vector{Int},
     tag::Int,
 )
     MPI.Comm_size(MPI.COMM_WORLD) == 1 && return nothing
     _mpi_exchange_varsize!(ghost, ghost_buffer, ghost_offsets, ghost_elem_sizes,
-                           mirror_data_pointers, mirror_elem_sizes, tag)
+                           mirror_data_bufs, mirror_elem_sizes, tag)
     return nothing
 end
 
@@ -313,15 +315,15 @@ function get_mirror_data(p4est, kinfo::KInfo{DIM,NDF}, mirror_vsnums::Vector{Int
     GC.@preserve p4est kinfo begin
         gp = PointerWrapper(kinfo.forest.ghost)
         pp = PointerWrapper(p4est)
-        mirror_data_pointers = Array{Ptr{Cdouble}}(undef, gp.mirrors.elem_count[])
-        for i = 1:gp.mirrors.elem_count[]
+        n_mirrors = Int(gp.mirrors.elem_count[])
+        mirror_data_bufs = Vector{Vector{Float64}}(undef, n_mirrors)
+        for i = 1:n_mirrors
             pq = pw_mirror_quadrant(pp,gp,i)
             dp = PointerWrapper(P4estPsData, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
             vs_num = mirror_vsnums[i]
             sz = size_Ghost_Data(vs_num, DIM, NDF)
-            p = Ptr{Cdouble}(sc_malloc(P4est.package_id(), sz * sizeof(Cdouble)))
-            ap = Base.unsafe_wrap(Vector{Cdouble}, p, sz)
+            ap = Vector{Float64}(undef, sz)
             offset = 0
             if isa(ps_data,InsideSolidData)
                 ap[1:(offset+=DIM)] .= ps_data.ds
@@ -338,60 +340,59 @@ function get_mirror_data(p4est, kinfo::KInfo{DIM,NDF}, mirror_vsnums::Vector{Int
                 vs_temp = @view(ap[offset+1:(offset+=NDF*vs_num)])
                 get_mirror_data_inner!(ps_data, vs_temp)
             end
-            mirror_data_pointers[i] = p
+            mirror_data_bufs[i] = ap
         end
     end
-    return mirror_data_pointers
+    return mirror_data_bufs
 end
 
 function get_mirror_slope(p4est, kinfo::KInfo{DIM,NDF}, mirror_vsnums::Vector{Int}) where{DIM,NDF}
     GC.@preserve p4est kinfo begin
         gp = PointerWrapper(kinfo.forest.ghost)
         pp = PointerWrapper(p4est)
-        mirror_slope_pointers = Array{Ptr{Cdouble}}(undef, gp.mirrors.elem_count[])
-        for i = 1:gp.mirrors.elem_count[]
+        n_mirrors = Int(gp.mirrors.elem_count[])
+        mirror_slope_bufs = Vector{Vector{Float64}}(undef, n_mirrors)
+        for i = 1:n_mirrors
             pq = pw_mirror_quadrant(pp,gp,i)
             dp = PointerWrapper(P4estPsData, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
             vs_num = mirror_vsnums[i]
             sz = size_Ghost_Slope(vs_num, DIM, NDF)
             # For InsideSolidData (vs_num=0), size_Ghost_Slope = DIM*(DIM+2) >= 1.
-            p = Ptr{Cdouble}(sc_malloc(P4est.package_id(), sz * sizeof(Cdouble)))
-            ap = Base.unsafe_wrap(Vector{Cdouble}, p, sz)
+            ap = Vector{Float64}(undef, max(sz, 1))
             get_mirror_slope_inner!(ps_data, ap)
-            mirror_slope_pointers[i] = p
+            mirror_slope_bufs[i] = ap
         end
     end
-    return mirror_slope_pointers
+    return mirror_slope_bufs
 end
 
 function get_mirror_structure(p4est, kinfo::KInfo{DIM,NDF}, mirror_vsnums::Vector{Int}) where{DIM,NDF}
     GC.@preserve p4est kinfo begin
         gp = PointerWrapper(kinfo.forest.ghost)
         pp = PointerWrapper(p4est)
-        mirror_structure_pointers = Array{Ptr{Cdouble}}(undef, gp.mirrors.elem_count[])
-        for i = 1:gp.mirrors.elem_count[]
+        n_mirrors = Int(gp.mirrors.elem_count[])
+        mirror_structure_bufs = Vector{Vector{Float64}}(undef, n_mirrors)
+        for i = 1:n_mirrors
             pq = pw_mirror_quadrant(pp,gp,i)
             dp = PointerWrapper(P4estPsData, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
             if isa(ps_data, InsideSolidData)
-                # size_Ghost_VS_Structure(0,DIM)=0; allocate a 1-element placeholder.
+                # size_Ghost_VS_Structure(0,DIM)=0; 1-element placeholder.
                 # Zero elements are exchanged for InsideSolidData (ghost_vsnums=0).
-                p = Ptr{Cdouble}(sc_malloc(P4est.package_id(), sizeof(Cdouble)))
-                mirror_structure_pointers[i] = p
+                mirror_structure_bufs[i] = Vector{Float64}(undef, 1)
                 continue
             end
             vs_num = mirror_vsnums[i]
             sz = size_Ghost_VS_Structure(vs_num, DIM)
-            p = Ptr{Cdouble}(sc_malloc(P4est.package_id(), sz * sizeof(Cdouble)))
-            ap = Base.unsafe_wrap(Vector{Cdouble}, p, sz)
+            ap = Vector{Float64}(undef, max(sz, 1))
             weight_temp   = @view(ap[1:vs_num])
             level_temp    = @view(ap[vs_num+1:2*vs_num])
             midpoint_temp = @view(ap[2*vs_num+1:vs_num*(DIM+2)])
             get_mirror_structure_inner!(ps_data, weight_temp, level_temp, midpoint_temp)
-            mirror_structure_pointers[i] = p
+            mirror_structure_bufs[i] = ap
         end
-        return mirror_structure_pointers
+        return mirror_structure_bufs
     end
 end
 
@@ -399,45 +400,56 @@ end
 # Ghost pointer and wrap initialisation
 # ---------------------------------------------------------------------------
 
-function initialize_ghost_pointers(p4est, kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
+function initialize_ghost_pool(p4est, kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
     ghost_vsnums, mirror_vsnums = exchange_ghost_vsnums(p4est, kinfo)
 
-    mirror_data_pointers = get_mirror_data(p4est, kinfo, mirror_vsnums)
-    mirror_data_szs = [size_Ghost_Data(v, DIM, NDF) for v in mirror_vsnums]
-    ghost_data_szs  = [size_Ghost_Data(v, DIM, NDF) for v in ghost_vsnums]
+    mirror_data_szs  = [size_Ghost_Data(v, DIM, NDF) for v in mirror_vsnums]
+    ghost_data_szs   = [size_Ghost_Data(v, DIM, NDF) for v in ghost_vsnums]
+    mirror_data_bufs = get_mirror_data(p4est, kinfo, mirror_vsnums)
     ghost_datas, ghost_data_offsets = amr_exchange_varsize(
-        kinfo.forest.ghost, mirror_data_pointers, mirror_data_szs, ghost_data_szs, 51)
+        kinfo.forest.ghost, mirror_data_bufs, mirror_data_szs, ghost_data_szs, 51)
 
-    mirror_slope_pointers = get_mirror_slope(p4est, kinfo, mirror_vsnums)
-    mirror_slope_szs = [size_Ghost_Slope(v, DIM, NDF) for v in mirror_vsnums]
-    ghost_slope_szs  = [size_Ghost_Slope(v, DIM, NDF) for v in ghost_vsnums]
+    mirror_slope_szs  = [size_Ghost_Slope(v, DIM, NDF) for v in mirror_vsnums]
+    ghost_slope_szs   = [size_Ghost_Slope(v, DIM, NDF) for v in ghost_vsnums]
+    mirror_slope_bufs = get_mirror_slope(p4est, kinfo, mirror_vsnums)
     ghost_slopes, ghost_slope_offsets = amr_exchange_varsize(
-        kinfo.forest.ghost, mirror_slope_pointers, mirror_slope_szs, ghost_slope_szs, 52)
+        kinfo.forest.ghost, mirror_slope_bufs, mirror_slope_szs, ghost_slope_szs, 52)
 
-    mirror_structure_pointers = get_mirror_structure(p4est, kinfo, mirror_vsnums)
-    # InsideSolidData mirrors have mirror_vsnums[i]=0 → size_Ghost_VS_Structure(0,DIM)=0
+    mirror_structure_bufs = get_mirror_structure(p4est, kinfo, mirror_vsnums)
     mirror_struct_szs = [size_Ghost_VS_Structure(v, DIM) for v in mirror_vsnums]
     ghost_struct_szs  = [size_Ghost_VS_Structure(v, DIM) for v in ghost_vsnums]
     ghost_structures, ghost_structure_offsets = amr_exchange_varsize(
-        kinfo.forest.ghost, mirror_structure_pointers, mirror_struct_szs, ghost_struct_szs, 53)
+        kinfo.forest.ghost, mirror_structure_bufs, mirror_struct_szs, ghost_struct_szs, 53)
 
-    return GhostPointers(
+    gb = GhostBuffer(
         ghost_datas, ghost_slopes, ghost_structures,
-        mirror_data_pointers, mirror_slope_pointers, mirror_structure_pointers,
+        mirror_data_bufs, mirror_slope_bufs, mirror_structure_bufs,
+    )
+    gi = GhostInfo(
         ghost_vsnums, mirror_vsnums,
         ghost_data_offsets, ghost_slope_offsets, ghost_structure_offsets,
+        ghost_data_szs, ghost_slope_szs, mirror_data_szs, mirror_slope_szs,
     )
+    return gb, gi
 end
 
-function initialize_ghost_wrap(kinfo::KInfo{DIM,NDF}, ghost_pointers::GhostPointers) where{DIM,NDF}
+function initialize_ghost_wrap(kinfo::KInfo{DIM,NDF},
+                               ghost_buffer::GhostBuffer,
+                               ghost_info::GhostInfo) where{DIM,NDF}
     gp = PointerWrapper(kinfo.forest.ghost)
     n_ghosts = Int(gp.ghosts.elem_count[])
     ghost_wrap = Array{AbstractGhostPsData}(undef, n_ghosts)
 
-    ghost_vsnums           = ghost_pointers.ghost_vsnums
-    ghost_data_offsets     = ghost_pointers.ghost_data_offsets
-    ghost_slope_offsets    = ghost_pointers.ghost_slope_offsets
-    ghost_structure_offsets = ghost_pointers.ghost_structure_offsets
+    ghost_vsnums            = ghost_info.ghost_vsnums
+    ghost_data_offsets      = ghost_info.ghost_data_offsets
+    ghost_slope_offsets     = ghost_info.ghost_slope_offsets
+    ghost_structure_offsets = ghost_info.ghost_structure_offsets
+
+    # Raw pointers into Julia-managed buffers.  The buffers live in ghost_buffer
+    # (held by Ghost → ka.kdata.ghost) so they outlive all the wrapped arrays.
+    p_datas   = pointer(ghost_buffer.ghost_datas)
+    p_slopes  = pointer(ghost_buffer.ghost_slopes)
+    p_structs = pointer(ghost_buffer.ghost_structures)
 
     for i in eachindex(ghost_wrap)
         pq = iPointerWrapper(gp.ghosts, p4est_quadrant_t, i - 1)
@@ -449,37 +461,36 @@ function initialize_ghost_wrap(kinfo::KInfo{DIM,NDF}, ghost_pointers::GhostPoint
         vs_num = ghost_vsnums[i]
 
         # --- data buffer (ds, midpoint, w, vs_num, bound_enc, df) ---
-        p_data = ghost_pointers.ghost_datas + ghost_data_offsets[i] * sizeof(Cdouble)
+        p_data = p_datas + ghost_data_offsets[i] * sizeof(Float64)
         offset = 0
-        ds       = Base.unsafe_wrap(Vector{Cdouble}, p_data + offset * sizeof(Cdouble), DIM)
+        ds       = Base.unsafe_wrap(Vector{Float64}, p_data + offset * sizeof(Float64), DIM)
         offset  += DIM
-        midpoint = Base.unsafe_wrap(Vector{Cdouble}, p_data + offset * sizeof(Cdouble), DIM)
+        midpoint = Base.unsafe_wrap(Vector{Float64}, p_data + offset * sizeof(Float64), DIM)
         offset  += DIM
-        w        = Base.unsafe_wrap(Vector{Cdouble}, p_data + offset * sizeof(Cdouble), DIM + 2)
+        w        = Base.unsafe_wrap(Vector{Float64}, p_data + offset * sizeof(Float64), DIM + 2)
         offset  += DIM + 2
-        # scalar fields: vs_num at offset, bound_enc at offset+1
-        bound_enc = Int(Base.unsafe_load(p_data + (offset + 1) * sizeof(Cdouble)))
+        bound_enc = Int(Base.unsafe_load(p_data + (offset + 1) * sizeof(Float64)))
 
         if w[1] == Inf
             ghost_wrap[i] = GhostInsideSolidData{DIM,NDF}(bound_enc, midpoint, ds)
             continue
         end
 
-        offset += 2  # skip vs_num and bound_enc scalars
-        df = Base.unsafe_wrap(Matrix{Cdouble}, p_data + offset * sizeof(Cdouble), (vs_num, NDF))
+        offset += 2
+        df = Base.unsafe_wrap(Matrix{Float64}, p_data + offset * sizeof(Float64), (vs_num, NDF))
 
         # --- slope buffer (sdf, sw) ---
-        p_slope = ghost_pointers.ghost_slopes + ghost_slope_offsets[i] * sizeof(Cdouble)
-        sdf = Base.unsafe_wrap(Array{Cdouble},  p_slope, (vs_num, NDF, DIM))
-        sw  = Base.unsafe_wrap(Matrix{Cdouble}, p_slope + vs_num * NDF * DIM * sizeof(Cdouble),
+        p_slope = p_slopes + ghost_slope_offsets[i] * sizeof(Float64)
+        sdf = Base.unsafe_wrap(Array{Float64},  p_slope, (vs_num, NDF, DIM))
+        sw  = Base.unsafe_wrap(Matrix{Float64}, p_slope + vs_num * NDF * DIM * sizeof(Float64),
                                (DIM + 2, DIM))
 
         # --- structure buffer (weight, level, midpoint_vs) ---
-        p_struct    = ghost_pointers.ghost_structures + ghost_structure_offsets[i] * sizeof(Cdouble)
-        weight      = Base.unsafe_wrap(Vector{Cdouble}, p_struct, vs_num)
-        level       = Base.unsafe_wrap(Vector{Cdouble}, p_struct + vs_num * sizeof(Cdouble), vs_num)
-        midpoint_vs = Base.unsafe_wrap(Matrix{Cdouble},
-                                       p_struct + 2 * vs_num * sizeof(Cdouble), (vs_num, DIM))
+        p_struct    = p_structs + ghost_structure_offsets[i] * sizeof(Float64)
+        weight      = Base.unsafe_wrap(Vector{Float64}, p_struct, vs_num)
+        level       = Base.unsafe_wrap(Vector{Float64}, p_struct + vs_num * sizeof(Float64), vs_num)
+        midpoint_vs = Base.unsafe_wrap(Matrix{Float64},
+                                       p_struct + 2 * vs_num * sizeof(Float64), (vs_num, DIM))
 
         vs_data = GhostVsData{DIM,NDF}(vs_num, Int8.(round.(level)), weight, midpoint_vs, df, sdf)
         ghost_wrap[i] = GhostPsData{DIM,NDF}(owner_rank, quadid, bound_enc, ds, midpoint, w, sw, vs_data)
@@ -493,19 +504,16 @@ end
 
 function update_mirror_data!(p4est, ka::KA{DIM,NDF}) where{DIM,NDF}
     GC.@preserve p4est ka begin
-        mirror_data_pointers = ka.kdata.ghost.ghost_pointers.mirror_data_pointers
-        mirror_vsnums        = ka.kdata.ghost.ghost_pointers.mirror_vsnums
+        mirror_data_bufs = ka.kdata.ghost.ghost_buffer.mirror_data_bufs
+        mirror_vsnums    = ka.kdata.ghost.ghost_info.mirror_vsnums
         gp = PointerWrapper(ka.kinfo.forest.ghost)
         pp = PointerWrapper(p4est)
-        for i in eachindex(mirror_data_pointers)
+        for i in eachindex(mirror_data_bufs)
             pq = pw_mirror_quadrant(pp,gp,i)
             dp = PointerWrapper(P4estPsData, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
             isa(ps_data,InsideSolidData) && continue
-            vsn = mirror_vsnums[i]
-            ap = Base.unsafe_wrap(
-                Vector{Cdouble}, mirror_data_pointers[i],
-                size_Ghost_Data(vsn, DIM, NDF))
+            ap = mirror_data_bufs[i]
             ap[DIM*2+1:DIM*3+2] .= ps_data.w
             vs_temp = @view(ap[3*DIM+4+1:end])
             get_mirror_data_inner!(ps_data, vs_temp)
@@ -515,19 +523,16 @@ end
 
 function update_solid_mirror_data!(p4est, ka::KA{DIM,NDF}) where{DIM,NDF}
     GC.@preserve p4est ka begin
-        mirror_data_pointers = ka.kdata.ghost.ghost_pointers.mirror_data_pointers
-        mirror_vsnums        = ka.kdata.ghost.ghost_pointers.mirror_vsnums
+        mirror_data_bufs = ka.kdata.ghost.ghost_buffer.mirror_data_bufs
+        mirror_vsnums    = ka.kdata.ghost.ghost_info.mirror_vsnums
         gp = PointerWrapper(ka.kinfo.forest.ghost)
         pp = PointerWrapper(p4est)
-        for i in eachindex(mirror_data_pointers)
+        for i in eachindex(mirror_data_bufs)
             pq = pw_mirror_quadrant(pp,gp,i)
             dp = PointerWrapper(P4estPsData, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
             (isa(ps_data,InsideSolidData) || ps_data.bound_enc >= 0) && continue
-            vsn = mirror_vsnums[i]
-            ap = Base.unsafe_wrap(
-                Vector{Cdouble}, mirror_data_pointers[i],
-                size_Ghost_Data(vsn, DIM, NDF))
+            ap = mirror_data_bufs[i]
             ap[DIM*2+1:DIM*3+2] .= ps_data.w
             vs_temp = @view(ap[3*DIM+4+1:end])
             get_mirror_data_inner!(ps_data, vs_temp)
@@ -537,20 +542,15 @@ end
 
 function update_mirror_slope!(p4est, ka::KA{DIM,NDF}) where{DIM,NDF}
     GC.@preserve p4est ka begin
-        mirror_slope_pointers = ka.kdata.ghost.ghost_pointers.mirror_slope_pointers
-        mirror_vsnums         = ka.kdata.ghost.ghost_pointers.mirror_vsnums
+        mirror_slope_bufs = ka.kdata.ghost.ghost_buffer.mirror_slope_bufs
         gp = PointerWrapper(ka.kinfo.forest.ghost)
         pp = PointerWrapper(p4est)
-        for i in eachindex(mirror_slope_pointers)
+        for i in eachindex(mirror_slope_bufs)
             pq = pw_mirror_quadrant(pp,gp,i)
             dp = PointerWrapper(P4estPsData, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
             isa(ps_data,InsideSolidData) && continue
-            vsn = mirror_vsnums[i]
-            ap = Base.unsafe_wrap(
-                Vector{Cdouble}, mirror_slope_pointers[i],
-                size_Ghost_Slope(vsn, DIM, NDF))
-            get_mirror_slope_inner!(ps_data, ap)
+            get_mirror_slope_inner!(ps_data, mirror_slope_bufs[i])
         end
     end
 end
@@ -566,13 +566,12 @@ Update `df` in [`GhostVsData`](@ref).
 function data_exchange!(p4est::P_pxest_t, ka::KA{DIM,NDF}) where{DIM,NDF}
     MPI.Comm_size(MPI.COMM_WORLD) == 1 && return nothing
     update_mirror_data!(p4est, ka)
-    gp_obj = ka.kdata.ghost.ghost_pointers
-    mirror_szs = [size_Ghost_Data(v, DIM, NDF) for v in gp_obj.mirror_vsnums]
-    ghost_szs  = [size_Ghost_Data(v, DIM, NDF) for v in gp_obj.ghost_vsnums]
+    gb_buf = ka.kdata.ghost.ghost_buffer
+    gi     = ka.kdata.ghost.ghost_info
     amr_exchange_varsize!(
         ka.kinfo.forest.ghost,
-        gp_obj.ghost_datas, gp_obj.ghost_data_offsets, ghost_szs,
-        gp_obj.mirror_data_pointers, mirror_szs, 51)
+        gb_buf.ghost_datas, gi.ghost_data_offsets, gi.ghost_data_szs,
+        gb_buf.mirror_data_bufs, gi.mirror_data_szs, 51)
 end
 
 """
@@ -582,13 +581,12 @@ Update `sdf` in [`GhostVsData`](@ref).
 function slope_exchange!(p4est::P_pxest_t, ka::KA{DIM,NDF}) where{DIM,NDF}
     MPI.Comm_size(MPI.COMM_WORLD) == 1 && return nothing
     update_mirror_slope!(p4est, ka)
-    gp_obj = ka.kdata.ghost.ghost_pointers
-    mirror_szs = [size_Ghost_Slope(v, DIM, NDF) for v in gp_obj.mirror_vsnums]
-    ghost_szs  = [size_Ghost_Slope(v, DIM, NDF) for v in gp_obj.ghost_vsnums]
+    gb_buf = ka.kdata.ghost.ghost_buffer
+    gi     = ka.kdata.ghost.ghost_info
     amr_exchange_varsize!(
         ka.kinfo.forest.ghost,
-        gp_obj.ghost_slopes, gp_obj.ghost_slope_offsets, ghost_szs,
-        gp_obj.mirror_slope_pointers, mirror_szs, 52)
+        gb_buf.ghost_slopes, gi.ghost_slope_offsets, gi.ghost_slope_szs,
+        gb_buf.mirror_slope_bufs, gi.mirror_slope_szs, 52)
 end
 
 # ---------------------------------------------------------------------------
@@ -596,20 +594,20 @@ end
 # ---------------------------------------------------------------------------
 
 function update_ghost!(p4est::Ptr{p4est_t}, ka::KA)
-    ghost_pointers = ka.kdata.ghost.ghost_pointers
     kinfo = ka.kinfo
-    finalize_ghost!(ghost_pointers)
     p4est_ghost_destroy(kinfo.forest.ghost)
     kinfo.forest.ghost = p4est_ghost_new(p4est, P4EST_CONNECT_FULL)
-    ka.kdata.ghost.ghost_pointers = initialize_ghost_pointers(p4est, kinfo)
-    ka.kdata.ghost.ghost_wrap = initialize_ghost_wrap(kinfo, ka.kdata.ghost.ghost_pointers)
+    gb, gi = initialize_ghost_pool(p4est, kinfo)
+    ka.kdata.ghost.ghost_buffer = gb
+    ka.kdata.ghost.ghost_info   = gi
+    ka.kdata.ghost.ghost_wrap   = initialize_ghost_wrap(kinfo, gb, gi)
 end
 function update_ghost!(p4est::Ptr{p8est_t}, ka::KA)
-    ghost_pointers = ka.kdata.ghost.ghost_pointers
     kinfo = ka.kinfo
-    finalize_ghost!(ghost_pointers)
     p8est_ghost_destroy(kinfo.forest.ghost)
     kinfo.forest.ghost = p8est_ghost_new(p4est, P8EST_CONNECT_FULL)
-    ka.kdata.ghost.ghost_pointers = initialize_ghost_pointers(p4est, kinfo)
-    ka.kdata.ghost.ghost_wrap = initialize_ghost_wrap(kinfo, ka.kdata.ghost.ghost_pointers)
+    gb, gi = initialize_ghost_pool(p4est, kinfo)
+    ka.kdata.ghost.ghost_buffer = gb
+    ka.kdata.ghost.ghost_info   = gi
+    ka.kdata.ghost.ghost_wrap   = initialize_ghost_wrap(kinfo, gb, gi)
 end

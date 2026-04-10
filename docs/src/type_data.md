@@ -31,7 +31,11 @@ Ghost
 ```
 
 ```@docs
-GhostPointers
+GhostBuffer
+```
+
+```@docs
+GhostInfo
 ```
 
 ```@docs

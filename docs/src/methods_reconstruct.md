@@ -25,26 +25,26 @@ Outer function to update `sdf` in [`VsData`](@ref) and `sw` in [`PsData`](@ref).
 Here are methods corresponding to different cases in physical space. The first two argument types refer to the number of the neighboring cells in negative and positive direction along the `dir`th dimension. `Val{i}` refers to there are `i` neighboring cells across the face. `-1` represents a single cell with lower refinement level. Because the mesh is balanced, only following cases are required to consider.
 
 ```@docs
-update_slope!(::Val{0},::Val{1},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer)
-update_slope!(::Val{1},::Val{0},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer)
-update_slope!(::Val{0},::Val{-1},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer)
-update_slope!(::Val{-1},::Val{0},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer)
-update_slope!(::Val{0},::KitAMR.NeighborNum,::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer)
-update_slope!(::KitAMR.NeighborNum,::Val{0},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer)
+update_slope!(::Val{0},::Val{1},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer,::Matrix{Float64},::Matrix{Float64},::Vector{Float64},::Vector{Float64})
+update_slope!(::Val{1},::Val{0},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer,::Matrix{Float64},::Matrix{Float64},::Vector{Float64},::Vector{Float64})
+update_slope!(::Val{0},::Val{-1},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer,::Matrix{Float64},::Matrix{Float64},::Vector{Float64},::Vector{Float64})
+update_slope!(::Val{-1},::Val{0},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer,::Matrix{Float64},::Matrix{Float64},::Vector{Float64},::Vector{Float64})
+update_slope!(::Val{0},::KitAMR.NeighborNum,::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer,::Matrix{Float64},::Matrix{Float64},::Vector{Float64},::Vector{Float64})
+update_slope!(::KitAMR.NeighborNum,::Val{0},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer,::Matrix{Float64},::Matrix{Float64},::Vector{Float64},::Vector{Float64})
 ```
 Update both micro and macro slopes in cells neighboring to domain edges. 
 
 ---
 ```@docs
-update_slope!(::Val{1},::Val{1},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer)
-update_slope!(::Val{1},::Val{-1},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer)
-update_slope!(::Val{-1},::Val{1},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer)
-update_slope!(::Val{1},::KitAMR.NeighborNum,::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer)
-update_slope!(::KitAMR.NeighborNum,::Val{1},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer)
-update_slope!(::Val{-1},::KitAMR.NeighborNum,::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer)
-update_slope!(::KitAMR.NeighborNum,::Val{-1},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer)
-update_slope!(::KitAMR.NeighborNum,::KitAMR.NeighborNum,::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer)
-update_slope!(::Val{-1},::Val{-1},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer)
+update_slope!(::Val{1},::Val{1},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer,::Matrix{Float64},::Matrix{Float64},::Vector{Float64},::Vector{Float64})
+update_slope!(::Val{1},::Val{-1},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer,::Matrix{Float64},::Matrix{Float64},::Vector{Float64},::Vector{Float64})
+update_slope!(::Val{-1},::Val{1},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer,::Matrix{Float64},::Matrix{Float64},::Vector{Float64},::Vector{Float64})
+update_slope!(::Val{1},::KitAMR.NeighborNum,::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer,::Matrix{Float64},::Matrix{Float64},::Vector{Float64},::Vector{Float64})
+update_slope!(::KitAMR.NeighborNum,::Val{1},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer,::Matrix{Float64},::Matrix{Float64},::Vector{Float64},::Vector{Float64})
+update_slope!(::Val{-1},::KitAMR.NeighborNum,::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer,::Matrix{Float64},::Matrix{Float64},::Vector{Float64},::Vector{Float64})
+update_slope!(::KitAMR.NeighborNum,::Val{-1},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer,::Matrix{Float64},::Matrix{Float64},::Vector{Float64},::Vector{Float64})
+update_slope!(::KitAMR.NeighborNum,::KitAMR.NeighborNum,::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer,::Matrix{Float64},::Matrix{Float64},::Vector{Float64},::Vector{Float64})
+update_slope!(::Val{-1},::Val{-1},::PsData,::KInfo,::AbstractVector,::AbstractVector,::Integer,::Matrix{Float64},::Matrix{Float64},::Vector{Float64},::Vector{Float64})
 ```
 Update both micro and macro in internal cells.
 

@@ -114,7 +114,7 @@ Considering the above limitation of DVM, we adopt Adaptive Mesh Refinement (AMR)
 
 ```@raw html
 <div align="center">
-    <img src="assets/KitAMR.gif" alt="Image 1" width = "600" style="margin-left: 1px;">
+    <img src="assets/AMR.gif" alt="Image 1" width = "600" style="margin-left: 1px;">
     <figcaption><i>Hypersonic rarefied flow over a cylinder. The simultaneous AMR in physical space (left) and velocity space (right) are performed.</i></figcaption>
 </div>
 ```
@@ -126,7 +126,7 @@ For an AMR solver, the load-balance ability is crucial for high efficiency. KitA
 
 ```@raw html
 <div align="center">
-    <img src="assets/KitAMR_partition.gif" alt="Image 1" width = "600" style="margin-left: 1px;">
+    <img src="assets/partition.gif" alt="Image 1" width = "600" style="margin-left: 1px;">
     <figcaption><i>The variation of the processor rank in physical domain during a simulation.</i></figcaption>
 </div>
 ```

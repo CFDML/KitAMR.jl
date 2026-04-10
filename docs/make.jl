@@ -33,7 +33,8 @@ makedocs(;
         "Limitations"=>"limitations.md"
         ],
     # format = Documenter.HTML(; collapselevel=1),
-    checkdocs = :none
+    checkdocs = :none,
+    format = Documenter.HTML()
 )
 
 deploydocs(;devbranch = "ge",

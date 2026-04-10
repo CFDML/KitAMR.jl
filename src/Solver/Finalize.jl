@@ -32,16 +32,9 @@ function check_for_convergence(ka::KA)
 end
 
 
-function finalize_ghost!(ghost_pointers::GhostPointers)
-    id = P4est.package_id()
-    sc_free(id, ghost_pointers.ghost_datas)
-    sc_free(id, ghost_pointers.ghost_slopes)
-    sc_free(id, ghost_pointers.ghost_structures)
-    for i in eachindex(ghost_pointers.mirror_data_pointers)
-        sc_free(id, ghost_pointers.mirror_data_pointers[i])
-        sc_free(id, ghost_pointers.mirror_slope_pointers[i])
-        sc_free(id, ghost_pointers.mirror_structure_pointers[i])
-    end
+function finalize_ghost!(::GhostBuffer)
+    # Julia GC owns all buffers — nothing to free.
+    return nothing
 end
 function finalize_p4est!(p4est::Ptr{p4est_t}, ka::KA)
     kinfo = ka.kinfo
@@ -56,7 +49,7 @@ end
 $(TYPEDSIGNATURES)
 """
 function finalize!(p4est::Ptr{p4est_t}, ka::KA)
-    finalize_ghost!(ka.kdata.ghost.ghost_pointers)
+    finalize_ghost!(ka.kdata.ghost.ghost_buffer)
     finalize_p4est!(p4est, ka)
     return nothing
 end
@@ -74,7 +67,7 @@ end
 $(TYPEDSIGNATURES)
 """
 function finalize!(p4est::Ptr{p8est_t}, ka::KA)
-    finalize_ghost!(ka.kdata.ghost.ghost_pointers)
+    finalize_ghost!(ka.kdata.ghost.ghost_buffer)
     finalize_p4est!(p4est, ka)
     return nothing
 end

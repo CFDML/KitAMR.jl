@@ -1,8 +1,15 @@
-# KitAMR.jl
+<div align="center">
+  <h1>KitAMR.jl</h1>
+  <img
+    src="./docs/src/assets/logo.svg"
+    alt="KitAMR Logo" width="100">
+  </img>
 
-[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://cfdml.github.io/KitAMR.jl/dev/)
-![CI](https://img.shields.io/github/actions/workflow/status/vavrines/KitBase.jl/ci.yml?branch=main)
-[![codecov](https://img.shields.io/codecov/c/github/CFDML/KitAMR.jl)](https://codecov.io/gh/CFDML/KitAMR.jl)
+    [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://cfdml.github.io/KitAMR.jl/dev/)
+    ![CI](https://img.shields.io/github/actions/workflow/status/vavrines/KitBase.jl/ci.yml?branch=main)
+    [![codecov](https://img.shields.io/codecov/c/github/CFDML/KitAMR.jl)](https://codecov.io/gh/CFDML/KitAMR.jl)
+</div>
+
 
 ## Motivation
 **KitAMR.jl** is a distributed adaptive Cartesian grid solver for kinetic equations, developed based on [P4est.jl](https://github.com/trixi-framework/P4est.jl). Its goal is to achieve large-scale parallel solving of 2D and 3D flows across all regimes, leveraging GPUs, differentiable programming, and machine learning to enhance solving efficiency.
@@ -89,7 +96,7 @@ DVM is one of the popular approaches for solving rarefied flow problems. In this
 Considering the above limitation of DVM, we adopt Adaptive Mesh Refinement (AMR) to improve solving efficiency. AMR reallocates computational resources based on flow features, balancing efficiency and accuracy. 
 
 <div align="center">
-    <img src="./docs/src/assets/KitAMR.gif" alt="Image 1" width = "600" style="margin-left: 1px;">
+    <img src="./docs/src/assets/AMR.gif" alt="Image 1" width = "600" style="margin-left: 1px;">
     <br>
     <figcaption><i>Hypersonic rarefied flow over a cylinder. The simultaneous AMR in physical space (left) and velocity space (right) are performed.</i></figcaption>
 </div>
@@ -99,7 +106,7 @@ The current solver discretizes with tree-based Cartesian grids, adapting the mes
 For an AMR solver, the load-balance ability is crucial for high efficiency. KitAMR.jl inherits the load-balance functionality in p4est. The domain decomposition is performed in physical space. The physical grids are encoded into a 1-dimensional sequence by Morton code, and are partitioned to maintain the phase grids number on each processor approximately equal.
 
 <div align="center">
-    <img src="./docs/src/assets/KitAMR_partition.gif" alt="Image 1" width = "600" style="margin-left: 1px;">
+    <img src="./docs/src/assets/partition.gif" alt="Image 1" width = "600" style="margin-left: 1px;">
     <br>
     <figcaption><i>The variation of the processor rank in physical domain during a simulation.</i></figcaption>
 </div>

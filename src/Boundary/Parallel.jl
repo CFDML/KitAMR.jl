@@ -6,10 +6,10 @@ rank and then scattered into the correct positions after `MPI.Waitall`.
 """
 function _mpi_solid_exchange_varsize!(
     ghost::P_pxest_ghost_t,
-    ghost_buffer::Ptr{Cdouble},
+    ghost_buffer::Vector{Float64},
     ghost_offsets::Vector{Int},
     ghost_elem_sizes::Vector{Int},   # 0 for non-solid ghosts
-    mirror_data_pointers::Vector{Ptr{Cdouble}},
+    mirror_data_bufs::Vector{Vector{Float64}},
     mirror_elem_sizes::Vector{Int},  # 0 for non-solid mirrors
     tag::Int,
 )
@@ -19,9 +19,9 @@ function _mpi_solid_exchange_varsize!(
     comm   = MPI.COMM_WORLD
 
     reqs      = Vector{MPI.Request}(undef, 0)
-    send_bufs = Vector{Vector{Cdouble}}(undef, 0)
+    send_bufs = Vector{Vector{Float64}}(undef, 0)
     # Each entry: (recv_buf, solid_ghost_indices, solid_ghost_sizes) for one source rank.
-    recv_infos = Vector{Tuple{Vector{Cdouble}, Vector{Int}, Vector{Int}}}(undef, 0)
+    recv_infos = Vector{Tuple{Vector{Float64}, Vector{Int}, Vector{Int}}}(undef, 0)
 
     # --- Post receives grouped by source rank (only solid ghost cells) ---
     for r in 0:mpisize-1
@@ -40,7 +40,7 @@ function _mpi_solid_exchange_varsize!(
             recv_elems += sz
         end
         recv_elems == 0 && continue
-        recv_buf = Vector{Cdouble}(undef, recv_elems)
+        recv_buf = Vector{Float64}(undef, recv_elems)
         push!(recv_infos, (recv_buf, solid_idx, solid_szs))
         push!(reqs, MPI.Irecv!(recv_buf, comm; source = r, tag = tag))
     end
@@ -56,15 +56,13 @@ function _mpi_solid_exchange_varsize!(
             send_elems += mirror_elem_sizes[Int(mirror_proc_mirrors[k]) + 1]
         end
         send_elems == 0 && continue
-        send_buf = Vector{Cdouble}(undef, send_elems)
+        send_buf = Vector{Float64}(undef, send_elems)
         off = 0
         for k in mp_start:mp_end
             m_idx = Int(mirror_proc_mirrors[k]) + 1
             sz = mirror_elem_sizes[m_idx]
             sz == 0 && continue
-            src = Base.unsafe_wrap(
-                Vector{Cdouble}, mirror_data_pointers[m_idx], sz, own = false)
-            copyto!(send_buf, off + 1, src, 1, sz)
+            copyto!(send_buf, off + 1, mirror_data_bufs[m_idx], 1, sz)
             off += sz
         end
         push!(send_bufs, send_buf)
@@ -77,9 +75,7 @@ function _mpi_solid_exchange_varsize!(
     for (recv_buf, solid_idx, solid_szs) in recv_infos
         off = 0
         for (i, sz) in zip(solid_idx, solid_szs)
-            dst = Base.unsafe_wrap(
-                Vector{Cdouble},
-                ghost_buffer + ghost_offsets[i] * sizeof(Cdouble), sz, own = false)
+            dst = @view ghost_buffer[ghost_offsets[i]+1 : ghost_offsets[i]+sz]
             copyto!(dst, 1, recv_buf, off + 1, sz)
             off += sz
         end
@@ -101,32 +97,33 @@ function solid_exchange!(p4est::P_pxest_t, ka::KA{DIM,NDF}) where {DIM,NDF}
 
     update_solid_mirror_data!(p4est, ka)
 
-    gp_obj     = ka.kdata.ghost.ghost_pointers
+    gb_buf     = ka.kdata.ghost.ghost_buffer
+    gi         = ka.kdata.ghost.ghost_info
     ghost_wrap = ka.kdata.ghost.ghost_wrap
 
     # Ghost element sizes: non-zero only for solid-adjacent (bound_enc < 0) ghost cells.
     ghost_szs = [(!isa(gw, GhostInsideSolidData) && gw.bound_enc < 0) ?
-                 size_Ghost_Data(gp_obj.ghost_vsnums[i], DIM, NDF) : 0
+                 size_Ghost_Data(gi.ghost_vsnums[i], DIM, NDF) : 0
                  for (i, gw) in enumerate(ghost_wrap)]
 
     # Mirror element sizes: non-zero only for solid-adjacent mirror cells.
-    n_mirrors  = length(gp_obj.mirror_vsnums)
+    n_mirrors  = length(gi.mirror_vsnums)
     mirror_szs = Vector{Int}(undef, n_mirrors)
     GC.@preserve p4est ka begin
-        gp = PointerWrapper(ka.kinfo.forest.ghost)
+        ghost_pw = PointerWrapper(ka.kinfo.forest.ghost)
         pp = PointerWrapper(p4est)
         for i in 1:n_mirrors
-            pq = pw_mirror_quadrant(pp, gp, i)
+            pq = pw_mirror_quadrant(pp, ghost_pw, i)
             dp = PointerWrapper(P4estPsData, pq.p.user_data[])
             ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
             is_solid = !isa(ps_data, InsideSolidData) && ps_data.bound_enc < 0
-            mirror_szs[i] = is_solid ? size_Ghost_Data(gp_obj.mirror_vsnums[i], DIM, NDF) : 0
+            mirror_szs[i] = is_solid ? size_Ghost_Data(gi.mirror_vsnums[i], DIM, NDF) : 0
         end
     end
 
     _mpi_solid_exchange_varsize!(
         ka.kinfo.forest.ghost,
-        gp_obj.ghost_datas, gp_obj.ghost_data_offsets,
-        ghost_szs, gp_obj.mirror_data_pointers, mirror_szs, 51)
+        gb_buf.ghost_datas, gi.ghost_data_offsets,
+        ghost_szs, gb_buf.mirror_data_bufs, mirror_szs, 51)
     return nothing
 end
