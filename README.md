@@ -1,13 +1,14 @@
 <div align="center">
-  <h1>KitAMR.jl</h1>
-  <img
-    src="./docs/src/assets/logo.svg"
-    alt="KitAMR Logo" width="100">
+    <img
+        src="./docs/src/assets/logo.svg"
+        alt="KitAMR Logo" width="100">
   </img>
 
-    [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://cfdml.github.io/KitAMR.jl/dev/)
-    ![CI](https://img.shields.io/github/actions/workflow/status/vavrines/KitBase.jl/ci.yml?branch=main)
-    [![codecov](https://img.shields.io/codecov/c/github/CFDML/KitAMR.jl)](https://codecov.io/gh/CFDML/KitAMR.jl)
+  <font size="7"><b>KitAMR.jl</b></font>
+  
+[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://cfdml.github.io/KitAMR.jl/dev/)
+![CI](https://img.shields.io/github/actions/workflow/status/vavrines/KitBase.jl/ci.yml?branch=main)
+[![codecov](https://img.shields.io/codecov/c/github/CFDML/KitAMR.jl)](https://codecov.io/gh/CFDML/KitAMR.jl)
 </div>
 
 
