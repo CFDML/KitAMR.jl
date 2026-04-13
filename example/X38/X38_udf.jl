@@ -8,8 +8,7 @@ function amr_region(ps_data,level,ka) # dynamic
     end
     return false
 end
-function X38_buffer_IC(midpoint::Vector{Float64},::KInfo)
-    kinfo = kwargs[:kinfo]
+function X38_buffer_IC(midpoint::Vector{Float64},kinfo::KInfo)
     ib = kinfo.config.IB[1]
     Ma = 8.
     T0 = 1.0

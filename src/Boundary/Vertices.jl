@@ -1,8 +1,4 @@
-function pre_ps_refine_flag(boundary::Vertices,midpoint::AbstractVector,ds::AbstractVector,kinfo::KInfo) # Circle type IB boundary flag
-    boundary.box[1][1]<midpoint[1]&&boundary.box[2][1]>midpoint[1]&&boundary.box[1][2]<midpoint[2]&&boundary.box[2][2]>midpoint[2] && return true
-    return false
-end
-function boundary_flag(boundary::Vertices,midpoint::AbstractVector,ds::AbstractVector,::KInfo) # Circle type IB boundary flag
+function boundary_flag(boundary::Vertices,midpoint::AbstractVector,ds::AbstractVector,::Union{KInfo,Nothing}) # Circle type IB boundary flag
     # (boundary.box[1][1]>midpoint[1]||boundary.box[2][1]<midpoint[1]||boundary.box[1][2]>midpoint[2]||boundary.box[2][2]<midpoint[2]) && return false
     flag = 0
     for i = 1:4
@@ -14,6 +10,34 @@ end
 function solid_cell_flag(boundary::Vertices,midpoint::AbstractVector,ds::AbstractVector,kinfo::KInfo,inside::Bool) # Ghost nodes, those are inside solid domain and immediately adjacent the boundary.
     (boundary_flag(boundary,midpoint,ds,kinfo) && inside) && return true
     return false
+end
+function solid_box_flag(midpoint,ds,ib::Vertices)
+    r = ib.search_radius
+    lower = midpoint .- 0.5 .* ds
+    upper = midpoint .+ 0.5 .* ds
+    box_lower = ib.box[1] .- r
+    box_upper = ib.box[2] .+ r
+    return all(lower .< box_upper) && all(upper .> box_lower)
+end
+function search_radius_flag!(i::Int,ib::Vertices,midpoint,ds,mesh_data)
+    solid_box_flag(midpoint,ds,ib) || return false
+    mesh_data.in_box = i
+    r = ib.search_radius
+    distance = minimum(norm(midpoint .- v) for v in ib.vertices)
+    if distance < r + 0.5*norm(ds)
+        mesh_data.in_search_radius = i
+        return true
+    end
+    return false
+end
+function search_radius_flag(ib::Vertices,midpoint,ds)
+    solid_box_flag(midpoint,ds,ib) || return false
+    r = ib.search_radius
+    distance = minimum(norm(midpoint .- v) for v in ib.vertices)
+    return distance < r + 0.5*norm(ds)
+end
+function ghost_cell_flag(ib::Vertices{2},midpoint,ds)
+    return boundary_flag(ib,midpoint,ds,nothing)
 end
 function solid_flag(boundary::Vertices,midpoint::AbstractVector) # Does midpoint locate at solid?
     inbox = (boundary.box[1][1]<midpoint[1]&&boundary.box[2][1]>midpoint[1]&&boundary.box[1][2]<midpoint[2]&&boundary.box[2][2]>midpoint[2])

@@ -1,6 +1,3 @@
-function pre_ps_refine_flag(boundary::AbstractCircle,midpoint::AbstractVector,ds::AbstractVector,kinfo::KInfo) # Circle type IB boundary flag
-    boundary_flag(boundary,midpoint,ds,kinfo)
-end
 function boundary_flag(boundary::Circle,midpoint::AbstractVector,ds::AbstractVector,::KInfo) # Circle type IB boundary flag
     flag = 0
     for i = 1:4
@@ -64,7 +61,37 @@ function calc_intersect(f_midpoint,s_midpoint,::Vector,::Int,circle::Sphere)
     return ap,n
 end
 
-function solid_box_flag(midpoint,ds,ib::AbstractCircle)
+
+function search_radius_flag!(i::Int,ib::Circle,midpoint,ds,mesh_data)
+    solid_box_flag(midpoint,ds,ib) || return false
+    mesh_data.in_box = i
+    r = ib.search_radius
+    distance = abs(norm(midpoint .- ib.center) - ib.radius)
+    if distance < r + 0.5*norm(ds)
+        mesh_data.in_search_radius = i
+        return true
+    end
+    return false
+end
+
+function search_radius_flag(ib::Circle,midpoint,ds)
+    solid_box_flag(midpoint,ds,ib) || return false
+    r = ib.search_radius
+    distance = abs(norm(midpoint .- ib.center) - ib.radius)
+    return distance < r + 0.5*norm(ds)
+end
+
+function solid_box_flag(midpoint,ds,ib::Circle)
+    r = ib.search_radius
+    hyper_rec = HyperRectangle(SVector{2,Float64}(ib.center.-ib.radius.-r),SVector{2,Float64}(ib.center.+ib.radius.+r))
+    lower = midpoint-0.5*ds;upper = midpoint+0.5*ds
+    if overlap_test(lower,upper,hyper_rec)
+        return true
+    else
+        return false
+    end
+end
+function solid_box_flag(midpoint,ds,ib::Sphere)
     r = ib.search_radius
     hyper_rec = HyperRectangle(SVector{3,Float64}(ib.center.-ib.radius.-r),SVector{3,Float64}(ib.center.+ib.radius.+r))
     lower = midpoint-0.5*ds;upper = midpoint+0.5*ds
@@ -75,7 +102,7 @@ function solid_box_flag(midpoint,ds,ib::AbstractCircle)
     end
 end
 
-function search_radius_flag!(i::Int,ib::AbstractCircle,midpoint,ds,mesh_data)
+function search_radius_flag!(i::Int,ib::Sphere,midpoint,ds,mesh_data)
     r = ib.search_radius
     hyper_rec = HyperRectangle(SVector{3,Float64}(ib.center.-ib.radius.-r),SVector{3,Float64}(ib.center.+ib.radius.+r))
     lower = midpoint-0.5*ds;upper = midpoint+0.5*ds
@@ -90,6 +117,18 @@ function search_radius_flag!(i::Int,ib::AbstractCircle,midpoint,ds,mesh_data)
     return false
 end
 
+"""
+$(TYPEDSIGNATURES)
+Only accurate for grids that have been refined to the same level (inside the search radius).
+"""
+function ghost_cell_flag(ib::Circle,midpoint,ds)
+    flag = 0
+    for i = 1:4
+        flag += norm(midpoint.+ds.*NMT[2][i].-ib.center)>ib.radius ? 1 : -1 # any neighbor cross boundary?
+    end
+    abs(flag)==4 && return false
+    return true
+end
 """
 $(TYPEDSIGNATURES)
 Only accurate for grids that have been refined to the same level (inside the search radius).

@@ -138,173 +138,86 @@ end
 """
 $(TYPEDSIGNATURES)
 """
-function initialize_neighbor_data!(ip::PointerWrapper{p4est_iter_volume_info_t}, data, dp)
-    ka = unsafe_pointer_to_objref(data)
-    ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
-    isa(ps_data,InsideSolidData) && return nothing
-    for i = 1:face_num_2d
-        ps_data.neighbor.data[i], ps_data.neighbor.state[i] = access_neighbor(
-            pointer(ip.p4est),
-            local_quadid(ip),
-            ka.kinfo,
-            ka.kdata.ghost.ghost_wrap,
-            i - 1,
-        )
-    end
-    if ps_data.bound_enc<0
-        for i in 4:7 # Corners are indexed with z-order, as well.
-            data,state = access_neighbor(
-                pointer(ip.p4est),
-                local_quadid(ip),
-                ka.kinfo,
-                ka.kdata.ghost.ghost_wrap,
-                i,
-            )
-            push!(ps_data.neighbor.data,data);push!(ps_data.neighbor.state,state)
-        end
-    end
-    return nothing
-end
-
-"""
-$(TYPEDSIGNATURES)
-"""
-function initialize_neighbor_data!(ip::PointerWrapper{p8est_iter_volume_info_t}, data, dp)
-    ka = unsafe_pointer_to_objref(data)
-    ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
-    isa(ps_data,InsideSolidData) && return nothing
-    for i = 1:face_num_3d
-        ps_data.neighbor.data[i], ps_data.neighbor.state[i] = access_neighbor(
-            pointer(ip.p4est),
-            local_quadid(ip),
-            ka.kinfo,
-            ka.kdata.ghost.ghost_wrap,
-            i - 1,
-        )
-    end
-    if ps_data.bound_enc<0
-        for i in 6:25 # Corners are indexed with z-order, as well.
-            data,state = access_neighbor(
-                pointer(ip.p4est),
-                local_quadid(ip),
-                ka.kinfo,
-                ka.kdata.ghost.ghost_wrap,
-                i,
-            )
-            push!(ps_data.neighbor.data,data);push!(ps_data.neighbor.state,state)
-        end
-    end
-    return nothing
-end
-
-"""
-$(TYPEDSIGNATURES)
-"""
-function initialize_neighbor_data!(info, data)
-    AMR_volume_iterate(info, data, P4estPsData, initialize_neighbor_data!)
-end
-"""
-$(TYPEDSIGNATURES)
-"""
 function initialize_neighbor_data!(p4est::P_pxest_t, ka::KA)
     p_ka = pointer_from_objref(ka)
-    GC.@preserve  ka AMR_4est_volume_iterate(
-        p4est,
-        ka.kinfo.forest.ghost,
-        p_ka,
-        initialize_neighbor_data!,
-    )
+    GC.@preserve  ka AMR_volume_iterate(p4est;ghost = ka.kinfo.forest.ghost,user_data = p_ka) do ip,data,dp
+        ka = unsafe_pointer_to_objref(data)
+        ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+        isa(ps_data,InsideSolidData) && return nothing
+        face_num = ip isa PointerWrapper{p4est_iter_volume_info_t} ? face_num_2d : face_num_3d
+        for i = 1:face_num
+            ps_data.neighbor.data[i], ps_data.neighbor.state[i] = access_neighbor(
+                pointer(ip.p4est),
+                local_quadid(ip),
+                ka.kinfo,
+                ka.kdata.ghost.ghost_wrap,
+                i - 1,
+            )
+        end
+        corner_range = ip isa PointerWrapper{p4est_iter_volume_info_t} ? (4:7) : (6:25)
+        if ps_data.bound_enc<0
+            for i in corner_range
+                nb,state = access_neighbor(
+                    pointer(ip.p4est),
+                    local_quadid(ip),
+                    ka.kinfo,
+                    ka.kdata.ghost.ghost_wrap,
+                    i,
+                )
+                push!(ps_data.neighbor.data,nb);push!(ps_data.neighbor.state,state)
+            end
+        end
+        return nothing
+    end
 end
 
 #=
 face_micro_nums: 1->4时记1，只需在state=-1时+0.25即可
 =#
-function update_neighbor_kernel!(ip::PointerWrapper{p4est_iter_volume_info_t}, data, dp)
-    ka = unsafe_pointer_to_objref(data)
-    ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
-    isa(ps_data,InsideSolidData) && return nothing
-    for i = 1:face_num_2d
-        ps_data.neighbor.data[i], ps_data.neighbor.state[i] = access_neighbor(
-            pointer(ip.p4est),
-            local_quadid(ip),
-            ka.kinfo,
-            ka.kdata.ghost.ghost_wrap,
-            i - 1,
-        )
-    end
-    if length(ps_data.neighbor.data) > 4
-        for i in 4:7
-            ps_data.neighbor.data[i+1],ps_data.neighbor.state[i+1] = access_neighbor(
-                pointer(ip.p4est),
-                local_quadid(ip),
-                ka.kinfo,
-                ka.kdata.ghost.ghost_wrap,
-                i,
-            )
-        end
-    elseif ps_data.bound_enc<0
-        for i in 4:7
-            data,state = access_neighbor(
-                pointer(ip.p4est),
-                local_quadid(ip),
-                ka.kinfo,
-                ka.kdata.ghost.ghost_wrap,
-                i,
-            )
-            push!(ps_data.neighbor.data,data);push!(ps_data.neighbor.state,state)
-        end
-    end
-    return nothing
-end
-function update_neighbor_kernel!(ip::PointerWrapper{p8est_iter_volume_info_t}, data, dp)
-    ka = unsafe_pointer_to_objref(data)
-    ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
-    isa(ps_data,InsideSolidData) && return nothing
-    for i = 1:face_num_3d
-        ps_data.neighbor.data[i], ps_data.neighbor.state[i] = access_neighbor(
-            pointer(ip.p4est),
-            local_quadid(ip),
-            ka.kinfo,
-            ka.kdata.ghost.ghost_wrap,
-            i - 1,
-        )
-    end
-    if length(ps_data.neighbor.data) > 6
-        for i in 6:25 #6~17: edge, 18~25: corner
-            ps_data.neighbor.data[i+1],ps_data.neighbor.state[i+1] = access_neighbor(
-                pointer(ip.p4est),
-                local_quadid(ip),
-                ka.kinfo,
-                ka.kdata.ghost.ghost_wrap,
-                i,
-            )
-        end
-    elseif ps_data.bound_enc<0
-        for i in 6:25
-            data,state = access_neighbor(
-                pointer(ip.p4est),
-                local_quadid(ip),
-                ka.kinfo,
-                ka.kdata.ghost.ghost_wrap,
-                i,
-            )
-            push!(ps_data.neighbor.data,data);push!(ps_data.neighbor.state,state)
-        end
-    end
-    return nothing
-end
-function update_neighbor_kernel!(info, data)
-    AMR_volume_iterate(info, data, P4estPsData, update_neighbor_kernel!)
-end
 function update_neighbor_kernel!(p4est::P_pxest_t, ka::KA)
     p_ka = pointer_from_objref(ka)
     MPI.Barrier(MPI.COMM_WORLD)
-    GC.@preserve  ka AMR_4est_volume_iterate(
-        p4est,
-        ka.kinfo.forest.ghost,
-        p_ka,
-        update_neighbor_kernel!,
-    )
+    GC.@preserve  ka AMR_volume_iterate(p4est;ghost = ka.kinfo.forest.ghost,user_data = p_ka) do ip,data,dp
+        ka = unsafe_pointer_to_objref(data)
+        ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+        isa(ps_data,InsideSolidData) && return nothing
+        is2d = ip isa PointerWrapper{p4est_iter_volume_info_t}
+        face_num = is2d ? face_num_2d : face_num_3d
+        extra_range = is2d ? (4:7) : (6:25)
+        extra_thresh = is2d ? 4 : 6
+        for i = 1:face_num
+            ps_data.neighbor.data[i], ps_data.neighbor.state[i] = access_neighbor(
+                pointer(ip.p4est),
+                local_quadid(ip),
+                ka.kinfo,
+                ka.kdata.ghost.ghost_wrap,
+                i - 1,
+            )
+        end
+        if length(ps_data.neighbor.data) > extra_thresh
+            for i in extra_range
+                ps_data.neighbor.data[i+1],ps_data.neighbor.state[i+1] = access_neighbor(
+                    pointer(ip.p4est),
+                    local_quadid(ip),
+                    ka.kinfo,
+                    ka.kdata.ghost.ghost_wrap,
+                    i,
+                )
+            end
+        elseif ps_data.bound_enc<0
+            for i in extra_range
+                nb,state = access_neighbor(
+                    pointer(ip.p4est),
+                    local_quadid(ip),
+                    ka.kinfo,
+                    ka.kdata.ghost.ghost_wrap,
+                    i,
+                )
+                push!(ps_data.neighbor.data,nb);push!(ps_data.neighbor.state,state)
+            end
+        end
+        return nothing
+    end
 end
 function update_neighbor!(p4est::Ptr{p4est_t}, ka::KA)
     kinfo = ka.kinfo

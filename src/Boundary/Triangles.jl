@@ -56,12 +56,6 @@ function triangle_edges(mesh::Mesh)
     return edges
 end
 
-function overlap_test(lower,upper,hyper_rec::HyperRectangle)
-    for i = 1:3
-        (upper[i]<hyper_rec.mins[i]||lower[i]>hyper_rec.maxes[i])&& return false
-    end
-    return true
-end
 function SAT_test_1(h,C,edge,V0)
     n = cross(edge[1],edge[2])
     l = dot(h,abs.(n))
@@ -300,8 +294,30 @@ function ghost_cell_flag(ib::Triangles,midpoint,ds)
     return false
 end
 
+function cell_type_decision!(p4est::Ptr{p4est_t})
+    AMR_volume_iterate(p4est) do ip,_,dp
+        kinfo,_ = unsafe_pointer_to_objref(pointer(ip.p4est.user_pointer))
+        mesh_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+        ds,midpoint = quad_to_cell(ip.p4est,ip.treeid[],ip.quad)
+        if mesh_data.in_box!=0
+            ib = kinfo.config.IB[mesh_data.in_box]
+            mesh_data.in_solid = solid_flag(ib,midpoint)
+            if mesh_data.in_search_radius!=0&&mesh_data.in_solid
+                mesh_data.is_ghost_cell = ghost_cell_flag(ib,midpoint,ds)
+            end
+        else
+            ibs = kinfo.config.IB
+            if isempty(ibs)
+                mesh_data.in_solid = false
+            else
+                ib = ibs[1]
+                mesh_data.in_solid = ib.solid ? false : true
+            end
+        end
+    end
+end
 function cell_type_decision!(p4est::Ptr{p8est_t})
-    AMR_volume_iterate(p4est) do ip,data,dp
+    AMR_volume_iterate(p4est) do ip,_,dp
         kinfo,_ = unsafe_pointer_to_objref(pointer(ip.p4est.user_pointer))
         mesh_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
         ds,midpoint = quad_to_cell(ip.p4est,ip.treeid[],ip.quad)

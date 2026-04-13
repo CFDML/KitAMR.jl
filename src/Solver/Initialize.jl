@@ -225,76 +225,6 @@ end
 function initial_prim(ic::PCoordFn;midpoint::AbstractVector{Float64},kinfo::KInfo)
     return ic.PCIC_fn(midpoint,kinfo)
 end
-function init_solid_midpoints_kernel(ip, data, dp)
-    kinfo, solid_midpoints = unsafe_pointer_to_objref(data)
-    boundaries = kinfo.config.IB
-    ds, midpoint = quad_to_cell(ip.p4est, ip.treeid[], ip.quad)
-    for i in eachindex(boundaries)
-        inside = solid_flag(boundaries[i],midpoint)
-        solid_cell_flag(boundaries[i],midpoint,ds,kinfo,inside)&&push!(solid_midpoints[i],midpoint)
-    end
-end
-function init_solid_midpoints(info, data)
-    AMR_volume_iterate(info, data, P4estPsData, init_solid_midpoints_kernel)
-end
-
-function init_ps_p4est_kernel(ip, data, dp)
-    kinfo, trees = unsafe_pointer_to_objref(data)
-    boundaries = kinfo.config.IB
-    ds, midpoint = quad_to_cell(ip.p4est, ip.treeid[], ip.quad)
-    flag = true # need to be initialized?
-    solid_cell_flags = Vector{Bool}(undef,length(kinfo.config.IB))
-    ghost_cell_flags = Vector{Bool}(undef,length(kinfo.config.IB))
-    target_cell_flags = Vector{Bool}(undef,length(kinfo.config.IB))
-    for i in eachindex(boundaries)
-        boundary = boundaries[i]
-        inside = solid_flag(boundary,midpoint)
-        bf = boundary_flag(boundary,midpoint,ds,kinfo)
-	    ghost_cell_flags[i] = (bf && inside)&&ip.quad.level[]==kinfo.config.solver.AMR_PS_MAXLEVEL
-        solid_cell_flags[i] = inside
-        target_cell_flags[i] = (bf && !inside)&&ip.quad.level[]==kinfo.config.solver.AMR_PS_MAXLEVEL
-        flag = flag&&(!inside||ghost_cell_flags[i])
-        !flag&&break
-    end
-    treeid = ip.treeid[] - trees.offset # local treeid
-    if flag
-        ps_data = PsData(typeof(kinfo).parameters...)
-        push!(trees.data[treeid], ps_data)
-        dp[] = P4estPsData(pointer_from_objref(ps_data))
-        ic = kinfo.config.IC
-        ps_data.quadid = global_quadid(ip)
-        ps_data.ds .= ds
-        ps_data.midpoint .= midpoint
-        ps_data.prim .= initial_prim(ic;midpoint = ps_data.midpoint,kinfo = kinfo)
-        ps_data.w .= get_conserved(ps_data, kinfo)
-        ps_data.vs_data = initialize_vs_data(ps_data.prim, kinfo)
-        for i in eachindex(ghost_cell_flags)
-            if ghost_cell_flags[i]
-                ps_data.bound_enc<0&&(@error `The ghost cell is shared!`)
-                ps_data.bound_enc = -i
-            elseif target_cell_flags[i]
-                ps_data.bound_enc<0&&(@error `The ghost cell is shared!`)
-                ps_data.bound_enc>0&&(@error `The target cell is shared!`)
-                ps_data.bound_enc = i
-            end
-        end
-    else
-        bound_enc = 0
-        for i in eachindex(solid_cell_flags)
-            if solid_cell_flags[i]
-                bound_enc<0 && (@error `The solid cell is shared!`)
-                bound_enc = -i
-            end
-        end
-        bound_enc==0 && (@error `Unexpected bound_enc!`)
-        inside_quad = InsideSolidData{typeof(kinfo).parameters...}(bound_enc,midpoint,ds)
-        dp[] = P4estPsData(pointer_from_objref(inside_quad))
-        push!(trees.data[treeid],inside_quad)
-    end
-end
-function init_ps_p4est(info, data)
-    AMR_volume_iterate(info, data, P4estPsData, init_ps_p4est_kernel)
-end
 
 function re_init_vs4est!(trees, kinfo)
     for i in eachindex(trees.data)
@@ -307,32 +237,36 @@ function re_init_vs4est!(trees, kinfo)
         end
     end
 end
-function init_aux_points(kinfo::KInfo,solid_midpoints::Vector)
-    calc_intersect_point(kinfo.config.IB,solid_midpoints)
-end
-
 """
 $(TYPEDSIGNATURES)
 """
 function pre_refine!(p4est::Ptr{p4est_t},kinfo::KInfo)
-    pre_ps_refine!(p4est,kinfo)
-    pre_ps_balance!(p4est)
-    solid_midpoints = Vector{Vector{Vector{Float64}}}(undef,length(kinfo.config.IB)) # boundaries{solidcells{midpoints{}}}
-    for i in eachindex(solid_midpoints)
-        solid_midpoints[i] = Vector{Float64}[]
+    user_defined_ps_refine!(p4est,kinfo)
+    AMR_partition(p4est) do p4est,which_tree,quadrant
+        fp = PointerWrapper(p4est)
+        kinfo = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        ibs = kinfo.config.IB
+        qp = PointerWrapper(quadrant)
+        ds,midpoint = quad_to_cell(fp,which_tree,qp)
+        for ib in ibs
+            if solid_box_flag(midpoint,ds,ib)
+                return Cint(1)
+            end
+        end
+        return Cint(0)
     end
-    data = [kinfo, solid_midpoints]
-    p_data = pointer_from_objref(data)
-    GC.@preserve data AMR_4est_volume_iterate(p4est, p_data, init_solid_midpoints)
-    solid_midpoints = broadcast_boundary_midpoints!(solid_midpoints,kinfo)
-    data = [kinfo,solid_midpoints]
+    trees = initialize_MeshData!(p4est,kinfo)
+    data = [kinfo,trees]
     PointerWrapper(p4est).user_pointer = pointer_from_objref(data)
-    GC.@preserve data begin 
-        IB_pre_ps_refine!(p4est,kinfo)
-        pre_ps_coarsen!(p4est;recursive=1)
+    GC.@preserve data begin
+        search_radius_refine!(p4est,kinfo)
+        cell_type_decision!(p4est)
+        pre_ps_coarsen!(p4est)
+        pre_ps_balance!(p4est)
+        meshed_partition!(p4est,trees)
     end
-    AMR_partition(p4est)
-    pre_ps_balance!(p4est)
+    PointerWrapper(p4est).user_pointer = pointer_from_objref(kinfo)
+    return trees
 end
 """
 $(TYPEDSIGNATURES)
@@ -379,7 +313,31 @@ function initialize_ps!(p4est::Ptr{p4est_t},kinfo::KInfo{DIM,NDF}) where{DIM,NDF
     trees = PsTrees{DIM,NDF}(trees_data, fp.first_local_tree[] - 1)
     data = [kinfo,trees]
     p_data = pointer_from_objref(data)
-    GC.@preserve data AMR_4est_volume_iterate(p4est, p_data, init_ps_p4est)
+    GC.@preserve data AMR_volume_iterate(p4est;user_data = p_data) do ip,data,dp
+        kinfo, trees = unsafe_pointer_to_objref(data)
+        ds, midpoint = quad_to_cell(ip.p4est, ip.treeid[], ip.quad)
+        mesh_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
+        treeid = ip.treeid[] - trees.offset # local treeid
+        if !mesh_data.in_solid||mesh_data.is_ghost_cell
+            ps_data = PsData(typeof(kinfo).parameters...)
+            push!(trees.data[treeid], ps_data)
+            dp[] = P4estPsData(pointer_from_objref(ps_data))
+            ic = kinfo.config.IC
+            ps_data.quadid = global_quadid(ip)
+            ps_data.ds .= ds
+            ps_data.midpoint .= midpoint
+            ps_data.prim .= initial_prim(ic;midpoint = ps_data.midpoint,kinfo = kinfo)
+            ps_data.w .= get_conserved(ps_data, kinfo)
+            ps_data.vs_data = initialize_vs_data(ps_data.prim, kinfo)
+            if mesh_data.is_ghost_cell
+                ps_data.bound_enc = -mesh_data.in_search_radius
+            end
+        else
+            inside_quad = InsideSolidData{typeof(kinfo).parameters...}(-mesh_data.in_box,midpoint,ds)
+            dp[] = P4estPsData(pointer_from_objref(inside_quad))
+            push!(trees.data[treeid],inside_quad)
+        end
+    end
     # pre_vs_refine!(trees, kinfo)
     # re_init_vs4est!(trees, kinfo)
     return trees
@@ -438,8 +396,10 @@ function initialize_trees!(kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
             pointer_from_objref(kinfo),
         )
         kinfo.forest.p4est = p4est
-        pre_refine!(p4est,kinfo)
-        trees = initialize_ps!(p4est,kinfo)
+        mesh_tree = pre_refine!(p4est,kinfo)
+        GC.@preserve mesh_tree begin
+            trees = initialize_ps!(p4est,kinfo)
+        end
         return p4est, trees
     end
 end

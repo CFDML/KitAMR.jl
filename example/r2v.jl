@@ -1,6 +1,4 @@
 using KitAMR
-include("convergence_ps_TC/convergence_ps_udf.jl")
-include("artificial_interpolation/convergence_ps_udf.jl")
 include("cylinder/cylinder_udf.jl")
 KitAMR.result2vtk("result2025-01-09_21-43","modified1_UGKS_vtk")
 KitAMR.result2vtk("result2025-08-17_19-27","test_period")

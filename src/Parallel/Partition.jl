@@ -226,6 +226,9 @@ end
 $(TYPEDSIGNATURES)
 """
 function partition!(p4est::Ptr{p4est_t},weight::Function = partition_weight)
+    partition!(p4est,@cfunction($weight,Cint,(Ptr{p4est_t},p4est_topidx_t,Ptr{p4est_quadrant_t})))
+end
+function partition!(p4est::Ptr{p4est_t},weight::Union{Ptr{Nothing},Base.CFunction})
     pp = PointerWrapper(p4est)
     gfq = Base.unsafe_wrap(
         Vector{Int},
@@ -235,7 +238,7 @@ function partition!(p4est::Ptr{p4est_t},weight::Function = partition_weight)
     src_gfq = copy(gfq)
     src_flt = pp.first_local_tree[]
     src_llt = pp.last_local_tree[]
-    p4est_partition(p4est, 0, @cfunction($weight,Cint,(Ptr{p4est_t},p4est_topidx_t,Ptr{p4est_quadrant_t})))
+    p4est_partition(p4est, 0, weight)
     return src_gfq, gfq, src_flt, src_llt
 end
 function partition!(p4est::Ptr{p8est_t},weight::Function = partition_weight)
@@ -667,27 +670,18 @@ function init_down_quadrants!(ip, dp, ti_data::TransferInit, treeid::Integer, tr
     ti_data.down_index += 1
     return nothing
 end
-function init_transferred_quadrant!(ip, data, dp)
-    ti_data = unsafe_pointer_to_objref(data)
-    ka = unsafe_pointer_to_objref(pointer(ip.p4est.user_pointer))
-    trees = ka.kdata.field.trees
-    treeid = ip.treeid[] - trees.offset
-    tree_datas = trees.data[treeid]
-    init_up_quadrants!(ip, dp, ti_data, ip.treeid[], tree_datas)
-    init_down_quadrants!(ip, dp, ti_data, ip.treeid[], tree_datas)
-end
-function init_transferred_quadrant!(info, data)
-    AMR_volume_iterate(info, data, P4estPsData, init_transferred_quadrant!)
-end
 function init_transferred_quadrant!(p4est::P_pxest_t, ti_data::TransferInit, ka)
     ghost = ka.kinfo.forest.ghost
     p_data = pointer_from_objref(ti_data)
-    GC.@preserve ti_data AMR_4est_volume_iterate(
-        p4est,
-        ghost,
-        p_data,
-        init_transferred_quadrant!,
-    )
+    GC.@preserve ti_data AMR_volume_iterate(p4est;ghost = ghost,user_data = p_data) do ip,data,dp
+        ti_data = unsafe_pointer_to_objref(data)
+        ka = unsafe_pointer_to_objref(pointer(ip.p4est.user_pointer))
+        trees = ka.kdata.field.trees
+        treeid = ip.treeid[] - trees.offset
+        tree_datas = trees.data[treeid]
+        init_up_quadrants!(ip, dp, ti_data, ip.treeid[], tree_datas)
+        init_down_quadrants!(ip, dp, ti_data, ip.treeid[], tree_datas)
+    end
 end
 function init_transferred_ps!(p4est::P_pxest_t, ti_data::TransferInit, ka::KA)
     insert_trees!(p4est, ti_data, ka)

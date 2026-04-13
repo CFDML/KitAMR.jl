@@ -62,6 +62,20 @@ function user_defined_ps_refine_flag(forest::P_pxest_t,which_tree,quadrant)
         end
     end
 end
+function user_defined_ps_refine!(p4est::Ptr{p4est_t},kinfo::KInfo)
+    p4est_refine_ext(
+        p4est,
+        1,
+        kinfo.config.solver.AMR_PS_MAXLEVEL,
+        @cfunction(
+            user_defined_ps_refine_flag,
+            Cint,
+            (Ptr{p4est_t}, p4est_topidx_t, Ptr{p4est_quadrant_t})
+        ),
+        C_NULL,
+        C_NULL,
+    )
+end
 function user_defined_ps_refine!(p4est::Ptr{p8est_t},kinfo::KInfo)
     p8est_refine_ext(
         p4est,
@@ -115,6 +129,31 @@ function search_radius_refine_replace(forest::P_pxest_t,which_tree,num_out,out_q
         search_radius_refine_replace(forest, out_quads_wrap, in_quads_wrap, which_tree, trees, kinfo)
         return nothing
     end
+end
+function search_radius_refine!(p4est::Ptr{p4est_t},kinfo::KInfo)
+    p4est_refine_ext(
+        p4est,
+        1,
+        kinfo.config.solver.AMR_PS_MAXLEVEL,
+        @cfunction(
+            search_radius_flag!,
+            Cint,
+            (Ptr{p4est_t}, p4est_topidx_t, Ptr{p4est_quadrant_t})
+        ),
+        C_NULL,
+        @cfunction(
+            search_radius_refine_replace,
+            Cvoid,
+            (
+                Ptr{p4est_t},
+                p4est_topidx_t,
+                Cint,
+                Ptr{Ptr{p4est_quadrant_t}},
+                Cint,
+                Ptr{Ptr{p4est_quadrant_t}},
+            )
+        )
+    )
 end
 function search_radius_refine!(p4est::Ptr{p8est_t},kinfo::KInfo)
     p8est_refine_ext(
@@ -192,17 +231,6 @@ function boundary_flag(midpoint::AbstractVector,ds::AbstractVector,kinfo::KInfo)
         boundary_flag(domain[i],midpoint,ds,kinfo) && return true
     end
     return solid_cell_flag(boundary,midpoint,ds,kinfo)
-end
-function pre_ps_refine_flag(midpoint,ds,kinfo::KInfo{DIM}) where{DIM}
-    domain = kinfo.config.domain
-    boundary = kinfo.config.IB
-    for i in eachindex(domain)
-        boundary_flag(domain[i],midpoint,ds,kinfo) && return true
-    end
-    for i in eachindex(boundary)
-        pre_ps_refine_flag(boundary[i],midpoint,ds,kinfo) && return true
-    end
-    return false
 end
 function ps_copy(data::PsData{DIM,NDF}) where{DIM,NDF}
     p = PsData(DIM,NDF;
@@ -444,57 +472,20 @@ function ps_refine!(p4est::Ptr{p8est_t},ka::KA; recursive = 0)
 end
 
 
-function pre_IB_refine_flag(forest::P_pxest_t, which_tree, quadrant)
-    GC.@preserve forest which_tree quadrant begin
-        fp = PointerWrapper(forest)
-        qp = PointerWrapper(quadrant)
-        kinfo,aux_points = unsafe_pointer_to_objref(pointer(fp.user_pointer))
-        ds,midpoint = quad_to_cell(fp,which_tree,qp)
-        kinfo.config.user_defined.static_ps_refine_flag(midpoint,ds,kinfo,qp.level[]) && return Cint(1)
-        IB_flag(aux_points,midpoint,ds,qp.level[],kinfo) && return Cint(1)
-    end
-    return Cint(0)
-end
-function IB_pre_ps_refine!(p4est::Ptr{p4est_t},kinfo::KInfo)
-    p4est_refine_ext(
-        p4est,
-        1,
-        kinfo.config.solver.AMR_PS_MAXLEVEL,
-        @cfunction(
-            pre_IB_refine_flag,
-            Cint,
-            (Ptr{p4est_t}, p4est_topidx_t, Ptr{p4est_quadrant_t})
-        ),
-        C_NULL,
-        C_NULL,
-    )
-end
-function IB_pre_ps_refine!(p4est::Ptr{p8est_t},kinfo::KInfo)
-    p8est_refine_ext(
-        p4est,
-        1,
-        kinfo.config.solver.AMR_PS_MAXLEVEL,
-        @cfunction(
-            pre_IB_refine_flag,
-            Cint,
-            (Ptr{p8est_t}, p4est_topidx_t, Ptr{p8est_quadrant_t})
-        ),
-        C_NULL,
-        C_NULL,
-    )
-end
 function pre_ps_coarsen_flag(forest::Ptr{p4est_t},which_tree,quadrants)
     GC.@preserve forest which_tree quadrants begin
         DIM = 2
         fp = PointerWrapper(forest)
         quadrants_wrap = unsafe_wrap(Vector{Ptr{p4est_quadrant_t}}, quadrants, 2^DIM)
-        kinfo,aux_points = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        kinfo,_ = unsafe_pointer_to_objref(pointer(fp.user_pointer))
         for i = 1:2^DIM
             quadrants_wrap[i]==C_NULL&&break
             qp = PointerWrapper(quadrants_wrap[i])
+            dp = PointerWrapper(P4estPsData,qp.p.user_data[])
+            mesh_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
             ds,midpoint = quad_to_cell(fp,which_tree,qp)
-            (kinfo.config.user_defined.static_ps_refine_flag(midpoint,ds,kinfo,qp.level[]-1)&&!solid_flag(midpoint,kinfo)||
-                IB_flag(aux_points,midpoint,ds,qp.level[],kinfo))&&return Cint(0)
+            (kinfo.config.user_defined.static_ps_refine_flag(midpoint,ds,kinfo,qp.level[]-1)&&!mesh_data.in_solid
+                ||mesh_data.is_ghost_cell||(mesh_data.in_search_radius!=0&&!mesh_data.in_solid))&&return Cint(0)
         end
         return Cint(1)
     end
@@ -527,7 +518,18 @@ function pre_ps_coarsen!(p4est::Ptr{p4est_t}; recursive = 0)
             (Ptr{p4est_t}, p4est_topidx_t, Ptr{Ptr{p4est_quadrant_t}})
         ),
         C_NULL,
-        C_NULL,
+        @cfunction(
+            pre_ps_replace,
+            Cvoid,
+            (
+                Ptr{p4est_t},
+                p4est_topidx_t,
+                Cint,
+                Ptr{Ptr{p4est_quadrant_t}},
+                Cint,
+                Ptr{Ptr{p4est_quadrant_t}},
+            )
+        )
     )
 end
 function pre_ps_coarsen!(p4est::Ptr{p8est_t}; recursive = 0)
@@ -691,50 +693,21 @@ function ps_balance!(p4est::Ptr{p8est_t})
         )
     )
 end
-function pre_ps_refine_flag(forest::P_pxest_t, which_tree, quadrant)
-    GC.@preserve forest which_tree quadrant begin
-        fp = PointerWrapper(forest)
-        qp = PointerWrapper(quadrant)
-        kinfo = unsafe_pointer_to_objref(pointer(fp.user_pointer))
-        ds, midpoint = quad_to_cell(fp, which_tree, qp)
-        if pre_ps_refine_flag(midpoint, ds, kinfo)
-            return Cint(1)
-        else
-            return Cint(0)
-        end
-    end
-end
-function pre_ps_refine!(p4est::Ptr{p4est_t},kinfo::KInfo)
-    p4est_refine_ext(
-        p4est,
-        1,
-        kinfo.config.solver.AMR_PS_MAXLEVEL,
-        @cfunction(
-            pre_ps_refine_flag,
-            Cint,
-            (Ptr{p4est_t}, p4est_topidx_t, Ptr{p4est_quadrant_t})
-        ),
-        C_NULL,
-        C_NULL,
-    )
-end
-function pre_ps_refine!(p4est::Ptr{p8est_t},kinfo::KInfo)
-    p8est_refine_ext(
-        p4est,
-        1,
-        kinfo.config.solver.AMR_PS_MAXLEVEL,
-        @cfunction(
-            pre_ps_refine_flag,
-            Cint,
-            (Ptr{p8est_t}, p4est_topidx_t, Ptr{p8est_quadrant_t})
-        ),
-        C_NULL,
-        C_NULL,
-    )
-end
-
 function pre_ps_balance!(p4est::Ptr{p4est_t})
-    p4est_balance_ext(p4est, P4EST_CONNECT_FULL, C_NULL, C_NULL)
+    p4est_balance_ext(p4est, P4EST_CONNECT_FULL, C_NULL,
+        @cfunction(
+            pre_ps_replace,
+            Cvoid,
+            (
+                Ptr{p4est_t},
+                p4est_topidx_t,
+                Cint,
+                Ptr{Ptr{p4est_quadrant_t}},
+                Cint,
+                Ptr{Ptr{p4est_quadrant_t}},
+            )
+        )
+    )
 end
 function pre_ps_balance!(p4est::Ptr{p8est_t})
     p8est_balance_ext(p4est, P8EST_CONNECT_FULL, C_NULL, 
