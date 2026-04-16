@@ -180,3 +180,20 @@ function SolidCells(ps_datas::Vector{PsData{DIM,NDF}}) where{DIM,NDF}
     quadids = [x.quadid for x in ps_datas]
     return SolidCells{DIM,NDF}(ps_datas,quadids)
 end
+
+"""
+$(TYPEDEF)
+Pre-collected immersed-boundary data for a simulation.  Donor cells, solid
+cells and IB-adjacent faces are gathered once at initialisation (and after
+AMR) so that the time-step loop can iterate over them directly without
+scanning every cell in the tree.
+$(TYPEDFIELDS)
+"""
+mutable struct ImmersedBoundary{DIM,NDF}
+    "Donor cells (`bound_enc > 0`)."
+    donor_cells::Vector{AbstractPsData{DIM,NDF}}
+    "Solid cells (`bound_enc < 0`, excluding `InsideSolidData`)."
+    solid_cells::Vector{AbstractPsData{DIM,NDF}}
+    "Faces that involve a `SolidNeighbor` on one side."
+    faces::Vector{AbstractFace}
+end

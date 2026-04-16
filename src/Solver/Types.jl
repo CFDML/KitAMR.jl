@@ -376,6 +376,8 @@ mutable struct Status
     residual::Residual
     "Flag indicating whether to save."
     save_flag::Base.RefValue{Bool}
+    "Reusable vector of MPI requests for asynchronous communication."
+    mpi_reqs::Vector{MPI.Request}
 end
 function Status(config::Dict)
     DIM = config[:DIM]
@@ -388,7 +390,7 @@ function Status(config::Dict)
         (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
         2^config[:AMR_VS_MAXLEVEL] / 2 for i in 1:DIM] : [maximum(abs.(quadrature.vcoords)) for _ in 1:DIM]
     Δt_ξ = config[:CFL]*minimum(ds ./ U)
-    return Status(zeros(DIM+2), Δt_ξ,Δt_ξ,0.,0,1,1,1,Residual(DIM),Ref(false))
+    return Status(zeros(DIM+2), Δt_ξ,Δt_ξ,0.,0,1,1,1,Residual(DIM),Ref(false),MPI.Request[])
 end
 function Status(config::Configure{DIM,NDF}) where{DIM,NDF}
     trees_num = config.trees_num
@@ -400,7 +402,7 @@ function Status(config::Configure{DIM,NDF}) where{DIM,NDF}
         (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
         2^config.solver.AMR_VS_MAXLEVEL / 2 for i in 1:DIM] : [maximum(abs.(quadrature.vcoords)) for _ in 1:DIM]
     Δt_ξ = config.solver.CFL*minimum(ds ./ U)
-    return Status(zeros(DIM+2), Δt_ξ,Δt_ξ,0.,0,1,1,1,Residual(DIM),Ref(false))
+    return Status(zeros(DIM+2), Δt_ξ,Δt_ξ,0.,0,1,1,1,Residual(DIM),Ref(false),MPI.Request[])
 end
 
 """
@@ -540,6 +542,8 @@ mutable struct Field{DIM,NDF}
     trees::PsTrees{DIM,NDF}
     "Mapping between faces and cells. The element type is defined by [`AbstractFace`](@ref)."
     faces::Vector{AbstractFace}
+    "Pre-collected immersed-boundary data (donor cells, solid cells, IB faces)."
+    immersed_boundaries::Vector{ImmersedBoundary{DIM,NDF}}
 end
 
 """
@@ -551,7 +555,7 @@ mutable struct KData{DIM,NDF}
     field::Field{DIM,NDF}
     ghost::Ghost
     KData(trees::PsTrees{DIM,NDF}) where{DIM,NDF} = (n = new{DIM,NDF}();
-        n.field = Field{DIM,NDF}(trees,Vector{AbstractFace}(undef,0));
+        n.field = Field{DIM,NDF}(trees,Vector{AbstractFace}(undef,0),ImmersedBoundary{DIM,NDF}[]);
         n
     )
 end

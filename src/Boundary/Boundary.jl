@@ -7,9 +7,10 @@ include("Period.jl")
 include("Triangles.jl")
 
 export Domain, Circle, Sphere, Vertices, Triangles, TriangleKDT
-export DomainFace
+export DomainFace, ImmersedBoundary
 export initialize_solid_neighbor!, update_solid_neighbor!, update_solid_cell!
-export solid_exchange!
+export initialize_immersed_boundaries!
+export solid_exchange!, solid_exchange_begin!, solid_exchange_finish!
 
 
 function overlap_test(lower,upper,hyper_rec::HyperRectangle{SVector{N,Float64}}) where N

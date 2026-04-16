@@ -41,5 +41,6 @@ function amr_recover!(p4est::P_pxest_t,ka::KA)
     update_neighbor!(p4est, ka)
     update_solid!(ka)
     update_faces!(p4est, ka)
+    initialize_immersed_boundaries!(ka)
     return nothing
 end

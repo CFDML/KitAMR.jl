@@ -274,10 +274,11 @@ function ps_refine_flag(forest::P_pxest_t, which_tree, quadrant)
     GC.@preserve forest which_tree quadrant begin
         fp = PointerWrapper(forest)
         qp = PointerWrapper(quadrant)
+        level = qp.level[]
         dp = PointerWrapper(P4estPsData, qp.p.user_data[])
         ps_data = unsafe_pointer_to_objref(pointer(dp.ps_data))
         ka = unsafe_pointer_to_objref(pointer(fp.user_pointer))
-        ps_refine_flag(ps_data, ka, qp)
+        ps_refine_flag(ps_data, level, ka)
     end
 end
 

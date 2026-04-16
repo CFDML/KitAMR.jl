@@ -61,14 +61,11 @@ for i in 1:nt
     adaptive_mesh_refinement!(p4est,ka;ps_interval = 40, vs_interval=40, partition_interval=40) # AMR.
     update_slope!(ka) # Update `sdf` in `VsData` and `sw` in `PsData`.
     slope_exchange!(p4est, ka) # Update `sdf` in `GhostVsData` by MPI communication.
-    update_solid_cell!(ka) # Update variables in solid cells in immersed boundaries.
-    solid_exchange!(p4est, ka) # Update variables in ghost solid cells by MPI communication.
-    update_solid_neighbor!(ka) # Update variables in SolidNeighbor by IBM.
-    flux!(ka) # Compute numerical fluxes.
+    flux!(p4est, ka) # Compute and update numerical fluxes.
     iterate!(ka) # Collision process and time marching.
     data_exchange!(p4est, ka) # Update variables in ghost cells by MPI communication.
-    check_for_convergence(ka)&&break # Check for convergence.
     check!(p4est,ka) # Check for save and output simulation status to `stdout`.
+    check_for_convergence(ka)&&break # Check for convergence.
 end
 
 save_result(p4est,ka) # Save converging results.

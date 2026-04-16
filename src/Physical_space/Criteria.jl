@@ -3,16 +3,16 @@ $(TYPEDSIGNATURES)
 """
 function ps_refine_flag(
     ps_data::PsData{DIM},
-    ka::KA{DIM},
-    qp::PW_pxest_quadrant_t,
+    level::Int8,
+    ka::KA{DIM}
 ) where{DIM}
     kinfo = ka.kinfo
     if ps_data.bound_enc!=0||domain_flag(kinfo,ps_data.midpoint,ps_data.ds)
         return Cint(1)
     end
     qp.level[]>kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL-1&&return Cint(0)
-    kinfo.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,kinfo,qp.level[]) && return Cint(1)
-    dflag = kinfo.config.user_defined.dynamic_ps_refine_flag(ps_data,qp.level[],ka)
+    kinfo.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,kinfo,level) && return Cint(1)
+    dflag = kinfo.config.user_defined.dynamic_ps_refine_flag(ps_data,level,ka)
     !dflag&&return Cint(0)
     agrad = zeros(DIM+2)
     gradmax = kinfo.status.gradmax
@@ -22,7 +22,7 @@ function ps_refine_flag(
         end
     end
     rgrad = maximum(agrad./gradmax)
-    if rgrad > 2.0^(2*(qp.level[] - kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL)) * kinfo.config.solver.ADAPT_COEFFI_PS # 2 for second-order scheme
+    if rgrad > 2.0^(2*(level - kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL)) * kinfo.config.solver.ADAPT_COEFFI_PS # 2 for second-order scheme
         flag = Cint(1)
     else
         flag = Cint(0)

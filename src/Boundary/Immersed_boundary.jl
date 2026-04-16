@@ -198,9 +198,8 @@ $(TYPEDSIGNATURES)
 Update `solid_cell` in [`SolidNeighbor`](@ref) with interpolation.
 """
 function update_solid_cell!(ka::KA)
-    for tree in ka.kdata.field.trees.data
-        for ps_data in tree
-            (isa(ps_data,InsideSolidData)||ps_data.bound_enc>=0)&&continue
+    for ib in ka.kdata.field.immersed_boundaries
+        for ps_data in ib.solid_cells
             update_solid_cell!(ps_data,ka)
         end
     end
@@ -278,9 +277,6 @@ function initialize_solid_neighbor!(ps_data::PsData{DIM,NDF},ka::KA{DIM,NDF}) wh
     vs_data = ps_data.vs_data
     for i in solid_dirs
         solid_cell = ps_data.neighbor.data[i][1]
-        if isa(solid_cell,AbstractInsideSolidData)
-            @show solid_cell.midpoint solid_cell.ds solid_cell.bound_enc ps_data.midpoint ps_data.ds ps_data.bound_enc i 
-        end
         ps_data.bound_enc = -solid_cell.bound_enc
         ib = ka.kinfo.config.IB[-solid_cell.bound_enc]
         aux_point,normal = calc_intersect(ps_data.midpoint,solid_cell.midpoint,ps_data.ds,get_dir(i),ib)
@@ -481,13 +477,51 @@ $(TYPEDSIGNATURES)
 Update [`VsData`](@ref) variables in [`SolidNeighbor`](@ref) with the immersed boundary method.
 """
 function update_solid_neighbor!(ka::KA{DIM,NDF}) where{DIM,NDF}
-    for tree in ka.kdata.field.trees.data
-        for ps_data in tree
-            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<=0)&&continue
+    for ib in ka.kdata.field.immersed_boundaries
+        for ps_data in ib.donor_cells
             update_solid_neighbor!(ps_data,ka)
         end
     end
 end
 function update_solid!(ka::KA{DIM,NDF}) where{DIM,NDF}
     initialize_solid_neighbor!(ka)
+end
+
+_is_ib_face(f::FullFace) = isa(f.there_data, SolidNeighbor)
+_is_ib_face(f::HangingFace) = any(isa(d, SolidNeighbor) for d in f.there_data)
+_is_ib_face(f::BackHangingFace) = any(isa(d, SolidNeighbor) for d in f.here_data)
+_is_ib_face(::BoundaryFace) = false
+
+"""
+$(TYPEDSIGNATURES)
+Collect donor cells, solid cells and IB-adjacent faces into
+[`ImmersedBoundary`](@ref) objects stored in `ka.kdata.field.immersed_boundaries`.
+
+Must be called after [`initialize_faces!`](@ref) and [`initialize_solid_neighbor!`](@ref).
+"""
+function initialize_immersed_boundaries!(ka::KA{DIM,NDF}) where{DIM,NDF}
+    ibs = ImmersedBoundary{DIM,NDF}[]
+    if isempty(ka.kinfo.config.IB)
+        ka.kdata.field.immersed_boundaries = ibs
+        return nothing
+    end
+
+    donors = AbstractPsData{DIM,NDF}[]
+    solids = AbstractPsData{DIM,NDF}[]
+    for tree in ka.kdata.field.trees.data
+        for ps_data in tree
+            isa(ps_data, InsideSolidData) && continue
+            ps_data.bound_enc > 0 && push!(donors, ps_data)
+            ps_data.bound_enc < 0 && push!(solids, ps_data)
+        end
+    end
+
+    ib_faces = AbstractFace[]
+    for face in ka.kdata.field.faces
+        _is_ib_face(face) && push!(ib_faces, face)
+    end
+
+    push!(ibs, ImmersedBoundary{DIM,NDF}(donors, solids, ib_faces))
+    ka.kdata.field.immersed_boundaries = ibs
+    return nothing
 end

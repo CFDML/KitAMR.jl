@@ -470,6 +470,7 @@ function initialize_KitAMR(config::Dict)
     initialize_neighbor_data!(p4est, ka)
     initialize_solid_neighbor!(ka)
     initialize_faces!(p4est, ka)
+    initialize_immersed_boundaries!(ka)
     return p4est,ka
 end
 function initialize_KitAMR(config::Configure{DIM,NDF}) where{DIM,NDF}
@@ -485,5 +486,6 @@ function initialize_KitAMR(config::Configure{DIM,NDF}) where{DIM,NDF}
     initialize_balanced_vs!(ka)
     initialize_solid_neighbor!(ka)
     initialize_faces!(p4est, ka)
+    initialize_immersed_boundaries!(ka)
     return p4est,ka
 end

@@ -378,3 +378,50 @@ function flux!(ka::KA)
     end
     return nothing
 end
+
+"""
+$(TYPEDSIGNATURES)
+Asynchronous flux computation with overlapped `solid_exchange!`.
+
+1. `update_solid_cell!` — interpolate solid-cell df from fluid neighbors.
+2. `solid_exchange_begin!` — post non-blocking MPI sends/recvs.
+3. Compute flux for all non-IB faces (overlapped with communication).
+4. `solid_exchange_finish!` — `MPI_Waitall` + scatter.
+5. `update_solid_neighbor!` — reconstruct `SolidNeighbor` df/w/sw from the
+   now-synchronised ghost data.
+6. Compute flux for IB faces.
+"""
+function flux!(p4est::P_pxest_t, ka::KA{DIM,NDF}) where {DIM,NDF}
+    ibs = ka.kdata.field.immersed_boundaries
+
+    # 1. update solid cells (local interpolation)
+    update_solid_cell!(ka)
+
+    # 2. begin async solid exchange
+    recv_bufs = solid_exchange_begin!(p4est, ka)
+
+    # 3. compute non-IB face fluxes (overlapped with MPI communication)
+    ib_face_set = Set{UInt}()
+    for ib in ibs
+        for f in ib.faces; push!(ib_face_set, objectid(f)); end
+    end
+    for face in ka.kdata.field.faces
+        objectid(face) in ib_face_set && continue
+        flux!(face, ka)
+    end
+
+    # 4. finish async solid exchange (Waitall + scatter)
+    solid_exchange_finish!(ka, recv_bufs)
+
+    # 5. update solid neighbors
+    update_solid_neighbor!(ka)
+
+    # 6. compute IB face fluxes
+    for ib in ibs
+        for face in ib.faces
+            flux!(face, ka)
+        end
+    end
+
+    return nothing
+end
