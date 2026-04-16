@@ -40,7 +40,7 @@ ps_replace!(::KitAMR.ChildNum,out_quads,in_quads,which_tree,ka::KA{DIM,NDF}) whe
 
 AMR criteria in physical space are defined by
 ```@docs
-ps_refine_flag(::PsData{DIM},::KA{DIM},qp::KitAMR.PW_pxest_quadrant_t) where{DIM}
+ps_refine_flag(::PsData{DIM},level::Int8, ::KA{DIM}) where{DIM}
 ```
 ```@docs
 ps_coarsen_flag(::Vector{PsData},::Vector{Int},::KA{DIM,NDF}) where{DIM,NDF}
