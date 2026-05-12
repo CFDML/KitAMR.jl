@@ -526,3 +526,8 @@ function update_slope!(ka::KA{DIM,NDF}) where{DIM,NDF}
         end
     end
 end
+function slope!(p4est::P_pxest_t,ka::KA)
+    update_slope!(ka)
+    slope_exchange!(p4est, ka)
+    return nothing
+end

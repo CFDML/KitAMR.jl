@@ -10,9 +10,9 @@ function ps_refine_flag(
     if ps_data.bound_enc!=0||domain_flag(kinfo,ps_data.midpoint,ps_data.ds)
         return Cint(1)
     end
-    qp.level[]>kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL-1&&return Cint(0)
+    level>kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL-1&&return Cint(0)
     kinfo.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,kinfo,level) && return Cint(1)
-    dflag = kinfo.config.user_defined.dynamic_ps_refine_flag(ps_data,level,ka)
+    dflag = kinfo.config.user_defined.dynamic_ps_refine_flag==null_udf ? true : kinfo.config.user_defined.dynamic_ps_refine_flag(ps_data,level,ka)
     !dflag&&return Cint(0)
     agrad = zeros(DIM+2)
     gradmax = kinfo.status.gradmax

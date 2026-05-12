@@ -2,7 +2,7 @@ using KitAMR,MPI
 include("./X38_udf.jl")
 MPI.Init()
 config = KitAMR.read_config("./example/X38/configure_X38.txt")
-p4est,ka = KitAMR.initialize_KitAMR(config);
+p4est,ka = KitAMR.initialize(config);
 KitAMR.listen_for_save!()
 max_sim_time = 20.
 nt = max_sim_time/ka.kinfo.status.Δt+1.0 |> floor |> Int

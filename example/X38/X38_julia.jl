@@ -48,7 +48,7 @@ config = Configure(solver;
 )
 # ----------------------------------------------------------------------------------------------------
 
-p4est,ka = initialize_KitAMR(config) # Initialization for `KitAMR_Data`.
+p4est,ka = initialize(config) # Initialization for `KitAMR_Data`.
 listen_for_save!() # Start listening for `save` input from `stdin`.
 max_sim_time = 20. # Maximum simulation time.
 nt = max_sim_time/ka.kinfo.status.Δt+1.0 |> floor |> Int # Maximum number of time marching steps.
@@ -59,11 +59,9 @@ Main loop.
 =#
 for i in 1:nt
     adaptive_mesh_refinement!(p4est,ka;ps_interval = 40, vs_interval=40, partition_interval=40) # AMR.
-    update_slope!(ka) # Update `sdf` in `VsData` and `sw` in `PsData`.
-    slope_exchange!(p4est, ka) # Update `sdf` in `GhostVsData` by MPI communication.
+    slope!(p4est,ka) # Update `sdf` in `AbstractVsData` and `sw` in `PsData`.
     flux!(p4est, ka) # Compute and update numerical fluxes.
-    iterate!(ka) # Collision process and time marching.
-    data_exchange!(p4est, ka) # Update variables in ghost cells by MPI communication.
+    iterate!(p4est, ka) # Collision process and time marching.
     check!(p4est,ka) # Check for save and output simulation status to `stdout`.
     check_for_convergence(ka)&&break # Check for convergence.
 end

@@ -2,7 +2,7 @@ include("CAIDVM.jl")
 include("DVM.jl")
 include("UGKS.jl")
 include("Slope.jl")
-export update_slope!, update_slope_inner_vs!, update_slope_bound_vs!, update_slope_inner_ps!, update_slope_bound_ps!
+export slope!, update_slope!, update_slope_inner_vs!, update_slope_bound_vs!, update_slope_inner_ps!, update_slope_bound_ps!
 export vanleer, minmod, diff_vs!
 export flux!, update_flux!, update_domain_flux!, update_micro_flux!, update_macro_flux!, make_face_vs
 export calc_flux, calc_domain_flux, positivity_preserving_reconstruct

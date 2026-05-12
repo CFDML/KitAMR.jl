@@ -2,10 +2,11 @@
 $(TYPEDSIGNATURES)
 Outer function of collision and time marching.
 """
-function iterate!(ka::KA)
+function iterate!(p4est::P_pxest_t,ka::KA)
     time_marching = ka.kinfo.config.solver.time_marching
     iterate!(time_marching,ka)
     residual_comm!(ka.kinfo)
+    data_exchange!(p4est, ka)
     ka.kinfo.status.step += 1
     ka.kinfo.status.ps_adapt_step += 1
     ka.kinfo.status.vs_adapt_step += 1

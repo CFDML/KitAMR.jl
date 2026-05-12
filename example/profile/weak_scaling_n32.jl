@@ -1,7 +1,7 @@
 using KitAMR,MPI
 MPI.Init()
 config = KitAMR.read_config("./example/cavity/configure_cavity_3D_32.txt")
-p4est,ka = KitAMR.initialize_KitAMR(config);
+p4est,ka = KitAMR.initialize(config);
 max_sim_time = 20.
 nt = max_sim_time/ka.kinfo.status.Δt+1.0 |> floor |> Int
 for i in 1:200

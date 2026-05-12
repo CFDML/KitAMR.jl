@@ -458,7 +458,7 @@ end
 $(TYPEDSIGNATURES)
 Initialize everthing according to `config` dictionary.
 """
-function initialize_KitAMR(config::Dict)
+function initialize(config::Dict)
     kinfo = KInfo(config)
     p4est, trees = initialize_trees!(kinfo)
     kdata = KData(trees)
@@ -473,7 +473,7 @@ function initialize_KitAMR(config::Dict)
     initialize_immersed_boundaries!(ka)
     return p4est,ka
 end
-function initialize_KitAMR(config::Configure{DIM,NDF}) where{DIM,NDF}
+function initialize(config::Configure{DIM,NDF}) where{DIM,NDF}
     kinfo = KInfo(config)
     p4est, trees = initialize_trees!(kinfo)
     kdata = KData(trees)

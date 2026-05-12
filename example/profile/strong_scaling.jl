@@ -35,7 +35,7 @@ config = Configure(solver;
     user_defined = udf
 )
 
-p4est,ka = initialize_KitAMR(config);
+p4est,ka = initialize(config);
 max_sim_time = 20.
 nt = max_sim_time/ka.kinfo.status.Δt+1.0 |> floor |> Int
 for i in 1:10

@@ -6,7 +6,7 @@ solver = Solver(;
     DIM = 3, NDF = 1,
     AMR_PS_MAXLEVEL = 4,
     AMR_DYNAMIC_PS_MAXLEVEL = 3,
-    AMR_VS_MAXLEVEL = 5,
+    AMR_VS_MAXLEVEL = 4,
     PS_DYNAMIC_AMR = true,
     VS_DYNAMIC_AMR = true,
     flux = CAIDVM,
@@ -29,21 +29,21 @@ udf = UDF(;
 config = Configure(solver;
     geometry = [-4.,4.,-4.,4.,-4.,4.],
     trees_num = [16,16,16],
-    quadrature = [-57.95,57.95,-57.95,57.95,-57.95,57.95], # 3σ: 3√Ts
+    quadrature = [-29.30,29.30,-29.30,29.30,-29.30,29.30], # 3σ: 5√Ts
     vs_trees_num = [8,8,8],
     IC = PCoordFn(sphere_buffer_IC),
     domain = [
-        Domain(SuperSonicInflow,1,[1.,20.0*sqrt(5/6),0.,0.,1.]),
+        Domain(SuperSonicInflow,1,[1.,10.0*sqrt(5/6),0.,0.,1.]),
         Domain(UniformOutflow,2),Domain(UniformOutflow,3),Domain(UniformOutflow,4),
         Domain(UniformOutflow,5),Domain(UniformOutflow,6)
     ],
-    IB = [Sphere(Maxwellian,[0.,0.,0.],0.5,true,1.5,[1.,0.,0.,0.,1/(1.0+(5/3-1)*0.5*20.0^2)])],
+    IB = [Sphere(Maxwellian,[0.,0.,0.],0.5,true,1.5,[1.,0.,0.,0.,1/(1.0+(5/3-1)*0.5*10.0^2)])],
     output = output,
     gas = gas,
     user_defined = udf
 )
 
-p4est,ka = initialize_KitAMR(config);
+p4est,ka = initialize(config);
 KitAMR.execute_check(p4est,ka)
 listen_for_save!()
 max_sim_time = 20.
@@ -52,24 +52,12 @@ for i in 1:nt
     if MPI.Comm_rank(MPI.COMM_WORLD)==0
         @show i
     end
-    if i <100
-        adaptive_mesh_refinement!(p4est,ka;ps_interval = 5, vs_interval = 5, partition_interval = 20, vs_balance = true)
-    else
-        adaptive_mesh_refinement!(p4est,ka;ps_interval = 20, vs_interval = 20, partition_interval = 40, vs_balance = true)
-    end
-    update_slope!(ka)
-    slope_exchange!(p4est, ka) 
-    update_solid_cell!(ka)
-    solid_exchange!(p4est, ka)
-    update_solid_neighbor!(ka)
-    flux!(ka) 
-    iterate!(ka) 
-    data_exchange!(p4est, ka)
-    check!(p4est,ka)
-    check_for_convergence(ka)&&break
-    if i==650
-        save_result(p4est,ka)
-    end
+    adaptive_mesh_refinement!(p4est,ka;ps_interval = 20, vs_interval = 20, partition_interval = 40, vs_balance = false)
+    slope!(p4est,ka) # Update `sdf` in `AbstractVsData` and `sw` in `PsData`.
+    flux!(p4est, ka) # Compute and update numerical fluxes.
+    iterate!(p4est, ka) # Collision process and time marching.
+    check!(p4est,ka) # Check for save and output simulation status to `stdout`.
+    check_for_convergence(ka)&&break # Check for convergence.
 end
 KitAMR.execute_check(p4est,ka)
 save_result(p4est,ka)

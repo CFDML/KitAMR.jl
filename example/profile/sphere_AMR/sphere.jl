@@ -43,7 +43,7 @@ config = Configure(solver;
     user_defined = udf
 )
 
-p4est,ka = initialize_KitAMR(config);
+p4est,ka = initialize(config);
 KitAMR.execute_check(p4est,ka)
 listen_for_save!()
 max_sim_time = 20.

@@ -1,6 +1,6 @@
 # Initialization
 ```@docs
-initialize_KitAMR
+initialize
 ```
 ---
 ```@docs

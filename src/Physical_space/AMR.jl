@@ -265,8 +265,8 @@ function ps_merge(Odatas::Vector,index::Int,kinfo::KInfo{DIM,NDF}) where{DIM,NDF
 end
 function ps_refine_flag(
     ::InsideSolidData,
+    ::Int8,
     ::KA,
-    ::PW_pxest_quadrant_t,
 )
     Cint(0)
 end

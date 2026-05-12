@@ -1,14 +1,14 @@
 using LinearAlgebra
 function shock_wave_region(ps_data,level,ka)
     midpoint = ps_data.midpoint;ds = ps_data.ds
-    if midpoint[1]+0.5ds[1]>-2.0&&midpoint[1]-0.5ds[1]<2.0&&midpoint[2]-0.5ds[2]<2.0&&midpoint[2]+0.5ds[2]>-2.05&&midpoint[3]+0.5ds[3]>-2.0&&midpoint[3]-0.5ds[3]<2.0
+    if midpoint[1]+0.5ds[1]>-2.0&&midpoint[1]-0.5ds[1]<2.0&&midpoint[2]-0.5ds[2]<2.0&&midpoint[2]+0.5ds[2]>-2.0&&midpoint[3]+0.5ds[3]>-2.0&&midpoint[3]-0.5ds[3]<2.0
         return true
     end
     return false
 end
 function sphere_buffer_IC(midpoint::Vector{Float64},::KInfo)
     r = norm(midpoint)
-    Ma = 20.0
+    Ma = 10.0
     Tw = 1.0+(5/3-1)*0.5*Ma^2
     if r>1.0
         return [1.0,Ma*√(5/6),0.,0.,1.0]
