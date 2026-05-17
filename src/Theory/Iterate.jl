@@ -112,7 +112,7 @@ function iterate!(::Type{Euler},ka::KA{DIM}) where{DIM}
             if isa(ka.kinfo.config.solver.flux,MicroFlux)
                 ps_data.w = calc_w0(ps_data)
             else
-                ps_data.w .+= ps_data.flux ./ area
+                ps_data.w .+= ps_data.flux .*Δt / area
                 ps_data.flux .= 0.0
             end
             prim = get_prim(ps_data, kinfo)
@@ -121,7 +121,7 @@ function iterate!(::Type{Euler},ka::KA{DIM}) where{DIM}
             ps_data.qf .= qf = calc_qf(vs_data, prim)
             F = discrete_maxwell(vs_data.midpoint, prim, kinfo)
             F .+= shakhov_part(vs_data.midpoint, F, prim, qf, kinfo)
-            @. f = (τ-Δt)/τ*f+Δt/τ*F+Δt/area*vs_data.flux
+            f .= (f+Δt/area*vs_data.flux)*τ/(τ+Δt)+Δt/(τ+Δt)*F
             residual_check!(ps_data,prim,kinfo)
             ps_data.prim .= prim
             vs_data.flux .= 0.0

@@ -111,7 +111,7 @@ function update_slope_inner_vs!(
         diff_vs!(vs_data, R_data, dsR, sR)
     end
     sL ./= nL; sR ./= nR
-    @. vs_data.sdf[:, :, dir] = vanleer(sL, sR)
+    @. vs_data.sdf[:, :, dir] = minmod(sL, sR)
     return nothing
 end
 """

@@ -385,7 +385,6 @@ $(TYPEDSIGNATURES)
 """
 function vs_conserved_correction!(va_data::Velocity_Adaptive_Data,ka)
     trees = ka.kdata.field.trees
-    kinfo = ka.kinfo
     va_flags = va_data.va_flags
     id = 0
     @inbounds for i in eachindex(trees.data)
@@ -394,11 +393,7 @@ function vs_conserved_correction!(va_data::Velocity_Adaptive_Data,ka)
             ps_data = trees.data[i][j]
             (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0)&&continue
             vs_data = ps_data.vs_data
-            F_c = discrete_maxwell(vs_data.midpoint, ps_data.prim, kinfo)
-            w = calc_w0(ps_data)
-            prim = get_prim(w,kinfo)
-            F = discrete_maxwell(vs_data.midpoint, prim, kinfo)
-            vs_data.df .+= F_c-F
+            conserved_I_porjection!(vs_data,ps_data.w)
         end
     end
 end

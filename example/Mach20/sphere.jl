@@ -4,9 +4,10 @@ MPI.Init()
 
 solver = Solver(;
     DIM = 3, NDF = 1,
+    CFL = 0.2,
     AMR_PS_MAXLEVEL = 4,
     AMR_DYNAMIC_PS_MAXLEVEL = 3,
-    AMR_VS_MAXLEVEL = 4,
+    AMR_VS_MAXLEVEL = 5,
     PS_DYNAMIC_AMR = true,
     VS_DYNAMIC_AMR = true,
     flux = CAIDVM,
@@ -29,15 +30,15 @@ udf = UDF(;
 config = Configure(solver;
     geometry = [-4.,4.,-4.,4.,-4.,4.],
     trees_num = [16,16,16],
-    quadrature = [-29.30,29.30,-29.30,29.30,-29.30,29.30], # 3σ: 5√Ts
+    quadrature = [-57.94,57.94,-57.94,57.94,-57.94,57.94], # 3σ: 5√Ts
     vs_trees_num = [8,8,8],
     IC = PCoordFn(sphere_buffer_IC),
     domain = [
-        Domain(SuperSonicInflow,1,[1.,10.0*sqrt(5/6),0.,0.,1.]),
+        Domain(SuperSonicInflow,1,[1.,20.0*sqrt(5/6),0.,0.,1.]),
         Domain(UniformOutflow,2),Domain(UniformOutflow,3),Domain(UniformOutflow,4),
         Domain(UniformOutflow,5),Domain(UniformOutflow,6)
     ],
-    IB = [Sphere(Maxwellian,[0.,0.,0.],0.5,true,1.5,[1.,0.,0.,0.,1/(1.0+(5/3-1)*0.5*10.0^2)])],
+    IB = [Sphere(Maxwellian,[0.,0.,0.],0.5,true,1.5,[1.,0.,0.,0.,1/(1.0+(5/3-1)*0.5*20.0^2)])],
     output = output,
     gas = gas,
     user_defined = udf

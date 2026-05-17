@@ -114,7 +114,7 @@ function initialize_hanging_face!(side::PW_pxest_iter_face_side_t,ka::KA{DIM,NDF
     if  midpoint[1][direction] == kinfo.config.geometry[2*direction-1]||midpoint[1][direction] == kinfo.config.geometry[2*direction]
         periodic_midpoints = [copy(x) for x in midpoint]
         for i in eachindex(periodic_midpoints)
-            periodic_midpoints[i][direction] .+= 0.5*rot*neighbor[i].ds[direction]
+            periodic_midpoints[i][direction] += 0.5*rot*neighbor[i].ds[direction]
         end
         push!(faces,HangingFace{DIM,NDF}(rot,direction,midpoint,base_quad,periodic_ghost_cell(periodic_midpoints,neighbor)))
     else
@@ -149,8 +149,8 @@ function initialize_back_hanging_face!(side::PointerWrapper{p4est_iter_face_side
     kinfo = ka.kinfo
     if midpoint[1][direction] == kinfo.config.geometry[2*direction-1]||midpoint[1][direction] == kinfo.config.geometry[2*direction]
         there_midpoint = copy(first(here_data).neighbor.data[faceid][1].midpoint)
-        there_midpoint[direction] = midpoint[1][direction] -= 0.5*rot*here_data[i].ds[direction]
-        push!(faces,BackHangingFace{DIM,NDF}(rot,direction,midpoint,here_data,periodic_ghost_cell(there_midpoint,base_quad.neighbor.data[faceid][1])))
+        there_midpoint[direction] = midpoint[1][direction] -= 0.5*rot*first(here_data).ds[direction]
+        push!(faces,BackHangingFace{DIM,NDF}(rot,direction,midpoint,here_data,periodic_ghost_cell(there_midpoint,first(here_data).neighbor.data[faceid][1])))
     else
         push!(faces,BackHangingFace{DIM,NDF}(rot,direction,midpoint,here_data,first(here_data).neighbor.data[faceid][1]))
     end

@@ -20,3 +20,4 @@ test*
 /docs/build
 deprecated
 .codex
+debug_Mach20.jl

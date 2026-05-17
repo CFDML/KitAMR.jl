@@ -90,6 +90,7 @@ const HybridFlux = Union{UGKS,CAIDVM} # to add more...
 
 abstract type Euler <:AbstractTimeMarchingType end
 abstract type UGKS_Marching<:AbstractTimeMarchingType end
+abstract type CIP_Marching<:AbstractTimeMarchingType end
 """
 $(TYPEDEF)
 """
@@ -166,5 +167,5 @@ export AbstractInitCond, AbstractBoundCond, AbstractBoundary
 export Pixel, Voxel, Triangle, Tetra
 export AbstractPsData, AbstractFace
 export AbstractVsData
-export AbstractFluxType, AbstractDVMFluxType, CAIDVM
-export AbstractTimeMarchingType, CAIDVM_Marching
+export AbstractFluxType, AbstractDVMFluxType, CAIDVM, DVM
+export AbstractTimeMarchingType, CAIDVM_Marching, CIP_Marching, Euler
