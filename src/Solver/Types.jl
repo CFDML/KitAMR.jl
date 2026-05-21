@@ -55,7 +55,7 @@ struct Solver{DIM,NDF}
     PS_DYNAMIC_AMR::Bool
     "Dynamic AMR in velocity space is open or not. Default is `true`."
     VS_DYNAMIC_AMR::Bool
-    "Redundancy coefficient of AMR in physical space. Default is `0.25`."
+    "Criterion of AMR in L\"ohner criterion of physical space. Default is `0.2`."
     ADAPT_COEFFI_PS::Float64
     "Redundancy coefficient of AMR in velocity space. Default is `0.125`."
     ADAPT_COEFFI_VS_GLOBAL::Float64
@@ -175,7 +175,7 @@ function Output(config::Dict)
     )
     for i in fieldnames(Output)
         if haskey(config,i)
-            setfield!(n,i,config[i])
+            setfield!(output,i,config[i])
         end
     end
     return output
@@ -188,7 +188,7 @@ function Output(solver::Solver{DIM,NDF};kwargs...) where{DIM,NDF}
     )
     for i in fieldnames(Output)
         if haskey(kwargs,i)
-            setfield!(n,i,kwargs[i])
+            setfield!(output,i,kwargs[i])
         end
     end
     return output
@@ -205,7 +205,7 @@ This struct plays an key role in the solution process.
 $(TYPEDFIELDS)
 
 """
-struct Configure{DIM,NDF}
+struct Configure{DIM,NDF}<:AbstractConfig{DIM,NDF}
     "Range of the simulated domain. As an example, for 2D case, it should be aligned as [xmin,xmax,ymin,ymax]."
     geometry::Vector{Float64}
     "Number of tree roots for each dimension. For 2D case, it should be aligned as [x_num,y_num]"
@@ -358,6 +358,10 @@ $(TYPEDFIELDS)
 mutable struct Status
     "Maximum absolute value of the gradients of conserved variables."
     gradmax::Vector{Float64}
+    "Maximum number of velocity cells in a physical cell."
+    max_vs_num::Int
+    "Total number of phase grids."
+    total_phase_num::Int
     "Time step size used in [`iterate!`](@ref)."
     Δt::Float64
     "Time step size constraint by grid size."
@@ -390,7 +394,7 @@ function Status(config::Dict)
         (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
         2^config[:AMR_VS_MAXLEVEL] / 2 for i in 1:DIM] : [maximum(abs.(quadrature.vcoords)) for _ in 1:DIM]
     Δt_ξ = config[:CFL]*minimum(ds ./ U)
-    return Status(zeros(DIM+2), Δt_ξ,Δt_ξ,0.,0,1,1,1,Residual(DIM),Ref(false),MPI.Request[])
+    return Status(zeros(DIM+2), 0,0,Δt_ξ,Δt_ξ,0.,0,1,1,1,Residual(DIM),Ref(false),MPI.Request[])
 end
 function Status(config::Configure{DIM,NDF}) where{DIM,NDF}
     trees_num = config.trees_num
@@ -402,7 +406,7 @@ function Status(config::Configure{DIM,NDF}) where{DIM,NDF}
         (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
         2^config.solver.AMR_VS_MAXLEVEL / 2 for i in 1:DIM] : [maximum(abs.(quadrature.vcoords)) for _ in 1:DIM]
     Δt_ξ = config.solver.CFL*minimum(ds ./ U)
-    return Status(zeros(DIM+2), Δt_ξ,Δt_ξ,0.,0,1,1,1,Residual(DIM),Ref(false),MPI.Request[])
+    return Status(zeros(DIM+2), 0,0,Δt_ξ,Δt_ξ,0.,0,1,1,1,Residual(DIM),Ref(false),MPI.Request[])
 end
 
 """

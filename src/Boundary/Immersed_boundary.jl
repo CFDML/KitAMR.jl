@@ -10,7 +10,7 @@ function IB_prim(bc::AbstractVector,::AbstractVector,ρw::Real)
     return prim
 end
 function save_boundary_result!(ib::AbstractBoundary,ps_data,solid_neighbor::SolidNeighbor{DIM,NDF},boundary_results,ka::KA{DIM,NDF};dir_path="") where{DIM,NDF}
-    kinfo = ka.kinfo
+    kinfo = ka.kinfo;ib = kinfo.config.IB[ps_data.bound_enc]
     vs_data = ps_data.vs_data
     aux_point = solid_neighbor.aux_point;n = solid_neighbor.normal
     faceid = solid_neighbor.faceid
@@ -24,7 +24,14 @@ function save_boundary_result!(ib::AbstractBoundary,ps_data,solid_neighbor::Soli
     ssdf = @views solid_neighbor.vs_data.sdf[:,:,dir]
     boundary_slope!(ssdf,vs_data.level,s_vs_data.level,ib_df,vs_data.df,
         s_vs_data.df,ib_point[dir]-ps_data.midpoint[dir],ps_data.midpoint[dir]-solid_neighbor.midpoint[dir],ka)
-    @. aux_df = ib_df+ssdf*(aux_point[dir]-ib_point[dir])
+    dxL = aux_point[dir]-ib_point[dir]
+    for j in axes(ssdf,2)
+        for i in axes(ssdf,1)
+            # positivity-preserving
+            ssdf[i,j] = min(abs((ib_df[i,j]-eps())/(ssdf[i,j]*dxL+eps())),1.0)*ssdf[i,j]
+        end
+    end
+    @. aux_df = ib_df+ssdf*dxL
     cvc_gas_correction!(aux_df,solid_neighbor)
     aux_prim = get_bc(ib.bc;intersect_point=aux_point,ib);aux_prim[1] = 1.
     M = discrete_maxwell(vs_data.midpoint,aux_prim,kinfo)
@@ -287,11 +294,11 @@ function initialize_solid_neighbor!(ps_data::PsData{DIM,NDF},ka::KA{DIM,NDF}) wh
             vs_data.midpoint,
             copy(vs_data.df),
             zeros(vs_data.vs_num,NDF,DIM),
-            Matrix{Float64}(undef,0,0)
+            zeros(vs_data.vs_num,NDF)
         )
         cvc = initialize_cutted_velocity_cell(normal,svsdata,ka) # heavy overhead
         ps_data.neighbor.data[i][1] = SolidNeighbor{DIM,NDF}(
-            solid_cell.bound_enc,i,0,aux_point,normal,solid_cell,solid_cell.midpoint,solid_cell.ds,zeros(DIM+2),zeros(DIM+2,DIM),cvc,svsdata
+            solid_cell.bound_enc,i,0,aux_point,normal,solid_cell,solid_cell.midpoint,solid_cell.ds,zeros(DIM+2),zeros(DIM+2),zeros(DIM+2,DIM),cvc,svsdata
         )
     end
     return nothing
@@ -441,7 +448,14 @@ function update_solid_neighbor!(::Type{T},ps_data::PsData{DIM,NDF},solid_neighbo
     ssdf = @views solid_neighbor.vs_data.sdf[:,:,dir]
     boundary_slope!(ssdf,vs_data.level,s_vs_data.level,ib_df,vs_data.df,
         s_vs_data.df,ib_point[dir]-ps_data.midpoint[dir],ps_data.midpoint[dir]-solid_neighbor.midpoint[dir],ka)
-    @. aux_df = ib_df+ssdf*(aux_point[dir]-ib_point[dir])
+    dxL = aux_point[dir]-ib_point[dir]
+    for j in axes(ssdf,2)
+        for i in axes(ssdf,1)
+            # positivity-preserving
+            ssdf[i,j] = min(abs((ib_df[i,j]-eps())/(ssdf[i,j]*dxL+eps())),1.0)*ssdf[i,j]
+        end
+    end
+    @. aux_df = ib_df+ssdf*dxL
     cvc_gas_correction!(aux_df,solid_neighbor)
     aux_prim = get_bc(ib.bc;intersect_point=aux_point,ib);aux_prim[1] = 1.
     M = discrete_maxwell(vs_data.midpoint,aux_prim,kinfo)
@@ -457,14 +471,15 @@ function update_solid_neighbor!(::Type{T},ps_data::PsData{DIM,NDF},solid_neighbo
         end
     end
     cvc_correction!(aux_df,M,solid_neighbor,ka)
-    @. solid_neighbor.vs_data.df = aux_df+ssdf*(solid_neighbor.midpoint[dir]-aux_point[dir])    
-    for i in axes(ssdf,1)
-        for j in axes(ssdf,2)
-            ssdf[i,j] = vs_data.sdf[i,j,dir]
-        end
-    end
-    solid_neighbor.w = calc_w0(vs_data.midpoint,solid_neighbor.vs_data.df,vs_data.weight,kinfo)
-    solid_neighbor.sw[:,dir] .= (solid_neighbor.w-ps_data.w)./(solid_neighbor.midpoint[dir]-ps_data.midpoint[dir])
+    @. solid_neighbor.vs_data.df = aux_df # Positive part
+    @. solid_neighbor.vs_data.flux = ssdf*(solid_neighbor.midpoint[dir]-aux_point[dir]) # Reconstruction perturbance
+    # for i in axes(ssdf,1)
+    #     for j in axes(ssdf,2)
+    #         ssdf[i,j] = vs_data.sdf[i,j,dir] # Symmetric slope
+    #     end
+    # end
+    # solid_neighbor.w = calc_w0(vs_data.midpoint,solid_neighbor.vs_data.df,vs_data.weight,kinfo)
+    # solid_neighbor.sw[:,dir] .= (solid_neighbor.w-ps_data.w)./(solid_neighbor.midpoint[dir]-ps_data.midpoint[dir])
 end
 function update_solid_neighbor!(ps_data::PsData{DIM,NDF},ka::KA{DIM,NDF}) where{DIM,NDF}
     solid_neighbors = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)

@@ -43,6 +43,11 @@ PW_pxest_iter_face_side_t = Union{PointerWrapper{p4est_iter_face_side_t},Pointer
 """
 $(TYPEDEF)
 """
+abstract type AbstractConfig{DIM,NDF} end
+
+"""
+$(TYPEDEF)
+"""
 abstract type AbstractInitCond end
 
 abstract type AbstractVTKCellType end

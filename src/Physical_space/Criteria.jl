@@ -14,43 +14,75 @@ function ps_refine_flag(
     kinfo.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,kinfo,level) && return Cint(1)
     dflag = kinfo.config.user_defined.dynamic_ps_refine_flag==null_udf ? true : kinfo.config.user_defined.dynamic_ps_refine_flag(ps_data,level,ka)
     !dflag&&return Cint(0)
-    agrad = zeros(DIM+2)
-    gradmax = kinfo.status.gradmax
-    for j in axes(ps_data.sw,1)
-        for k in axes(ps_data.sw,2)
-            agrad[j] = max(abs(ps_data.sw[j,k]),agrad[j])
-        end
-    end
-    rgrad = maximum(agrad./gradmax)
-    if rgrad > 2.0^(2*(level - kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL)) * kinfo.config.solver.ADAPT_COEFFI_PS # 2 for second-order scheme
-        flag = Cint(1)
-    else
-        flag = Cint(0)
-    end
-    flag
+    return @views Cint(max(maximum(ps_data.lohner[1,:]),maximum(ps_data.lohner[end,:]))>kinfo.config.solver.ADAPT_COEFFI_PS)
 end
+# function ps_refine_flag(
+#     ps_data::PsData{DIM},
+#     level::Int8,
+#     ka::KA{DIM}
+# ) where{DIM}
+#     kinfo = ka.kinfo
+#     if ps_data.bound_enc!=0||domain_flag(kinfo,ps_data.midpoint,ps_data.ds)
+#         return Cint(1)
+#     end
+#     level>kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL-1&&return Cint(0)
+#     kinfo.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,kinfo,level) && return Cint(1)
+#     dflag = kinfo.config.user_defined.dynamic_ps_refine_flag==null_udf ? true : kinfo.config.user_defined.dynamic_ps_refine_flag(ps_data,level,ka)
+#     !dflag&&return Cint(0)
+#     agrad = zeros(DIM+2)
+#     gradmax = kinfo.status.gradmax
+#     for j in axes(ps_data.sw,1)
+#         for k in axes(ps_data.sw,2)
+#             agrad[j] = max(abs(ps_data.sw[j,k]),agrad[j])
+#         end
+#     end
+#     rgrad = maximum(agrad./gradmax)
+#     if rgrad > 2.0^(2*(level - kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL)) * kinfo.config.solver.ADAPT_COEFFI_PS # 2 for second-order scheme
+#         flag = Cint(1)
+#     else
+#         flag = Cint(0)
+#     end
+#     flag
+# end
+
 """
 $(TYPEDSIGNATURES)
 """
 function ps_coarsen_flag(ps_datas::Vector{PsData}, levels::Vector{Int}, ka::KA{DIM,NDF}) where{DIM,NDF}
     kinfo = ka.kinfo
     levels[1]>kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL&&return Cint(0)
-    agrad = zeros(DIM+2)
-    gradmax = kinfo.status.gradmax
+    # agrad = zeros(DIM+2)
+    # gradmax = kinfo.status.gradmax
     for i = 1:2^DIM
         ps_data = ps_datas[i]
         (ps_data.bound_enc!=0||domain_flag(kinfo,ps_data.midpoint,ps_data.ds)) && return Cint(0)
         kinfo.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,kinfo,levels[i]-1) && return Cint(0)
-        for j in axes(ps_data.sw,1)
-            for k in axes(ps_data.sw,2)
-                agrad[j] = max(abs(ps_data.sw[j,k]),agrad[j])
-            end
-        end
-        rgrad = maximum(agrad./gradmax)
-        if rgrad > 2.0^(2*(levels[i]-1 - kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL)) * kinfo.config.solver.ADAPT_COEFFI_PS # 2 for second-order scheme
+        if @views max(maximum(ps_data.lohner[1,:]),maximum(ps_data.lohner[end,:]))>0.8*kinfo.config.solver.ADAPT_COEFFI_PS
             return Cint(0)
         end
-        agrad.=0.
     end
     return Cint(1)
 end
+
+# function ps_coarsen_flag(ps_datas::Vector{PsData}, levels::Vector{Int}, ka::KA{DIM,NDF}) where{DIM,NDF}
+#     kinfo = ka.kinfo
+#     levels[1]>kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL&&return Cint(0)
+#     agrad = zeros(DIM+2)
+#     gradmax = kinfo.status.gradmax
+#     for i = 1:2^DIM
+#         ps_data = ps_datas[i]
+#         (ps_data.bound_enc!=0||domain_flag(kinfo,ps_data.midpoint,ps_data.ds)) && return Cint(0)
+#         kinfo.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,kinfo,levels[i]-1) && return Cint(0)
+#         for j in axes(ps_data.sw,1)
+#             for k in axes(ps_data.sw,2)
+#                 agrad[j] = max(abs(ps_data.sw[j,k]),agrad[j])
+#             end
+#         end
+#         rgrad = maximum(agrad./gradmax)
+#         if rgrad > 2.0^(2*(levels[i]-1 - kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL)) * kinfo.config.solver.ADAPT_COEFFI_PS # 2 for second-order scheme
+#             return Cint(0)
+#         end
+#         agrad.=0.
+#     end
+#     return Cint(1)
+# end

@@ -80,10 +80,13 @@ function write_vs_VTK(df::AbstractMatrix,vs_data::AbstractVsData{2,2},ka::KA{2,2
     end
 end
 function write_vs_VTK(df::AbstractMatrix,vs_data::AbstractVsData{3,1},ka::KA{3,1},filename::String,fieldnames::Vector{String},fieldvalues_fn)
-    kinfo = ka.kinfo
-    xmin,xmax,ymin,ymax,zmin,zmax = kinfo.config.quadrature
-    Nx,Ny,Nz = kinfo.config.vs_trees_num
-    AMR_VS_MAXLEVEL = kinfo.config.solver.AMR_VS_MAXLEVEL
+    config = ka.kinfo.config
+    write_vs_VTK(df,vs_data,config,filename,fieldnames,fieldvalues_fn)
+end
+function write_vs_VTK(df::AbstractMatrix,vs_data::AbstractVsData{3,1},config::AbstractConfig{3,1},filename::String,fieldnames::Vector{String},fieldvalues_fn)
+    xmin,xmax,ymin,ymax,zmin,zmax = config.quadrature
+    Nx,Ny,Nz = config.vs_trees_num
+    AMR_VS_MAXLEVEL = config.solver.AMR_VS_MAXLEVEL
     dx = (xmax - xmin) / Nx/2^AMR_VS_MAXLEVEL
     dy = (ymax - ymin) / Ny/2^AMR_VS_MAXLEVEL
     dz = (zmax - zmin) / Nz/2^AMR_VS_MAXLEVEL
@@ -138,12 +141,13 @@ end
 function save_vs_result(ka::KA{DIM,NDF};dir_path) where{DIM,NDF}
     vs_solutions = VS_Solution[]
     vs_path = dir_path*"vs_result_"*string(MPI.Comm_rank(MPI.COMM_WORLD))*".jld2"
+    op = ka.kinfo.config.output
     for tree in ka.kdata.field.trees.data
         for ps_data in tree
             (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0)&&continue
-            x,y = ps_data.midpoint
             vs_data = ps_data.vs_data
-            if x>-1.04-EPS&&x<-0.09+EPS&&y>-EPS&&y<0.11+EPS
+            flag = op.vs_output_criterion==null_udf ? true : op.vs_output_criterion(ps_data,ka)
+            if flag
                 push!(vs_solutions,VS_Solution(ps_data.quadid,ps_data.midpoint,vs_data.midpoint,vs_data.level,vs_data.df))
             end
         end
@@ -275,6 +279,7 @@ function save_result(p4est::Ptr{p8est_t},ka::KA{DIM,NDF};dir_path="") where{DIM,
         save_object(dir_path * "solverset.jld2", solverset)
     end
     save_pvtu(dir_path*"vtk/field",p4est,ka,ka.kinfo.config.output.vtk_celltype)
+    save_vs_result(ka;dir_path)
     save_object(dir_path * "result_"*string(rank)*".jld2", result)
     save_boundary_result(dir_path,ka)
 end

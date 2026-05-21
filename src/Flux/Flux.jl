@@ -153,75 +153,131 @@ function update_micro_flux!(here_micro,there_micro,here_data::PsData{DIM,NDF},th
     level = vs_data.level;level_n = nvs_data.level
     flux = vs_data.flux;flux_n = nvs_data.flux
     index = j = index_n = 1;flag = 0.
-    @inbounds for i = 1:vs_data.vs_num
-        if heavi[i]
-            @simd for ii in 1:NDF
-                flux[i, ii] +=here_micro[index, ii]
-            end
-            if level[i] == level_n[j]
+    if there_data.bound_enc<0
+        @inbounds for i = 1:vs_data.vs_num
+            if heavi[i]
                 @simd for ii in 1:NDF
-                    flux_n[j, ii] -= here_micro[index, ii]
+                    flux[i, ii] +=here_micro[index, ii]
                 end
-                j += 1
-            elseif level[i] < level_n[j]
-                while flag != 1.0
-                    @simd for ii in 1:NDF
-                        flux_n[j, ii] -= here_micro[index, ii]
+                if level[i] == level_n[j]
+                    j += 1
+                elseif level[i] < level_n[j]
+                    while flag != 1.0
+                        flag += 1 / 2^(DIM * (level_n[j] - level[i]))
+                        j += 1
                     end
-                    flag += 1 / 2^(DIM * (level_n[j] - level[i]))
-                    j += 1
-                end
-                flag = 0.0
-            else
-                @simd for ii in 1:NDF
-                    flux_n[j, ii] -=
-                        (here_micro[index, ii]) / 2^(DIM * (level[i] - level_n[j]))
-                end
-                flag += 1 / 2^(DIM * (level[i] - level_n[j]))
-                if flag == 1.0
-                    j += 1
                     flag = 0.0
-                end
-            end
-            index += 1
-        else
-            if level[i] == level_n[j]
-                @simd for ii in 1:NDF
-                    flux_n[j, ii] -= there_micro[index_n, ii]
-                    flux[i, ii] += there_micro[index_n, ii]
-                end
-                j += 1
-                index_n += 1
-            elseif level[i] < level_n[j]
-                while flag != 1.0
-                    @simd for ii in 1:NDF
-                        flux_n[j, ii] -= there_micro[index_n, ii]
-                        flux[i, ii] +=
-                            (there_micro[index_n, ii]) /
-                            2^(DIM * (level_n[j] - level[i]))
+                else
+                    flag += 1 / 2^(DIM * (level[i] - level_n[j]))
+                    if flag == 1.0
+                        j += 1
+                        flag = 0.0
                     end
-                    flag += 1 / 2^(DIM * (level_n[j] - level[i]))
-                    j += 1
-                    index_n += 1
                 end
-                flag = 0.0
+                index += 1
             else
-                @simd for ii in 1:NDF
-                    flux[i, ii] +=  there_micro[index_n, ii]
-                end
-                flag += 1 / 2^(DIM * (level[i] - level_n[j]))
-                if flag == 1.0
+                if level[i] == level_n[j]
                     @simd for ii in 1:NDF
-                        flux_n[j, ii] -= there_micro[index_n, ii]
+                        flux[i, ii] += there_micro[index_n, ii]
                     end
                     j += 1
                     index_n += 1
+                elseif level[i] < level_n[j]
+                    while flag != 1.0
+                        for ii in 1:NDF
+                            flux[i, ii] +=
+                                (there_micro[index_n, ii]) /
+                                2^(DIM * (level_n[j] - level[i]))
+                        end
+                        flag += 1 / 2^(DIM * (level_n[j] - level[i]))
+                        j += 1
+                        index_n += 1
+                    end
                     flag = 0.0
+                else
+                    for ii in 1:NDF
+                        flux[i, ii] += there_micro[index_n, ii]
+                    end
+                    flag += 1 / 2^(DIM * (level[i] - level_n[j]))
+                    if flag == 1.0
+                        j += 1
+                        index_n += 1
+                        flag = 0.0
+                    end
                 end
             end
         end
+    else
+        @inbounds for i = 1:vs_data.vs_num
+            if heavi[i]
+                @simd for ii in 1:NDF
+                    flux[i, ii] +=here_micro[index, ii]
+                end
+                if level[i] == level_n[j]
+                    @simd for ii in 1:NDF
+                        flux_n[j, ii] -= here_micro[index, ii]
+                    end
+                    j += 1
+                elseif level[i] < level_n[j]
+                    while flag != 1.0
+                        @simd for ii in 1:NDF
+                            flux_n[j, ii] -= here_micro[index, ii]
+                        end
+                        flag += 1 / 2^(DIM * (level_n[j] - level[i]))
+                        j += 1
+                    end
+                    flag = 0.0
+                else
+                    @simd for ii in 1:NDF
+                        flux_n[j, ii] -=
+                            (here_micro[index, ii]) / 2^(DIM * (level[i] - level_n[j]))
+                    end
+                    flag += 1 / 2^(DIM * (level[i] - level_n[j]))
+                    if flag == 1.0
+                        j += 1
+                        flag = 0.0
+                    end
+                end
+                index += 1
+            else
+                if level[i] == level_n[j]
+                    @simd for ii in 1:NDF
+                        flux_n[j, ii] -= there_micro[index_n, ii]
+                        flux[i, ii] += there_micro[index_n, ii]
+                    end
+                    j += 1
+                    index_n += 1
+                elseif level[i] < level_n[j]
+                    while flag != 1.0
+                        @simd for ii in 1:NDF
+                            flux_n[j, ii] -= there_micro[index_n, ii]
+                            flux[i, ii] +=
+                                (there_micro[index_n, ii]) /
+                                2^(DIM * (level_n[j] - level[i]))
+                        end
+                        flag += 1 / 2^(DIM * (level_n[j] - level[i]))
+                        j += 1
+                        index_n += 1
+                    end
+                    flag = 0.0
+                else
+                    @simd for ii in 1:NDF
+                        flux[i, ii] +=  there_micro[index_n, ii]
+                    end
+                    flag += 1 / 2^(DIM * (level[i] - level_n[j]))
+                    if flag == 1.0
+                        @simd for ii in 1:NDF
+                            flux_n[j, ii] -= there_micro[index_n, ii]
+                        end
+                        j += 1
+                        index_n += 1
+                        flag = 0.0
+                    end
+                end
+            end
+        end
+        return nothing
     end
-    return nothing
 end
 """
 $(TYPEDSIGNATURES)

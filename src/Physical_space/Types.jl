@@ -40,6 +40,7 @@ mutable struct SolidNeighbor{DIM,NDF} <:AbstractPsData{DIM,NDF}
     midpoint::Vector{Float64}
     ds::Vector{Float64}
     w::Vector{Float64}
+    flux::Vector{Float64}
     sw::Matrix{Float64}
     "Struct containing information of cut cell in velocity space."
     cvc::CuttedVelocityCells
@@ -66,6 +67,8 @@ mutable struct PsData{DIM,NDF} <: AbstractPsData{DIM,NDF}
     w::Vector{Float64}
     "Gradients of conserved variables."
     sw::Matrix{Float64} # DIM + 2 x DIM
+    "Loner criterion for each direction."
+    lohner::Matrix{Float64} # DIM + 2 x DIM
     "Primary variables."
     prim::Vector{Float64}
     "Conserved flux."
@@ -83,6 +86,7 @@ mutable struct PsData{DIM,NDF} <: AbstractPsData{DIM,NDF}
         n.qf = haskey(kwargs,:qf) ? kwargs[:qf] : zeros(DIM);
         n.w = haskey(kwargs,:w) ? kwargs[:w] : zeros(DIM+2);
         n.sw = haskey(kwargs,:sw) ? kwargs[:sw] : zeros(DIM+2, DIM);
+        n.lohner = haskey(kwargs,:lohner) ? kwargs[:lohner] : zeros(DIM+2, DIM);
         n.prim = haskey(kwargs,:prim) ? kwargs[:prim] : zeros(DIM+2);
         n.flux = haskey(kwargs,:flux) ? kwargs[:flux] : zeros(DIM+2);
         if haskey(kwargs,:vs_data)

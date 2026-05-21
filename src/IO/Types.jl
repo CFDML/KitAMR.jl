@@ -1,4 +1,4 @@
-struct ConfigureForSave{DIM,NDF}
+struct ConfigureForSave{DIM,NDF}<:AbstractConfig{DIM,NDF}
     geometry::Vector{Float64}
     trees_num::Vector{Int64}
     quadrature::Union{Vector{Float64},AbstractQuadrature}

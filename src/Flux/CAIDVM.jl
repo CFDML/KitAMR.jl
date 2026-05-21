@@ -109,7 +109,7 @@ function calc_flux(::Type{CAIDVM},here_vs,there_vs,flux_data::Union{FullFace,Flu
         ndx = [midpoint[j]-there_mid[i,j]*Δt-there_ps_mid[j] for i in axes(there_mid,1),j in axes(there_mid,2)]
         if there_data.bound_enc<0
             here_micro = [(here_df[i,j]+dot(dx[i,:],here_sdf[i,j,:]))*here_vn[i] for i in axes(here_df,1),j in axes(here_df,2)]
-            there_micro = [(there_df[i,j]+dot(ndx[i,:],there_sdf[i,j,:]))*there_vn[i] for i in axes(there_df,1),j in axes(there_df,2)]
+            there_micro = [there_df[i,j]*there_vn[i] for i in axes(there_df,1),j in axes(there_df,2)]
         else
             here_micro = positivity_preserving_reconstruct(here_df,here_sdf,here_data.ds,dx,here_vn)
             there_micro = positivity_preserving_reconstruct(there_df,there_sdf,there_data.ds,ndx,there_vn)
@@ -126,7 +126,7 @@ Positivity preserving reconstruction (10.1016/j.jcp.2009.12.030).
 """
 function positivity_preserving_reconstruct(here_df,here_sdf,here_ds,dx,vn) # positivity preserving reconstruct (10.1016/j.jcp.2009.12.030)
     @views begin
-        micro = [(here_df[i,j]+min(abs(here_df[i,j]/(0.5*dot(here_ds,abs.(here_sdf[i,j,:]))+EPS)),1.)*dot(dx[i,:],here_sdf[i,j,:]))*vn[i] for i in axes(here_df,1),j in axes(here_df,2)]
+        micro = [(here_df[i,j]+min(abs((here_df[i,j]-eps())/(0.5*dot(here_ds,abs.(here_sdf[i,j,:]))+EPS)),1.)*dot(dx[i,:],here_sdf[i,j,:]))*vn[i] for i in axes(here_df,1),j in axes(here_df,2)]
     end
     return micro
 end

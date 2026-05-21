@@ -21,3 +21,4 @@ test*
 deprecated
 .codex
 debug_Mach20.jl
+*.vtu

@@ -70,6 +70,19 @@ function solve_I_projection(
     G_prev_norm = T(Inf)
     stall_count = 0
 
+    # shave negative distribution
+    f_min = 1.1*minimum(f)
+    if f_min<0
+        fp_min = minimum(x for x in f if x>0)
+        d = fp_min-f_min
+        for i in eachindex(f)
+            if f[i]<0
+                f[i] = (f[i]-f_min)/d*fp_min
+            end
+        end
+    end
+
+
     for _ in 1:maxiter
         fill!(G, zero(T))
         fill!(J, zero(T))
@@ -158,25 +171,13 @@ function iterate!(::Type{CIP_Marching},ka::KA)
             vs_data = ps_data.vs_data
             area = reduce(*, ps_data.ds)
             ps_data.w .+= ps_data.flux .*Δt / area # Macroscopic update
+            positivity_preserving_ib!(ps_data,area,Δt)
             prim_c = get_prim(ps_data, kinfo) # Conserved macroscopic variables
             f = vs_data.df
             f.+= Δt/area*vs_data.flux # Convection first
-            F_c = 
-            # try
-                discrete_maxwell(vs_data.midpoint, prim_c, kinfo)
-            # catch
-            #     @show prim_c ps_data.midpoint 
-            #     @save "domain_error_$(MPI.Comm_rank(MPI.COMM_WORLD)).jld2" ps_data
-            #     rethrow()
-            # end
+            F_c = discrete_maxwell(vs_data.midpoint, prim_c, kinfo)
             ps_data.qf .= qf = calc_qf(vs_data, prim_c) # Heatflux after convection
             F_c .+= shakhov_part(vs_data.midpoint, F_c, prim_c, qf, kinfo) # g^{S,n+1}
-            # try
-            #     conserved_I_porjection!(vs_data,ps_data.w)
-            # catch
-            #     @show ps_data.midpoint
-            #     write_vs_VTK(vs_data,ka,"I_projection_failure_$(MPI.Comm_rank(MPI.COMM_WORLD))",["h","b"],fieldvalues_fn)
-            # end
             conserved_I_porjection!(vs_data,ps_data.w)
             # Collision process
             τ = get_τ(prim_c, gas.μᵣ, gas.ω) # τ^{n+1}

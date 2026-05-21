@@ -4,6 +4,7 @@ include("Immersed_boundary.jl")
 include("Parallel.jl")
 include("Vertices.jl")
 include("Period.jl")
+include("Positivity.jl")
 include("Triangles.jl")
 
 export Domain, Circle, Sphere, Vertices, Triangles, TriangleKDT

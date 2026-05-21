@@ -4,16 +4,15 @@ MPI.Init()
 
 solver = Solver(;
     DIM = 3, NDF = 1,
-    CFL = 0.2,
-    AMR_PS_MAXLEVEL = 4,
-    AMR_DYNAMIC_PS_MAXLEVEL = 3,
+    CFL = 0.4,
+    AMR_PS_MAXLEVEL = 5,
+    AMR_DYNAMIC_PS_MAXLEVEL = 4,
     AMR_VS_MAXLEVEL = 5,
     PS_DYNAMIC_AMR = true,
     VS_DYNAMIC_AMR = true,
     flux = CAIDVM,
     time_marching = CIP_Marching,
-    ADAPT_COEFFI_PS = 0.5,
-    ADAPT_COEFFI_VS_LOCAL = 0.05,
+    ADAPT_COEFFI_VS_LOCAL = 0.01,
     ADAPT_COEFFI_VS_GLOBAL = 0.25
 )
 gas = Gas(;
@@ -23,12 +22,14 @@ gas = Gas(;
     ωᵣ = 0.75,
     μᵣ = 5.0*√π/16.0*1.0
 )
-output = Output(solver)
+output = Output(solver;
+    vs_output_criterion = vs_comparison
+)
 udf = UDF(;
     # dynamic_ps_refine_flag = shock_wave_region
 )
 config = Configure(solver;
-    geometry = [-4.,4.,-4.,4.,-4.,4.],
+    geometry = [-8.,8.,-8.,8.,-8.,8.],
     trees_num = [16,16,16],
     quadrature = [-57.94,57.94,-57.94,57.94,-57.94,57.94], # 3σ: 5√Ts
     vs_trees_num = [8,8,8],
@@ -45,7 +46,7 @@ config = Configure(solver;
 )
 
 p4est,ka = initialize(config);
-KitAMR.execute_check(p4est,ka)
+KitAMR.execute_check!(p4est,ka)
 listen_for_save!()
 max_sim_time = 20.
 nt = max_sim_time/ka.kinfo.status.Δt+1.0 |> floor |> Int
@@ -60,7 +61,7 @@ for i in 1:nt
     check!(p4est,ka) # Check for save and output simulation status to `stdout`.
     check_for_convergence(ka)&&break # Check for convergence.
 end
-KitAMR.execute_check(p4est,ka)
+KitAMR.execute_check!(p4est,ka)
 save_result(p4est,ka)
 finalize!(p4est,ka)
 MPI.Finalize()

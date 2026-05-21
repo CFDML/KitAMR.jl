@@ -4,12 +4,14 @@ Perform a check procedure. Simulation status will be output every `ST_CHECK_INTE
 """
 function check!(p4est,ka)
     if ka.kinfo.status.step%ka.kinfo.config.solver.ST_CHECK_INTERVAL==0
-        execute_check(p4est,ka)
+        execute_check!(p4est,ka)
         check_for_save!(p4est,ka)
     end
 end
-function execute_check(p4est,ka)
+function execute_check!(p4est,ka)
+    status = ka.kinfo.status
     max_vs_num,total_phase_num = check_vs_num(ka)
+    status.max_vs_num = max_vs_num;status.total_phase_num = total_phase_num
     if MPI.Comm_rank(MPI.COMM_WORLD) == 0
         println("Iteration: $(ka.kinfo.status.step)")
         sim_time = ka.kinfo.status.sim_time

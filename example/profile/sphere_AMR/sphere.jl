@@ -44,7 +44,7 @@ config = Configure(solver;
 )
 
 p4est,ka = initialize(config);
-KitAMR.execute_check(p4est,ka)
+KitAMR.execute_check!(p4est,ka)
 listen_for_save!()
 max_sim_time = 20.
 nt = max_sim_time/ka.kinfo.status.Δt+1.0 |> floor |> Int
