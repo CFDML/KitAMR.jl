@@ -1,3 +1,329 @@
+
+function update_Lohner_inner_ps!(
+    ps_data::PsData{DIM,NDF},
+    Ldata::AbstractVector,
+    Rdata::AbstractVector,
+    dsL::Float64,
+    dsR::Float64,
+    dir::Int,
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
+) where{DIM,NDF}
+    fill!(ws_swL, 0.0); fill!(ws_swR, 0.0)
+    nL = length(Ldata); nR = length(Rdata)
+    for j in 1:nL
+        @. ws_swL += Ldata[j].w
+    end
+    for j in 1:nR
+        @. ws_swR += Rdata[j].w
+    end
+    if dsL>ps_data.ds[dir] # Coarsen neighbor interpolation
+        dx = ps_data.midpoint-Ldata[1].midpoint;dx = dx[FAT[DIM-1][dir]]
+        for j in eachindex(ws_swL)
+            @views ws_swL[j] += dot(dx, Ldata[1].sw[j,FAT[DIM-1][dir]])
+        end
+    end
+    if dsR>ps_data.ds[dir]
+        dx = ps_data.midpoint-Rdata[1].midpoint;dx = dx[FAT[DIM-1][dir]]
+        for j in eachindex(ws_swR)
+            @views ws_swR[j] += dot(dx, Rdata[1].sw[j,FAT[DIM-1][dir]])
+        end
+    end
+    ws_swL ./= nL; ws_swR ./= nR
+    ep = 0.2*ps_data.ds[dir]
+    for j in eachindex(ws_swL)
+        ps_data.lohner[j, dir] = max(abs(ws_swL[j]-ps_data.w[j])/dsL,abs(ws_swR[j]-ps_data.w[j])/dsR)>1e-2 ?
+         abs(dsR*ws_swL[j]-(dsL+dsR)*ps_data.w[j]+dsL*ws_swR[j])/
+            (dsR*abs(ws_swL[j]-ps_data.w[j])+dsL*abs(ws_swR[j]-ps_data.w[j])+ep*
+                (dsR*abs(ws_swL[j])+(dsL+dsR)*abs(ps_data.w[j])+dsL*abs(ws_swR[j]))) : 0.
+    end
+    return nothing
+end
+# Inner
+"""
+$(TYPEDSIGNATURES)
+"""
+function update_criterion!(
+    ::Val{1},
+    ::Val{1},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
+    Ldata::AbstractVector,
+    Rdata::AbstractVector,
+    dir::Integer,
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
+) where {DIM,NDF}
+    ds = ps_data.ds[dir]
+    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, ds, ds, dir, ws_swL, ws_swR)
+    return nothing
+end
+"""
+$(TYPEDSIGNATURES)
+"""
+function update_criterion!(
+    ::Val{1},
+    ::NeighborNum,
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
+    Ldata::AbstractVector,
+    Rdata::AbstractVector,
+    dir::Integer,
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
+) where {DIM,NDF}
+    ds = ps_data.ds[dir]
+    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, ds, 0.75 * ds, dir, ws_swL, ws_swR)
+end
+"""
+$(TYPEDSIGNATURES)
+"""
+function update_criterion!(
+    ::NeighborNum,
+    ::Val{1},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
+    Ldata::AbstractVector,
+    Rdata::AbstractVector,
+    dir::Integer,
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
+) where {DIM,NDF}
+    ds = ps_data.ds[dir]
+    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, ds, dir, ws_swL, ws_swR)
+end
+"""
+$(TYPEDSIGNATURES)
+"""
+function update_criterion!(
+    ::NeighborNum,
+    ::NeighborNum,
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
+    Ldata::AbstractVector,
+    Rdata::AbstractVector,
+    dir::Integer,
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
+) where {DIM,NDF}
+    ds = ps_data.ds[dir]
+    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, 0.75 * ds, dir, ws_swL, ws_swR)
+end
+"""
+$(TYPEDSIGNATURES)
+"""
+function update_criterion!(
+    ::Val{-1},
+    ::Val{-1},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
+    Ldata::AbstractVector,
+    Rdata::AbstractVector,
+    dir::Integer,
+    ws_sL::Matrix{Float64},
+    ws_sR::Matrix{Float64},
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
+) where {DIM,NDF}
+    ds = ps_data.ds[dir]
+    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, 1.5 * ds, 1.5 * ds, dir, ws_swL, ws_swR)
+end
+"""
+$(TYPEDSIGNATURES)
+"""
+function update_criterion!(
+    ::Val{1},
+    ::Val{-1},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
+    Ldata::AbstractVector,
+    Rdata::AbstractVector,
+    dir::Integer,
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
+) where {DIM,NDF}
+    ds = ps_data.ds[dir]
+    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, ds, 1.5 * ds, dir, ws_swL, ws_swR)
+end
+"""
+$(TYPEDSIGNATURES)
+"""
+function update_criterion!(
+    ::Val{-1},
+    ::Val{1},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
+    Ldata::AbstractVector,
+    Rdata::AbstractVector,
+    dir::Integer,
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
+) where {DIM,NDF}
+    ds = ps_data.ds[dir]
+    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, 1.5 * ds, ds, dir, ws_swL, ws_swR)
+end
+"""
+$(TYPEDSIGNATURES)
+"""
+function update_criterion!(
+    ::NeighborNum,
+    ::Val{-1},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
+    Ldata::AbstractVector,
+    Rdata::AbstractVector,
+    dir::Integer,
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
+) where {DIM,NDF}
+    ds = ps_data.ds[dir]
+    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, 1.5 * ds, dir, ws_swL, ws_swR)
+end
+"""
+$(TYPEDSIGNATURES)
+"""
+function update_criterion!(
+    ::Val{-1},
+    ::NeighborNum,
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
+    Ldata::AbstractVector,
+    Rdata::AbstractVector,
+    dir::Integer,
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
+) where {DIM,NDF}
+    ds = ps_data.ds[dir]
+    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, 1.5 * ds, 0.75 * ds, dir, ws_swL, ws_swR)
+end
+
+# Boundary
+"""
+$(TYPEDSIGNATURES)
+"""
+function update_criterion!(
+    ::Val{0},
+    ::Val{1},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
+    Ldata::AbstractVector,
+    Rdata::AbstractVector,
+    dir::Integer,
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
+) where {DIM,NDF}
+    ps_data.lohner[:,dir] .= 0.
+end
+"""
+$(TYPEDSIGNATURES)
+"""
+function update_criterion!(
+    ::Val{1},
+    ::Val{0},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
+    Ldata::AbstractVector,
+    Rdata::AbstractVector,
+    dir::Integer,
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
+) where {DIM,NDF}
+    ps_data.lohner[:,dir] .= 0.
+end
+"""
+$(TYPEDSIGNATURES)
+"""
+function update_criterion!(
+    ::NeighborNum,
+    ::Val{0},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
+    Ldata::AbstractVector,
+    Rdata::AbstractVector,
+    dir::Integer,
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
+) where {DIM,NDF}
+    ps_data.lohner[:,dir] .= 0.
+end
+"""
+$(TYPEDSIGNATURES)
+"""
+function update_criterion!(
+    ::Val{0},
+    ::NeighborNum,
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
+    Ldata::AbstractVector,
+    Rdata::AbstractVector,
+    dir::Integer,
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
+) where {DIM,NDF}
+    ps_data.lohner[:,dir] .= 0.
+end
+"""
+$(TYPEDSIGNATURES)
+"""
+function update_criterion!(
+    ::Val{0},
+    ::Val{-1},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
+    Ldata::AbstractVector,
+    Rdata::AbstractVector,
+    dir::Integer,
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
+) where {DIM,NDF}
+    ps_data.lohner[:,dir] .= 0.
+end
+"""
+$(TYPEDSIGNATURES)
+"""
+function update_criterion!(
+    ::Val{-1},
+    ::Val{0},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
+    Ldata::AbstractVector,
+    Rdata::AbstractVector,
+    dir::Integer,
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
+) where {DIM,NDF}
+    ps_data.lohner[:,dir] .= 0.
+end
+function update_criterion!(ka::KA{DIM,NDF}) where{DIM,NDF}
+    trees = ka.kdata.field.trees
+    kinfo = ka.kinfo
+    ws_swL = zeros(Float64, DIM + 2)
+    ws_swR = zeros(Float64, DIM + 2)
+
+    @inbounds for i in eachindex(trees.data)
+        @inbounds for j in eachindex(trees.data[i])
+            ps_data = trees.data[i][j]
+            isa(ps_data,InsideSolidData) && continue
+            ps_data.bound_enc<0 && continue # solid_cells
+            neighbor = ps_data.neighbor
+            for dir = 1:DIM
+                iL = 2 * dir - 1
+                iR = 2 * dir
+                update_criterion!(
+                    Val(neighbor.state[iL]),
+                    Val(neighbor.state[iR]),
+                    ps_data,
+                    kinfo,
+                    neighbor.data[iL],
+                    neighbor.data[iR],
+                    dir,
+                    ws_swL, ws_swR,
+                )
+            end
+        end
+    end
+end
+
 function vs_merge!(sdf::AbstractArray,sdf_n::AbstractArray,level::Vector,level_n::Vector,::KA{DIM}) where{DIM}
     j = 1
     flag = 0.0
@@ -757,8 +1083,15 @@ Outer function of AMR in physical space.
 """
 function ps_adaptive_mesh_refinement!(p4est::P_pxest_t,ka::KA;recursive = false)
     # update_gradmax!(ka)
+    update_slope!(ka)
+    update_criterion!(ka)
     ps_refine!(p4est,ka;recursive = recursive ? 1 : 0)
     ps_coarsen!(p4est; recursive = recursive ? 1 : 0)
     ps_balance!(p4est)
     return nothing
 end
+
+
+
+
+

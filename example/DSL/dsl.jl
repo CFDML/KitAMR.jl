@@ -1,20 +1,26 @@
 using KitAMR,MPI
 MPI.Init()
-function Sod_init(midpoint,kinfo)
-    if midpoint[1]<0.
-        return [1.,0.,0.,0.5]
+function dsl_init(midpoint,kinfo)
+    Ma = 20
+    u0 = √(5/6)*Ma
+    k = 80; δ = 0.05
+    T0 = 5/6
+    uy = u0*δ*sin(2*π*(midpoint[1]+1/4))
+    if midpoint[2]<0.5
+        ux = u0*tanh(k*(midpoint[2]-1/4))
+        return [1.,ux,uy,1/T0]
     else
-        return [0.125,0.,0.,0.625]
+        ux = u0*tanh(k*(3/4-midpoint[2]))
+        return [1.,ux,uy,1/T0]
     end
 end
 solver = Solver(;
     DIM = 2, NDF = 2,
     CFL = 0.4,
     AMR_PS_MAXLEVEL = 3,
-    AMR_DYNAMIC_PS_MAXLEVEL = 3,
     AMR_VS_MAXLEVEL = 3,
     PS_DYNAMIC_AMR = true,
-    ADAPT_COEFFI_PS = 0.3,
+    ADAPT_COEFFI_PS = 0.6,
     VS_DYNAMIC_AMR = true,
     flux = CAIDVM,
     # flux = DVM,
@@ -34,13 +40,13 @@ output = Output(
 udf = UDF(;
 )
 config = Configure(solver;
-    geometry = [-2.,2.,-0.5,0.5],
-    trees_num = [32,8],
-    quadrature = [-5.,5.,-5.,5.,-5.,5.],
+    geometry = [0., 1., 0., 1.],
+    trees_num = [16,16],
+    quadrature = [-22.36,22.36,-22.36,22.36,-22.36,22.36],
     vs_trees_num = [8,8],
-    IC = PCoordFn(Sod_init),
+    IC = PCoordFn(dsl_init),
     domain = [
-            Domain(UniformOutflow,1),Domain(UniformOutflow,2),
+            Domain(Period,1),Domain(Period,2),
             Domain(Period,3),Domain(Period,4)
         ],
     output = output,
@@ -56,7 +62,7 @@ KitAMR.execute_check!(p4est,ka)
 listen_for_save!()
 max_sim_time = 20.
 nt = max_sim_time/ka.kinfo.status.Δt+1.0 |> floor |> Int
-for i in 1:500
+for i in 1:1000
     if MPI.Comm_rank(MPI.COMM_WORLD)==0
         @show i
     end

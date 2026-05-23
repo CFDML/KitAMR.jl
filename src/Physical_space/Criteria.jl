@@ -14,7 +14,7 @@ function ps_refine_flag(
     kinfo.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,kinfo,level) && return Cint(1)
     dflag = kinfo.config.user_defined.dynamic_ps_refine_flag==null_udf ? true : kinfo.config.user_defined.dynamic_ps_refine_flag(ps_data,level,ka)
     !dflag&&return Cint(0)
-    return @views Cint(max(maximum(ps_data.lohner[1,:]),maximum(ps_data.lohner[end,:]))>kinfo.config.solver.ADAPT_COEFFI_PS)
+    return @views Cint(maximum(ps_data.lohner)>kinfo.config.solver.ADAPT_COEFFI_PS)
 end
 # function ps_refine_flag(
 #     ps_data::PsData{DIM},
@@ -57,7 +57,7 @@ function ps_coarsen_flag(ps_datas::Vector{PsData}, levels::Vector{Int}, ka::KA{D
         ps_data = ps_datas[i]
         (ps_data.bound_enc!=0||domain_flag(kinfo,ps_data.midpoint,ps_data.ds)) && return Cint(0)
         kinfo.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,kinfo,levels[i]-1) && return Cint(0)
-        if @views max(maximum(ps_data.lohner[1,:]),maximum(ps_data.lohner[end,:]))>0.8*kinfo.config.solver.ADAPT_COEFFI_PS
+        if @views maximum(ps_data.lohner)>0.8*kinfo.config.solver.ADAPT_COEFFI_PS
             return Cint(0)
         end
     end

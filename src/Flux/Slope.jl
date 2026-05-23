@@ -137,35 +137,11 @@ function update_slope_inner_ps!(
     end
     ws_swL ./= nL; ws_swR ./= nR
     for j in eachindex(ws_swL)
-        ps_data.sw[j, dir] = abs(ws_swL[j]) > abs(ws_swR[j]) ? ws_swL[j] : ws_swR[j]
+        ps_data.sw[j, dir] = vanleer(ws_swL[j],ws_swR[j])
     end
     return nothing
 end
 
-function update_Lohner_inner_ps!(
-    ps_data::PsData{DIM,NDF},
-    Ldata::AbstractVector,
-    Rdata::AbstractVector,
-    dir::Int,
-    ws_swL::Vector{Float64},
-    ws_swR::Vector{Float64},
-) where{DIM,NDF}
-    fill!(ws_swL, 0.0); fill!(ws_swR, 0.0)
-    nL = length(Ldata); nR = length(Rdata)
-    for j in 1:nL
-        @. ws_swL += Ldata[j].w
-    end
-    for j in 1:nR
-        @. ws_swR += Rdata[j].w
-    end
-    ws_swL ./= nL; ws_swR ./= nR
-    for j in eachindex(ws_swL)
-        ps_data.lohner[j, dir] = abs(ws_swL[j]-2*ps_data.w[j]+ws_swR[j])/
-            (abs(ws_swL[j]-ps_data.w[j])+abs(ws_swR[j]-ps_data.w[j])+0.01*
-                (abs(ws_swL[j])+2*abs(ps_data.w[j])+abs(ws_swR[j])))
-    end
-    return nothing
-end
 """
 $(TYPEDSIGNATURES)
 """
@@ -210,17 +186,14 @@ function update_slope!(
         ds = ps_data.midpoint[dir]-Rdata[1].midpoint[dir]
         update_slope_bound_vs!(ps_data.vs_data, Rdata, ds, dir, ws_sL)
         update_slope_bound_ps!(ps_data, Rdata, ds, dir, ws_swL)
-        ps_data.lohner[:,dir] .= 0.
     elseif Rdata[1].bound_enc<0
         ds = ps_data.midpoint[dir]-Ldata[1].midpoint[dir]
         update_slope_bound_vs!(ps_data.vs_data, Ldata, ds, dir, ws_sL)
         update_slope_bound_ps!(ps_data, Ldata, ds, dir, ws_swL)
-        ps_data.lohner[:,dir] .= 0.
     else
         ds = ps_data.ds[dir]
         update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ds, -ds, dir, ws_sL, ws_sR)
         update_slope_inner_ps!(ps_data, Ldata, Rdata, ds, -ds, dir, ws_swL, ws_swR)
-        update_Lohner_inner_ps!(ps_data, Ldata, Rdata, dir, ws_swL, ws_swR)
     end
     return nothing
 end
@@ -243,7 +216,6 @@ function update_slope!(
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ds, -0.75 * ds, dir, ws_sL, ws_sR)
     update_slope_inner_ps!(ps_data, Ldata, Rdata, ds, -0.75 * ds, dir, ws_swL, ws_swR)
-    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, dir, ws_swL, ws_swR)
 end
 """
 $(TYPEDSIGNATURES)
@@ -264,7 +236,6 @@ function update_slope!(
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, -ds, dir, ws_sL, ws_sR)
     update_slope_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, -ds, dir, ws_swL, ws_swR)
-    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, dir, ws_swL, ws_swR)
 end
 """
 $(TYPEDSIGNATURES)
@@ -285,7 +256,6 @@ function update_slope!(
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, -0.75 * ds, dir, ws_sL, ws_sR)
     update_slope_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, -0.75 * ds, dir, ws_swL, ws_swR)
-    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, dir, ws_swL, ws_swR)
 end
 """
 $(TYPEDSIGNATURES)
@@ -306,7 +276,6 @@ function update_slope!(
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, -1.5 * ds, dir, ws_sL, ws_sR)
     update_slope_inner_ps!(ps_data, Ldata, Rdata, 1.5 * ds, -1.5 * ds, dir, ws_swL, ws_swR)
-    update_Lohner_inner_ps!(ps_data, Ldata, Rdata,  dir, ws_swL, ws_swR)
 end
 """
 $(TYPEDSIGNATURES)
@@ -327,7 +296,6 @@ function update_slope!(
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, ds, -1.5 * ds, dir, ws_sL, ws_sR)
     update_slope_inner_ps!(ps_data, Ldata, Rdata, ds, -1.5 * ds, dir, ws_swL, ws_swR)
-    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, dir, ws_swL, ws_swR)
 end
 """
 $(TYPEDSIGNATURES)
@@ -348,7 +316,6 @@ function update_slope!(
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, -ds, dir, ws_sL, ws_sR)
     update_slope_inner_ps!(ps_data, Ldata, Rdata, 1.5 * ds, -ds, dir, ws_swL, ws_swR)
-    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, dir, ws_swL, ws_swR)
 end
 """
 $(TYPEDSIGNATURES)
@@ -369,7 +336,6 @@ function update_slope!(
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 0.75 * ds, -1.5 * ds, dir, ws_sL, ws_sR)
     update_slope_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, -1.5 * ds, dir, ws_swL, ws_swR)
-    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, dir, ws_swL, ws_swR)
 end
 """
 $(TYPEDSIGNATURES)
@@ -390,7 +356,6 @@ function update_slope!(
     ds = ps_data.ds[dir]
     update_slope_inner_vs!(ps_data.vs_data, Ldata, Rdata, 1.5 * ds, -0.75 * ds, dir, ws_sL, ws_sR)
     update_slope_inner_ps!(ps_data, Ldata, Rdata, 1.5 * ds, -0.75 * ds, dir, ws_swL, ws_swR)
-    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, dir, ws_swL, ws_swR)
 end
 
 # Boundary
@@ -414,7 +379,6 @@ function update_slope!(
     vs_data = ps_data.vs_data
     update_slope_bound_vs!(vs_data, Rdata, ds, dir, ws_sL)
     update_slope_bound_ps!(ps_data, Rdata, ds, dir, ws_swL)
-    ps_data.lohner[:,dir] .= 0.
 end
 """
 $(TYPEDSIGNATURES)
@@ -436,7 +400,6 @@ function update_slope!(
     vs_data = ps_data.vs_data
     update_slope_bound_vs!(vs_data, Ldata, ds, dir, ws_sL)
     update_slope_bound_ps!(ps_data, Ldata, ds, dir, ws_swL)
-    ps_data.lohner[:,dir] .= 0.
 end
 """
 $(TYPEDSIGNATURES)
@@ -456,8 +419,7 @@ function update_slope!(
 ) where {DIM,NDF}
     ds = ps_data.midpoint[dir]-Ldata[1].midpoint[dir]
     update_slope_bound_vs!(ps_data.vs_data, Ldata, ds, dir, ws_sL)
-    # update_slope_bound_ps!(ps_data, Ldata, ds, dir, ws_swL)
-    ps_data.sw[:,dir] .= 0.
+    update_slope_bound_ps!(ps_data, Ldata, ds, dir, ws_swL)
 end
 """
 $(TYPEDSIGNATURES)
@@ -477,8 +439,7 @@ function update_slope!(
 ) where {DIM,NDF}
     ds = ps_data.midpoint[dir]-Rdata[1].midpoint[dir]
     update_slope_bound_vs!(ps_data.vs_data, Rdata, ds, dir, ws_sL)
-    # update_slope_bound_ps!(ps_data, Rdata, ds, dir, ws_swL)
-    ps_data.sw[:,dir] .= 0.
+    update_slope_bound_ps!(ps_data, Rdata, ds, dir, ws_swL)
 end
 """
 $(TYPEDSIGNATURES)
@@ -498,8 +459,7 @@ function update_slope!(
 ) where {DIM,NDF}
     ds = ps_data.midpoint[dir]-Rdata[1].midpoint[dir]
     update_slope_bound_vs!(ps_data.vs_data, Rdata, ds, dir, ws_sL)
-    # update_slope_bound_ps!(ps_data, Rdata, ds, dir, ws_swL)
-    ps_data.sw[:,dir] .= 0.
+    update_slope_bound_ps!(ps_data, Rdata, ds, dir, ws_swL)
 end
 """
 $(TYPEDSIGNATURES)
@@ -519,8 +479,7 @@ function update_slope!(
 ) where {DIM,NDF}
     ds = ps_data.midpoint[dir]-Ldata[1].midpoint[dir]
     update_slope_bound_vs!(ps_data.vs_data, Ldata, ds, dir, ws_sL)
-    # update_slope_bound_ps!(ps_data, Ldata, ds, dir, ws_swL)
-    ps_data.sw[:,dir] .= 0.
+    update_slope_bound_ps!(ps_data, Ldata, ds, dir, ws_swL)
 end
 
 """
