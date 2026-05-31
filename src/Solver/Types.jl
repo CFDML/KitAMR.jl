@@ -512,6 +512,10 @@ struct GhostInfo
     mirror_data_szs::Vector{Int}
     "Cached Float64-element count of ghost slope buffer per mirror quadrant."
     mirror_slope_szs::Vector{Int}
+    "Physical-space refinement level of each ghost quadrant."
+    ghost_levels::Vector{Int8}
+    "Physical-space refinement level of each mirror quadrant."
+    mirror_levels::Vector{Int8}
 end
 
 """

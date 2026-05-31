@@ -68,7 +68,7 @@ function _mpi_solid_exchange_varsize!(
         push!(send_bufs, send_buf)
         push!(reqs, MPI.Isend(send_buf, comm; dest = r, tag = tag))
     end
-    MPI.Waitall(reqs)
+    GC.@preserve send_bufs recv_infos MPI.Waitall(reqs)
 
     # --- Scatter received data into the correct (non-contiguous) positions ---
     for (recv_buf, solid_idx, solid_szs) in recv_infos
@@ -130,8 +130,8 @@ end
 """
 $(TYPEDSIGNATURES)
 Non-blocking start of `solid_exchange!`.  Posts `MPI.Irecv!` and `MPI.Isend`
-for solid-adjacent ghost cells and returns `recv_bufs` that must be kept alive
-until [`solid_exchange_finish!`](@ref) is called.
+for solid-adjacent ghost cells and returns receive/send buffers that must be
+kept alive until [`solid_exchange_finish!`](@ref) is called.
 
 MPI request handles are stored in `ka.kinfo.status.mpi_reqs`.
 """
@@ -139,9 +139,10 @@ function solid_exchange_begin!(p4est::P_pxest_t, ka::KA{DIM,NDF}) where {DIM,NDF
     reqs = ka.kinfo.status.mpi_reqs
     empty!(reqs)
     recv_bufs = Tuple{Vector{Float64}, Vector{Int}, Vector{Int}}[]
+    send_bufs = Vector{Vector{Float64}}(undef, 0)
 
-    MPI.Comm_size(MPI.COMM_WORLD) == 1 && return recv_bufs
-    isempty(ka.kinfo.config.IB) && return recv_bufs
+    MPI.Comm_size(MPI.COMM_WORLD) == 1 && return (recv_bufs, send_bufs)
+    isempty(ka.kinfo.config.IB) && return (recv_bufs, send_bufs)
 
     update_solid_mirror_data!(p4est, ka)
 
@@ -196,7 +197,6 @@ function solid_exchange_begin!(p4est::P_pxest_t, ka::KA{DIM,NDF}) where {DIM,NDF
     end
 
     # Post sends
-    send_bufs = Vector{Vector{Float64}}(undef, 0)
     for r in 0:mpisize-1
         r == myrank && continue
         mp_start = Int(mirror_proc_offsets[r+1]) + 1
@@ -220,7 +220,7 @@ function solid_exchange_begin!(p4est::P_pxest_t, ka::KA{DIM,NDF}) where {DIM,NDF
         push!(reqs, MPI.Isend(send_buf, comm; dest = r, tag = 51))
     end
 
-    return recv_bufs
+    return (recv_bufs, send_bufs)
 end
 
 """
@@ -229,14 +229,20 @@ Complete the asynchronous `solid_exchange!`.  Calls `MPI.Waitall` on the
 requests stored in `ka.kinfo.status.mpi_reqs`, then scatters received data
 into `ghost_datas`.
 
-`recv_bufs` is the value returned by [`solid_exchange_begin!`](@ref).
+`exchange_buffers` is the value returned by [`solid_exchange_begin!`](@ref).
 """
-function solid_exchange_finish!(ka::KA{DIM,NDF}, recv_bufs) where {DIM,NDF}
+function solid_exchange_finish!(ka::KA{DIM,NDF}, exchange_buffers) where {DIM,NDF}
+    if exchange_buffers isa Tuple && length(exchange_buffers) == 2
+        recv_bufs, send_bufs = exchange_buffers
+    else
+        recv_bufs = exchange_buffers
+        send_bufs = Vector{Vector{Float64}}(undef, 0)
+    end
     MPI.Comm_size(MPI.COMM_WORLD) == 1 && return nothing
     isempty(ka.kinfo.config.IB) && return nothing
 
     reqs = ka.kinfo.status.mpi_reqs
-    MPI.Waitall(reqs)
+    GC.@preserve send_bufs recv_bufs MPI.Waitall(reqs)
 
     gi = ka.kdata.ghost.ghost_info
     ghost_buffer = ka.kdata.ghost.ghost_buffer.ghost_datas

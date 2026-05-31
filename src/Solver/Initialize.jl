@@ -108,7 +108,7 @@ function initialize_hanging_face!(side::PW_pxest_iter_face_side_t,ka::KA{DIM,NDF
     neighbor = base_quad.neighbor.data[faceid]
     midpoint = [copy(x.midpoint) for x in neighbor]
     for i in eachindex(neighbor)
-        midpoint[i][direction] += 0.5*rot*neighbor[i].ds[direction]
+        midpoint[i][direction] = base_quad.midpoint[direction] - 0.5 * rot * base_quad.ds[direction]
     end
     kinfo = ka.kinfo
     if  midpoint[1][direction] == kinfo.config.geometry[2*direction-1]||midpoint[1][direction] == kinfo.config.geometry[2*direction]
@@ -460,6 +460,7 @@ Initial vs_balance. Before calling the function, ghost and neighbor should be in
 function initialize_balanced_vs!(ka::KA)
     vs_balance!(ka)
     re_init_vs4est!(ka.kdata.field.trees,ka.kinfo)
+    vs_ghost_exchange!(ka.kinfo.forest.p4est, ka)
     update_neighbor!(ka.kinfo.forest.p4est,ka)
 end
 

@@ -221,14 +221,18 @@ function update_neighbor_kernel!(p4est::P_pxest_t, ka::KA)
 end
 function update_neighbor!(p4est::Ptr{p4est_t}, ka::KA)
     kinfo = ka.kinfo
-    p4est_mesh_destroy(kinfo.forest.mesh)
+    if kinfo.forest.mesh != Ptr{p4est_mesh_t}(C_NULL)
+        p4est_mesh_destroy(kinfo.forest.mesh)
+    end
     kinfo.forest.mesh =
         p4est_mesh_new_ext(p4est, kinfo.forest.ghost, 1, 1,  P4EST_CONNECT_FULL)
     update_neighbor_kernel!(p4est, ka)
 end
 function update_neighbor!(p4est::Ptr{p8est_t}, ka::KA)
     kinfo = ka.kinfo
-    p8est_mesh_destroy(kinfo.forest.mesh)
+    if kinfo.forest.mesh != Ptr{p8est_mesh_t}(C_NULL)
+        p8est_mesh_destroy(kinfo.forest.mesh)
+    end
     kinfo.forest.mesh =
         p8est_mesh_new_ext(p4est, kinfo.forest.ghost, 1, 1, P8EST_CONNECT_FULL)
     update_neighbor_kernel!(p4est, ka)

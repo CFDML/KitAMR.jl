@@ -39,6 +39,58 @@ end
 
 """
 $(TYPEDSIGNATURES)
+Get gradients of primary macroscopic variables from gradients of conserved variables.
+"""
+function get_sprim(ps_data::PsData, kinfo::KInfo)
+    get_sprim(ps_data.sw, ps_data.prim, kinfo)
+end
+function get_sprim(sw::AbstractVector, prim::AbstractVector, kinfo::KInfo)
+    get_sprim(sw, prim, kinfo.config.gas.γ)
+end
+function get_sprim(sw::AbstractMatrix, prim::AbstractVector, kinfo::KInfo)
+    get_sprim(sw, prim, kinfo.config.gas.γ)
+end
+function get_sprim(sw::AbstractVector{T}, prim::AbstractVector, gamma::Real) where {T}
+    sprim = Vector{T}(undef, length(prim))
+    get_sprim!(sprim, sw, prim, gamma)
+end
+function get_sprim(sw::AbstractMatrix, prim::AbstractVector, gamma::Real)
+    sprim = similar(sw)
+    get_sprim!(sprim, sw, prim, gamma)
+end
+function get_sprim!(sprim::AbstractVector, sw::AbstractVector, prim::AbstractVector, gamma::Real)
+    DIM = length(prim) - 2
+    @inbounds begin
+        rho = prim[1]
+        lambda = prim[end]
+        sprim[1] = sw[1]
+
+        velocity2 = zero(lambda * sw[1] / rho)
+        momentum_slope = zero(lambda * sw[1] / rho)
+        for i in 1:DIM
+            velocity = prim[i + 1]
+            sw_momentum = sw[i + 1]
+            sprim[i + 1] = (sw_momentum - velocity * sw[1]) / rho
+            velocity2 += velocity^2
+            momentum_slope += velocity * sw_momentum
+        end
+
+        internal_energy = 0.5 * rho / lambda / (gamma - 1.0)
+        internal_slope = sw[DIM + 2] - momentum_slope + 0.5 * velocity2 * sw[1]
+        sprim[DIM + 2] = lambda * (sw[1] / rho - internal_slope / internal_energy)
+    end
+    return sprim
+end
+function get_sprim!(sprim::AbstractMatrix, sw::AbstractMatrix, prim::AbstractVector, gamma::Real)
+    @inbounds for dir in axes(sw, 2)
+        get_sprim!(view(sprim, :, dir), view(sw, :, dir), prim, gamma)
+    end
+    return sprim
+end
+
+
+"""
+$(TYPEDSIGNATURES)
 Caculate the discretized Maxwellian distribution according to the primary macroscopic variables.
 """
 function discrete_maxwell(ps_data::PsData, kinfo::KInfo)

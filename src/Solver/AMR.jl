@@ -8,7 +8,7 @@ function adaptive_mesh_refinement!(p4est::P_pxest_t,ka::KA;ps_interval=40,vs_int
     flag = false
     if ka.kinfo.config.solver.PS_DYNAMIC_AMR&&ka.kinfo.status.ps_adapt_step > ps_interval*converge_ratio
         ps_adaptive_mesh_refinement!(p4est,ka;recursive = ps_recursive)
-        flag = true;ka.kinfo.status.ps_adapt_step = 0
+        flag = true;ka.kinfo.status.ps_adapt_step = 1
     end
     if ka.kinfo.config.solver.VS_DYNAMIC_AMR&&ka.kinfo.status.vs_adapt_step > vs_interval*converge_ratio
         if vs_balance
@@ -16,14 +16,14 @@ function adaptive_mesh_refinement!(p4est::P_pxest_t,ka::KA;ps_interval=40,vs_int
             update_neighbor!(p4est,ka)
         end
         vs_adaptive_mesh_refinement!(ka)
-        flag = true;ka.kinfo.status.vs_adapt_step=0
+        flag = true;ka.kinfo.status.vs_adapt_step=1
     end
     if (ka.kinfo.config.solver.PS_DYNAMIC_AMR||ka.kinfo.config.solver.VS_DYNAMIC_AMR)&&ka.kinfo.status.partition_step>partition_interval*converge_ratio&&flag
         ps_partition!(p4est, ka)
-        flag = true;ka.kinfo.status.partition_step = 0
+        flag = true;ka.kinfo.status.partition_step = 1
     end
     if flag
-        amr_recover!(p4est,ka)      
+        amr_recover!(p4est,ka)
     end
     return nothing
 end

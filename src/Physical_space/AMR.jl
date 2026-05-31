@@ -1,44 +1,3 @@
-
-function update_Lohner_inner_ps!(
-    ps_data::PsData{DIM,NDF},
-    Ldata::AbstractVector,
-    Rdata::AbstractVector,
-    dsL::Float64,
-    dsR::Float64,
-    dir::Int,
-    ws_swL::Vector{Float64},
-    ws_swR::Vector{Float64},
-) where{DIM,NDF}
-    fill!(ws_swL, 0.0); fill!(ws_swR, 0.0)
-    nL = length(Ldata); nR = length(Rdata)
-    for j in 1:nL
-        @. ws_swL += Ldata[j].w
-    end
-    for j in 1:nR
-        @. ws_swR += Rdata[j].w
-    end
-    if dsL>ps_data.ds[dir] # Coarsen neighbor interpolation
-        dx = ps_data.midpoint-Ldata[1].midpoint;dx = dx[FAT[DIM-1][dir]]
-        for j in eachindex(ws_swL)
-            @views ws_swL[j] += dot(dx, Ldata[1].sw[j,FAT[DIM-1][dir]])
-        end
-    end
-    if dsR>ps_data.ds[dir]
-        dx = ps_data.midpoint-Rdata[1].midpoint;dx = dx[FAT[DIM-1][dir]]
-        for j in eachindex(ws_swR)
-            @views ws_swR[j] += dot(dx, Rdata[1].sw[j,FAT[DIM-1][dir]])
-        end
-    end
-    ws_swL ./= nL; ws_swR ./= nR
-    ep = 0.2*ps_data.ds[dir]
-    for j in eachindex(ws_swL)
-        ps_data.lohner[j, dir] = max(abs(ws_swL[j]-ps_data.w[j])/dsL,abs(ws_swR[j]-ps_data.w[j])/dsR)>1e-2 ?
-         abs(dsR*ws_swL[j]-(dsL+dsR)*ps_data.w[j]+dsL*ws_swR[j])/
-            (dsR*abs(ws_swL[j]-ps_data.w[j])+dsL*abs(ws_swR[j]-ps_data.w[j])+ep*
-                (dsR*abs(ws_swL[j])+(dsL+dsR)*abs(ps_data.w[j])+dsL*abs(ws_swR[j]))) : 0.
-    end
-    return nothing
-end
 # Inner
 """
 $(TYPEDSIGNATURES)
@@ -55,7 +14,7 @@ function update_criterion!(
     ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.ds[dir]
-    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, ds, ds, dir, ws_swL, ws_swR)
+    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, ds, ds, dir, ws_swL, ws_swR,kinfo)
     return nothing
 end
 """
@@ -73,7 +32,7 @@ function update_criterion!(
     ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.ds[dir]
-    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, ds, 0.75 * ds, dir, ws_swL, ws_swR)
+    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, ds, 0.75 * ds, dir, ws_swL, ws_swR,kinfo)
 end
 """
 $(TYPEDSIGNATURES)
@@ -90,7 +49,7 @@ function update_criterion!(
     ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.ds[dir]
-    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, ds, dir, ws_swL, ws_swR)
+    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, ds, dir, ws_swL, ws_swR,kinfo)
 end
 """
 $(TYPEDSIGNATURES)
@@ -107,7 +66,7 @@ function update_criterion!(
     ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.ds[dir]
-    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, 0.75 * ds, dir, ws_swL, ws_swR)
+    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, 0.75 * ds, dir, ws_swL, ws_swR,kinfo)
 end
 """
 $(TYPEDSIGNATURES)
@@ -126,7 +85,7 @@ function update_criterion!(
     ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.ds[dir]
-    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, 1.5 * ds, 1.5 * ds, dir, ws_swL, ws_swR)
+    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, 1.5 * ds, 1.5 * ds, dir, ws_swL, ws_swR,kinfo)
 end
 """
 $(TYPEDSIGNATURES)
@@ -143,7 +102,7 @@ function update_criterion!(
     ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.ds[dir]
-    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, ds, 1.5 * ds, dir, ws_swL, ws_swR)
+    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, ds, 1.5 * ds, dir, ws_swL, ws_swR,kinfo)
 end
 """
 $(TYPEDSIGNATURES)
@@ -160,7 +119,7 @@ function update_criterion!(
     ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.ds[dir]
-    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, 1.5 * ds, ds, dir, ws_swL, ws_swR)
+    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, 1.5 * ds, ds, dir, ws_swL, ws_swR,kinfo)
 end
 """
 $(TYPEDSIGNATURES)
@@ -177,7 +136,7 @@ function update_criterion!(
     ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.ds[dir]
-    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, 1.5 * ds, dir, ws_swL, ws_swR)
+    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, 0.75 * ds, 1.5 * ds, dir, ws_swL, ws_swR,kinfo)
 end
 """
 $(TYPEDSIGNATURES)
@@ -194,7 +153,7 @@ function update_criterion!(
     ws_swR::Vector{Float64},
 ) where {DIM,NDF}
     ds = ps_data.ds[dir]
-    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, 1.5 * ds, 0.75 * ds, dir, ws_swL, ws_swR)
+    update_Lohner_inner_ps!(ps_data, Ldata, Rdata, 1.5 * ds, 0.75 * ds, dir, ws_swL, ws_swR,kinfo)
 end
 
 # Boundary
@@ -322,6 +281,62 @@ function update_criterion!(ka::KA{DIM,NDF}) where{DIM,NDF}
             end
         end
     end
+    # apply_lohner_buffer!(ka)
+end
+
+"""
+$(TYPEDSIGNATURES)
+One-cell buffer layer: any cell whose neighbor's Löhner sensor exceeds the
+refine threshold has its own `lohner` inflated above the threshold, so it
+will also be flagged for refinement. Decide-then-apply keeps the buffer
+strictly one layer thick. Ghost neighbours' flags are synced via
+[`lohner_flag_exchange!`](@ref).
+"""
+function apply_lohner_buffer!(ka::KA{DIM,NDF}) where{DIM,NDF}
+    trees = ka.kdata.field.trees
+    threshold = ka.kinfo.config.solver.ADAPT_COEFFI_PS
+    inflate = 2.0 * threshold
+
+    ghost_flags = lohner_flag_exchange!(ka.kinfo.forest.p4est, ka)
+
+    buffer = [falses(length(t)) for t in trees.data]
+    @inbounds for i in eachindex(trees.data)
+        for j in eachindex(trees.data[i])
+            ps_data = trees.data[i][j]
+            isa(ps_data, InsideSolidData) && continue
+            ps_data.bound_enc < 0 && continue
+            maximum(ps_data.lohner) > threshold && continue
+            neighbor = ps_data.neighbor
+            flagged = false
+            for k in eachindex(neighbor.data)
+                neighbor.state[k] == 0 && continue
+                for nb in neighbor.data[k]
+                    if isa(nb, PsData)
+                        nb.bound_enc < 0 && continue
+                        if maximum(nb.lohner) > threshold
+                            flagged = true
+                            break
+                        end
+                    elseif isa(nb, GhostPsData)
+                        nb.bound_enc < 0 && continue
+                        if get(ghost_flags, objectid(nb), false)
+                            flagged = true
+                            break
+                        end
+                    end
+                end
+                flagged && break
+            end
+            buffer[i][j] = flagged
+        end
+    end
+
+    @inbounds for i in eachindex(trees.data)
+        for j in eachindex(trees.data[i])
+            buffer[i][j] && (trees.data[i][j].lohner .= inflate)
+        end
+    end
+    return nothing
 end
 
 function vs_merge!(sdf::AbstractArray,sdf_n::AbstractArray,level::Vector,level_n::Vector,::KA{DIM}) where{DIM}
@@ -1083,15 +1098,13 @@ Outer function of AMR in physical space.
 """
 function ps_adaptive_mesh_refinement!(p4est::P_pxest_t,ka::KA;recursive = false)
     # update_gradmax!(ka)
-    update_slope!(ka)
+    slope!(p4est,ka)
     update_criterion!(ka)
     ps_refine!(p4est,ka;recursive = recursive ? 1 : 0)
     ps_coarsen!(p4est; recursive = recursive ? 1 : 0)
     ps_balance!(p4est)
     return nothing
 end
-
-
 
 
 

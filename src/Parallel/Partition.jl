@@ -238,7 +238,7 @@ function partition!(p4est::Ptr{p4est_t},weight::Union{Ptr{Nothing},Base.CFunctio
     src_gfq = copy(gfq)
     src_flt = pp.first_local_tree[]
     src_llt = pp.last_local_tree[]
-    p4est_partition(p4est, 0, weight)
+    p4est_partition(p4est, 1, weight)
     return src_gfq, gfq, src_flt, src_llt
 end
 function partition!(p4est::Ptr{p8est_t},weight::Function = partition_weight)
@@ -254,7 +254,7 @@ function partition!(p4est::Ptr{p8est_t},weight::Union{Ptr{Nothing},Base.CFunctio
     src_gfq = copy(gfq)
     src_flt = pp.first_local_tree[]
     src_llt = pp.last_local_tree[]
-    p8est_partition(p4est, 0, weight)
+    p8est_partition(p4est, 1, weight)
     return src_gfq, gfq, src_flt, src_llt
 end
 function get_receive_send(src_gfq::Vector, dest_gfq::Vector)

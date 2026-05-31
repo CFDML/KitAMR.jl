@@ -54,10 +54,13 @@ function write_vs_VTK(vs_data::AbstractVsData{2,2},ka::KA{2,2},filename::String,
     end
 end
 function write_vs_VTK(df::AbstractMatrix,vs_data::AbstractVsData{2,2},ka::KA{2,2},filename::String,fieldnames::Vector{String},fieldvalues_fn)
-    kinfo = ka.kinfo
-    xmin,xmax,ymin,ymax = kinfo.config.quadrature
-    Nx,Ny = kinfo.config.vs_trees_num
-    AMR_VS_MAXLEVEL = kinfo.config.solver.AMR_VS_MAXLEVEL
+    config = ka.kinfo.config
+    write_vs_VTK(df,vs_data,config,filename,fieldnames,fieldvalues_fn)
+end
+function write_vs_VTK(df::AbstractMatrix,vs_data::AbstractVsData{2,2},config::AbstractConfig{2,2},filename::String,fieldnames::Vector{String},fieldvalues_fn)
+    xmin,xmax,ymin,ymax = config.quadrature
+    Nx,Ny = config.vs_trees_num
+    AMR_VS_MAXLEVEL = config.solver.AMR_VS_MAXLEVEL
     dx = (xmax - xmin) / Nx/2^AMR_VS_MAXLEVEL
     dy = (ymax - ymin) / Ny/2^AMR_VS_MAXLEVEL
     D = [dx,dy]

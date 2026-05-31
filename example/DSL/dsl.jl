@@ -1,7 +1,7 @@
 using KitAMR,MPI
 MPI.Init()
 function dsl_init(midpoint,kinfo)
-    Ma = 20
+    Ma = 2
     u0 = √(5/6)*Ma
     k = 80; δ = 0.05
     T0 = 5/6
@@ -20,7 +20,7 @@ solver = Solver(;
     AMR_PS_MAXLEVEL = 3,
     AMR_VS_MAXLEVEL = 3,
     PS_DYNAMIC_AMR = true,
-    ADAPT_COEFFI_PS = 0.6,
+    ADAPT_COEFFI_PS = 0.3,
     VS_DYNAMIC_AMR = true,
     flux = CAIDVM,
     # flux = DVM,
@@ -30,7 +30,7 @@ solver = Solver(;
 )
 gas = Gas(;
     K = 1.0,
-    Kn = 0.001,
+    Kn = 1e-5,
     ω = 0.81,
     ωᵣ = 0.81,
 )
@@ -42,7 +42,7 @@ udf = UDF(;
 config = Configure(solver;
     geometry = [0., 1., 0., 1.],
     trees_num = [16,16],
-    quadrature = [-22.36,22.36,-22.36,22.36,-22.36,22.36],
+    quadrature = [-7.,7.,-7.,7.],
     vs_trees_num = [8,8],
     IC = PCoordFn(dsl_init),
     domain = [
@@ -56,17 +56,19 @@ config = Configure(solver;
 
 p4est,ka = initialize(config);
 slope!(p4est,ka)
-KitAMR.ps_adaptive_mesh_refinement!(p4est,ka;recursive = true)
-KitAMR.amr_recover!(p4est,ka)
+for _ in 1:3
+    KitAMR.ps_adaptive_mesh_refinement!(p4est,ka;recursive = false)
+    KitAMR.amr_recover!(p4est,ka)
+end
 KitAMR.execute_check!(p4est,ka)
 listen_for_save!()
 max_sim_time = 20.
 nt = max_sim_time/ka.kinfo.status.Δt+1.0 |> floor |> Int
-for i in 1:1000
+for i in 1:10000
     if MPI.Comm_rank(MPI.COMM_WORLD)==0
         @show i
     end
-    adaptive_mesh_refinement!(p4est,ka;ps_interval = 20, vs_interval = 10, partition_interval = 20, vs_balance = false)
+    adaptive_mesh_refinement!(p4est,ka;ps_interval = 20, vs_interval = 40, partition_interval = 20, vs_balance = false)
     slope!(p4est,ka) # Update `sdf` in `AbstractVsData` and `sw` in `PsData`.
     flux!(p4est, ka) # Compute and update numerical fluxes.
     iterate!(p4est, ka) # Collision process and time marching.

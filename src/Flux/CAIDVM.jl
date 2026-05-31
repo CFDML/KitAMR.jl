@@ -116,7 +116,7 @@ function calc_flux(::Type{CAIDVM},here_vs,there_vs,flux_data::Union{FullFace,Flu
         end
     end
     here_weight = here_vs.weight;there_weight = there_vs.weight
-    fw = micro_to_macro(here_micro,here_mid,here_weight,here_data.vs_data)+micro_to_macro(there_micro,there_mid,there_weight,here_data.vs_data)
+    fw = micro_to_macro(here_micro,here_mid,here_weight,here_data.vs_data)+micro_to_macro(there_micro,there_mid,there_weight,there_data.vs_data)
     return fw,[here_micro,there_micro]
 end
 
