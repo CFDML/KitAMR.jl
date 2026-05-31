@@ -930,8 +930,8 @@ end
 
 """
 $(TYPEDSIGNATURES)
-Exchange a single Bool-as-Float per mirror cell: whether
-`maximum(ps_data.lohner) > ADAPT_COEFFI_PS`. Returns a map keyed by ghost-object
+Exchange a single Bool-as-Float per mirror cell: whether its physical-space
+AMR sensor exceeds `ADAPT_COEFFI_PS`. Returns a map keyed by ghost-object
 identity, with `true` for ghosts whose owner-side cell is above threshold.
 Caller must have already filled `ps_data.lohner` on all local cells.
 `GhostInsideSolidData` ghosts are left out of the map.
@@ -956,7 +956,7 @@ function lohner_flag_exchange!(p4est::P_pxest_t, ka::KA{DIM,NDF}) where{DIM,NDF}
             flag = if isa(ps_data, InsideSolidData) || ps_data.bound_enc < 0
                 0.0
             else
-                maximum(ps_data.lohner) > threshold ? 1.0 : 0.0
+                ps_sensor(ps_data) > threshold ? 1.0 : 0.0
             end
             mirror_bufs[i] = Float64[flag]
         end

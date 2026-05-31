@@ -14,10 +14,10 @@ end
 @inline function ps_sensor(ps_data::PsData)
     max(
         lohner_rowmax(ps_data.lohner, 1),
-        max(
-            lohner_rowmax(ps_data.lohner, 2),
-            lohner_rowmax(ps_data.lohner, size(ps_data.lohner, 1)),
-        ),
+        # max(
+            # lohner_rowmax(ps_data.lohner, 2),
+            lohner_rowmax(ps_data.lohner, size(ps_data.lohner, 1))
+        # ),
     )
 end
 

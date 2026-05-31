@@ -246,6 +246,34 @@ function re_init_vs4est!(trees, kinfo)
         end
     end
 end
+
+"""
+$(TYPEDSIGNATURES)
+Reapply the configured initial condition on the current physical mesh.
+
+This is intended for initial physical-space AMR: after refinement creates
+children from interpolated parent data, call this before rebuilding ghosts so
+new fine cells receive the exact initial state at their own cell centers.
+"""
+function reinitialize_initial_condition!(ka::KA{DIM,NDF}) where{DIM,NDF}
+    kinfo = ka.kinfo
+    ic = kinfo.config.IC
+    for tree in ka.kdata.field.trees.data
+        for ps_data in tree
+            isa(ps_data, PsData) || continue
+            ps_data.bound_enc < 0 && continue
+            ps_data.prim .= initial_prim(ic; midpoint = ps_data.midpoint, kinfo = kinfo)
+            ps_data.w .= get_conserved(ps_data.prim, kinfo)
+            fill!(ps_data.qf, 0.0)
+            fill!(ps_data.flux, 0.0)
+            fill!(ps_data.sw, 0.0)
+            fill!(ps_data.lohner, 0.0)
+            ps_data.vs_data = initialize_vs_data(ps_data.prim, kinfo)
+        end
+    end
+    return nothing
+end
+
 """
 $(TYPEDSIGNATURES)
 """

@@ -438,10 +438,12 @@ function vs_adaptive_mesh_refinement!(ka;vs_balance = false)
     va_data = Velocity_Adaptive_Data(vr,va_flags)
     vs_refine!(va_data,ka)
     vs_coarsen!(va_data,ka)
+    changed = any(va_flags)
     if vs_balance
-        vs_balance!(ka)
+        changed |= vs_balance!(ka)
     end
     vs_conserved_correction!(va_data,ka)
+    return Bool(MPI.Allreduce(Int(changed), +, MPI.COMM_WORLD) > 0)
 end
 
 function initial_vs_adaptive_mesh_refinement!(prim,vs_data,kinfo::KInfo{DIM,NDF}) where{DIM,NDF}

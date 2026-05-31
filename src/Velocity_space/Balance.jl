@@ -273,22 +273,23 @@ For single-rank runs the MPI steps are skipped.
 """
 function vs_balance!(ka::KA{DIM,NDF}) where {DIM,NDF}
     p4est = ka.kinfo.forest.p4est
-    !isa(ka.kinfo.config.quadrature, Vector) && return nothing
+    !isa(ka.kinfo.config.quadrature, Vector) && return false
 
     if MPI.Comm_size(MPI.COMM_WORLD) == 1
-        vs_balance_local!(ka)
-        return nothing
+        return vs_balance_local!(ka)
     end
 
+    any_changed = false
     changed_global = true
     while changed_global
         changed_local  = vs_balance_local!(ka)
         # Reduce across all ranks: any change on any rank keeps the loop going.
         changed_global = Bool(MPI.Allreduce(Int(changed_local), +, MPI.COMM_WORLD) > 0)
+        any_changed |= changed_global
         # Rebuild ghost velocity-space data so that each rank sees its neighbours'
         # updated levels in the next pass.
         changed_global && vs_ghost_exchange!(p4est, ka)
     end
 
-    return nothing
+    return any_changed
 end

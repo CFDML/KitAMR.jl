@@ -281,7 +281,8 @@ function update_criterion!(ka::KA{DIM,NDF}) where{DIM,NDF}
             end
         end
     end
-    # apply_lohner_buffer!(ka)
+    apply_amr_buffer!(ka)
+    return nothing
 end
 
 """
@@ -292,7 +293,7 @@ will also be flagged for refinement. Decide-then-apply keeps the buffer
 strictly one layer thick. Ghost neighbours' flags are synced via
 [`lohner_flag_exchange!`](@ref).
 """
-function apply_lohner_buffer!(ka::KA{DIM,NDF}) where{DIM,NDF}
+function apply_amr_buffer!(ka::KA{DIM,NDF}) where{DIM,NDF}
     trees = ka.kdata.field.trees
     threshold = ka.kinfo.config.solver.ADAPT_COEFFI_PS
     inflate = 2.0 * threshold
@@ -305,7 +306,7 @@ function apply_lohner_buffer!(ka::KA{DIM,NDF}) where{DIM,NDF}
             ps_data = trees.data[i][j]
             isa(ps_data, InsideSolidData) && continue
             ps_data.bound_enc < 0 && continue
-            maximum(ps_data.lohner) > threshold && continue
+            ps_sensor(ps_data) > threshold && continue
             neighbor = ps_data.neighbor
             flagged = false
             for k in eachindex(neighbor.data)
@@ -313,7 +314,7 @@ function apply_lohner_buffer!(ka::KA{DIM,NDF}) where{DIM,NDF}
                 for nb in neighbor.data[k]
                     if isa(nb, PsData)
                         nb.bound_enc < 0 && continue
-                        if maximum(nb.lohner) > threshold
+                        if ps_sensor(nb) > threshold
                             flagged = true
                             break
                         end
@@ -587,6 +588,7 @@ function ps_copy(data::PsData{DIM,NDF}) where{DIM,NDF}
     )
     return p
 end
+
 function ps_merge(Odatas::Vector,index::Int,kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
     data = Odatas[index]
     vs_data = data.vs_data;vs_num = vs_data.vs_num
@@ -1105,6 +1107,3 @@ function ps_adaptive_mesh_refinement!(p4est::P_pxest_t,ka::KA;recursive = false)
     ps_balance!(p4est)
     return nothing
 end
-
-
-
