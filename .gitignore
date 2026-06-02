@@ -16,7 +16,7 @@ result_*
 animation
 *.json
 *.jld2
-test*
+test_*
 /docs/build
 deprecated
 .codex
