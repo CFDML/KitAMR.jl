@@ -183,26 +183,22 @@ function check_vs_num(ka::KA)
         end
     end
     if MPI.Comm_rank(MPI.COMM_WORLD)==0
-        buffer[1] = MPI.Reduce(buffer[1],(x,y)->(
-            max(x,y)
-        ),
-        MPI.COMM_WORLD
+        buffer[1] = MPI.Reduce(buffer[1],
+            MPI.MAX,
+            MPI.COMM_WORLD
         )
-        buffer[2] = MPI.Reduce(buffer[1],(x,y)->(
-            x+y
-        ),
-        MPI.COMM_WORLD
+        buffer[2] = MPI.Reduce(buffer[1],
+            +,
+            MPI.COMM_WORLD
         )
     else
-        MPI.Reduce(buffer[1],(x,y)->(
-            max(x,y)
-        ),
-        MPI.COMM_WORLD
+        MPI.Reduce(buffer[1],
+            MPI.MAX,
+            MPI.COMM_WORLD
         )
-        MPI.Reduce(buffer[2],(x,y)->(
-            x+y
-        ),
-        MPI.COMM_WORLD
+        MPI.Reduce(buffer[2],
+            +,
+            MPI.COMM_WORLD
         )
     end
     return buffer

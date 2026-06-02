@@ -19,7 +19,7 @@ function blast_wave_init(midpoint, kinfo)
     uy = 0.0
 
     T_ambient = 1.0
-    T_peak = 80.0
+    T_peak = 160.0
     radius = 0.08
     width = 0.01
     hot_fraction = 0.5 * (1.0 - tanh((r - radius) / width))
@@ -35,7 +35,7 @@ solver = Solver(;
     AMR_PS_MAXLEVEL = 4,
     AMR_VS_MAXLEVEL = 5,
     PS_DYNAMIC_AMR = true,
-    ADAPT_COEFFI_PS = 0.8,
+    ADAPT_COEFFI_PS = 0.5,
     VS_DYNAMIC_AMR = true,
     flux = CAIDVM,
     time_marching = CIP_Marching,
@@ -73,7 +73,7 @@ config = Configure(solver;
 p4est, ka = initialize(config)
 slope!(p4est, ka)
 
-for _ in 1:3
+for _ in 1:4
     KitAMR.ps_adaptive_mesh_refinement!(p4est, ka; recursive = false)
     reinitialize_initial_condition!(ka)
     KitAMR.amr_recover!(p4est, ka)

@@ -37,7 +37,7 @@ function get_vs_num(pp::PW_pxest_t, gp::PW_pxest_ghost_t)
         isa(ps_data,InsideSolidData)&&continue
         vs_num = max(vs_num, ps_data.vs_data.vs_num)
     end
-    vs_num = MPI.Allreduce(vs_num, max, MPI.COMM_WORLD)
+    vs_num = MPI.Allreduce(vs_num, MPI.MAX, MPI.COMM_WORLD)
 end
 function get_mirror_data_inner!(ps_data::PsData{DIM,NDF}, vs_temp::AbstractVector) where{DIM,NDF}
     vs_data = ps_data.vs_data
@@ -335,7 +335,7 @@ function _native_exchange_varsize(
     max_mirror = isempty(mirror_elem_sizes) ? 0 : maximum(mirror_elem_sizes)
     max_ghost = isempty(ghost_elem_sizes) ? 0 : maximum(ghost_elem_sizes)
     local_N = max(1, max_mirror, max_ghost)
-    N = MPI.Allreduce(local_N, max, MPI.COMM_WORLD)
+    N = MPI.Allreduce(local_N, MPI.MAX, MPI.COMM_WORLD)
 
     send_bufs = [zeros(Float64, N) for _ in eachindex(mirror_data_bufs)]
     ptrs = Vector{Ptr{Float64}}(undef, length(send_bufs))
@@ -378,7 +378,7 @@ function _native_exchange_varsize!(
     max_mirror = isempty(mirror_elem_sizes) ? 0 : maximum(mirror_elem_sizes)
     max_ghost = isempty(ghost_elem_sizes) ? 0 : maximum(ghost_elem_sizes)
     local_N = max(1, max_mirror, max_ghost)
-    N = MPI.Allreduce(local_N, max, MPI.COMM_WORLD)
+    N = MPI.Allreduce(local_N, MPI.MAX, MPI.COMM_WORLD)
 
     send_bufs = [zeros(Float64, N) for _ in eachindex(mirror_data_bufs)]
     ptrs = Vector{Ptr{Float64}}(undef, length(send_bufs))

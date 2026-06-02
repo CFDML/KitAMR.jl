@@ -1090,7 +1090,7 @@ function update_gradmax!(ka::KA{DIM}) where{DIM}
             end
         end
     end
-    gradmax .= MPI.Allreduce(gradmax, (x,y)->max.(x,y), MPI.COMM_WORLD)
+    gradmax .= MPI.Allreduce(gradmax, MPI.MAX, MPI.COMM_WORLD)
     return nothing
 end
 

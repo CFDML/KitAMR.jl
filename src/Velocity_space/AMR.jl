@@ -412,8 +412,8 @@ function vs_resolution(trees::PsTrees,kinfo)
             energy_res = max(energy_res_i,energy_res)
         end
     end
-    density_res = MPI.Allreduce(density_res, (x,y)->max(x,y), MPI.COMM_WORLD)
-    energy_res = MPI.Allreduce(energy_res, (x,y)->max(x,y), MPI.COMM_WORLD)
+    density_res = MPI.Allreduce(density_res, MPI.MAX, MPI.COMM_WORLD)
+    energy_res = MPI.Allreduce(energy_res, MPI.MAX, MPI.COMM_WORLD)
     return Velocity_Resolution(density_res,energy_res)
 end
 function vs_resolution(ps_data::PsData{DIM,NDF},kinfo) where{DIM,NDF}

@@ -19,8 +19,6 @@ using GeometryBasics:Mesh
 using StructArrays
 
 
-BLAS.set_num_threads(1)
-
 include("../lib/P4est/src/P4est.jl")
 # @reexport using .P4est
 using .P4est
@@ -41,11 +39,13 @@ include("Solver/Solver.jl")
 include("Theory/Theory.jl")
 include("Velocity_space/Velocity_space.jl")
 
-# const np = Ref{Py}()
-# const scipy = Ref{Py}()
-# function __init__()
-#     np[] = pyimport("numpy")
-#     scipy[] = pyimport("scipy")
-# end
+# Runtime initialization: runs once per process when the module is loaded.
+# OpenBLAS thread count is process-global runtime state and must be set here
+# (not at module top-level, which only runs during precompilation). Each MPI
+# rank already provides parallelism, so BLAS stays single-threaded to avoid
+# oversubscription / busy-wait spinning.
+function __init__()
+    BLAS.set_num_threads(1)
+end
 
 end # module

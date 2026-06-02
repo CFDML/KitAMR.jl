@@ -14,8 +14,8 @@ function residual_comm!(kinfo::KInfo)
     fp = PointerWrapper(kinfo.forest.p4est)
     N = fp.global_num_quadrants[]
     kinfo.status.step%kinfo.config.solver.ST_CHECK_INTERVAL!=0&&(return nothing)
-    MPI.Reduce!(Res.sumRes,(x,y)->x.+y,0,MPI.COMM_WORLD)
-    MPI.Reduce!(Res.sumAvg,(x,y)->x.+y,0,MPI.COMM_WORLD)
+    MPI.Reduce!(Res.sumRes,+,0,MPI.COMM_WORLD)
+    MPI.Reduce!(Res.sumAvg,+,0,MPI.COMM_WORLD)
     if MPI.Comm_rank(MPI.COMM_WORLD)==0
         @. Res.residual=sqrt(Res.sumRes*N)/(Res.sumAvg+EPS)
     end
