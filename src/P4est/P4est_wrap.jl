@@ -1,3 +1,89 @@
+# ---------------------------------------------------------------------------
+# Closure-free C callbacks (Apple Silicon / aarch64 does not support closure
+# `@cfunction`). Two strategies are used:
+#   * weight / init callbacks have no user_data slot, and the forest
+#     `user_pointer` is already occupied by `kinfo`/`ka` (and read inside the
+#     callbacks), so the Julia callable is stashed in a module-level Ref that a
+#     fixed top-level trampoline reads. The previous Ref value is restored after
+#     the call.
+#   * volume/face/corner iterate callbacks carry the callable (plus data_type
+#     and the caller's user_data) in `AMR_iterate_context`, passed through the
+#     p4est_iterate `user_data` channel and recovered in a top-level trampoline.
+#     The forest `user_pointer` is never disturbed.
+# ---------------------------------------------------------------------------
+
+const _AMR_WEIGHT_FN = Ref{Function}()
+const _AMR_INIT_FN = Ref{Function}()
+
+function _amr_weight_cb_p4est(p4est::Ptr{p4est_t}, which_tree::p4est_topidx_t, quadrant::Ptr{p4est_quadrant_t})::Cint
+    return Cint(_AMR_WEIGHT_FN[](p4est, which_tree, quadrant))
+end
+function _amr_weight_cb_p8est(p4est::Ptr{p8est_t}, which_tree::p4est_topidx_t, quadrant::Ptr{p8est_quadrant_t})::Cint
+    return Cint(_AMR_WEIGHT_FN[](p4est, which_tree, quadrant))
+end
+function _amr_init_cb_p4est(p4est::Ptr{p4est_t}, which_tree::p4est_topidx_t, quadrant::Ptr{p4est_quadrant_t})::Cvoid
+    _AMR_INIT_FN[](p4est, which_tree, quadrant)
+    return nothing
+end
+function _amr_init_cb_p8est(p4est::Ptr{p8est_t}, which_tree::p4est_topidx_t, quadrant::Ptr{p8est_quadrant_t})::Cvoid
+    _AMR_INIT_FN[](p4est, which_tree, quadrant)
+    return nothing
+end
+
+"""
+Bundles a Julia callable together with the per-call `user_data` (and, for volume
+iteration, the quadrant `data_type`) so it can be passed into a p4est_iterate C
+callback through the `user_data` channel without forming a closure.
+"""
+mutable struct AMR_iterate_context
+    f::Function
+    data_type::DataType
+    user_data::Ptr{Cvoid}
+end
+
+function _amr_volume_iter_cb_p4est(info::Ptr{p4est_iter_volume_info}, data::Ptr{Nothing})::Cvoid
+    GC.@preserve info begin
+        ctx = unsafe_pointer_to_objref(data)::AMR_iterate_context
+        ip = PointerWrapper(info)
+        dp = PointerWrapper(ctx.data_type, ip.quad.p.user_data[])
+        GC.@preserve ip dp ctx.f(ip, ctx.user_data, dp)
+    end
+    return nothing
+end
+function _amr_volume_iter_cb_p8est(info::Ptr{p8est_iter_volume_info}, data::Ptr{Nothing})::Cvoid
+    GC.@preserve info begin
+        ctx = unsafe_pointer_to_objref(data)::AMR_iterate_context
+        ip = PointerWrapper(info)
+        dp = PointerWrapper(ctx.data_type, ip.quad.p.user_data[])
+        GC.@preserve ip dp ctx.f(ip, ctx.user_data, dp)
+    end
+    return nothing
+end
+function _amr_corner_iter_cb_p4est(info::Ptr{p4est_iter_corner_info}, data::Ptr{Nothing})::Cvoid
+    GC.@preserve info begin
+        ctx = unsafe_pointer_to_objref(data)::AMR_iterate_context
+        ip = PointerWrapper(info)
+        GC.@preserve ip ctx.f(ip, ctx.user_data)
+    end
+    return nothing
+end
+function _amr_face_iter_cb_p4est(info::Ptr{p4est_iter_face_info}, data::Ptr{Nothing})::Cvoid
+    GC.@preserve info begin
+        ctx = unsafe_pointer_to_objref(data)::AMR_iterate_context
+        ip = PointerWrapper(info)
+        GC.@preserve ip ctx.f(ip, ctx.user_data)
+    end
+    return nothing
+end
+function _amr_face_iter_cb_p8est(info::Ptr{p8est_iter_face_info}, data::Ptr{Nothing})::Cvoid
+    GC.@preserve info begin
+        ctx = unsafe_pointer_to_objref(data)::AMR_iterate_context
+        ip = PointerWrapper(info)
+        GC.@preserve ip ctx.f(ip, ctx.user_data)
+    end
+    return nothing
+end
+
 function quad_to_cell(
     fp::PointerWrapper{p4est_t},
     treeid,
@@ -114,16 +200,22 @@ function AMR_4est_new(
     init_fn::Function,
     user_pointer::Ptr,
 ) where {T}
-    GC.@preserve comm conn min_quads min_level uniform user_pointer p4est_new_ext(
-        comm,
-        conn,
-        min_quads,
-        min_level,
-        uniform,
-        sizeof(T),
-        @cfunction($init_fn, Cvoid, (Ptr{p4est_t}, p4est_topidx_t, Ptr{p4est_quadrant_t})),
-        user_pointer,
-    )
+    old = isassigned(_AMR_INIT_FN) ? _AMR_INIT_FN[] : nothing
+    _AMR_INIT_FN[] = init_fn
+    try
+        GC.@preserve comm conn min_quads min_level uniform user_pointer init_fn p4est_new_ext(
+            comm,
+            conn,
+            min_quads,
+            min_level,
+            uniform,
+            sizeof(T),
+            @cfunction(_amr_init_cb_p4est, Cvoid, (Ptr{p4est_t}, p4est_topidx_t, Ptr{p4est_quadrant_t})),
+            user_pointer,
+        )
+    finally
+        old === nothing || (_AMR_INIT_FN[] = old)
+    end
 end
 function AMR_4est_new(
     comm::MPI.Comm,
@@ -135,16 +227,22 @@ function AMR_4est_new(
     init_fn::Function,
     user_pointer::Ptr,
 ) where {T}
-    GC.@preserve comm conn min_quads min_level uniform user_pointer p8est_new_ext(
-        comm,
-        conn,
-        min_quads,
-        min_level,
-        uniform,
-        sizeof(T),
-        @cfunction($init_fn, Cvoid, (Ptr{p8est_t}, p4est_topidx_t, Ptr{p8est_quadrant_t})),
-        user_pointer,
-    )
+    old = isassigned(_AMR_INIT_FN) ? _AMR_INIT_FN[] : nothing
+    _AMR_INIT_FN[] = init_fn
+    try
+        GC.@preserve comm conn min_quads min_level uniform user_pointer init_fn p8est_new_ext(
+            comm,
+            conn,
+            min_quads,
+            min_level,
+            uniform,
+            sizeof(T),
+            @cfunction(_amr_init_cb_p8est, Cvoid, (Ptr{p8est_t}, p4est_topidx_t, Ptr{p8est_quadrant_t})),
+            user_pointer,
+        )
+    finally
+        old === nothing || (_AMR_INIT_FN[] = old)
+    end
 end
 
 function AMR_4est_new(comm::MPI.Comm, conn::Ptr{p4est_connectivity}, ::Type{T}) where {T}
@@ -161,16 +259,22 @@ function AMR_4est_new(
     init_fn::Function,
     user_pointer::Ptr,
 ) where {T}
-    GC.@preserve comm conn user_pointer p4est_new_ext(
-        comm,
-        conn,
-        1,
-        0,
-        1,
-        sizeof(T),
-        @cfunction($init_fn, Cvoid, (Ptr{p4est_t}, p4est_topidx_t, Ptr{p4est_quadrant_t})),
-        user_pointer,
-    )
+    old = isassigned(_AMR_INIT_FN) ? _AMR_INIT_FN[] : nothing
+    _AMR_INIT_FN[] = init_fn
+    try
+        GC.@preserve comm conn user_pointer init_fn p4est_new_ext(
+            comm,
+            conn,
+            1,
+            0,
+            1,
+            sizeof(T),
+            @cfunction(_amr_init_cb_p4est, Cvoid, (Ptr{p4est_t}, p4est_topidx_t, Ptr{p4est_quadrant_t})),
+            user_pointer,
+        )
+    finally
+        old === nothing || (_AMR_INIT_FN[] = old)
+    end
 end
 function AMR_4est_new(
     comm::MPI.Comm,
@@ -179,16 +283,22 @@ function AMR_4est_new(
     init_fn::Function,
     user_pointer::Ptr,
 ) where {T}
-    GC.@preserve comm conn user_pointer p8est_new_ext(
-        comm,
-        conn,
-        1,
-        0,
-        1,
-        sizeof(T),
-        @cfunction($init_fn, Cvoid, (Ptr{p8est_t}, p4est_topidx_t, Ptr{p8est_quadrant_t})),
-        user_pointer,
-    )
+    old = isassigned(_AMR_INIT_FN) ? _AMR_INIT_FN[] : nothing
+    _AMR_INIT_FN[] = init_fn
+    try
+        GC.@preserve comm conn user_pointer init_fn p8est_new_ext(
+            comm,
+            conn,
+            1,
+            0,
+            1,
+            sizeof(T),
+            @cfunction(_amr_init_cb_p8est, Cvoid, (Ptr{p8est_t}, p4est_topidx_t, Ptr{p8est_quadrant_t})),
+            user_pointer,
+        )
+    finally
+        old === nothing || (_AMR_INIT_FN[] = old)
+    end
 end
 
 function AMR_4est_new(
@@ -232,16 +342,22 @@ function AMR_4est_new(
     ::Type{T},
     init_fn::Function,
 ) where {T}
-    GC.@preserve comm conn user_pointer init_fn p4est_new_ext(
-        comm,
-        conn,
-        1,
-        0,
-        1,
-        sizeof(T),
-        @cfunction($init_fn, Cvoid, (Ptr{p4est_t}, p4est_topidx_t, Ptr{p4est_quadrant_t})),
-        C_NULL,
-    )
+    old = isassigned(_AMR_INIT_FN) ? _AMR_INIT_FN[] : nothing
+    _AMR_INIT_FN[] = init_fn
+    try
+        GC.@preserve comm conn init_fn p4est_new_ext(
+            comm,
+            conn,
+            1,
+            0,
+            1,
+            sizeof(T),
+            @cfunction(_amr_init_cb_p4est, Cvoid, (Ptr{p4est_t}, p4est_topidx_t, Ptr{p4est_quadrant_t})),
+            C_NULL,
+        )
+    finally
+        old === nothing || (_AMR_INIT_FN[] = old)
+    end
 end
 function AMR_4est_new(
     comm::MPI.Comm,
@@ -249,16 +365,22 @@ function AMR_4est_new(
     ::Type{T},
     init_fn::Function,
 ) where {T}
-    GC.@preserve comm conn user_pointer init_fn p8est_new_ext(
-        comm,
-        conn,
-        1,
-        0,
-        1,
-        sizeof(T),
-        @cfunction($init_fn, Cvoid, (Ptr{p8est_t}, p4est_topidx_t, Ptr{p8est_quadrant_t})),
-        C_NULL,
-    )
+    old = isassigned(_AMR_INIT_FN) ? _AMR_INIT_FN[] : nothing
+    _AMR_INIT_FN[] = init_fn
+    try
+        GC.@preserve comm conn init_fn p8est_new_ext(
+            comm,
+            conn,
+            1,
+            0,
+            1,
+            sizeof(T),
+            @cfunction(_amr_init_cb_p8est, Cvoid, (Ptr{p8est_t}, p4est_topidx_t, Ptr{p8est_quadrant_t})),
+            C_NULL,
+        )
+    finally
+        old === nothing || (_AMR_INIT_FN[] = old)
+    end
 end
 
 function AMR_face_iterate(
@@ -290,13 +412,27 @@ function AMR_partition(p4est::Ptr{p4est_t},weight_fn::T=C_NULL) where{T<:Union{P
     p4est_partition(p4est, 0, weight_fn)
 end
 function AMR_partition(weight_fn::Function,p4est::Ptr{p4est_t})
-    AMR_partition(p4est,@cfunction($weight_fn,Cint,(Ptr{p4est_t},p4est_topidx_t,Ptr{p4est_quadrant_t})))
+    old = isassigned(_AMR_WEIGHT_FN) ? _AMR_WEIGHT_FN[] : nothing
+    _AMR_WEIGHT_FN[] = weight_fn
+    try
+        GC.@preserve weight_fn AMR_partition(p4est,
+            @cfunction(_amr_weight_cb_p4est,Cint,(Ptr{p4est_t},p4est_topidx_t,Ptr{p4est_quadrant_t})))
+    finally
+        old === nothing || (_AMR_WEIGHT_FN[] = old)
+    end
 end
 function AMR_partition(p4est::Ptr{p8est_t},weight_fn::T=C_NULL) where{T<:Union{Ptr{Nothing},Base.CFunction}}
     p8est_partition(p4est, 0, weight_fn)
 end
 function AMR_partition(weight_fn::Function,p4est::Ptr{p8est_t})
-    AMR_partition(p4est,@cfunction($weight_fn,Cint,(Ptr{p8est_t},p4est_topidx_t,Ptr{p8est_quadrant_t})))
+    old = isassigned(_AMR_WEIGHT_FN) ? _AMR_WEIGHT_FN[] : nothing
+    _AMR_WEIGHT_FN[] = weight_fn
+    try
+        GC.@preserve weight_fn AMR_partition(p4est,
+            @cfunction(_amr_weight_cb_p8est,Cint,(Ptr{p8est_t},p4est_topidx_t,Ptr{p8est_quadrant_t})))
+    finally
+        old === nothing || (_AMR_WEIGHT_FN[] = old)
+    end
 end
 
 """
@@ -330,90 +466,58 @@ function unsafe_wrap_sc(::Type{T}, sc_array_pw::PointerWrapper{sc_array}) where 
 end
 
 function AMR_volume_iterate(f::Function,forest::Ptr{p4est_t};ghost=C_NULL,user_data=C_NULL,data_type = P4estPsData)
-    function iter_fn(info,data)
-        GC.@preserve info data data_type begin
-            ip = PointerWrapper(info)
-            dp = PointerWrapper(data_type, ip.quad.p.user_data[])
-            GC.@preserve ip dp f(ip, data, dp)
-        end
-        return nothing
-    end
-    GC.@preserve forest ghost user_data iter_fn p4est_iterate(
+    ctx = AMR_iterate_context(f, data_type, Ptr{Cvoid}(user_data))
+    GC.@preserve f ctx forest ghost p4est_iterate(
         forest,
         ghost,
-        user_data,
-        @cfunction($iter_fn,Cvoid, (Ptr{p4est_iter_volume_info}, Ptr{Nothing})),
+        pointer_from_objref(ctx),
+        @cfunction(_amr_volume_iter_cb_p4est,Cvoid, (Ptr{p4est_iter_volume_info}, Ptr{Nothing})),
         C_NULL,
         C_NULL,
     )
 end
 function AMR_volume_iterate(f::Function,forest::Ptr{p8est_t};ghost=C_NULL,user_data=C_NULL,data_type = P4estPsData)
-    function iter_fn(info,data)
-        GC.@preserve info data data_type begin
-            ip = PointerWrapper(info)
-            dp = PointerWrapper(data_type, ip.quad.p.user_data[])
-            GC.@preserve ip dp f(ip, data, dp)
-        end
-        return nothing
-    end
-    GC.@preserve forest ghost user_data iter_fn p8est_iterate(
+    ctx = AMR_iterate_context(f, data_type, Ptr{Cvoid}(user_data))
+    GC.@preserve f ctx forest ghost p8est_iterate(
         forest,
         ghost,
-        user_data,
-        @cfunction($iter_fn,Cvoid, (Ptr{p8est_iter_volume_info}, Ptr{Nothing})),
+        pointer_from_objref(ctx),
+        @cfunction(_amr_volume_iter_cb_p8est,Cvoid, (Ptr{p8est_iter_volume_info}, Ptr{Nothing})),
         C_NULL,
         C_NULL,
         C_NULL,
     )
 end
 function AMR_corner_iterate(f::Function,forest::Ptr{p4est_t};ghost=C_NULL,user_data=C_NULL)
-    function iter_fn(info,data)
-        GC.@preserve info data begin
-            ip = PointerWrapper(info)
-            GC.@preserve ip f(ip, data)
-        end
-        return nothing
-    end
-    GC.@preserve forest ghost user_data iter_fn p4est_iterate(
+    ctx = AMR_iterate_context(f, Nothing, Ptr{Cvoid}(user_data))
+    GC.@preserve f ctx forest ghost p4est_iterate(
         forest,
         ghost,
-        user_data,
+        pointer_from_objref(ctx),
         C_NULL,
         C_NULL,
-        @cfunction($iter_fn,Cvoid, (Ptr{p4est_iter_corner_info}, Ptr{Nothing})),
+        @cfunction(_amr_corner_iter_cb_p4est,Cvoid, (Ptr{p4est_iter_corner_info}, Ptr{Nothing})),
     )
 end
 function AMR_face_iterate(f::Function,forest::Ptr{p4est_t};ghost=C_NULL,user_data=C_NULL)
-    function iter_fn(info,data)
-        GC.@preserve info data begin
-            ip = PointerWrapper(info)
-            GC.@preserve ip f(ip, data)
-        end
-        return nothing
-    end
-    GC.@preserve forest ghost user_data iter_fn p4est_iterate(
+    ctx = AMR_iterate_context(f, Nothing, Ptr{Cvoid}(user_data))
+    GC.@preserve f ctx forest ghost p4est_iterate(
         forest,
         ghost,
-        user_data,
+        pointer_from_objref(ctx),
         C_NULL,
-        @cfunction($iter_fn,Cvoid, (Ptr{p4est_iter_face_info}, Ptr{Nothing})),
+        @cfunction(_amr_face_iter_cb_p4est,Cvoid, (Ptr{p4est_iter_face_info}, Ptr{Nothing})),
         C_NULL,
     )
 end
 function AMR_face_iterate(f::Function,forest::Ptr{p8est_t};ghost=C_NULL,user_data=C_NULL)
-    function iter_fn(info,data)
-        GC.@preserve info data begin
-            ip = PointerWrapper(info)
-            GC.@preserve ip f(ip, data)
-        end
-        return nothing
-    end
-    GC.@preserve forest ghost user_data iter_fn p8est_iterate( # volume, face, edge, corner
+    ctx = AMR_iterate_context(f, Nothing, Ptr{Cvoid}(user_data))
+    GC.@preserve f ctx forest ghost p8est_iterate( # volume, face, edge, corner
         forest,
         ghost,
-        user_data,
+        pointer_from_objref(ctx),
         C_NULL,
-        @cfunction($iter_fn,Cvoid, (Ptr{p8est_iter_face_info}, Ptr{Nothing})),
+        @cfunction(_amr_face_iter_cb_p8est,Cvoid, (Ptr{p8est_iter_face_info}, Ptr{Nothing})),
         C_NULL,
         C_NULL,
     )
