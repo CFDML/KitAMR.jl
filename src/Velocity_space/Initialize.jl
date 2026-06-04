@@ -54,3 +54,24 @@ function initialize_vs_data(prim::AbstractVector,kinfo::KInfo{2,NDF},quadrature:
     flux = zeros(vs_num, NDF)
     return VsData{DIM,NDF}(vs_num, zeros(Int, vs_num), weight, midpoint, df, sdf, flux)
 end
+
+function initialize_vs_data(prim::AbstractVector,kinfo::KInfo{3,NDF},quadrature::Gauss_Hermite{NP};kwargs...) where{NDF,NP}
+    DIM = 3
+    trees_num = kinfo.config.vs_trees_num
+    vs_num = reduce(*, trees_num)
+    index = 1;midpoint = Matrix{Float64}(undef,vs_num,DIM);weight = Vector{Float64}(undef,vs_num)
+    vcoords = quadrature.vcoords;weights = quadrature.weights
+    for i in 1:NP
+        for j in 1:NP
+            for k in 1:NP
+                midpoint[index,1] = vcoords[i];midpoint[index,2] = vcoords[j];midpoint[index,3] = vcoords[k]
+                weight[index] = weights[i]*exp(midpoint[index,1]^2)*weights[j]*exp(midpoint[index,2]^2)*weights[k]*exp(midpoint[index,3]^2)
+                index += 1
+            end
+        end
+    end
+    df = haskey(kwargs,:df) ? kwargs[:df] : discrete_maxwell(midpoint, prim, kinfo)
+    sdf = zeros(vs_num, NDF, DIM)
+    flux = zeros(vs_num, NDF)
+    return VsData{DIM,NDF}(vs_num, zeros(Int, vs_num), weight, midpoint, df, sdf, flux)
+end

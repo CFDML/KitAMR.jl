@@ -23,7 +23,7 @@ end
 
 @inline function lohner_value(left::Real, center::Real, right::Real, dsL::Real, dsR::Real, eps::Real)
     scale = dsR * abs(left) + (dsL + dsR) * abs(center) + dsL * abs(right)
-    scale < PS_LOHNER_ABS_FLOOR && return 0.0
+    scale <  PS_LOHNER_ABS_FLOOR*min(dsL,dsR) && return 0.0
     denom = dsR * abs(left - center) + dsL * abs(right - center) + eps * scale
     denom <= 0.0 && return 0.0
     abs(dsR * left - (dsL + dsR) * center + dsL * right) / denom

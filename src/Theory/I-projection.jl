@@ -121,7 +121,6 @@ function solve_I_projection(
             stall_count = 0
         end
         G_prev_norm = G_norm
-        
         Δλ = -(Symmetric(J, :U) \ G)
         # Armijo 回溯线搜索
         Φ0 = dual_objective(Psi, f, W, weight, lambda)

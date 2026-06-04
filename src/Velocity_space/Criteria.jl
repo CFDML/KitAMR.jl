@@ -104,7 +104,7 @@ function maxwellian_dρ(midpoint,du,U,prim)
     dg = prim[1]
     vth = 1.0/√prim[end]
     for i in eachindex(midpoint)
-        dg*=0.5/vth*(erf((c[i]+0.5*du[i])/vth)-erf((c[i]-0.5*du[i])/vth))
+        dg*=0.5*(erf((c[i]+0.5*du[i])/vth)-erf((c[i]-0.5*du[i])/vth))
     end
     return dg
 end
