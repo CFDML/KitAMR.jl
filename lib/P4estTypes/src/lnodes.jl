@@ -4,20 +4,26 @@
 Stores a parallel numbering of Lobatto nodes for a `Pxest{X}`.
 
 # Fields
+
 $(DocStringExtensions.FIELDS)
 
 # See also
-- [`lnodes`](@ref): a function used to construct `LNodes`
+
+  - [`lnodes`](@ref): a function used to construct `LNodes`
 """
 mutable struct LNodes{X,P}
-    """The pointer (of type `P`) can be a pointer to either a
+    """
+    The pointer (of type `P`) can be a pointer to either a
     `P4estTypes.P4est.p4est_lnodes_t` or a
     `P4estTypes.P4est.p8est_lnodes_t`.  See the help
     documentation for these types for more information about the
-    underlying p4est structures. """
+    underlying p4est structures.
+    """
     pointer::P
-    """The MPI Communicator that includes the ranks participating in the
-    lnods."""
+    """
+    The MPI Communicator that includes the ranks participating in the
+    lnods.
+    """
     comm::MPI.Comm
     function LNodes{4}(pointer::Ptr{P4est.LibP4est.p4est_lnodes}, comm::MPI.Comm)
         nodes = new{4,typeof(pointer)}(pointer, comm)

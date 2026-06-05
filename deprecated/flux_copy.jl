@@ -341,13 +341,15 @@ function update_face_data_L!(
         df_L = @view(vs_data.df[bit_L, :])
     end
     f_vs_data.midpoint =
-        Vcat(@view(midpoint_L[bit_L, :]), @view(f_vs_data.midpoint[offset+1:end, :]))
+        Vcat(@view(midpoint_L[bit_L, :]), @view(f_vs_data.midpoint[(offset+1):end, :]))
     f_vs_data.vn = @view(f_vs_data.midpoint[:, DIR])
-    f_vs_data.df = Vcat(df_L, @view(f_vs_data.df[offset+1:end, :]))
-    f_vs_data.sdf =
-        Vcat(@view(vs_data.sdf[bit_L, :, DIR]), @view(f_vs_data.sdf[offset+1:end, :, DIR]))
+    f_vs_data.df = Vcat(df_L, @view(f_vs_data.df[(offset+1):end, :]))
+    f_vs_data.sdf = Vcat(
+        @view(vs_data.sdf[bit_L, :, DIR]),
+        @view(f_vs_data.sdf[(offset+1):end, :, DIR])
+    )
     f_vs_data.weight =
-        Vcat(@view(vs_data.weight[bit_L]), @view(f_vs_data.weight[offset+1:end]))
+        Vcat(@view(vs_data.weight[bit_L]), @view(f_vs_data.weight[(offset+1):end]))
     offset = length(df_L)
     return (bit_L, offset)
 end
@@ -373,13 +375,15 @@ function update_face_data_L!(
         df_L = @view(vs_data.df[bit_L, :])
     end
     f_vs_data.midpoint =
-        Vcat(@view(midpoint_L[bit_L, :]), @view(f_vs_data.midpoint[offset+1:end, :]))
+        Vcat(@view(midpoint_L[bit_L, :]), @view(f_vs_data.midpoint[(offset+1):end, :]))
     f_vs_data.vn = @view(f_vs_data.midpoint[:, DIR])
-    f_vs_data.df = Vcat(df_L, @view(f_vs_data.df[offset+1:end, :]))
-    f_vs_data.sdf =
-        Vcat(@view(vs_data.sdf[bit_L, :, DIR]), @view(f_vs_data.sdf[offset+1:end, :, DIR]))
+    f_vs_data.df = Vcat(df_L, @view(f_vs_data.df[(offset+1):end, :]))
+    f_vs_data.sdf = Vcat(
+        @view(vs_data.sdf[bit_L, :, DIR]),
+        @view(f_vs_data.sdf[(offset+1):end, :, DIR])
+    )
     f_vs_data.weight =
-        Vcat(@view(vs_data.weight[bit_L]), @view(f_vs_data.weight[offset+1:end]))
+        Vcat(@view(vs_data.weight[bit_L]), @view(f_vs_data.weight[(offset+1):end]))
     offset = length(df_L)
     return (bit_L, offset)
 end
@@ -497,7 +501,9 @@ function calc_flux!(::HalfSizeNeighbor, face::Face, amr::KitAMR_Data{3,1})
     gas = global_data.config.gas
     ds = ps_data.ds[DIR]
     vs_data = ps_data.vs_data
-    f_vs_data = nothing; offset = 0; bit_L = nothing
+    f_vs_data = nothing;
+    offset = 0;
+    bit_L = nothing
     for i = 1:4
         nps_data = ps_data.neighbor.data[faceid][i]
         vs_data_n = nps_data.vs_data
@@ -560,9 +566,15 @@ function calc_flux!(::DoubleSizeNeighbor, face::Face, amr::KitAMR_Data{2,2})
     micro_flux = calc_micro_flux(f_vs_data, F, F⁺, aL, aR, A, Mt, offset, dsf)
     update_vs_flux!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
     for i in eachindex(face.hanging_data)
-        (isa(face.hanging_data[i], Ghost_PS_Data)||isa(face.hanging_data[i],MissingHangingQuad)) && continue
+        (
+            isa(face.hanging_data[i], Ghost_PS_Data)||isa(
+                face.hanging_data[i],
+                MissingHangingQuad,
+            )
+        ) && continue
         ps_data = face.hanging_data[i]
-        bit_L, offset = update_face_data_L!(ps_data, nps_data, f_vs_data, offset, faceid, ROT, DIR)
+        bit_L, offset =
+            update_face_data_L!(ps_data, nps_data, f_vs_data, offset, faceid, ROT, DIR)
         reconstruct_vs_L!(f_vs_data, ds, offset, ROT)
         w0 = calc_w0(f_vs_data)
         prim0 = get_prim(w0, global_data)
@@ -612,9 +624,15 @@ function calc_flux!(::DoubleSizeNeighbor, face::Face, amr::KitAMR_Data{3,1})
     micro_flux = calc_micro_flux(f_vs_data, F, F⁺, aL, aR, A, Mt, offset, dsf)
     update_vs_flux!(micro_flux, bit_L, vs_data, vs_data_n, offset, ROT)
     for i in eachindex(face.hanging_data)
-        (isa(face.hanging_data[i], Ghost_PS_Data)||isa(face.hanging_data[i],MissingHangingQuad)) && continue
+        (
+            isa(face.hanging_data[i], Ghost_PS_Data)||isa(
+                face.hanging_data[i],
+                MissingHangingQuad,
+            )
+        ) && continue
         ps_data = face.hanging_data[i]
-        bit_L, offset = update_face_data_L!(ps_data, nps_data, f_vs_data, offset, faceid, ROT, DIR)
+        bit_L, offset =
+            update_face_data_L!(ps_data, nps_data, f_vs_data, offset, faceid, ROT, DIR)
         reconstruct_vs_L!(f_vs_data, ds, offset, ROT)
         w0 = calc_w0(f_vs_data)
         prim0 = get_prim(w0, global_data)

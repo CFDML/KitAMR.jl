@@ -4,22 +4,17 @@ function discrete_maxwell_3D1F(
     w::AbstractVector,
     prim::AbstractVector,
 ) where {T}
-    M = Matrix{T}(undef, length(u),1)
+    M = Matrix{T}(undef, length(u), 1)
     @inbounds @. M =
         prim[1] *
         (prim[5] / π)^(3 / 2) *
         exp(-prim[5] * ((u - prim[2])^2 + (v - prim[3])^2 + (w - prim[4])^2))
     return M
 end
-function discrete_maxwell_3D1F(
-    u::Real,
-    v::Real,
-    w::Real,
-    prim::AbstractVector,
-)
-        prim[1] *
-            (prim[5] / π)^(3 / 2) *
-            exp(-prim[5] * ((u - prim[2])^2 + (v - prim[3])^2 + (w - prim[4])^2))
+function discrete_maxwell_3D1F(u::Real, v::Real, w::Real, prim::AbstractVector)
+    prim[1] *
+    (prim[5] / π)^(3 / 2) *
+    exp(-prim[5] * ((u - prim[2])^2 + (v - prim[3])^2 + (w - prim[4])^2))
 end
 function shakhov_part_3D1F(
     u::AbstractVector{T},
@@ -30,7 +25,7 @@ function shakhov_part_3D1F(
     qf::AbstractVector,
     Pr::Real,
 ) where {T}
-    M⁺ = Matrix{T}(undef, length(u),1)
+    M⁺ = Matrix{T}(undef, length(u), 1)
     @inbounds @. M⁺ =
         0.8 * (1 - Pr) * prim[5]^2 / prim[1] *
         ((u - prim[2]) * qf[1] + (v - prim[3]) * qf[2] + (w - prim[4]) * qf[3]) *
@@ -45,7 +40,7 @@ function heat_flux_3D1F(
     h::AbstractVector,
     prim::AbstractVector,
     weight::AbstractVector,
-) where{T}
+) where {T}
     q = Vector{T}(undef, 3)
     @inbounds q[1] =
         0.5 * (sum(
@@ -122,18 +117,24 @@ function micro_to_macro_3D1F(
     return W
 end
 
-function moment_u_3D1F(U::T,V::Real,W::Real,λ::Real,n::Integer,m::Integer,δ::Integer) where{T} # n>=1 calculate <u^n> <v^m> <w^δ> <u^n>_>0 <u^n>_<0 
+function moment_u_3D1F(
+    U::T,
+    V::Real,
+    W::Real,
+    λ::Real,
+    n::Integer,
+    m::Integer,
+    δ::Integer,
+) where {T} # n>=1 calculate <u^n> <v^m> <w^δ> <u^n>_>0 <u^n>_<0 
     Mu_L = Vector{T}(undef, n + 1)
     Mu = Vector{T}(undef, n + 1)
     Mu_R = Vector{T}(undef, n + 1)
     @inbounds begin
         Mu_L[1] = 0.5 * erfc(-√(λ) * U)
-        Mu_L[2] =
-            U * Mu_L[1] + 0.5 * exp(-λ * U^2) / (√(π * λ))
+        Mu_L[2] = U * Mu_L[1] + 0.5 * exp(-λ * U^2) / (√(π * λ))
         Mu_R[1] = 0.5 * erfc(√(λ) * U)
-        Mu_R[2] =
-            U * Mu_R[1] - 0.5 * exp(-λ * U^2) / (√(π * λ))
-        for i = 1:n-1
+        Mu_R[2] = U * Mu_R[1] - 0.5 * exp(-λ * U^2) / (√(π * λ))
+        for i = 1:(n-1)
             Mu_L[i+2] = U * Mu_L[i+1] + 0.5 * i / λ * Mu_L[i]
             Mu_R[i+2] = U * Mu_R[i+1] + 0.5 * i / λ * Mu_R[i]
         end
@@ -141,20 +142,27 @@ function moment_u_3D1F(U::T,V::Real,W::Real,λ::Real,n::Integer,m::Integer,δ::I
         Mv = Vector{T}(undef, m + 1)
         Mv[1] = one(T)
         Mv[2] = V
-        for i = 1:m-1
+        for i = 1:(m-1)
             Mv[i+2] = V * Mv[i+1] + 0.5 * i * Mv[i] / λ
         end
         Mw = Vector{T}(undef, δ + 1)
         Mw[1] = one(T)
         Mw[2] = W
-        for i = 1:δ-1
+        for i = 1:(δ-1)
             Mw[i+2] = W * Mw[i+1] + 0.5 * i * Mw[i] / λ
         end
     end
     return (Mu, Mv, Mw, Mu_L, Mu_R)
 end
 
-function moment_uv_3D1F(Mu::AbstractVector{T},Mv,Mw,α::Integer, β::Integer, δ::Integer) where{T}# calc <u^αv^βw^δψ>
+function moment_uv_3D1F(
+    Mu::AbstractVector{T},
+    Mv,
+    Mw,
+    α::Integer,
+    β::Integer,
+    δ::Integer,
+) where {T}# calc <u^αv^βw^δψ>
     Muv = Vector{T}(undef, 5)
     @inbounds begin
         Muv[1] = Mu[α+1] * Mv[β+1] * Mw[δ+1]

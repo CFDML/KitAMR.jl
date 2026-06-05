@@ -27,7 +27,12 @@ function calc_flux!(::Val{1}, ::Val{0}, face::Face, AMR_2D::KitAMR_Data_2D, face
     # end
     @. vs_data.flux[:, 2] += vn * rot * ps_data.ds[dir] * gas.Δt * B
 end
-function make_face_data(ps_data::PS_Data_2D, nps_data::AbstractPsData, rot::Float64, dir::Int)
+function make_face_data(
+    ps_data::PS_Data_2D,
+    nps_data::AbstractPsData,
+    rot::Float64,
+    dir::Int,
+)
     vs_data = ps_data.vs_data
     midpoint_L = vs_data.midpoint
     vs_data_n = nps_data.vs_data
@@ -328,7 +333,7 @@ function calc_flux!(::Val{0}, ::Val{2}, face::Face, AMR_2D::KitAMR_Data_2D, face
     #     @show ps_data.neighbor.data[faceid][2].midpoint
     # end
     fw_test = zeros(DIM + 2)
-    for i = 1:2^(DIM-1)
+    for i = 1:(2^(DIM-1))
         nps_data = ps_data.neighbor.data[faceid][i]
         vs_data_n = nps_data.vs_data
         ds = nps_data.ds[dir]

@@ -213,14 +213,17 @@ and `X=8` indicates an octant; quadrant is used both as the general
 term and the term for the 2D object).
 
 # Fields
+
 $(DocStringExtensions.FIELDS)
 """
 struct QuadrantWrapper{X,P}
-    """The pointer (of type `P`) can be a pointer to either a
-   `P4estTypes.P4est.p4est_quadrant` or a
-   `P4estTypes.P4est.p8est_quadrant`.  See the help
-   documentation for these types for more information about the
-   underlying p4est structures. """
+    """
+    The pointer (of type `P`) can be a pointer to either a
+    `P4estTypes.P4est.p4est_quadrant` or a
+    `P4estTypes.P4est.p8est_quadrant`.  See the help
+    documentation for these types for more information about the
+    underlying p4est structures.
+    """
     pointer::P
 end
 
@@ -308,16 +311,20 @@ end
 Stores the quadrants in a tree of a Pxest{X}.
 
 # Fields
+
 $(DocStringExtensions.FIELDS)
 """
 struct Tree{X,P,Q} <: AbstractArray{QuadrantWrapper,1}
-    """The pointer (of type `P`) can be a pointer to either a
+    """
+    The pointer (of type `P`) can be a pointer to either a
     `P4estTypes.P4est.p4est_tree` or a
     `P4estTypes.P4est.p8est_tree`.  See the help documentation
     for these types for more information about the underlying
-    p4est structures."""
+    p4est structures.
+    """
     pointer::P
-    """The forest (of type `Q`) the tree is associated with.  This is stored
+    """
+    The forest (of type `Q`) the tree is associated with.  This is stored
     so the forest will not be reclaimed by the garbage collector too early.
     """
     forest::Q
@@ -357,32 +364,40 @@ So, each rank will only have access to the quadrants it owns.) Second, using
 forest via callback functions.
 
 # Fields
+
 $(DocStringExtensions.FIELDS)
 
 # See also
-- [`pxest`](@ref): a function that constructs a `Pxest` from a [`Connectivity`](@ref).
-- [`iterateforest`](@ref): a function to iterate over the volumes, faces, edges, and
-  corners of the forest.
-- [`refine!`](@ref): refine the quadrants of the forest.
-- [`coarsen!`](@ref): coarsen the quadrants of the forest.
-- [`balance!`](@ref): two-to-one balance the quadrants of the forest.
-- [`partition!`](@ref): partition the quadrants of the forest.
-- [`ghostlayer`](@ref): get the ghost layer of quadrants for the forest.
-- [`lnodes`](@ref): get a global node numbering.
-- [`P4estTypes.savevtk`](@ref): save a VTK representation of the forest.
+
+  - [`pxest`](@ref): a function that constructs a `Pxest` from a [`Connectivity`](@ref).
+  - [`iterateforest`](@ref): a function to iterate over the volumes, faces, edges, and
+    corners of the forest.
+  - [`refine!`](@ref): refine the quadrants of the forest.
+  - [`coarsen!`](@ref): coarsen the quadrants of the forest.
+  - [`balance!`](@ref): two-to-one balance the quadrants of the forest.
+  - [`partition!`](@ref): partition the quadrants of the forest.
+  - [`ghostlayer`](@ref): get the ghost layer of quadrants for the forest.
+  - [`lnodes`](@ref): get a global node numbering.
+  - [`P4estTypes.savevtk`](@ref): save a VTK representation of the forest.
 """
 mutable struct Pxest{X,P,C} <: AbstractArray{Tree,1}
-    """The pointer (of type `P`) can be a pointer to either a
+    """
+    The pointer (of type `P`) can be a pointer to either a
     `P4estTypes.P4est.LibP4est.p4est` or a
     `P4estTypes.P4est.LibP4est.p8est`.  See the help documentation for these
-    types for more information about the underlying p4est structures."""
+    types for more information about the underlying p4est structures.
+    """
     pointer::P
-    """The connectivity (of type `C`) the forest is associated with.  This is
+    """
+    The connectivity (of type `C`) the forest is associated with.  This is
     stored so the connectivity will not be reclaimed by the garbage collector
-    too early."""
+    too early.
+    """
     connectivity::C
-    """The MPI Communicator that includes the ranks participating in the
-    forest."""
+    """
+    The MPI Communicator that includes the ranks participating in the
+    forest.
+    """
     comm::MPI.Comm
     function Pxest{4}(pointer::Ptr{p4est_t}, connectivity::Connectivity{4}, comm::MPI.Comm)
         forest = new{4,typeof(pointer),typeof(connectivity)}(pointer, connectivity, comm)
@@ -1051,9 +1066,11 @@ The keyword arguments (`kw...`) for the balancing are:
       + `P4estTypes.CONNECT_EDGE(Val(8))`: enforce across face and edge.
       + `P4estTypes.CONNECT_CORNER(Val(4))`: enforce across face and corner.
       + `P4estTypes.CONNECT_CORNER(Val(8))`: enforce across face, edge, and corner.
+
   - `init = nothing`: callback function with prototype
     `init(forest, treeid, quadrant)` called for each quadrant created to
     initialized the user data.
+
   - `replace = nothing`: callback function with prototype
     `replace(forest, treeid, outgoing, incoming)` called for each
     `outgoing` quadrant with their associated `incoming` quadrants. Note both

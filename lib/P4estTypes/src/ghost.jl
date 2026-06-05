@@ -6,17 +6,21 @@ for a `Pxest{X}`.  Also stores the corresponding local domain quadrants,
 mirrors, that are in other rank's ghost layers.
 
 # Fields
+
 $(DocStringExtensions.FIELDS)
 
 # See also
-- [`ghostlayer`](@ref): a function used to construct a `GhostLayer`
+
+  - [`ghostlayer`](@ref): a function used to construct a `GhostLayer`
 """
 mutable struct GhostLayer{X,P}
-    """The pointer (of type `P`) can be a pointer to either a
+    """
+    The pointer (of type `P`) can be a pointer to either a
     `P4estTypes.P4est.p4est_ghost_t` or a
     `P4estTypes.P4est.p8est_ghost_t`.  See the help
     documentation for these types for more information about the
-    underlying p4est structures. """
+    underlying p4est structures.
+    """
     pointer::P
     function GhostLayer{4}(pointer::Ptr{p4est_ghost_t})
         ghost = new{4,typeof(pointer)}(pointer)

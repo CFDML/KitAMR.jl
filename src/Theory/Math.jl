@@ -74,20 +74,14 @@ function discrete_maxwell(
     prim::AbstractVector,
     ::Global_Data{3,1},
 )
-    discrete_maxwell_3D1F(
-        midpoint[1],
-        midpoint[2],
-        midpoint[3],
-        prim,
-    )
+    discrete_maxwell_3D1F(midpoint[1], midpoint[2], midpoint[3], prim)
 end
-function discrete_maxwell(midpoint::AbstractVector,prim::AbstractVector,global_data::Global_Data{2,2})
-    discrete_maxwell_2D2F(
-        midpoint[1],
-        midpoint[2],
-        prim,
-        global_data.config.gas.K,
-    )
+function discrete_maxwell(
+    midpoint::AbstractVector,
+    prim::AbstractVector,
+    global_data::Global_Data{2,2},
+)
+    discrete_maxwell_2D2F(midpoint[1], midpoint[2], prim, global_data.config.gas.K)
 end
 
 """
@@ -118,7 +112,7 @@ function shakhov_part(
     prim::AbstractVector,
     qf::AbstractVector,
     global_data::Global_Data{2,2},
-) where{T<:Union{Tuple,AbstractVector}}
+) where {T<:Union{Tuple,AbstractVector}}
     shakhov_part_2D2F(
         midpoint[1],
         midpoint[2],
@@ -142,7 +136,7 @@ function shakhov_part(
         midpoint[:, 1],
         midpoint[:, 2],
         midpoint[:, 3],
-        F[:,1],
+        F[:, 1],
         prim,
         qf,
         global_data.config.gas.Pr,
@@ -178,23 +172,68 @@ end
 $(TYPEDSIGNATURES)
 Calculate the conserved macroscopic variables according to the microscopic distribution.
 """
-function calc_w0(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{2,2})
-    @views micro_to_macro_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],weight)
+function calc_w0(
+    midpoint::AbstractMatrix,
+    df::AbstractMatrix,
+    weight::AbstractVector,
+    ::Global_Data{2,2},
+)
+    @views micro_to_macro_2D2F(midpoint[:, 1], midpoint[:, 2], df[:, 1], df[:, 2], weight)
 end
-function calc_w0(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{3,1})
-    @views micro_to_macro_3D1F(midpoint[:,1],midpoint[:,2],midpoint[:,3],df[:,1],weight)
+function calc_w0(
+    midpoint::AbstractMatrix,
+    df::AbstractMatrix,
+    weight::AbstractVector,
+    ::Global_Data{3,1},
+)
+    @views micro_to_macro_3D1F(
+        midpoint[:, 1],
+        midpoint[:, 2],
+        midpoint[:, 3],
+        df[:, 1],
+        weight,
+    )
 end
-function calc_qf(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,prim::AbstractVector,::Global_Data{2,2})
-    @views heat_flux_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],prim,weight)
+function calc_qf(
+    midpoint::AbstractMatrix,
+    df::AbstractMatrix,
+    weight::AbstractVector,
+    prim::AbstractVector,
+    ::Global_Data{2,2},
+)
+    @views heat_flux_2D2F(midpoint[:, 1], midpoint[:, 2], df[:, 1], df[:, 2], prim, weight)
 end
-function calc_qf(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,prim::AbstractVector,::Global_Data{3,1})
-    @views heat_flux_3D1F(midpoint[:,1],midpoint[:,2],midpoint[:,3],df[:,1],prim,weight)
+function calc_qf(
+    midpoint::AbstractMatrix,
+    df::AbstractMatrix,
+    weight::AbstractVector,
+    prim::AbstractVector,
+    ::Global_Data{3,1},
+)
+    @views heat_flux_3D1F(
+        midpoint[:, 1],
+        midpoint[:, 2],
+        midpoint[:, 3],
+        df[:, 1],
+        prim,
+        weight,
+    )
 end
-function calc_pressure(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{2})
-    @views pressure_2D(midpoint[:,1],midpoint[:,2],df[:,1],weight)
+function calc_pressure(
+    midpoint::AbstractMatrix,
+    df::AbstractMatrix,
+    weight::AbstractVector,
+    ::Global_Data{2},
+)
+    @views pressure_2D(midpoint[:, 1], midpoint[:, 2], df[:, 1], weight)
 end
-function calc_pressure(midpoint::AbstractMatrix,df::AbstractMatrix,weight::AbstractVector,::Global_Data{3})
-    @views pressure_3D(midpoint[:,1],midpoint[:,2],midpoint[:,3],df[:,1],weight)
+function calc_pressure(
+    midpoint::AbstractMatrix,
+    df::AbstractMatrix,
+    weight::AbstractVector,
+    ::Global_Data{3},
+)
+    @views pressure_3D(midpoint[:, 1], midpoint[:, 2], midpoint[:, 3], df[:, 1], weight)
 end
 function calc_ρw(
     there_midpoint::AbstractMatrix,
@@ -204,12 +243,20 @@ function calc_ρw(
     there_vn::AbstractVector,
     here_weight,
     there_weight,
-    ::KitAMR_Data{2,2}
+    ::KitAMR_Data{2,2},
 )
-    @inbounds @views SF = sum(@. here_weight * here_vn * here_df[:,1])
+    @inbounds @views SF = sum(@. here_weight * here_vn * here_df[:, 1])
     @inbounds @views SG =
-        prim[4] / π *
-        sum(@. there_weight * there_vn * exp(-prim[4] * ((there_midpoint[:,1] - prim[2])^2 + (there_midpoint[:,2] - prim[3])^2)))
+        prim[4] / π * sum(
+            @. there_weight *
+               there_vn *
+               exp(
+                   -prim[4] * (
+                       (there_midpoint[:, 1] - prim[2])^2 +
+                       (there_midpoint[:, 2] - prim[3])^2
+                   ),
+               )
+        )
     return -SF / SG
 end
 function calc_ρw(
@@ -220,12 +267,21 @@ function calc_ρw(
     there_vn::AbstractVector,
     here_weight,
     there_weight,
-    ::KitAMR_Data{3,1}
+    ::KitAMR_Data{3,1},
 )
-    @inbounds @views SF = sum(@. here_weight * here_vn * here_df[:,1])
+    @inbounds @views SF = sum(@. here_weight * here_vn * here_df[:, 1])
     @inbounds @views SG =
-        (prim[5] / π)^(3/2) *
-        sum(@. there_weight * there_vn * exp(-prim[5] * ((there_midpoint[:,1] - prim[2])^2 + (there_midpoint[:,2] - prim[3])^2+(there_midpoint[:,3] - prim[4])^2)))
+        (prim[5] / π)^(3/2) * sum(
+            @. there_weight *
+               there_vn *
+               exp(
+                   -prim[5] * (
+                       (there_midpoint[:, 1] - prim[2])^2 +
+                       (there_midpoint[:, 2] - prim[3])^2 +
+                       (there_midpoint[:, 3] - prim[4])^2
+                   ),
+               )
+        )
     return -SF / SG
 end
 function calc_ρw(
@@ -286,24 +342,24 @@ function calc_fwb(vs_data::VS_Data{3,1}, F::AbstractMatrix, vn::AbstractVector)
 end
 
 function calc_w0(ps_data::AbstractPsData{2,2})
-	vs_data = ps_data.vs_data
-	@inbounds micro_to_macro_2D2F(
-				      @view(vs_data.midpoint[:,1]),
-					    @view(vs_data.midpoint[:,2]),
-					      @view(vs_data.df[:,1]),
-					      @view(vs_data.df[:,2]),
-					      vs_data.weight
-				      )
+    vs_data = ps_data.vs_data
+    @inbounds micro_to_macro_2D2F(
+        @view(vs_data.midpoint[:, 1]),
+        @view(vs_data.midpoint[:, 2]),
+        @view(vs_data.df[:, 1]),
+        @view(vs_data.df[:, 2]),
+        vs_data.weight,
+    )
 end
 function calc_w0(ps_data::AbstractPsData{3,1})
-	vs_data = ps_data.vs_data
-	@inbounds @views micro_to_macro_3D1F(
-				        vs_data.midpoint[:,1],
-                        vs_data.midpoint[:,2],
-                        vs_data.midpoint[:,3],
-                        vs_data.df[:,1],
-                        vs_data.weight
-				      )
+    vs_data = ps_data.vs_data
+    @inbounds @views micro_to_macro_3D1F(
+        vs_data.midpoint[:, 1],
+        vs_data.midpoint[:, 2],
+        vs_data.midpoint[:, 3],
+        vs_data.df[:, 1],
+        vs_data.weight,
+    )
 end
 
 function calc_a(
@@ -423,7 +479,7 @@ function calc_A(
     micro_slope(sw, prim, global_data)
 end
 
-function calc_flux_f0_2D2F(prim,Mt,Mu,Mv,Mξ,a,A)
+function calc_flux_f0_2D2F(prim, Mt, Mu, Mv, Mξ, a, A)
     Mau_0 = moment_uv_2D2F(Mu, Mv, Mξ, 1, 0, 0)
     Mau2 = moment_au_2D2F(a, Mu, Mv, Mξ, 2, 0)
     Mau_T = moment_au_2D2F(A, Mu, Mv, Mξ, 1, 0)
@@ -465,7 +521,19 @@ function calc_flux_g0_3D1F(prim, Mt, Mu, Mv, Mw, Mu_L, Mu_R, aL, aR, A, dir)
 end
 
 
-function calc_flux_f0_2D2F(u::AbstractVector{T}, v, h, b, sh, sb, weight, H⁺, B⁺, vn, Mt) where {T}
+function calc_flux_f0_2D2F(
+    u::AbstractVector{T},
+    v,
+    h,
+    b,
+    sh,
+    sb,
+    weight,
+    H⁺,
+    B⁺,
+    vn,
+    Mt,
+) where {T}
     F = Vector{T}(undef, 4)
     @inbounds begin
         F[1] =
@@ -518,11 +586,31 @@ function calc_flux_f0_3D1F(u::AbstractVector{T}, v, w, f, sf, weight, F⁺, vn, 
 end
 
 
-function calc_unified_ft(midpoint::AbstractMatrix,df::AbstractMatrix,sdf::AbstractMatrix,F::AbstractMatrix,F⁺::AbstractMatrix,ax,at,Mξ,Mt,dir,::Global_Data{2,2})
-    f = similar(df);vn = @views midpoint[:,dir]
-    u = @views midpoint[:,1];v = @views midpoint[:,2];h = @views df[:,1];b = @views df[:,2]
-    sh = @views sdf[:,1]; sb = @views sdf[:,2]
-    H0 = @views F[:,1]; B0 = @views F[:,2]; H⁺ = @views F⁺[:,1]; B⁺ = @views F⁺[:,2]
+function calc_unified_ft(
+    midpoint::AbstractMatrix,
+    df::AbstractMatrix,
+    sdf::AbstractMatrix,
+    F::AbstractMatrix,
+    F⁺::AbstractMatrix,
+    ax,
+    at,
+    Mξ,
+    Mt,
+    dir,
+    ::Global_Data{2,2},
+)
+    f = similar(df);
+    vn = @views midpoint[:, dir]
+    u = @views midpoint[:, 1];
+    v = @views midpoint[:, 2];
+    h = @views df[:, 1];
+    b = @views df[:, 2]
+    sh = @views sdf[:, 1];
+    sb = @views sdf[:, 2]
+    H0 = @views F[:, 1];
+    B0 = @views F[:, 2];
+    H⁺ = @views F⁺[:, 1];
+    B⁺ = @views F⁺[:, 2]
     @inbounds begin
         @. f[:, 1] =
             Mt[1] * (H0 + H⁺) +
@@ -533,9 +621,8 @@ function calc_unified_ft(midpoint::AbstractMatrix,df::AbstractMatrix,sdf::Abstra
                 ax[2] * u * H0 +
                 ax[3] * v * H0 +
                 0.5 * ax[4] * ((u^2 + v^2) * H0 + B0)
-            )+
-            Mt[3] *
-            (
+            ) +
+            Mt[3] * (
                 at[1] * H0 +
                 at[2] * u * H0 +
                 at[3] * v * H0 +
@@ -543,7 +630,7 @@ function calc_unified_ft(midpoint::AbstractMatrix,df::AbstractMatrix,sdf::Abstra
             ) +
             Mt[4] * h - Mt[5] * vn * sh
         @. f[:, 2] =
-            Mt[1] *  (B0 + B⁺) +
+            Mt[1] * (B0 + B⁺) +
             Mt[2] *
             vn *
             (
@@ -552,8 +639,7 @@ function calc_unified_ft(midpoint::AbstractMatrix,df::AbstractMatrix,sdf::Abstra
                 ax[3] * v * B0 +
                 0.5 * ax[4] * ((u^2 + v^2) * B0 + Mξ[3] * H0)
             ) +
-            Mt[3] *
-            (
+            Mt[3] * (
                 at[1] * B0 +
                 at[2] * u * B0 +
                 at[3] * v * B0 +
@@ -702,9 +788,31 @@ function calc_micro_flux_3D1F(
     return micro_flux .* ds
 end
 
-function micro_to_macro(df::AbstractMatrix,midpoint::AbstractMatrix,weight::AbstractVector,::AbstractVsData{2,2})
-    @inbounds @views micro_to_macro_2D2F(midpoint[:,1],midpoint[:,2],df[:,1],df[:,2],weight)
+function micro_to_macro(
+    df::AbstractMatrix,
+    midpoint::AbstractMatrix,
+    weight::AbstractVector,
+    ::AbstractVsData{2,2},
+)
+    @inbounds @views micro_to_macro_2D2F(
+        midpoint[:, 1],
+        midpoint[:, 2],
+        df[:, 1],
+        df[:, 2],
+        weight,
+    )
 end
-function micro_to_macro(df::AbstractMatrix,midpoint::AbstractMatrix,weight::AbstractVector,::AbstractVsData{3,1})
-    @inbounds @views micro_to_macro_3D1F(midpoint[:,1],midpoint[:,2],midpoint[:,3],df[:,1],weight)
+function micro_to_macro(
+    df::AbstractMatrix,
+    midpoint::AbstractMatrix,
+    weight::AbstractVector,
+    ::AbstractVsData{3,1},
+)
+    @inbounds @views micro_to_macro_3D1F(
+        midpoint[:, 1],
+        midpoint[:, 2],
+        midpoint[:, 3],
+        df[:, 1],
+        weight,
+    )
 end

@@ -8,7 +8,7 @@ type_page = [
     "Gas"=>"type_gas.md",
     "Physical space"=>"type_physical_space.md",
     "Velocity space"=>"type_velocity_space.md",
-    "Output"=>"type_output.md"
+    "Output"=>"type_output.md",
 ]
 methods_page = [
     "Initialization"=>"methods_initialize.md",
@@ -19,7 +19,7 @@ methods_page = [
     "Parallel"=>"methods_parallel.md",
     "Theory"=>"methods_theory.md",
     "Finalization"=>"methods_finalize.md",
-    "IO"=>"methods_io.md"
+    "IO"=>"methods_io.md",
 ]
 makedocs(;
     sitename = "KitAMR.jl",
@@ -30,12 +30,10 @@ makedocs(;
         "Functions and Methods"=>methods_page,
         "Tutorial"=>"tutorial.md",
         "Index"=>"index_internal.md",
-        "Limitations"=>"limitations.md"
-        ],
+        "Limitations"=>"limitations.md",
+    ],
     # format = Documenter.HTML(; collapselevel=1),
-    checkdocs = :none
+    checkdocs = :none,
 )
 
-deploydocs(;devbranch = "ge",
-    repo = "github.com/CFDML/KitAMR.jl.git",
-)
+deploydocs(; devbranch = "ge", repo = "github.com/CFDML/KitAMR.jl.git")

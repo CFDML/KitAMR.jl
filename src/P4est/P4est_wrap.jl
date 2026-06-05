@@ -44,37 +44,45 @@ function quad_to_cell(
             qp.z[] + halflength,
             mid,
         )
-        ds = 2. * (mid - quad)
+        ds = 2.0 * (mid - quad)
     end
     (ds, mid)
 end
 
-function iPointerWrapper(p::Ptr{T},i::Integer) where{T}
+function iPointerWrapper(p::Ptr{T}, i::Integer) where {T}
     return PointerWrapper(p + sizeof(T) * i)
 end
-function iPointerWrapper(pw::PointerWrapper{T},i::Integer) where{T}
+function iPointerWrapper(pw::PointerWrapper{T}, i::Integer) where {T}
     return PointerWrapper(pointer(pw)+i*sizeof(T))
 end
-function iPointerWrapper(p::Ptr{sc_array_t},::Type{T},i::Integer) where{T}
-    return PointerWrapper(T,pointer(PointerWrapper(p).array)+i*sizeof(T))
+function iPointerWrapper(p::Ptr{sc_array_t}, ::Type{T}, i::Integer) where {T}
+    return PointerWrapper(T, pointer(PointerWrapper(p).array)+i*sizeof(T))
 end
-function iPointerWrapper(p::Ptr{sc_array_t},::Type{Ptr{T}},i::Integer) where{T} # to avoid the dereference of the Pointer-type
+function iPointerWrapper(p::Ptr{sc_array_t}, ::Type{Ptr{T}}, i::Integer) where {T} # to avoid the dereference of the Pointer-type
     return PointerWrapper(Ptr{Ptr{T}}(pointer(PointerWrapper(p).array)+i*sizeof(Ptr{T})))
 end
-function iPointerWrapper(pw::PointerWrapper{sc_array_t},::Type{T},i::Integer) where{T}
-    return PointerWrapper(T,pointer(pw.array)+i*sizeof(T))
+function iPointerWrapper(pw::PointerWrapper{sc_array_t}, ::Type{T}, i::Integer) where {T}
+    return PointerWrapper(T, pointer(pw.array)+i*sizeof(T))
 end
-function iPointerWrapper(pw::PointerWrapper{sc_array_t},::Type{Ptr{T}},i::Integer) where{T}
+function iPointerWrapper(
+    pw::PointerWrapper{sc_array_t},
+    ::Type{Ptr{T}},
+    i::Integer,
+) where {T}
     return PointerWrapper(Ptr{Ptr{T}}(pointer(pw.array)+i*sizeof(Ptr{T})))
 end
-function iPointerWrapper(pw::PointerWrapper{NTuple{N,T}},::Type{T},i::Integer) where{N,T}
-    return PointerWrapper(T,pointer(pw)+i*sizeof(T))
+function iPointerWrapper(pw::PointerWrapper{NTuple{N,T}}, ::Type{T}, i::Integer) where {N,T}
+    return PointerWrapper(T, pointer(pw)+i*sizeof(T))
 end
-function iPointerWrapper(pw::PointerWrapper{NTuple{N,Ptr{T}}},::Type{Ptr{T}},i::Integer) where{N,T}
+function iPointerWrapper(
+    pw::PointerWrapper{NTuple{N,Ptr{T}}},
+    ::Type{Ptr{T}},
+    i::Integer,
+) where {N,T}
     return PointerWrapper(Ptr{Ptr{T}}(pointer(pw)+i*sizeof(Ptr{T})))
 end
 
-function local_quadid(p4est::PointerWrapper{p4est_t},treeid::Integer,quadid::Integer)
+function local_quadid(p4est::PointerWrapper{p4est_t}, treeid::Integer, quadid::Integer)
     tp = iPointerWrapper(p4est.trees, p4est_tree_t, treeid)
     return tp.quadrants_offset[] + quadid
 end
@@ -82,7 +90,10 @@ function local_quadid(ip::PointerWrapper{p4est_iter_volume_info_t})
     tp = iPointerWrapper(ip.p4est.trees, p4est_tree_t, ip.treeid[])
     return tp.quadrants_offset[] + ip.quadid[]
 end
-function local_quadid(ip::PointerWrapper{p4est_iter_corner_info_t},side::PointerWrapper{p4est_iter_corner_side_t})
+function local_quadid(
+    ip::PointerWrapper{p4est_iter_corner_info_t},
+    side::PointerWrapper{p4est_iter_corner_side_t},
+)
     tp = iPointerWrapper(ip.p4est.trees, p4est_tree_t, side.treeid[])
     return tp.quadrants_offset[] + side.quadid[]
 end
@@ -90,16 +101,19 @@ function local_quadid(ip::PointerWrapper{p8est_iter_volume_info_t})
     tp = iPointerWrapper(ip.p4est.trees, p8est_tree_t, ip.treeid[])
     return tp.quadrants_offset[] + ip.quadid[]
 end
-function local_quadid(ip::PointerWrapper{p8est_iter_corner_info_t},side::PointerWrapper{p8est_iter_corner_side_t})
+function local_quadid(
+    ip::PointerWrapper{p8est_iter_corner_info_t},
+    side::PointerWrapper{p8est_iter_corner_side_t},
+)
     tp = iPointerWrapper(ip.p4est.trees, p4est_tree_t, side.treeid[])
     return tp.quadrants_offset[] + side.quadid[]
 end
 function global_quadid(ip::PW_pxest_iter_volume_info_t)
     gfq = unsafe_wrap(
-            Vector{Int},
-            pointer(ip.p4est.global_first_quadrant),
-            MPI.Comm_size(MPI.COMM_WORLD) + 1,
-        )
+        Vector{Int},
+        pointer(ip.p4est.global_first_quadrant),
+        MPI.Comm_size(MPI.COMM_WORLD) + 1,
+    )
     return local_quadid(ip) + gfq[MPI.Comm_rank(MPI.COMM_WORLD)+1]
 end
 
@@ -305,7 +319,7 @@ function AMR_4est_volume_iterate(
         @cfunction($volume_iter_fn, Cvoid, (Ptr{p8est_iter_volume_info}, Ptr{Nothing})),
         C_NULL,
         C_NULL,
-        C_NULL
+        C_NULL,
     )
 end
 
@@ -335,7 +349,7 @@ function AMR_4est_volume_iterate(
         @cfunction($volume_iter_fn, Cvoid, (Ptr{p8est_iter_volume_info}, Ptr{Nothing})),
         C_NULL,
         C_NULL,
-        C_NULL
+        C_NULL,
     )
 end
 
@@ -381,7 +395,7 @@ function AMR_4est_face_iterate(
         C_NULL,
         face_iter_fn,
         C_NULL,
-        C_NULL
+        C_NULL,
     )
 end
 
@@ -411,7 +425,7 @@ function AMR_4est_face_iterate(
         C_NULL,
         face_iter_fn,
         C_NULL,
-        C_NULL
+        C_NULL,
     )
 end
 
@@ -440,30 +454,42 @@ function AMR_ghost_new(p4est::Ptr{p8est_t})
     GC.@preserve p4est p8est_ghost_new(p4est, P8EST_CONNECT_FULL)
 end
 
-function AMR_partition(p4est::Ptr{p4est_t},weight_fn::T=C_NULL) where{T<:Union{Ptr{Nothing},Base.CFunction}}
+function AMR_partition(
+    p4est::Ptr{p4est_t},
+    weight_fn::T = C_NULL,
+) where {T<:Union{Ptr{Nothing},Base.CFunction}}
     p4est_partition(p4est, 0, weight_fn)
 end
-function AMR_partition(weight_fn::Function,p4est::Ptr{p4est_t})
-    AMR_partition(p4est,@cfunction($weight_fn,Cint,(Ptr{p4est_t},p4est_topidx_t,Ptr{p4est_quadrant_t})))
+function AMR_partition(weight_fn::Function, p4est::Ptr{p4est_t})
+    AMR_partition(
+        p4est,
+        @cfunction($weight_fn, Cint, (Ptr{p4est_t}, p4est_topidx_t, Ptr{p4est_quadrant_t}))
+    )
 end
-function AMR_partition(p4est::Ptr{p8est_t},weight_fn::T=C_NULL) where{T<:Union{Ptr{Nothing},Base.CFunction}}
+function AMR_partition(
+    p4est::Ptr{p8est_t},
+    weight_fn::T = C_NULL,
+) where {T<:Union{Ptr{Nothing},Base.CFunction}}
     p8est_partition(p4est, 0, weight_fn)
 end
-function AMR_partition(weight_fn::Function,p4est::Ptr{p8est_t})
-    AMR_partition(p4est,@cfunction($weight_fn,Cint,(Ptr{p8est_t},p4est_topidx_t,Ptr{p8est_quadrant_t})))
+function AMR_partition(weight_fn::Function, p4est::Ptr{p8est_t})
+    AMR_partition(
+        p4est,
+        @cfunction($weight_fn, Cint, (Ptr{p8est_t}, p4est_topidx_t, Ptr{p8est_quadrant_t}))
+    )
 end
 
 """
 $(TYPEDSIGNATURES)
 """
-function AMR_mesh_new(p4est::Ptr{p4est_t},ghost::Ptr{p4est_ghost_t})
-    GC.@preserve p4est ghost p4est_mesh_new_ext(p4est,ghost,1,1,P4EST_CONNECT_FULL)
+function AMR_mesh_new(p4est::Ptr{p4est_t}, ghost::Ptr{p4est_ghost_t})
+    GC.@preserve p4est ghost p4est_mesh_new_ext(p4est, ghost, 1, 1, P4EST_CONNECT_FULL)
 end
 """
 $(TYPEDSIGNATURES)
 """
-function AMR_mesh_new(p4est::Ptr{p8est_t},ghost::Ptr{p8est_ghost_t})
-    GC.@preserve p4est ghost p8est_mesh_new_ext(p4est,ghost,1,1,P8EST_CONNECT_FULL)
+function AMR_mesh_new(p4est::Ptr{p8est_t}, ghost::Ptr{p8est_ghost_t})
+    GC.@preserve p4est ghost p8est_mesh_new_ext(p4est, ghost, 1, 1, P8EST_CONNECT_FULL)
 end
 
 
@@ -483,8 +509,14 @@ function unsafe_wrap_sc(::Type{T}, sc_array_pw::PointerWrapper{sc_array}) where 
     return unsafe_wrap(Vector{T}, Ptr{T}(pointer(array)), elem_count)
 end
 
-function AMR_volume_iterate(f::Function,forest::Ptr{p4est_t};ghost=C_NULL,user_data=C_NULL,data_type = P4est_PS_Data)
-    function iter_fn(info,data)
+function AMR_volume_iterate(
+    f::Function,
+    forest::Ptr{p4est_t};
+    ghost = C_NULL,
+    user_data = C_NULL,
+    data_type = P4est_PS_Data,
+)
+    function iter_fn(info, data)
         GC.@preserve info data data_type begin
             ip = PointerWrapper(info)
             dp = PointerWrapper(data_type, ip.quad.p.user_data[])
@@ -496,13 +528,19 @@ function AMR_volume_iterate(f::Function,forest::Ptr{p4est_t};ghost=C_NULL,user_d
         forest,
         ghost,
         user_data,
-        @cfunction($iter_fn,Cvoid, (Ptr{p4est_iter_volume_info}, Ptr{Nothing})),
+        @cfunction($iter_fn, Cvoid, (Ptr{p4est_iter_volume_info}, Ptr{Nothing})),
         C_NULL,
         C_NULL,
     )
 end
-function AMR_volume_iterate(f::Function,forest::Ptr{p8est_t};ghost=C_NULL,user_data=C_NULL,data_type = P4est_PS_Data)
-    function iter_fn(info,data)
+function AMR_volume_iterate(
+    f::Function,
+    forest::Ptr{p8est_t};
+    ghost = C_NULL,
+    user_data = C_NULL,
+    data_type = P4est_PS_Data,
+)
+    function iter_fn(info, data)
         GC.@preserve info data data_type begin
             ip = PointerWrapper(info)
             dp = PointerWrapper(data_type, ip.quad.p.user_data[])
@@ -514,14 +552,19 @@ function AMR_volume_iterate(f::Function,forest::Ptr{p8est_t};ghost=C_NULL,user_d
         forest,
         ghost,
         user_data,
-        @cfunction($iter_fn,Cvoid, (Ptr{p8est_iter_volume_info}, Ptr{Nothing})),
+        @cfunction($iter_fn, Cvoid, (Ptr{p8est_iter_volume_info}, Ptr{Nothing})),
         C_NULL,
         C_NULL,
         C_NULL,
     )
 end
-function AMR_corner_iterate(f::Function,forest::Ptr{p4est_t};ghost=C_NULL,user_data=C_NULL)
-    function iter_fn(info,data)
+function AMR_corner_iterate(
+    f::Function,
+    forest::Ptr{p4est_t};
+    ghost = C_NULL,
+    user_data = C_NULL,
+)
+    function iter_fn(info, data)
         GC.@preserve info data begin
             ip = PointerWrapper(info)
             GC.@preserve ip f(ip, data)
@@ -534,11 +577,16 @@ function AMR_corner_iterate(f::Function,forest::Ptr{p4est_t};ghost=C_NULL,user_d
         user_data,
         C_NULL,
         C_NULL,
-        @cfunction($iter_fn,Cvoid, (Ptr{p4est_iter_corner_info}, Ptr{Nothing})),
+        @cfunction($iter_fn, Cvoid, (Ptr{p4est_iter_corner_info}, Ptr{Nothing})),
     )
 end
-function AMR_face_iterate(f::Function,forest::Ptr{p4est_t};ghost=C_NULL,user_data=C_NULL)
-    function iter_fn(info,data)
+function AMR_face_iterate(
+    f::Function,
+    forest::Ptr{p4est_t};
+    ghost = C_NULL,
+    user_data = C_NULL,
+)
+    function iter_fn(info, data)
         GC.@preserve info data begin
             ip = PointerWrapper(info)
             GC.@preserve ip f(ip, data)
@@ -550,12 +598,17 @@ function AMR_face_iterate(f::Function,forest::Ptr{p4est_t};ghost=C_NULL,user_dat
         ghost,
         user_data,
         C_NULL,
-        @cfunction($iter_fn,Cvoid, (Ptr{p4est_iter_face_info}, Ptr{Nothing})),
+        @cfunction($iter_fn, Cvoid, (Ptr{p4est_iter_face_info}, Ptr{Nothing})),
         C_NULL,
     )
 end
-function AMR_face_iterate(f::Function,forest::Ptr{p8est_t};ghost=C_NULL,user_data=C_NULL)
-    function iter_fn(info,data)
+function AMR_face_iterate(
+    f::Function,
+    forest::Ptr{p8est_t};
+    ghost = C_NULL,
+    user_data = C_NULL,
+)
+    function iter_fn(info, data)
         GC.@preserve info data begin
             ip = PointerWrapper(info)
             GC.@preserve ip f(ip, data)
@@ -567,7 +620,7 @@ function AMR_face_iterate(f::Function,forest::Ptr{p8est_t};ghost=C_NULL,user_dat
         ghost,
         user_data,
         C_NULL,
-        @cfunction($iter_fn,Cvoid, (Ptr{p8est_iter_face_info}, Ptr{Nothing})),
+        @cfunction($iter_fn, Cvoid, (Ptr{p8est_iter_face_info}, Ptr{Nothing})),
         C_NULL,
         C_NULL,
     )
