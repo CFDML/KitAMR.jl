@@ -21,6 +21,30 @@ function vtk_data(vs_data::VsData{2,NDF},ka,::Type{T}) where{NDF,T<:Pixel}
     end
     return vertices,cells,point_solutions,solutions
 end
+function vtk_data(vs_data::VsData{3,NDF},ka,::Type{T}) where{NDF,T<:Voxel}
+    kinfo = ka.kinfo
+    xmin,xmax,ymin,ymax,zmin,zmax = kinfo.config.quadrature
+    Nx,Ny,Nz = kinfo.config.vs_trees_num
+    AMR_VS_MAXLEVEL = kinfo.config.solver.AMR_VS_MAXLEVEL
+    dx = (xmax - xmin) / Nx/2^AMR_VS_MAXLEVEL
+    dy = (ymax - ymin) / Ny/2^AMR_VS_MAXLEVEL
+    dz = (zmax - zmin) / Nz/2^AMR_VS_MAXLEVEL
+    D = [dx,dy,dz]
+    vertices = Matrix{Float64}(undef,3,8*length(vs_data.level))
+    midpoint = vs_data.midpoint
+    level = vs_data.level
+    dlevel = -(vs_data.level .- AMR_VS_MAXLEVEL)
+    cells = Vector{MeshCell}(undef,length(level))
+    solutions = vs_data.df;point_solutions = Matrix{Float64}(undef,8*vs_data.vs_num,NDF)
+    for i in eachindex(level)
+        for j in 1:8
+            @. vertices[:,(i-1)*8+j] = midpoint[i,:]+RMT[3][j]*2^dlevel[i]*D/2
+            @views @. point_solutions[8*(i-1)+j,:] = vs_data.df[i,:]
+        end
+        cells[i] = MeshCell(VTKCellTypes.VTK_VOXEL,(1:8).+8*(i-1))
+    end
+    return vertices,cells,point_solutions,solutions
+end
 #=
 example:
 function fieldvalues_fn(vs_data::VsData{3})
@@ -286,7 +310,28 @@ function save_result(p4est::Ptr{p8est_t},ka::KA{DIM,NDF};dir_path="") where{DIM,
     save_object(dir_path * "result_"*string(rank)*".jld2", result)
     save_boundary_result(dir_path,ka)
 end
-function save_pvtu(dir_path::String,p4est::Ptr{p4est_t},ka,celltype)
+"""
+$(SIGNATURES)
+Append the cell-type name to a file/path stem, e.g. `field` -> `field_Triangle`.
+"""
+celltype_suffix(celltype) = "_"*string(nameof(celltype))
+"""
+$(SIGNATURES)
+Normalize an `Output.vtk_celltype` field into a list of `(celltype, name_suffix)` pairs.
+A single cell type yields one pair with an empty suffix (backward compatible); a `Vector`
+of cell types yields one pair per type, each with a `_<CellTypeName>` suffix so the
+per-type files are written side by side without overwriting each other.
+"""
+celltype_outputs(celltype) = celltype isa AbstractVector ?
+    [(ct, celltype_suffix(ct)) for ct in celltype] : [(celltype, "")]
+
+function save_pvtu(dir_path::String,p4est::P_pxest_t,ka,celltypes::AbstractVector)
+    for ct in celltypes
+        save_pvtu(dir_path*celltype_suffix(ct),p4est,ka,ct)
+    end
+    return nothing
+end
+function save_pvtu(dir_path::String,p4est::Ptr{p4est_t},ka,celltype::Type)
     pp = PointerWrapper(p4est)
     gfq = Base.unsafe_wrap(
         Vector{Int},
@@ -311,7 +356,7 @@ function save_pvtu(dir_path::String,p4est::Ptr{p4est_t},ka,celltype)
         end
     end
 end
-function save_pvtu(dir_path::String,p4est::Ptr{p8est_t},ka,celltype)
+function save_pvtu(dir_path::String,p4est::Ptr{p8est_t},ka,celltype::Type)
     pp = PointerWrapper(p4est)
     gfq = Base.unsafe_wrap(
         Vector{Int},
@@ -848,4 +893,93 @@ function result2vtk(dirname::String,vtkname::String)
     else
         @error "Only support 2D now"
     end
+end
+
+
+"""
+$(SIGNATURES)
+Write the physical-space field arrays into an open `pvtk` handle for a 2D animation frame.
+"""
+function write_anim_field_data!(pvtk,solutions,point_solutions,ranks,::KA{2})
+    pvtk["rho"] = @views solutions[:,1]
+    pvtk["velocity"] = @views (solutions[:,2],solutions[:,3])
+    pvtk["T"] = @views solutions[:,4]
+    pvtk["qf"] = (solutions[:,5],solutions[:,6])
+    pvtk["mpi_rank"] = ranks
+    pvtk["rho",VTKPointData()] = @views point_solutions[:,1]
+    pvtk["velocity",VTKPointData()] = @views (point_solutions[:,2],point_solutions[:,3])
+    pvtk["T",VTKPointData()] = @views point_solutions[:,4]
+    pvtk["qf",VTKPointData()] = (point_solutions[:,5],point_solutions[:,6])
+    return nothing
+end
+"""
+$(SIGNATURES)
+Write the physical-space field arrays into an open `pvtk` handle for a 3D animation frame.
+"""
+function write_anim_field_data!(pvtk,solutions,point_solutions,ranks,::KA{3})
+    pvtk["rho"] = @views solutions[:,1]
+    pvtk["velocity"] = @views (solutions[:,2],solutions[:,3],solutions[:,4])
+    pvtk["T"] = @views solutions[:,5]
+    pvtk["qf"] = (solutions[:,6],solutions[:,7],solutions[:,8])
+    pvtk["mpi_rank"] = ranks
+    pvtk["rho",VTKPointData()] = @views point_solutions[:,1]
+    pvtk["velocity",VTKPointData()] = @views (point_solutions[:,2],point_solutions[:,3],point_solutions[:,4])
+    pvtk["T",VTKPointData()] = @views point_solutions[:,5]
+    pvtk["qf",VTKPointData()] = (point_solutions[:,6],point_solutions[:,7],point_solutions[:,8])
+    return nothing
+end
+"""
+$(SIGNATURES)
+Write one animation frame of the physical-space field for a single `celltype`. `suffix`
+is appended to the collection/frame file names so that, when several cell types are
+requested, each one gets its own `full_simulation<suffix>.pvd` / `step<step><suffix>.pvtu`.
+`first_step` is the step index at which the collection is created from scratch (`append`
+becomes `step!=first_step`).
+"""
+function save_anim_field(path,p4est,ka,celltype,step,sim_time,first_step,suffix)
+    vertices,cells,point_solutions,solutions = pvtu_data(p4est,ka,celltype)
+    ranks = ones(Int,size(solutions,1))*MPI.Comm_rank(MPI.COMM_WORLD)
+    if MPI.Comm_rank(MPI.COMM_WORLD)==0
+        paraview_collection(path*"/full_simulation"*suffix;append=step!=first_step) do pvd
+            pvtk_grid(path*"/step$step"*suffix,vertices,cells;part = MPI.Comm_rank(MPI.COMM_WORLD)+1,nparts = MPI.Comm_size(MPI.COMM_WORLD)) do pvtk
+                write_anim_field_data!(pvtk,solutions,point_solutions,ranks,ka)
+                pvd[sim_time] = pvtk
+                close(pvd)
+            end
+        end
+    else
+        pvtk_grid(path*"/step$step"*suffix,vertices,cells;part = MPI.Comm_rank(MPI.COMM_WORLD)+1,nparts = MPI.Comm_size(MPI.COMM_WORLD)) do pvtk
+            write_anim_field_data!(pvtk,solutions,point_solutions,ranks)
+        end
+    end
+    return nothing
+end
+"""
+$(SIGNATURES)
+Write one animation frame of the per-cell velocity space (driven by `vs_output_criterion`
+and `vs_vtk_celltype`). Independent of the physical-space cell type, so it is written once
+per frame.
+"""
+function save_anim_vs(path,ka,step,sim_time,first_step)
+    output = ka.kinfo.config.output
+    output.vs_output_criterion==null_udf && return nothing
+    trees = ka.kdata.field.trees.data
+    for tree in trees
+        for ps_data in tree
+            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0)&&continue
+            id,flag = output.vs_output_criterion(;ps_data,ka)
+            if flag
+                vertices,cells,point_solutions,solutions = vtk_data(ps_data.vs_data,ka,output.vs_vtk_celltype)
+                paraview_collection(path*"/id$(id)vs";append=step!=first_step) do pvd
+                    vtk_grid(path*"/id$(id)step$(step)vs",vertices,cells) do vtk
+                        vtk["df"] = @views Tuple([v for v in eachcol(solutions)])
+                        vtk["df",VTKPointData()] = @views Tuple([v for v in eachcol(point_solutions)])
+                        pvd[sim_time] = vtk
+                        close(pvd)
+                    end
+                end
+            end
+        end
+    end
+    return nothing
 end

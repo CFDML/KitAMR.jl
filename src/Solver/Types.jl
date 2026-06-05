@@ -67,6 +67,8 @@ struct Solver{DIM,NDF}
     ST_CHECK_INTERVAL::Int
     "Number of redundant steps after convergence criterion has been satisfied. Default is `100`."
     REDUNDANT_STEPS_NUM::Int
+    "Simulation termination time (dimensionless). The main loop runs until `sim_time` reaches this value, and the last time step is shrunk to land exactly on it (see [`limit_Δt!`](@ref) / [`reached_max_time`](@ref)). Default is `Inf` (no time limit; terminate by convergence)."
+    max_sim_time::Float64
 end
 function Solver(config::Dict)
     ADAPT_COEFFI_PS = haskey(config,:ADAPT_COEFFI_PS) ? config[:ADAPT_COEFFI_PS] : 0.25
@@ -75,6 +77,7 @@ function Solver(config::Dict)
     TOLERANCE = haskey(config,:TOLERANCE) ? config[:TOLERANCE] : 1e-6
     ST_CHECK_INTERVAL = haskey(config,:ST_CHECK_INTERVAL) ? config[:ST_CHECK_INTERVAL] : 100
     REDUNDANT_STEPS_NUM = haskey(config,:REDUNDANT_STEPS_NUM) ? config[:REDUNDANT_STEPS_NUM] : 100
+    max_sim_time = haskey(config,:max_sim_time) ? config[:max_sim_time] : Inf
     return Solver{config[:DIM],config[:NDF]}(config[:CFL],config[:AMR_PS_MAXLEVEL],
         haskey(config,:AMR_DYNAMIC_PS_MAXLEVEL) ? config[:AMR_DYNAMIC_PS_MAXLEVEL] : config[:AMR_PS_MAXLEVEL],
         config[:AMR_VS_MAXLEVEL],config[:flux],config[:time_marching],
@@ -85,7 +88,8 @@ function Solver(config::Dict)
         ADAPT_COEFFI_VS_LOCAL,
         TOLERANCE,
         ST_CHECK_INTERVAL,
-        REDUNDANT_STEPS_NUM
+        REDUNDANT_STEPS_NUM,
+        max_sim_time
         )
 end
 function Solver(;kwargs...)
@@ -99,6 +103,7 @@ function Solver(;kwargs...)
     TOLERANCE = haskey(kwargs,:TOLERANCE) ? kwargs[:TOLERANCE] : 1e-6
     ST_CHECK_INTERVAL = haskey(kwargs,:ST_CHECK_INTERVAL) ? kwargs[:ST_CHECK_INTERVAL] : 100
     REDUNDANT_STEPS_NUM = haskey(kwargs,:REDUNDANT_STEPS_NUM) ? kwargs[:REDUNDANT_STEPS_NUM] : 100
+    max_sim_time = haskey(kwargs,:max_sim_time) ? kwargs[:max_sim_time] : Inf
     return Solver{kwargs[:DIM],kwargs[:NDF]}(
         CFL,kwargs[:AMR_PS_MAXLEVEL],AMR_DYNAMIC_PS_MAXLEVEL,
         kwargs[:AMR_VS_MAXLEVEL],kwargs[:flux],kwargs[:time_marching],
@@ -108,7 +113,8 @@ function Solver(;kwargs...)
         ADAPT_COEFFI_VS_LOCAL,
         TOLERANCE,
         ST_CHECK_INTERVAL,
-        REDUNDANT_STEPS_NUM
+        REDUNDANT_STEPS_NUM,
+        max_sim_time
         )
 end
 function Solver(solver::Solver{DIM,NDF};kwargs...) where{DIM,NDF}
@@ -156,8 +162,8 @@ $(TYPEDFIELDS)
 
 """
 mutable struct Output
-    "VTK cell type in physical space. Available options: `Pixel` and `Triangle` for 2D; `Voxel` and `Tetra` for 3D. Default is [`Triangle`](@ref) for 2D and [`Tetra`](@ref) for 3D."
-    vtk_celltype::Type{Tp} where{Tp<:AbstractVTKCellType}
+    "VTK cell type in physical space. Available options: `Pixel` and `Triangle` for 2D; `Voxel` and `Tetra` for 3D. Default is [`Triangle`](@ref) for 2D and [`Tetra`](@ref) for 3D. A `Vector` of cell types (e.g. `[Triangle, Pixel]`) may also be given; in that case a separate output (pvtu for the flow field, and its own animation collection) is written for every cell type, with the cell-type name appended to the corresponding file name."
+    vtk_celltype::Union{Type{<:AbstractVTKCellType},Vector}
     "VTK cell type in velocity space. Available options: `Pixel` for 2D."
     vs_vtk_celltype::Type{Tv} where{Tv<:AbstractVTKCellType}
     "Time interval between animation frames."

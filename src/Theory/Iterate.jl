@@ -14,6 +14,38 @@ function iterate!(p4est::P_pxest_t,ka::KA)
     ka.kinfo.status.sim_time+=ka.kinfo.status.Δt
     return nothing
 end
+"""
+$(TYPEDSIGNATURES)
+Shrink the time step `status.Δt` (starting from the grid/CFL step `Δt_ξ`) so the simulation
+lands exactly on the next output target: the next animation frame time (integer multiples of
+`output.anim_dt`, when animation is enabled) and the termination time `solver.max_sim_time`.
+Call once per step before [`flux!`](@ref). With the default `max_sim_time=Inf` and animation
+off, this is a no-op (`Δt = Δt_ξ`). Note: only the time-accurate marching schemes
+(`CIP_Marching`, `CAIDVM_Marching`) consume `status.Δt` directly; `UGKS`/`Euler` reset it to
+`Δt_ξ` mid-step and are meant for steady runs.
+"""
+function limit_Δt!(ka::KA)
+    status = ka.kinfo.status
+    output = ka.kinfo.config.output
+    Δt = status.Δt_ξ
+    if output.anim_dt > 0.
+        Δt_anim = (output.anim_index+1)*output.anim_dt - status.sim_time
+        Δt_anim > 0. && (Δt = min(Δt, Δt_anim))
+    end
+    Δt_end = ka.kinfo.config.solver.max_sim_time - status.sim_time
+    Δt_end > 0. && (Δt = min(Δt, Δt_end))
+    status.Δt = Δt
+    return nothing
+end
+"""
+$(TYPEDSIGNATURES)
+Return `true` once `sim_time` has reached `solver.max_sim_time` (within a small relative
+tolerance). Use as the main-loop termination condition. Always `false` for the default
+`max_sim_time=Inf` (i.e. terminate only by convergence).
+"""
+function reached_max_time(ka::KA)
+    return ka.kinfo.status.sim_time >= ka.kinfo.config.solver.max_sim_time*(1-1e-12)
+end
 function iterate!(::Type{UGKS_Marching},ka::KA)
     kinfo = ka.kinfo
     gas = kinfo.config.gas

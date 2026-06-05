@@ -58,115 +58,23 @@ function check_for_save!(p4est::P_pxest_t,ka;rank=0)
     end
     return nothing
 end
-function check_for_animsave!(p4est::Ptr{p4est_t},ka;path="./animation")
-    sim_time = ka.kinfo.status.sim_time
+
+function check_for_animsave!(p4est::P_pxest_t,ka;path="./animation")
     output = ka.kinfo.config.output
+    output.anim_dt <= 0. && return nothing   # animation disabled; safe no-op
+    sim_time = ka.kinfo.status.sim_time
     if sim_time==0.
-        vertices,cells,point_solutions,solutions = pvtu_data(p4est,ka,output.vtk_celltype)
-        ranks = ones(Int,size(solutions,1))*MPI.Comm_rank(MPI.COMM_WORLD)
         step = output.anim_index
-        if MPI.Comm_rank(MPI.COMM_WORLD)==0
-            paraview_collection(path*"/full_simulation";append=step!=0) do pvd
-                pvtk_grid(path*"/step$step",vertices,cells;part = MPI.Comm_rank(MPI.COMM_WORLD)+1,nparts = MPI.Comm_size(MPI.COMM_WORLD)) do pvtk
-                    pvtk["rho"] = @views solutions[:,1]
-                    pvtk["velocity"] = @views (solutions[:,2],solutions[:,3])
-                    pvtk["T"] = @views solutions[:,4]
-                    pvtk["qf"] = (solutions[:,5],solutions[:,6])
-                    pvtk["mpi_rank"] = ranks
-                    pvtk["rho",VTKPointData()] = @views point_solutions[:,1]
-                    pvtk["velocity",VTKPointData()] = @views (point_solutions[:,2],point_solutions[:,3])
-                    pvtk["T",VTKPointData()] = @views point_solutions[:,4]
-                    pvtk["qf",VTKPointData()] = (point_solutions[:,5],point_solutions[:,6])
-                    pvd[sim_time] = pvtk
-                    close(pvd)
-                end
-            end
-        else
-            pvtk_grid(path*"/step$step",vertices,cells;part = MPI.Comm_rank(MPI.COMM_WORLD)+1,nparts = MPI.Comm_size(MPI.COMM_WORLD)) do pvtk
-                pvtk["rho"] = @views solutions[:,1]
-                pvtk["velocity"] = @views (solutions[:,2],solutions[:,3])
-                pvtk["T"] = @views solutions[:,4]
-                pvtk["qf"] = (solutions[:,5],solutions[:,6])
-                pvtk["mpi_rank"] = ranks
-                pvtk["rho",VTKPointData()] = @views point_solutions[:,1]
-                pvtk["velocity",VTKPointData()] = @views (point_solutions[:,2],point_solutions[:,3])
-                pvtk["T",VTKPointData()] = @views point_solutions[:,4]
-                pvtk["qf",VTKPointData()] = (point_solutions[:,5],point_solutions[:,6])
-            end
+        for (celltype,suffix) in celltype_outputs(output.vtk_celltype)
+            save_anim_field(path,p4est,ka,celltype,step,sim_time,0,suffix)
         end
-        if output.vs_output_criterion!=null_udf
-            trees = ka.kdata.field.trees.data
-            for tree in trees
-                for ps_data in tree
-                    (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0)&&continue
-                    id,flag = output.vs_output_criterion(;ps_data,ka)
-                    if flag
-                        vertices,cells,point_solutions,solutions = vtk_data(ps_data.vs_data,ka,output.vs_vtk_celltype)
-                        paraview_collection(path*"/id$(id)vs";append=step!=0) do pvd
-                            vtk_grid(path*"/id$(id)step$(step)vs",vertices,cells) do vtk
-                                vtk["df"] = @views Tuple([v for v in eachcol(solutions)])
-                                vtk["df",VTKPointData()] = @views Tuple([v for v in eachcol(point_solutions)])
-                                pvd[sim_time] = vtk
-                                close(pvd)
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    elseif div(sim_time,output.anim_dt)==output.anim_index+1
-        vertices,cells,point_solutions,solutions = pvtu_data(p4est,ka,output.vtk_celltype)
-        ranks = ones(Int,size(solutions,1))*MPI.Comm_rank(MPI.COMM_WORLD)
+        save_anim_vs(path,ka,step,sim_time,0)
+    elseif sim_time >= (output.anim_index+1)*output.anim_dt - 1e-10*output.anim_dt
         step = output.anim_index+1
-        if MPI.Comm_rank(MPI.COMM_WORLD)==0
-            paraview_collection(path*"/full_simulation";append=step!=1) do pvd
-                pvtk_grid(path*"/step$step",vertices,cells;part = MPI.Comm_rank(MPI.COMM_WORLD)+1,nparts = MPI.Comm_size(MPI.COMM_WORLD)) do pvtk
-                    pvtk["rho"] = @views solutions[:,1]
-                    pvtk["velocity"] = @views (solutions[:,2],solutions[:,3])
-                    pvtk["T"] = @views solutions[:,4]
-                    pvtk["qf"] = (solutions[:,5],solutions[:,6])
-                    pvtk["mpi_rank"] = ranks
-                    pvtk["rho",VTKPointData()] = @views point_solutions[:,1]
-                    pvtk["velocity",VTKPointData()] = @views (point_solutions[:,2],point_solutions[:,3])
-                    pvtk["T",VTKPointData()] = @views point_solutions[:,4]
-                    pvtk["qf",VTKPointData()] = (point_solutions[:,5],point_solutions[:,6])
-                    pvd[sim_time] = pvtk
-                    close(pvd)
-                end
-            end
-        else
-            pvtk_grid(path*"/step$step",vertices,cells;part = MPI.Comm_rank(MPI.COMM_WORLD)+1,nparts = MPI.Comm_size(MPI.COMM_WORLD)) do pvtk
-                pvtk["rho"] = @views solutions[:,1]
-                pvtk["velocity"] = @views (solutions[:,2],solutions[:,3])
-                pvtk["T"] = @views solutions[:,4]
-                pvtk["qf"] = (solutions[:,5],solutions[:,6])
-                pvtk["mpi_rank"] = ranks
-                pvtk["rho",VTKPointData()] = @views point_solutions[:,1]
-                pvtk["velocity",VTKPointData()] = @views (point_solutions[:,2],point_solutions[:,3])
-                pvtk["T",VTKPointData()] = @views point_solutions[:,4]
-                pvtk["qf",VTKPointData()] = (point_solutions[:,5],point_solutions[:,6])
-            end
+        for (celltype,suffix) in celltype_outputs(output.vtk_celltype)
+            save_anim_field(path,p4est,ka,celltype,step,sim_time,1,suffix)
         end
-        if output.vs_output_criterion!=null_udf
-            trees = ka.kdata.field.trees.data
-            for tree in trees
-                for ps_data in tree
-                    (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0)&&continue
-                    id,flag = output.vs_output_criterion(;ps_data,ka)
-                    if flag
-                        vertices,cells,point_solutions,solutions = vtk_data(ps_data.vs_data,ka,output.vs_vtk_celltype)
-                        paraview_collection(path*"/id$(id)vs";append=step!=1) do pvd
-                            vtk_grid(path*"/id$(id)step$(step)vs",vertices,cells) do vtk
-                                vtk["df"] = @views Tuple([v for v in eachcol(solutions)])
-                                vtk["df",VTKPointData()] = @views Tuple([v for v in eachcol(point_solutions)])
-                                pvd[sim_time] = vtk
-                                close(pvd)
-                            end
-                        end
-                    end
-                end
-            end
-        end
+        save_anim_vs(path,ka,step,sim_time,1)
         output.anim_index += 1
     end
 end

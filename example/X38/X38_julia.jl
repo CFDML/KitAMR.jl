@@ -18,6 +18,7 @@ solver = Solver(;
     VS_DYNAMIC_AMR = true,
     flux = CAIDVM,
     time_marching = CAIDVM_Marching,
+    max_sim_time = 20.,
 )
 gas = Gas(;
     K = 0.0,
@@ -50,18 +51,20 @@ config = Configure(solver;
 
 p4est,ka = initialize(config) # Initialization for `KitAMR_Data`.
 listen_for_save!() # Start listening for `save` input from `stdin`.
-max_sim_time = 20. # Maximum simulation time.
-nt = max_sim_time/ka.kinfo.status.Δt+1.0 |> floor |> Int # Maximum number of time marching steps.
-
-
 #=
-Main loop.
+Main loop. `max_sim_time` is set in the `Solver` above; `reached_max_time` / `limit_Δt!`
+make the run terminate (and the last step land) exactly on it.
 =#
-for i in 1:nt
+check_for_animsave!(p4est, ka)   # initial animation frame (no-op unless output.anim_dt>0)
+i = 0
+while !reached_max_time(ka)
+    global i += 1
     adaptive_mesh_refinement!(p4est,ka;ps_interval = 40, vs_interval=40, partition_interval=40) # AMR.
+    limit_Δt!(ka) # Shrink Δt to land exactly on the next animation frame / max_sim_time.
     slope!(p4est,ka) # Update `sdf` in `AbstractVsData` and `sw` in `PsData`.
     flux!(p4est, ka) # Compute and update numerical fluxes.
     iterate!(p4est, ka) # Collision process and time marching.
+    check_for_animsave!(p4est, ka) # Write a frame if this step landed on a frame time.
     check!(p4est,ka) # Check for save and output simulation status to `stdout`.
     check_for_convergence(ka)&&break # Check for convergence.
 end

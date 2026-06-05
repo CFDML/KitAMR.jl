@@ -2,7 +2,7 @@ include("Check.jl")
 include("Input.jl")
 include("Output.jl")
 
-export read_config, save_result, listen_for_save!, check_for_save!, check!
+export read_config, save_result, listen_for_save!, check_for_save!, check!, check_for_animsave!
 
 function string_to_Cstring(s::String)
     t = codeunits(s)

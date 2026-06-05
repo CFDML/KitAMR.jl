@@ -1,3 +1,106 @@
+# Minimal local reimplementation of the small subset of `P4estTypes.jl` that KitAMR
+# actually uses (only in `Mesh/Connectivity.jl`): the `Connectivity` wrapper, the
+# `(vertices, cells)` constructor, `brick`, and `unsafe_vertices`. This removes the
+# dependency on the vendored `lib/P4estTypes`. The underlying C structs/functions come
+# from the `P4est` bindings, which are already brought in via `using P4est`.
+
+"""
+$(TYPEDEF)
+Lightweight wrapper around a p4est (`X == 4`, 2D) or p8est (`X == 8`, 3D) connectivity
+C struct. `pointer` is a `Ptr{p4est_connectivity}` / `Ptr{p8est_connectivity}` suitable
+for passing to `p4est_new_ext` / `p8est_new_ext`.
+
+No finalizer is attached: the connectivity must outlive the forest built from it and is
+released when the process exits, matching the upstream `P4estTypes` behavior.
+"""
+mutable struct Connectivity{X,P}
+    pointer::P
+    Connectivity{4}(pointer::Ptr{p4est_connectivity}) = new{4,typeof(pointer)}(pointer)
+    Connectivity{8}(pointer::Ptr{p8est_connectivity}) = new{8,typeof(pointer)}(pointer)
+end
+
+# --- writable, non-owning views into the connectivity arrays -----------------------
+"""
+$(TYPEDSIGNATURES)
+Return a writable view (length `num_vertices`) of the connectivity's vertex coordinates
+as `NTuple{3,Cdouble}`. Writing through it mutates the underlying C memory.
+"""
+function unsafe_vertices(c::Connectivity)
+    cs = PointerWrapper(c.pointer)
+    v = unsafe_wrap(Matrix{Cdouble}, pointer(cs.vertices), (3, Int(cs.num_vertices[])), own = false)
+    return reinterpret(reshape, NTuple{3,Cdouble}, v)
+end
+function unsafe_trees(c::Connectivity{X}) where {X}
+    cs = PointerWrapper(c.pointer)
+    ttv = unsafe_wrap(Matrix{p4est_topidx_t}, pointer(cs.tree_to_vertex), (X, Int(cs.num_trees[])), own = false)
+    return reinterpret(reshape, NTuple{X,p4est_topidx_t}, ttv)
+end
+function unsafe_tree_to_tree(c::Connectivity{X}) where {X}
+    cs = PointerWrapper(c.pointer)
+    sides = X == 4 ? 4 : 6
+    ttt = unsafe_wrap(Matrix{p4est_topidx_t}, pointer(cs.tree_to_tree), (sides, Int(cs.num_trees[])), own = false)
+    return reinterpret(reshape, NTuple{sides,p4est_topidx_t}, ttt)
+end
+function unsafe_tree_to_face(c::Connectivity{X}) where {X}
+    cs = PointerWrapper(c.pointer)
+    sides = X == 4 ? 4 : 6
+    ttf = unsafe_wrap(Matrix{Int8}, pointer(cs.tree_to_face), (sides, Int(cs.num_trees[])), own = false)
+    return reinterpret(reshape, NTuple{sides,Int8}, ttf)
+end
+
+complete!(c::Connectivity{4}) = GC.@preserve c p4est_connectivity_complete(c.pointer)
+complete!(c::Connectivity{8}) = GC.@preserve c p8est_connectivity_complete(c.pointer)
+
+# --- build a connectivity from a vertex list and 1-based cell -> vertex tuples ------
+"""
+$(TYPEDSIGNATURES)
+Build a [`Connectivity`](@ref) from `vertices` (each an `NTuple` of coordinates) and
+`cells` (each a 1-based `NTuple{X}` of vertex indices). `X == 4` for 2D quads, `X == 8`
+for 3D hexes. Self-connecting faces are filled in and `complete!` resolves the topology.
+"""
+function Connectivity{X}(vertices::AbstractVector, cells::AbstractVector) where {X}
+    if X == 4
+        conn = GC.@preserve vertices cells Connectivity{X}(
+            p4est_connectivity_new(length(vertices), length(cells), 0, 0))
+    elseif X == 8
+        conn = GC.@preserve vertices cells Connectivity{X}(
+            p8est_connectivity_new(length(vertices), length(cells), 0, 0, 0, 0))
+    else
+        throw(error("Unsupported cells."))
+    end
+    trees = unsafe_trees(conn)
+    cvertices = unsafe_vertices(conn)
+    tree_to_tree = unsafe_tree_to_tree(conn)
+    tree_to_face = unsafe_tree_to_face(conn)
+    NUM_FACES = (X == 4) ? 4 : 6
+    for i in eachindex(cells, trees, tree_to_tree, tree_to_face)
+        trees[i] = cells[i] .- 1
+        tree_to_tree[i] = ntuple(_ -> (i - 1), NUM_FACES)
+        tree_to_face[i] = ntuple(j -> (j - 1), NUM_FACES)
+    end
+    for i in eachindex(cvertices, vertices)
+        cvertices[i] = ntuple(j -> (j ≤ length(vertices[i]) ? Float64(vertices[i][j]) : 0.0), Val(3))
+    end
+    complete!(conn)
+    return conn
+end
+
+# --- rectangular brick connectivities ----------------------------------------------
+"""
+$(TYPEDSIGNATURES)
+Rectangular `n[1]`-by-`n[2]` quadtree (2D) connectivity, periodic in x/y where `p` is true.
+"""
+brick(n::Tuple{Integer,Integer}, p::Tuple{Bool,Bool} = (false, false)) =
+    Connectivity{4}(p4est_connectivity_new_brick(n..., p...))
+"""
+$(TYPEDSIGNATURES)
+Rectangular `n[1]`-by-`n[2]`-by-`n[3]` octree (3D) connectivity, periodic in x/y/z where `p` is true.
+"""
+brick(n::Tuple{Integer,Integer,Integer}, p::Tuple{Bool,Bool,Bool} = (false, false, false)) =
+    Connectivity{8}(p8est_connectivity_new_brick(n..., p...))
+
+
+
 function Cartesian_connectivity(Nx, Ny, xmin, xmax, ymin, ymax)
     vertices_C = Array{NTuple{2,Float64}}(undef, Nx + 1, Ny + 1)
     dx = (xmax - xmin) / Nx
@@ -62,7 +165,6 @@ function set_connectivity(kinfo::KInfo{DIM}) where{DIM}
     return connectivity_ps
 end
 
-import ..P4estTypes.unsafe_vertices
 function set_periodic_connectivity(kinfo::KInfo{DIM}, periodic_dirs) where{DIM}
     geometry = kinfo.config.geometry
     bounds = if DIM == 2
@@ -83,7 +185,7 @@ function set_periodic_connectivity(kinfo::KInfo{DIM}, periodic_dirs) where{DIM}
         end, 3)
     end
     
-    connectivity_ps = P4estTypes.brick(
+    connectivity_ps = brick(
         Tuple(kinfo.config.trees_num),
         periodic_dirs
     )

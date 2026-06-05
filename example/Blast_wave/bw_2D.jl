@@ -39,6 +39,7 @@ solver = Solver(;
     VS_DYNAMIC_AMR = true,
     flux = CAIDVM,
     time_marching = CIP_Marching,
+    max_sim_time = 0.25,
 )
 
 gas = Gas(;
@@ -82,16 +83,19 @@ end
 KitAMR.execute_check!(p4est, ka)
 listen_for_save!()
 
-max_sim_time = 0.25
-nt = max_sim_time / ka.kinfo.status.Δt + 1.0 |> floor |> Int
-for i in 1:nt
+check_for_animsave!(p4est, ka)   # initial animation frame (no-op unless output.anim_dt>0)
+i = 0
+while !reached_max_time(ka)
+    global i += 1
     if MPI.Comm_rank(MPI.COMM_WORLD) == 0
         @show i
     end
     adaptive_mesh_refinement!(p4est, ka; ps_interval = 20, vs_interval = 40, partition_interval = 40, vs_balance = false)
+    limit_Δt!(ka)   # shrink Δt to land exactly on the next animation frame / max_sim_time
     slope!(p4est, ka)
     flux!(p4est, ka)
     iterate!(p4est, ka)
+    check_for_animsave!(p4est, ka)   # write a frame if this step landed on a frame time
     check!(p4est, ka)
     check_for_convergence(ka) && break
 end

@@ -17,13 +17,10 @@ using Statistics
 using FileIO,NearestNeighbors,AbstractTrees
 using GeometryBasics:Mesh
 using StructArrays
+using P4est
 
-
-include("../lib/P4est/src/P4est.jl")
-# @reexport using .P4est
-using .P4est
-include("../lib/P4estTypes/src/P4estTypes.jl")
-using .P4estTypes
+# include("../lib/P4est/src/P4est.jl")
+# using .P4est
 include("../lib/KitCore/KitCore.jl")
 using .KitCore
 include("Abstract/Types.jl")

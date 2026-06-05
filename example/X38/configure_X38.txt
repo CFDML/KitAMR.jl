@@ -15,6 +15,7 @@ IB = [Triangles(Maxwellian,"./example/X38/X38_normalized.stl",true,1.5,[1.,0.,0.
 flux = CAIDVM
 time_marching = CAIDVM_Marching
 CFL = 0.3
+max_sim_time = 20.
 K = 0.0
 Kn = 0.275
 ω = 0.81
