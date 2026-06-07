@@ -29,6 +29,7 @@ makedocs(;
         "Types"=>type_page,
         "Functions and Methods"=>methods_page,
         "Tutorial"=>"tutorial.md",
+        "Cluster deployment"=>"cluster_deployment.md",
         "Index"=>"index_internal.md",
         "Limitations"=>"limitations.md"
         ],

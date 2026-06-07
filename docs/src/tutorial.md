@@ -8,29 +8,7 @@ julia> ]
 (//your_julia_version//) pkg> activate .
 (//your_path//) pkg> add KitAMR
 ```
-For cluster environment, preliminary procedure is required to deploy a local `p4est`, which enable KitAMR.jl to use the optimized `MPI` backend on cluster.
-One can deploy KitAMR.jl on clusters following this
-
-1. Deploy a local [p4est](https://github.com/Blumenkranz/p4est).
-2. Run the Julia script
-```julia
-using Preferences, UUIDs, MPIPreferences
-const P4EST = UUID("7d669430-f675-4ae7-b43e-fab78ec5a902") 
-set_preferences!(KITAMR, "libp4est"=>"absolute/path/to/p4est/libp4est.so",
-                         "libsc"   =>"absolute/path/to/p4est/libsc.so"; force=true)
-MPIPreferences.use_system_binary()
-```
-Or switch to default version by
-```julia
-using Preferences, UUIDs, MPIPreferences
-const P4EST = UUID("7d669430-f675-4ae7-b43e-fab78ec5a902") 
-delete_preferences!(P4EST, "libp4est", "libsc"; force = true)
-MPIPreferences.use_jll_binary()
-```
-3. Restart Julia and run
-```sh
-julia --project -e 'using Pkg; Pkg.build("MPI")'
-```
+For cluster environment, preliminary procedure is required to deploy a local `p4est`, which enable KitAMR.jl to use the optimized `MPI` backend on cluster. The instruction is placed in [Cluster deployment (custom MPI & p4est)](@ref).
 
 ## Utilization
 
