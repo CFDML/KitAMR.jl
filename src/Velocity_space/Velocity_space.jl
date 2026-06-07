@@ -2,6 +2,7 @@ include("AMR.jl")
 include("Balance.jl")
 include("Neighbor.jl")
 include("Criteria.jl")
+include("Rebuild.jl")
 include("Cut_cell.jl")
 include("Initialize.jl")
 export VsData, GhostVsData, FaceVsData, CuttedVelocityCells

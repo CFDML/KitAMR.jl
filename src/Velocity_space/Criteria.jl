@@ -108,8 +108,93 @@ function maxwellian_dρ(midpoint,du,U,prim)
     end
     return dg
 end
-function maxwellian_refine_flag(midpoint,du,U,prim,kinfo::KInfo{DIM}) where{DIM}
-    return maxwellian_dρ(midpoint,du,U,prim)> 1e-3*prim[1]
+# ------------------------------------------------------------------------------------------
+# Analytic initial-grid refinement criterion.
+#
+# At initialization the distribution is exactly Maxwellian, so the cell curvature and the
+# relative mass/energy contribution are evaluated from the *analytic* Maxwellian (exact
+# erf-based cell integrals + analytic neighbor values) rather than from discrete samples.
+# This is robust to a coarse starting grid: a cell that overlaps an important region (peak or
+# rapidly-varying tail) is detected and refined even when no velocity node yet lies there,
+# and recursive refinement then homes in.
+# ------------------------------------------------------------------------------------------
+
+"Relative mass/energy floor for the analytic initial-grid criterion."
+const MAXWELLIAN_INIT_FLOOR = 1e-3
+
+# 1-D integrals over [c-du/2, c+du/2] of exp(-λs²) and s²exp(-λs²) (analytic, erf-based).
+@inline function _maxwellian_1d(c::Real, du::Real, λ::Real)
+    sqλ = sqrt(λ); a = c - 0.5 * du; b = c + 0.5 * du
+    I0 = 0.5 * sqrt(π / λ) * (erf(sqλ * b) - erf(sqλ * a))
+    I2 = (a * exp(-λ * a^2) - b * exp(-λ * b^2)) / (2λ) + I0 / (2λ)
+    return I0, I2
+end
+
+"""
+$(TYPEDSIGNATURES)
+Analytic under-resolution indicator of the Maxwellian over a cell of size `du`: the *relative*
+exact-minus-midpoint quadrature error of the cell mass, `|∫M_h − M_h(mid)·V| / ∫M_h`, where
+`dρ = ∫M_h` is the exact cell integral.  Because it compares the *exact* integral (which sees
+the peak wherever it lies inside the cell) against the single midpoint sample, it cannot miss
+sub-cell structure the way a `±du` finite difference can: it is O(1) once the cell is coarser
+than the thermal width — regardless of how the cell straddles the peak — and is normalized by
+the cell's own mass so a coarse cell carrying significant mass is flagged rather than diluted
+by the (large) peak-times-volume.  The denominator carries a deep-tail floor so cells with
+negligible mass (where both terms vanish) read ≈0 instead of `0/0`.
+"""
+function maxwellian_quad_error(dρ, midpoint, du, U, prim, ::Val{DIM}) where {DIM}
+    λ = prim[end]; ρ = prim[1]
+    pref = ρ * (λ / π)^(DIM / 2)
+    V = 1.0; sumc2 = 0.0
+    @inbounds for d in 1:DIM
+        V *= du[d]
+        sumc2 += (midpoint[d] - U[d])^2
+    end
+    Mmid = pref * exp(-λ * sumc2)
+    return abs(dρ - Mmid * V) / max(dρ, VS_LOHNER_EPS_ABS * pref * V)
+end
+
+"""
+$(TYPEDSIGNATURES)
+Analytic initial-grid refine flag for velocity cell with center `midpoint`, size `du`.  Mirrors
+the dynamic criterion using exact Maxwellian quantities: refine if the relative mass *or*
+energy contribution exceeds [`MAXWELLIAN_INIT_FLOOR`](@ref), or (in `:lohner` mode) the analytic
+Maxwellian curvature exceeds `ADAPT_COEFFI_VS_LOHNER`.  `I0buf`/`I2buf` are reused length-`DIM`
+scratch vectors.
+"""
+function maxwellian_refine_flag(midpoint, du, U, prim, kinfo::KInfo{DIM,NDF}, I0buf, I2buf) where {DIM,NDF}
+    λ = prim[end]; ρ = prim[1]
+    @inbounds for d in 1:DIM
+        I0buf[d], I2buf[d] = _maxwellian_1d(midpoint[d] - U[d], du[d], λ)
+    end
+    pref = ρ * (λ / π)^(DIM / 2)
+    prodI0 = 1.0
+    @inbounds for d in 1:DIM
+        prodI0 *= I0buf[d]
+    end
+    dρ = pref * prodI0                            # exact cell mass
+    dc2 = 0.0                                      # exact ∫ c² M_h over the cell
+    @inbounds for d in 1:DIM
+        p = 1.0
+        for e in 1:DIM
+            e != d && (p *= I0buf[e])
+        end
+        dc2 += I2buf[d] * p
+    end
+    dc2 *= pref
+    if NDF == 2
+        K = kinfo.config.gas.K
+        dE = 0.5 * (dc2 + (K / (2λ)) * dρ)
+        Eint = ρ * (DIM + K) / (4λ)
+    else
+        dE = 0.5 * dc2
+        Eint = ρ * DIM / (4λ)
+    end
+    max(dρ / ρ, dE / Eint) > MAXWELLIAN_INIT_FLOOR && return true
+    if kinfo.config.solver.ADAPT_VS_MODE === :lohner
+        return maxwellian_quad_error(dρ, midpoint, du, U, prim, Val(DIM)) > kinfo.config.solver.ADAPT_COEFFI_VS_LOHNER
+    end
+    return false
 end
 
 # ------------------------------------------------------------------------------------------
@@ -195,18 +280,4 @@ function vs_lohner_indicator(vs::AbstractVsData{DIM,NDF}, idx::VsNeighborIndex{D
         end
     end
     return η
-end
-
-# Carry the precomputed per-cell Löhner hint array alongside `df` through refine/coarsen so
-# that `lnflag[index]` stays aligned with the mutating velocity grid (mirrors `cdf`).
-function lohner_flag_refine_replace!(DIM::Integer, lnflag::AbstractVector{Bool}, index::Int)
-    deleteat!(lnflag, index)
-    for _ in 1:2^DIM
-        insert!(lnflag, index, false)
-    end
-end
-function lohner_flag_coarsen_replace!(DIM::Integer, lnflag::AbstractVector{Bool}, index::Int)
-    for _ in 1:2^DIM-1
-        deleteat!(lnflag, index)
-    end
 end

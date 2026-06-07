@@ -78,6 +78,27 @@ end
 
 """
 $(TYPEDSIGNATURES)
+Fill the reused scratch vectors `cdf_i` (length `NDF`) and `mid_i` (length `DIM`) with the
+criterion distribution `df + max_d|sdf*ds|` and the midpoint of velocity cell `c`.  Lets the
+refine/coarsen decision evaluate the contribution criteria per cell without allocating a full
+`criterion_df` matrix.  `ds` is the *physical* cell size `ps_data.ds`.
+"""
+@inline function _criterion_cell!(cdf_i, mid_i, vs_data::AbstractVsData{DIM,NDF}, ds, c::Int) where {DIM,NDF}
+    df = vs_data.df; sdf = vs_data.sdf
+    @inbounds for d in 1:DIM
+        mid_i[d] = vs_data.midpoint[c, d]
+    end
+    @inbounds for k in 1:NDF
+        m = 0.0
+        for d in 1:DIM
+            a = abs(sdf[c, k, d] * ds[d]); a > m && (m = a)
+        end
+        cdf_i[k] = df[c, k] + m
+    end
+end
+
+"""
+$(TYPEDSIGNATURES)
 """
 function vs_refine!(va_data::Velocity_Adaptive_Data, ka::KA{DIM,NDF}) where{DIM,NDF}
     trees = ka.kdata.field.trees;kinfo = ka.kinfo
@@ -89,74 +110,36 @@ function vs_refine!(va_data::Velocity_Adaptive_Data, ka::KA{DIM,NDF}) where{DIM,
     lohner = kinfo.config.solver.ADAPT_VS_MODE === :lohner
     vmin = ntuple(d -> kinfo.config.quadrature[2*d-1], DIM)
     ds0 = ntuple(d -> ds[d], DIM)
+    vstn = kinfo.config.vs_trees_num
     maxlevel = kinfo.config.solver.AMR_VS_MAXLEVEL
     τL = kinfo.config.solver.ADAPT_COEFFI_VS_LOHNER
     vsidx = lohner ? VsNeighborIndex{DIM}() : nothing
-    lnflag = Bool[]
+    refine_flags = Bool[]
+    cdf_i = Vector{Float64}(undef, NDF)
+    mid_i = Vector{Float64}(undef, DIM)
     for i in eachindex(trees.data)
         for j in eachindex(trees.data[i])
             id += 1
             ps_data = trees.data[i][j]
             isa(ps_data,InsideSolidData) && continue
-            cdf = criterion_df(ps_data)
             vs_data = ps_data.vs_data
-            U = ps_data.prim[2:1+DIM]
-            lnmidpoint = reshape(vs_data.midpoint, :)
-            lndf = reshape(vs_data.df, :)
-            lncdf = reshape(cdf,:)
-            lnsdf = reshape(vs_data.sdf, :)
-            lnflux = reshape(vs_data.flux, :)
+            U = @view(ps_data.prim[2:1+DIM])
+            n = vs_data.vs_num
+            s1 = 0.0; s2 = 0.0
             if lohner
-                build_vs_index!(vsidx, vs_data, vmin, ds0, maxlevel)
+                build_vs_index!(vsidx, vs_data, vmin, ds0, vstn, maxlevel)
                 s1, s2 = vs_lohner_scales(vs_data)
-                resize!(lnflag, vs_data.vs_num)
-                @inbounds for ii in 1:vs_data.vs_num
-                    lnflag[ii] = vs_lohner_indicator(vs_data, vsidx, ii, s1, s2) > τL
-                end
             end
-            index = 1
-            midpoint_index = Vector{Int}(undef, DIM)
-            df_index = Vector{Int}(undef, NDF)
-            while index < vs_data.vs_num + 1
-                @inbounds for i = 1:DIM
-                    midpoint_index[i] = (i - 1) * (vs_data.vs_num) + index
-                end
-                @inbounds for i = 1:NDF
-                    df_index[i] = (i - 1) * (vs_data.vs_num) + index
-                end
-                midpoint = @view(lnmidpoint[midpoint_index])
-                df = @view(lndf[df_index]);cdf = @view(lncdf[df_index])
-                do_refine = lohner ?
-                    (lnflag[index] || local_contribution_refine_flag(ps_data.w, U, midpoint, cdf, vs_data.weight[index], kinfo)) :
-                    contribution_refine_flag(ps_data.w, U, midpoint, cdf, vs_data.weight[index], va_data.vr, kinfo)
-                if vs_data.level[index] < kinfo.config.solver.AMR_VS_MAXLEVEL && do_refine
-                    midpoint_new = midpoint_refine(DIM,midpoint, vs_data.level[index], ds)
-                    df_new = df_refine(DIM,midpoint, midpoint_new, df)
-                    cdf_new = df_refine(DIM,midpoint,midpoint_new,df)
-                    vs_data.vs_num += 2^DIM - 1
-                    level_refine_replace!(DIM,vs_data.level, index)
-                    weight_refine_replace!(DIM,vs_data.weight, index)
-                    midpoint_refine_replace!(
-                        DIM,
-                        lnmidpoint,
-                        midpoint_new,
-                        vs_data.vs_num,
-                        index,
-                    )
-                    df_refine_replace!(DIM,NDF,lndf, df_new, vs_data.vs_num, index)
-                    df_refine_replace!(DIM,NDF,lncdf,cdf_new,vs_data.vs_num,index)
-                    sdf_refine_replace!(DIM,NDF,lnsdf)
-                    flux_refine_replace!(DIM,NDF,lnflux)
-                    lohner && lohner_flag_refine_replace!(DIM, lnflag, index)
-                    index += 2^DIM - 1
-                    !va_flags[id]&&(va_flags[id] = true)
-                end
-                index += 1
+            resize!(refine_flags, n)
+            @inbounds for c in 1:n
+                _criterion_cell!(cdf_i, mid_i, vs_data, ps_data.ds, c)
+                base = lohner ?
+                    (vs_lohner_indicator(vs_data, vsidx, c, s1, s2) > τL ||
+                     local_contribution_refine_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo)) :
+                    contribution_refine_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], va_data.vr, kinfo)
+                refine_flags[c] = vs_data.level[c] < maxlevel && base
             end
-            vs_data.midpoint = reshape(lnmidpoint, vs_data.vs_num, DIM)
-            vs_data.df = reshape(lndf, vs_data.vs_num, NDF)
-            vs_data.sdf = reshape(lnsdf, vs_data.vs_num, NDF, DIM)
-            vs_data.flux = reshape(lnflux, vs_data.vs_num, NDF)
+            refine_grid_stream!(vs_data, refine_flags, ds) && (va_flags[id] = true)
         end
     end
     return nothing
@@ -237,101 +220,39 @@ function vs_coarsen!(va_data::Velocity_Adaptive_Data,ka::KA{DIM,NDF})where{DIM,N
     kinfo.config.vs_trees_num[i] for i in 1:DIM]
     va_flags = va_data.va_flags
     id = 0
-    flag = zeros(kinfo.config.solver.AMR_VS_MAXLEVEL)
     lohner = kinfo.config.solver.ADAPT_VS_MODE === :lohner
     vmin = ntuple(d -> kinfo.config.quadrature[2*d-1], DIM)
     ds0 = ntuple(d -> ds[d], DIM)
+    vstn = kinfo.config.vs_trees_num
     maxlevel = kinfo.config.solver.AMR_VS_MAXLEVEL
     τc = VS_LOHNER_COARSEN_RATIO * kinfo.config.solver.ADAPT_COEFFI_VS_LOHNER
     vsidx = lohner ? VsNeighborIndex{DIM}() : nothing
-    lnflag = Bool[]
+    coarsen_ok = Bool[]
+    cdf_i = Vector{Float64}(undef, NDF)
+    mid_i = Vector{Float64}(undef, DIM)
     for i in eachindex(trees.data)
         for j in eachindex(trees.data[i])
             id += 1
             ps_data = trees.data[i][j]
             isa(ps_data,InsideSolidData) && continue
-            cdf = criterion_df(ps_data)
             vs_data = ps_data.vs_data
-            U = ps_data.prim[2:1+DIM]
-            lnmidpoint = reshape(vs_data.midpoint, :)
-            lndf = reshape(vs_data.df, :)
-            lncdf = reshape(cdf,:)
-            lnsdf = reshape(vs_data.sdf, :)
-            lnflux = reshape(vs_data.flux, :)
+            U = @view(ps_data.prim[2:1+DIM])
+            n = vs_data.vs_num
+            s1 = 0.0; s2 = 0.0
             if lohner
-                build_vs_index!(vsidx, vs_data, vmin, ds0, maxlevel)
+                build_vs_index!(vsidx, vs_data, vmin, ds0, vstn, maxlevel)
                 s1, s2 = vs_lohner_scales(vs_data)
-                resize!(lnflag, vs_data.vs_num)
-                @inbounds for ii in 1:vs_data.vs_num
-                    lnflag[ii] = vs_lohner_indicator(vs_data, vsidx, ii, s1, s2) < τc
-                end
             end
-            index = 1;flag.=0.
-            midpoint_index = Matrix{Int}(undef, 2^DIM, DIM)
-            df_index = Matrix{Int}(undef, 2^DIM, NDF)
-            while index < vs_data.vs_num + 1
-                first_level = vs_data.level[index]
-                if first_level > 0
-                    if flag[first_level]%1==0. &&
-                    all(x -> x == first_level, @view(vs_data.level[index+1:index+2^DIM-1]))
-                        for i in axes(midpoint_index,2)
-                            midpoint_index[:, i] .=
-                                (i-1)*(vs_data.vs_num)+index:(i-1)*(vs_data.vs_num)+index+2^DIM-1
-                        end
-                        for i in axes(df_index,2)
-                            df_index[:, i] .=
-                                (i-1)*(vs_data.vs_num)+index:(i-1)*(vs_data.vs_num)+index+2^DIM-1
-                        end
-                        midpoint = @view(lnmidpoint[midpoint_index])
-                        df = @view(lndf[df_index]);cdf = @view(lncdf[df_index])
-                        do_coarsen = lohner ?
-                            (all(@view(lnflag[index:index+2^DIM-1])) && local_contribution_coarsen_flag(
-                                ps_data.w, U, midpoint, cdf,
-                                @view(vs_data.weight[index:index+2^DIM-1]), kinfo)) :
-                            contribution_coarsen_flag(
-                                ps_data.w, U, midpoint, cdf,
-                                @view(vs_data.weight[index:index+2^DIM-1]), va_data.vr, kinfo)
-                        if do_coarsen
-                            midpoint_new =
-                                midpoint_coarsen(DIM,@view(midpoint[1, :]), first_level, ds);
-                            df_new = df_coarsen(DIM,NDF,df)
-                            cdf_new = df_coarsen(DIM,NDF,cdf)
-                            vs_data.vs_num -= 2^DIM - 1
-                            level_coarsen_replace!(DIM,vs_data.level, index)
-                            weight_coarsen_replace!(DIM,vs_data.weight, index)
-                            midpoint_coarsen_replace!(
-                                DIM,
-                                lnmidpoint,
-                                midpoint_new,
-                                vs_data.vs_num,
-                                index,
-                            )
-                            df_coarsen_replace!(DIM,NDF,lndf, df_new, vs_data.vs_num, index)
-                            df_coarsen_replace!(DIM,NDF,lncdf,cdf_new,vs_data.vs_num,index)
-                            sdf_coarsen_replace!(DIM,NDF,lnsdf)
-                            flux_coarsen_replace!(DIM,NDF,lnflux)
-                            lohner && lohner_flag_coarsen_replace!(DIM, lnflag, index)
-                            !va_flags[id]&&(va_flags[id] = true)
-                        else
-                            index += 2^DIM - 1
-                        end
-                        if first_level > 1
-                            for i = 1:first_level-1
-                                flag[i] += 1 / 2^(DIM * (first_level - i))
-                            end
-                        end
-                    else
-                        for i = 1:first_level
-                            flag[i] += 1 / 2^(DIM * (first_level - i+1))
-                        end
-                    end
-                end
-                index += 1
+            resize!(coarsen_ok, n)
+            @inbounds for c in 1:n
+                _criterion_cell!(cdf_i, mid_i, vs_data, ps_data.ds, c)
+                coarsen_ok[c] = lohner ?
+                    (vs_lohner_indicator(vs_data, vsidx, c, s1, s2) < τc &&
+                     local_contribution_coarsen_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo)) :
+                    (local_contribution_coarsen_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo) &&
+                     global_contribution_coarsen_flag(U, mid_i, cdf_i, vs_data.weight[c], va_data.vr, kinfo))
             end
-            vs_data.sdf = reshape(lnsdf, vs_data.vs_num, NDF, DIM)
-            vs_data.flux = reshape(lnflux, vs_data.vs_num, NDF)
-            vs_data.midpoint = reshape(lnmidpoint, vs_data.vs_num, DIM)
-            vs_data.df = reshape(lndf, vs_data.vs_num, NDF)
+            coarsen_grid_stream!(vs_data, coarsen_ok, ds, maxlevel) && (va_flags[id] = true)
         end
     end
     return nothing
@@ -482,48 +403,20 @@ end
 function initial_vs_adaptive_mesh_refinement!(prim,vs_data,kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
     ds = [(kinfo.config.quadrature[2*i] - kinfo.config.quadrature[2*i-1]) /
         kinfo.config.vs_trees_num[i] for i in 1:DIM]
-    ddus = [ds./2^i for i in 0:kinfo.config.solver.AMR_VS_MAXLEVEL]
-    U = prim[2:1+DIM]
-    lnmidpoint = reshape(vs_data.midpoint, :)
-    lndf = reshape(vs_data.df, :)
-    lnsdf = reshape(vs_data.sdf, :)
-    lnflux = reshape(vs_data.flux, :)
-    index = 1
-    midpoint_index = Vector{Int}(undef, DIM)
-    df_index = Vector{Int}(undef, NDF)
-    while index < vs_data.vs_num + 1
-        @inbounds for i = 1:DIM
-            midpoint_index[i] = (i - 1) * (vs_data.vs_num) + index
-        end
-        @inbounds for i = 1:NDF
-            df_index[i] = (i - 1) * (vs_data.vs_num) + index
-        end
-        midpoint = @view(lnmidpoint[midpoint_index])
-        df = @view(lndf[df_index])
-        if vs_data.level[index] < kinfo.config.solver.AMR_VS_MAXLEVEL &&
-            maxwellian_refine_flag(midpoint,ddus[vs_data.level[index]+1],U,prim,kinfo)
-            midpoint_new = midpoint_refine(DIM,midpoint, vs_data.level[index], ds)
-            df_new = df_refine(DIM,midpoint, midpoint_new, df)
-            vs_data.vs_num += 2^DIM - 1
-            level_refine_replace!(DIM,vs_data.level, index)
-            weight_refine_replace!(DIM,vs_data.weight, index)
-            midpoint_refine_replace!(
-                DIM,
-                lnmidpoint,
-                midpoint_new,
-                vs_data.vs_num,
-                index,
-            )
-            df_refine_replace!(DIM,NDF,lndf, df_new, vs_data.vs_num, index)
-            sdf_refine_replace!(DIM,NDF,lnsdf)
-            flux_refine_replace!(DIM,NDF,lnflux)
-            index += 2^DIM - 1
-        end
-        index += 1
+    maxlevel = kinfo.config.solver.AMR_VS_MAXLEVEL
+    ddus = [ds ./ 2.0^i for i in 0:maxlevel]      # cell size per level
+    U = @view(prim[2:1+DIM])
+    n = vs_data.vs_num
+    refine_flags = Vector{Bool}(undef, n)
+    I0buf = Vector{Float64}(undef, DIM)
+    I2buf = Vector{Float64}(undef, DIM)
+    @inbounds for c in 1:n
+        L = vs_data.level[c]
+        mid = @view(vs_data.midpoint[c, :])
+        refine_flags[c] = L < maxlevel &&
+            maxwellian_refine_flag(mid, ddus[L+1], U, prim, kinfo, I0buf, I2buf)
     end
-    vs_data.midpoint = reshape(lnmidpoint, vs_data.vs_num, DIM)
-    vs_data.df = reshape(lndf, vs_data.vs_num, NDF)
-    vs_data.sdf = reshape(lnsdf, vs_data.vs_num, NDF, DIM)
-    vs_data.flux = reshape(lnflux, vs_data.vs_num, NDF)
+    refine_grid_stream!(vs_data, refine_flags, ds)
+    return nothing
 end
 
