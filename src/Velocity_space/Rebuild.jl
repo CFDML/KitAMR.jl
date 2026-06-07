@@ -9,10 +9,9 @@
 # before use.
 #
 # Decisions are pure functions of the *original* (pre-mutation) cell state, so precomputing
-# them up front is equivalent to the original's inline evaluation.  Both an in-place reference
-# (`*_grid_inplace!`, faithful extraction of the original surgery) and the streaming version
-# (`*_grid_stream!`) consume the same flags; `test_vs_rebuild.jl` asserts they produce
-# identical grids.
+# them up front is equivalent to the original's inline evaluation.  Equivalence with the
+# original positional-surgery refine/coarsen was verified bit-for-bit before that code was
+# retired.
 
 @inline function _copy_cell!(dlevel, dweight, dmid, ddf, w::Int, vs_data::AbstractVsData{DIM,NDF}, src::Int) where {DIM,NDF}
     @inbounds begin
@@ -38,56 +37,9 @@ end
 
 """
 $(TYPEDSIGNATURES)
-In-place reference refinement (faithful extraction of the original `deleteat!`/`insert!`
-surgery).  `refine_flags[i]` is the final decision for original cell `i` (already including
-the `level < maxlevel` guard).  Used as the equivalence baseline for [`refine_grid_stream!`](@ref).
-"""
-function refine_grid_inplace!(vs_data::VsData{DIM,NDF}, refine_flags::AbstractVector{Bool}, ds) where {DIM,NDF}
-    lnmidpoint = reshape(vs_data.midpoint, :)
-    lndf = reshape(vs_data.df, :)
-    lnsdf = reshape(vs_data.sdf, :)
-    lnflux = reshape(vs_data.flux, :)
-    midpoint_index = Vector{Int}(undef, DIM)
-    df_index = Vector{Int}(undef, NDF)
-    changed = false
-    index = 1; oi = 0
-    while index < vs_data.vs_num + 1
-        oi += 1
-        @inbounds for i in 1:DIM
-            midpoint_index[i] = (i - 1) * vs_data.vs_num + index
-        end
-        @inbounds for i in 1:NDF
-            df_index[i] = (i - 1) * vs_data.vs_num + index
-        end
-        midpoint = @view(lnmidpoint[midpoint_index])
-        df = @view(lndf[df_index])
-        if refine_flags[oi]
-            midpoint_new = midpoint_refine(DIM, midpoint, vs_data.level[index], ds)
-            df_new = df_refine(DIM, midpoint, midpoint_new, df)
-            vs_data.vs_num += 2^DIM - 1
-            level_refine_replace!(DIM, vs_data.level, index)
-            weight_refine_replace!(DIM, vs_data.weight, index)
-            midpoint_refine_replace!(DIM, lnmidpoint, midpoint_new, vs_data.vs_num, index)
-            df_refine_replace!(DIM, NDF, lndf, df_new, vs_data.vs_num, index)
-            sdf_refine_replace!(DIM, NDF, lnsdf)
-            flux_refine_replace!(DIM, NDF, lnflux)
-            index += 2^DIM - 1
-            changed = true
-        end
-        index += 1
-    end
-    vs_data.midpoint = reshape(lnmidpoint, vs_data.vs_num, DIM)
-    vs_data.df = reshape(lndf, vs_data.vs_num, NDF)
-    vs_data.sdf = reshape(lnsdf, vs_data.vs_num, NDF, DIM)
-    vs_data.flux = reshape(lnflux, vs_data.vs_num, NDF)
-    return changed
-end
-
-"""
-$(TYPEDSIGNATURES)
 Streaming refinement: single O(N) pass into fresh arrays.  `refine_flags[i]` decides original
-cell `i`.  Children are emitted in `RMT` order with the parent's `df` injected (matching
-`df_refine`), parent weight split by `2^DIM`, and `sdf`/`flux` reset to zero.
+cell `i`.  Children are emitted in `RMT` order with the parent's `df` injected, parent weight
+split by `2^DIM`, and `sdf`/`flux` reset to zero.
 """
 function refine_grid_stream!(vs_data::VsData{DIM,NDF}, refine_flags::AbstractVector{Bool}, ds) where {DIM,NDF}
     n = vs_data.vs_num
@@ -136,83 +88,10 @@ end
 
 """
 $(TYPEDSIGNATURES)
-In-place reference coarsening (faithful extraction of the original surgery).  `coarsen_ok[i]`
-is the per-original-cell willingness to coarsen; a `2^DIM`-aligned same-level sibling group is
-merged iff every member is willing.  `maxlevel` sizes the alignment bookkeeping `flag`.
-"""
-function coarsen_grid_inplace!(vs_data::VsData{DIM,NDF}, coarsen_ok::AbstractVector{Bool}, ds, maxlevel::Integer) where {DIM,NDF}
-    lnmidpoint = reshape(vs_data.midpoint, :)
-    lndf = reshape(vs_data.df, :)
-    lnsdf = reshape(vs_data.sdf, :)
-    lnflux = reshape(vs_data.flux, :)
-    midpoint_index = Matrix{Int}(undef, 2^DIM, DIM)
-    df_index = Matrix{Int}(undef, 2^DIM, NDF)
-    flag = zeros(maxlevel)
-    nc = 2^DIM
-    changed = false
-    index = 1; op = 1
-    while index < vs_data.vs_num + 1
-        first_level = vs_data.level[index]
-        if first_level > 0
-            if flag[first_level] % 1 == 0.0 && index + nc - 1 <= vs_data.vs_num &&
-               _all_same_level(vs_data, index, first_level, nc)
-                grp = true
-                @inbounds for g in 0:nc-1
-                    coarsen_ok[op+g] || (grp = false; break)
-                end
-                if grp
-                    for i in axes(midpoint_index, 2)
-                        midpoint_index[:, i] .=
-                            (i-1)*vs_data.vs_num+index:(i-1)*vs_data.vs_num+index+nc-1
-                    end
-                    for i in axes(df_index, 2)
-                        df_index[:, i] .=
-                            (i-1)*vs_data.vs_num+index:(i-1)*vs_data.vs_num+index+nc-1
-                    end
-                    midpoint = @view(lnmidpoint[midpoint_index])
-                    df = @view(lndf[df_index])
-                    midpoint_new = midpoint_coarsen(DIM, @view(midpoint[1, :]), first_level, ds)
-                    df_new = df_coarsen(DIM, NDF, df)
-                    vs_data.vs_num -= nc - 1
-                    level_coarsen_replace!(DIM, vs_data.level, index)
-                    weight_coarsen_replace!(DIM, vs_data.weight, index)
-                    midpoint_coarsen_replace!(DIM, lnmidpoint, midpoint_new, vs_data.vs_num, index)
-                    df_coarsen_replace!(DIM, NDF, lndf, df_new, vs_data.vs_num, index)
-                    sdf_coarsen_replace!(DIM, NDF, lnsdf)
-                    flux_coarsen_replace!(DIM, NDF, lnflux)
-                    changed = true
-                else
-                    index += nc - 1
-                end
-                op += nc
-                if first_level > 1
-                    for i in 1:first_level-1
-                        flag[i] += 1 / 2^(DIM * (first_level - i))
-                    end
-                end
-            else
-                for i in 1:first_level
-                    flag[i] += 1 / 2^(DIM * (first_level - i + 1))
-                end
-                op += 1
-            end
-        else
-            op += 1
-        end
-        index += 1
-    end
-    vs_data.sdf = reshape(lnsdf, vs_data.vs_num, NDF, DIM)
-    vs_data.flux = reshape(lnflux, vs_data.vs_num, NDF)
-    vs_data.midpoint = reshape(lnmidpoint, vs_data.vs_num, DIM)
-    vs_data.df = reshape(lndf, vs_data.vs_num, NDF)
-    return changed
-end
-
-"""
-$(TYPEDSIGNATURES)
-Streaming coarsening: single read-only pass over the source grid driving the same alignment
-walk as the original, emitting merged/kept cells into fresh arrays.  Equivalent to
-[`coarsen_grid_inplace!`](@ref).
+Streaming coarsening: single read-only pass over the source grid driving the alignment walk,
+emitting merged/kept cells into fresh arrays.  `coarsen_ok[i]` is the per-cell willingness to
+coarsen; a `2^DIM`-aligned same-level sibling group is merged iff every member is willing.
+`maxlevel` sizes the alignment bookkeeping `flag`.
 """
 function coarsen_grid_stream!(vs_data::VsData{DIM,NDF}, coarsen_ok::AbstractVector{Bool}, ds, maxlevel::Integer) where {DIM,NDF}
     n = vs_data.vs_num

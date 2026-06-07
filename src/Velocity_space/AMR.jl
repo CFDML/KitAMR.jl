@@ -1,87 +1,10 @@
-function pre_vs_refine!(trees::PsTrees{DIM,NDF}, kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
-    vr = vs_resolution(trees,kinfo)
-    !isa(kinfo.config.quadrature,Vector)&&return nothing
-    ds = [(kinfo.config.quadrature[2*i] - kinfo.config.quadrature[2*i-1]) /
-        kinfo.config.vs_trees_num[i] for i in 1:DIM]
-    vs_refine_udf = kinfo.config.user_defined.static_vs_refine_flag
-    for _ = 1:kinfo.config.solver.AMR_VS_MAXLEVEL
-        for i in eachindex(trees.data)
-            for j in eachindex(trees.data[i])
-                ps_data = trees.data[i][j]
-                isa(ps_data,InsideSolidData) && continue
-                vs_data = ps_data.vs_data
-                U = ps_data.prim[2:1+DIM]
-                lnmidpoint = reshape(vs_data.midpoint, :)
-                lndf = reshape(vs_data.df, :)
-                lnsdf = reshape(vs_data.sdf, :)
-                lnflux = reshape(vs_data.flux, :)
-                index = 1
-                midpoint_index = Vector{Int}(undef, DIM)
-                df_index = Vector{Int}(undef, NDF)
-                while index < vs_data.vs_num + 1
-                    @inbounds for i = 1:DIM
-                        midpoint_index[i] = (i - 1) * (vs_data.vs_num) + index
-                    end
-                    @inbounds for i = 1:NDF
-                        df_index[i] = (i - 1) * (vs_data.vs_num) + index
-                    end
-                    midpoint = @view(lnmidpoint[midpoint_index])
-                    df = @view(lndf[df_index])
-                    if vs_data.level[index] < kinfo.config.solver.AMR_VS_MAXLEVEL &&
-                        (   vs_refine_udf==null_udf ? 
-                            contribution_refine_flag(ps_data.w, U, midpoint, df, vs_data.weight[index], vr, kinfo) : 
-                            vs_refine_udf(midpoint;level = vs_data.level[index],du = ds./2^vs_data.level[index])
-                        )
-                        midpoint_new = midpoint_refine(DIM,midpoint, vs_data.level[index], ds)
-                        df_new = df_refine(DIM,midpoint, midpoint_new, df)
-                        vs_data.vs_num += 2^DIM - 1
-                        level_refine_replace!(DIM,vs_data.level, index)
-                        weight_refine_replace!(DIM,vs_data.weight, index)
-                        midpoint_refine_replace!(
-                            DIM,
-                            lnmidpoint,
-                            midpoint_new,
-                            vs_data.vs_num,
-                            index,
-                        )
-                        df_refine_replace!(DIM,NDF,lndf, df_new, vs_data.vs_num, index)
-                        sdf_refine_replace!(DIM,NDF,lnsdf)
-                        flux_refine_replace!(DIM,NDF,lnflux)
-                        index += 2^DIM - 1
-                    end
-                    index += 1
-                end
-                vs_data.midpoint = reshape(lnmidpoint, vs_data.vs_num, DIM)
-                vs_data.df = reshape(lndf, vs_data.vs_num, NDF)
-                vs_data.sdf = reshape(lnsdf, vs_data.vs_num, NDF, DIM)
-                vs_data.flux = reshape(lnflux, vs_data.vs_num, NDF)
-            end
-        end
-    end
-    return nothing
-end
-function criterion_df(ps_data::AbstractPsData{DIM,NDF}) where{DIM,NDF}
-    vs_data = ps_data.vs_data;df = vs_data.df;sdf = vs_data.sdf
-    ds = ps_data.ds
-    cdf = similar(vs_data.df)
-    ddfi = zeros(DIM)
-    for j in axes(cdf,2)
-        for i in axes(cdf,1)
-            for k in 1:DIM
-                ddfi[k] = abs(sdf[i,j,k]*ds[k])
-            end
-            cdf[i,j] = df[i,j]+maximum(ddfi)
-        end
-    end
-    return cdf
-end
 
 """
 $(TYPEDSIGNATURES)
 Fill the reused scratch vectors `cdf_i` (length `NDF`) and `mid_i` (length `DIM`) with the
-criterion distribution `df + max_d|sdf*ds|` and the midpoint of velocity cell `c`.  Lets the
-refine/coarsen decision evaluate the contribution criteria per cell without allocating a full
-`criterion_df` matrix.  `ds` is the *physical* cell size `ps_data.ds`.
+criterion distribution `df + max_d|sdf*ds|` and the midpoint of velocity cell `c`, so the
+refine/coarsen decision can evaluate the contribution criteria per cell without allocating a
+full criterion matrix.  `ds` is the *physical* cell size `ps_data.ds`.
 """
 @inline function _criterion_cell!(cdf_i, mid_i, vs_data::AbstractVsData{DIM,NDF}, ds, c::Int) where {DIM,NDF}
     df = vs_data.df; sdf = vs_data.sdf
@@ -145,73 +68,6 @@ function vs_refine!(va_data::Velocity_Adaptive_Data, ka::KA{DIM,NDF}) where{DIM,
     return nothing
 end
 """
-$(SIGNATURES)
-"""
-function midpoint_refine_replace!(DIM::Integer,lnmidpoint::AbstractVector, midpoint_new::AbstractMatrix, vs_num::Int, index::Int)
-    for i = 1:DIM
-        deleteat!(lnmidpoint, (i - 1) * (vs_num) + index)
-        for j = 2^DIM:-1:1
-            insert!(lnmidpoint, (i - 1) * (vs_num) + index, midpoint_new[j, i])
-        end
-    end
-end
-"""
-$(SIGNATURES)
-"""
-function weight_refine_replace!(DIM::Integer,weight::AbstractVector, index::Int)
-    weight_new = popat!(weight, index) / 2^DIM
-    for _ = 1:2^DIM
-        insert!(weight, index, weight_new)
-    end
-end
-"""
-$(SIGNATURES)
-"""
-function level_refine_replace!(DIM::Integer,level::AbstractVector, index::Int)
-    level_new = popat!(level, index) + 1
-    for _ = 1:2^DIM
-        insert!(level, index, level_new)
-    end
-end
-"""
-$(SIGNATURES)
-"""
-function df_refine_replace!(DIM::Integer,NDF::Integer,lndf::AbstractVector, df_new::AbstractMatrix, vs_num::Int, index::Int)
-    for i = 1:NDF
-        deleteat!(lndf, (i - 1) * (vs_num) + index)
-        for j = 2^DIM:-1:1
-            insert!(lndf, (i - 1) * (vs_num) + index, df_new[j, i])
-        end
-    end
-end
-"""
-$(SIGNATURES)
-"""
-function sdf_refine_replace!(DIM::Integer,NDF::Integer,lnsdf::AbstractVector)
-    append!(lnsdf, zeros((2^DIM - 1) * NDF * DIM))
-end
-"""
-$(SIGNATURES)
-"""
-function flux_refine_replace!(DIM::Integer,NDF::Integer,lnflux::AbstractVector)
-    append!(lnflux, zeros((2^DIM - 1) * NDF))
-end
-"""
-$(SIGNATURES)
-"""
-function midpoint_refine(DIM::Integer,midpoint::AbstractVector, level::Int8, ds::AbstractVector)
-    midpoint_new = Matrix{Float64}(undef, 2^DIM, DIM)
-    ds_new = ds / 2^(level + 1)
-    for i = 1:2^DIM
-        midpoint_new[i, :] .= @. midpoint + 0.5 * ds_new * RMT[DIM][i]
-    end
-    return midpoint_new
-end
-"""
-$(SIGNATURES)
-"""
-df_refine(DIM::Integer,::AbstractVector, ::AbstractMatrix, df::AbstractVector) = ones(2^DIM) * df'
-"""
 $(TYPEDSIGNATURES)
 """
 function vs_coarsen!(va_data::Velocity_Adaptive_Data,ka::KA{DIM,NDF})where{DIM,NDF}
@@ -256,82 +112,6 @@ function vs_coarsen!(va_data::Velocity_Adaptive_Data,ka::KA{DIM,NDF})where{DIM,N
         end
     end
     return nothing
-end
-
-function midpoint_coarsen(DIM::Integer,midpoint::AbstractVector, level::Int8, ds::AbstractVector)
-    ds_new = ds / 2^level
-    @. midpoint - 0.5 * ds_new * RMT[DIM][1]
-end
-"""
-$(SIGNATURES)
-"""
-function df_coarsen(DIM::Integer,NDF::Integer,df::AbstractMatrix)
-    df_new = zeros(NDF)
-    for i = 1:2^DIM
-        df_new += @view(df[i, :])
-    end
-    df_new /= 2^DIM
-    return df_new
-end
-
-
-"""
-$(SIGNATURES)
-"""
-function level_coarsen_replace!(DIM::Integer,level::AbstractVector, index::Int)
-    for _ = 1:2^DIM-1
-        deleteat!(level, index)
-    end
-    level[index] -= 1
-end
-"""
-$(SIGNATURES)
-"""
-function weight_coarsen_replace!(DIM::Integer,weight::AbstractVector, index::Int)
-    for _ = 1:2^DIM-1
-        deleteat!(weight, index)
-    end
-    weight[index] *= 2^DIM
-end
-"""
-$(SIGNATURES)
-"""
-function midpoint_coarsen_replace!(
-    DIM::Integer,
-    lnmidpoint::AbstractVector,
-    midpoint_new::AbstractVector,
-    vs_num::Int,
-    index::Int,
-)
-for i = 1:DIM
-        for _ = 1:2^DIM-1
-            deleteat!(lnmidpoint, (i - 1) * (vs_num) + index)
-        end
-        lnmidpoint[(i-1)*(vs_num)+index] = midpoint_new[i]
-    end
-end
-"""
-$(SIGNATURES)
-"""
-function df_coarsen_replace!(DIM::Integer,NDF::Integer,lndf::AbstractVector, df_new::AbstractVector, vs_num::Int, index::Int)
-    for i = 1:NDF
-        for _ = 1:2^DIM-1
-            deleteat!(lndf, (i - 1) * (vs_num) + index)
-        end
-        lndf[(i-1)*(vs_num)+index] = df_new[i]
-    end
-end
-"""
-$(SIGNATURES)
-"""
-function sdf_coarsen_replace!(DIM::Integer,NDF::Integer,lnsdf::AbstractVector)
-    deleteat!(lnsdf, 1:(2^DIM-1)*NDF*DIM)
-end
-"""
-$(SIGNATURES)
-"""
-function flux_coarsen_replace!(DIM::Integer,NDF::Integer,lnflux::AbstractVector)
-    deleteat!(lnflux, 1:(2^DIM-1)*NDF)
 end
 
 """

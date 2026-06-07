@@ -375,7 +375,6 @@ function initialize_ps!(p4est::Ptr{p4est_t},kinfo::KInfo{DIM,NDF}) where{DIM,NDF
             push!(trees.data[treeid],inside_quad)
         end
     end
-    # pre_vs_refine!(trees, kinfo)
     # re_init_vs4est!(trees, kinfo)
     return trees
 end
@@ -414,7 +413,6 @@ function initialize_ps!(p4est::Ptr{p8est_t},kinfo::KInfo{DIM,NDF}) where{DIM,NDF
             push!(trees.data[treeid],inside_quad)
         end
     end
-    # pre_vs_refine!(trees, kinfo)
     # re_init_vs4est!(trees, kinfo)
     return trees
 end

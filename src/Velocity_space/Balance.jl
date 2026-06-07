@@ -14,115 +14,47 @@ function vs_balance_pair!(
     vs_neighbor::AbstractVsData{DIM,NDF},
     ds::AbstractVector,
 ) where {DIM,NDF}
-    lnmidpoint = reshape(vs_local.midpoint, :)
-    lndf       = reshape(vs_local.df, :)
-    lnsdf      = reshape(vs_local.sdf, :)
-    lnflux     = reshape(vs_local.flux, :)
-
     changed = false
-    i = 1          # current index in local grid
-    j = 1          # current index in neighbor grid
-    flag = 0.0     # fraction of the current neighbor cell already accounted for
-
-    midpoint_index = Vector{Int}(undef, DIM)
-    df_index       = Vector{Int}(undef, NDF)
-
-    while i <= vs_local.vs_num && j <= vs_neighbor.vs_num
-        l  = vs_local.level[i]
-        ln = vs_neighbor.level[j]
-
-        if l == ln
-            # Same level – one-to-one correspondence, no violation.
-            i += 1
-            j += 1
-
-        elseif l < ln
-            # Local cell i is coarser than the corresponding neighbor region.
-            if ln - l > 1
-                # Violation: refine the local cell one level.
-                for k in 1:DIM
-                    midpoint_index[k] = (k - 1) * vs_local.vs_num + i
+    refine_flags = Bool[]
+    # Refine local cell i one level whenever the maximum neighbor level over its spatial extent
+    # exceeds level(i)+1 (the 2:1 violation).  A read-only two-pointer walk fills the per-cell
+    # flags; a single streaming refine then applies them.  Looping to a fixed point fully
+    # balances this pair (a cell may need several levels), each level costing O(N) instead of the
+    # O(N) positional insert! per refined cell.
+    while true
+        nL = vs_local.vs_num; nN = vs_neighbor.vs_num
+        resize!(refine_flags, nL); fill!(refine_flags, false)
+        i = 1; j = 1
+        flag = 0.0          # fraction of the current (coarser) neighbor cell already covered
+        @inbounds while i <= nL && j <= nN
+            l = vs_local.level[i]; ln = vs_neighbor.level[j]
+            if l == ln
+                i += 1; j += 1
+            elseif l < ln
+                # Local cell i is coarser: accumulate the neighbor cells covering it, tracking
+                # their maximum level, then decide.
+                maxlev = 0; f = 0.0
+                while f < 1.0 - 1e-10 && j <= nN
+                    lv = vs_neighbor.level[j]
+                    lv > maxlev && (maxlev = Int(lv))
+                    f += 1.0 / 2^(DIM * (lv - l))
+                    j += 1
                 end
-                for k in 1:NDF
-                    df_index[k] = (k - 1) * vs_local.vs_num + i
-                end
-                midpoint_i   = lnmidpoint[midpoint_index]
-                df_i         = lndf[df_index]
-                midpoint_new = midpoint_refine(DIM, midpoint_i, l, ds)
-                df_new       = df_refine(DIM, midpoint_i, midpoint_new, df_i)
-                vs_local.vs_num += 2^DIM - 1
-                level_refine_replace!(DIM, vs_local.level, i)
-                weight_refine_replace!(DIM, vs_local.weight, i)
-                midpoint_refine_replace!(DIM, lnmidpoint, midpoint_new, vs_local.vs_num, i)
-                df_refine_replace!(DIM, NDF, lndf, df_new, vs_local.vs_num, i)
-                sdf_refine_replace!(DIM, NDF, lnsdf)
-                flux_refine_replace!(DIM, NDF, lnflux)
-                changed = true
-                # Do NOT advance i: re-examine the newly created children against j.
+                refine_flags[i] = maxlev > l + 1
+                i += 1
             else
-                # ln == l + 1: currently acceptable, but neighbor sub-cells may be
-                # refined further.  Check every neighbor sub-cell before consuming it;
-                # if any has level > l + 1, refine local cell i first and re-examine.
-                local_violated = false
-                j_scan = j
-                flag_scan = flag
-                while flag_scan < 1.0 - 1e-10 && j_scan <= vs_neighbor.vs_num
-                    if vs_neighbor.level[j_scan] - l > 1
-                        local_violated = true
-                        break
-                    end
-                    flag_scan += 1.0 / 2^(DIM * (vs_neighbor.level[j_scan] - l))
-                    j_scan += 1
+                # Local cell i is finer: one neighbor cell covers it (and more); no violation.
+                flag += 1.0 / 2^(DIM * (l - ln))
+                if flag >= 1.0 - 1e-10
+                    j += 1; flag = 0.0
                 end
-                if local_violated
-                    # Refine local cell i and re-examine without advancing j.
-                    for k in 1:DIM
-                        midpoint_index[k] = (k - 1) * vs_local.vs_num + i
-                    end
-                    for k in 1:NDF
-                        df_index[k] = (k - 1) * vs_local.vs_num + i
-                    end
-                    midpoint_i   = lnmidpoint[midpoint_index]
-                    df_i         = lndf[df_index]
-                    midpoint_new = midpoint_refine(DIM, midpoint_i, l, ds)
-                    df_new       = df_refine(DIM, midpoint_i, midpoint_new, df_i)
-                    vs_local.vs_num += 2^DIM - 1
-                    level_refine_replace!(DIM, vs_local.level, i)
-                    weight_refine_replace!(DIM, vs_local.weight, i)
-                    midpoint_refine_replace!(DIM, lnmidpoint, midpoint_new, vs_local.vs_num, i)
-                    df_refine_replace!(DIM, NDF, lndf, df_new, vs_local.vs_num, i)
-                    sdf_refine_replace!(DIM, NDF, lnsdf)
-                    flux_refine_replace!(DIM, NDF, lnflux)
-                    changed = true
-                    # Do NOT advance i or j: re-examine the new children against j.
-                else
-                    # All neighbor sub-cells satisfy the constraint; consume them.
-                    while flag < 1.0 - 1e-10 && j <= vs_neighbor.vs_num
-                        flag += 1.0 / 2^(DIM * (vs_neighbor.level[j] - l))
-                        j += 1
-                    end
-                    flag = 0.0
-                    i += 1
-                end
+                i += 1
             end
-
-        else
-            # l > ln: local cell is finer than the neighbor region – no local refinement
-            # needed.  Track what fraction of neighbor cell j has been covered.
-            flag += 1.0 / 2^(DIM * (l - ln))
-            if flag >= 1.0 - 1e-10
-                j += 1
-                flag = 0.0
-            end
-            i += 1
         end
+        any(refine_flags) || break
+        refine_grid_stream!(vs_local, refine_flags, ds)
+        changed = true
     end
-
-    vs_local.midpoint = reshape(lnmidpoint, vs_local.vs_num, DIM)
-    vs_local.df       = reshape(lndf,       vs_local.vs_num, NDF)
-    vs_local.sdf      = reshape(lnsdf,      vs_local.vs_num, NDF, DIM)
-    vs_local.flux     = reshape(lnflux,     vs_local.vs_num, NDF)
-
     return changed
 end
 
