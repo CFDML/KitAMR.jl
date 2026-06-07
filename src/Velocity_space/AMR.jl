@@ -86,6 +86,13 @@ function vs_refine!(va_data::Velocity_Adaptive_Data, ka::KA{DIM,NDF}) where{DIM,
     kinfo.config.vs_trees_num[i] for i in 1:DIM]
     va_flags = va_data.va_flags
     id = 0
+    lohner = kinfo.config.solver.ADAPT_VS_MODE === :lohner
+    vmin = ntuple(d -> kinfo.config.quadrature[2*d-1], DIM)
+    ds0 = ntuple(d -> ds[d], DIM)
+    maxlevel = kinfo.config.solver.AMR_VS_MAXLEVEL
+    τL = kinfo.config.solver.ADAPT_COEFFI_VS_LOHNER
+    vsidx = lohner ? VsNeighborIndex{DIM}() : nothing
+    lnflag = Bool[]
     for i in eachindex(trees.data)
         for j in eachindex(trees.data[i])
             id += 1
@@ -99,6 +106,14 @@ function vs_refine!(va_data::Velocity_Adaptive_Data, ka::KA{DIM,NDF}) where{DIM,
             lncdf = reshape(cdf,:)
             lnsdf = reshape(vs_data.sdf, :)
             lnflux = reshape(vs_data.flux, :)
+            if lohner
+                build_vs_index!(vsidx, vs_data, vmin, ds0, maxlevel)
+                s1, s2 = vs_lohner_scales(vs_data)
+                resize!(lnflag, vs_data.vs_num)
+                @inbounds for ii in 1:vs_data.vs_num
+                    lnflag[ii] = vs_lohner_indicator(vs_data, vsidx, ii, s1, s2) > τL
+                end
+            end
             index = 1
             midpoint_index = Vector{Int}(undef, DIM)
             df_index = Vector{Int}(undef, NDF)
@@ -111,8 +126,10 @@ function vs_refine!(va_data::Velocity_Adaptive_Data, ka::KA{DIM,NDF}) where{DIM,
                 end
                 midpoint = @view(lnmidpoint[midpoint_index])
                 df = @view(lndf[df_index]);cdf = @view(lncdf[df_index])
-                if vs_data.level[index] < kinfo.config.solver.AMR_VS_MAXLEVEL &&
-                    contribution_refine_flag(ps_data.w, U, midpoint, cdf, vs_data.weight[index], va_data.vr,kinfo)
+                do_refine = lohner ?
+                    (lnflag[index] || local_contribution_refine_flag(ps_data.w, U, midpoint, cdf, vs_data.weight[index], kinfo)) :
+                    contribution_refine_flag(ps_data.w, U, midpoint, cdf, vs_data.weight[index], va_data.vr, kinfo)
+                if vs_data.level[index] < kinfo.config.solver.AMR_VS_MAXLEVEL && do_refine
                     midpoint_new = midpoint_refine(DIM,midpoint, vs_data.level[index], ds)
                     df_new = df_refine(DIM,midpoint, midpoint_new, df)
                     cdf_new = df_refine(DIM,midpoint,midpoint_new,df)
@@ -130,6 +147,7 @@ function vs_refine!(va_data::Velocity_Adaptive_Data, ka::KA{DIM,NDF}) where{DIM,
                     df_refine_replace!(DIM,NDF,lncdf,cdf_new,vs_data.vs_num,index)
                     sdf_refine_replace!(DIM,NDF,lnsdf)
                     flux_refine_replace!(DIM,NDF,lnflux)
+                    lohner && lohner_flag_refine_replace!(DIM, lnflag, index)
                     index += 2^DIM - 1
                     !va_flags[id]&&(va_flags[id] = true)
                 end
@@ -220,6 +238,13 @@ function vs_coarsen!(va_data::Velocity_Adaptive_Data,ka::KA{DIM,NDF})where{DIM,N
     va_flags = va_data.va_flags
     id = 0
     flag = zeros(kinfo.config.solver.AMR_VS_MAXLEVEL)
+    lohner = kinfo.config.solver.ADAPT_VS_MODE === :lohner
+    vmin = ntuple(d -> kinfo.config.quadrature[2*d-1], DIM)
+    ds0 = ntuple(d -> ds[d], DIM)
+    maxlevel = kinfo.config.solver.AMR_VS_MAXLEVEL
+    τc = VS_LOHNER_COARSEN_RATIO * kinfo.config.solver.ADAPT_COEFFI_VS_LOHNER
+    vsidx = lohner ? VsNeighborIndex{DIM}() : nothing
+    lnflag = Bool[]
     for i in eachindex(trees.data)
         for j in eachindex(trees.data[i])
             id += 1
@@ -233,6 +258,14 @@ function vs_coarsen!(va_data::Velocity_Adaptive_Data,ka::KA{DIM,NDF})where{DIM,N
             lncdf = reshape(cdf,:)
             lnsdf = reshape(vs_data.sdf, :)
             lnflux = reshape(vs_data.flux, :)
+            if lohner
+                build_vs_index!(vsidx, vs_data, vmin, ds0, maxlevel)
+                s1, s2 = vs_lohner_scales(vs_data)
+                resize!(lnflag, vs_data.vs_num)
+                @inbounds for ii in 1:vs_data.vs_num
+                    lnflag[ii] = vs_lohner_indicator(vs_data, vsidx, ii, s1, s2) < τc
+                end
+            end
             index = 1;flag.=0.
             midpoint_index = Matrix{Int}(undef, 2^DIM, DIM)
             df_index = Matrix{Int}(undef, 2^DIM, NDF)
@@ -251,15 +284,14 @@ function vs_coarsen!(va_data::Velocity_Adaptive_Data,ka::KA{DIM,NDF})where{DIM,N
                         end
                         midpoint = @view(lnmidpoint[midpoint_index])
                         df = @view(lndf[df_index]);cdf = @view(lncdf[df_index])
-                        if contribution_coarsen_flag(
-                            ps_data.w,
-                            U,
-                            midpoint,
-                            cdf,
-                            @view(vs_data.weight[index:index+2^DIM-1]),
-                            va_data.vr,
-                            kinfo
-                        )
+                        do_coarsen = lohner ?
+                            (all(@view(lnflag[index:index+2^DIM-1])) && local_contribution_coarsen_flag(
+                                ps_data.w, U, midpoint, cdf,
+                                @view(vs_data.weight[index:index+2^DIM-1]), kinfo)) :
+                            contribution_coarsen_flag(
+                                ps_data.w, U, midpoint, cdf,
+                                @view(vs_data.weight[index:index+2^DIM-1]), va_data.vr, kinfo)
+                        if do_coarsen
                             midpoint_new =
                                 midpoint_coarsen(DIM,@view(midpoint[1, :]), first_level, ds);
                             df_new = df_coarsen(DIM,NDF,df)
@@ -278,6 +310,7 @@ function vs_coarsen!(va_data::Velocity_Adaptive_Data,ka::KA{DIM,NDF})where{DIM,N
                             df_coarsen_replace!(DIM,NDF,lncdf,cdf_new,vs_data.vs_num,index)
                             sdf_coarsen_replace!(DIM,NDF,lnsdf)
                             flux_coarsen_replace!(DIM,NDF,lnflux)
+                            lohner && lohner_flag_coarsen_replace!(DIM, lnflag, index)
                             !va_flags[id]&&(va_flags[id] = true)
                         else
                             index += 2^DIM - 1
