@@ -1,32 +1,87 @@
 # ---------------------------------------------------------------------------
 # Closure-free C callbacks (Apple Silicon / aarch64 does not support closure
-# `@cfunction`). Two strategies are used:
-#   * weight / init callbacks have no user_data slot, and the forest
-#     `user_pointer` is already occupied by `kinfo`/`ka` (and read inside the
-#     callbacks), so the Julia callable is stashed in a module-level Ref that a
-#     fixed top-level trampoline reads. The previous Ref value is restored after
-#     the call.
+# `@cfunction`). A fixed top-level trampoline is wrapped once with `@cfunction`
+# and the runtime-chosen Julia callable is recovered from a pointer the C side
+# can reach:
+#   * weight callbacks have no user_data slot, so the callable is threaded through
+#     the forest `user_pointer` inside an `AMR_weight_context` (which also keeps
+#     the object `user_pointer` originally referenced, e.g. `kinfo`/`ka`). The
+#     trampoline restores that original object around each call, and the partition
+#     wrappers restore `user_pointer` once partitioning finishes. This is reentrant
+#     — the state lives on the forest, not in a module-global Ref.
+#   * init callbacks (forest creation) still use a module-level Ref read by a fixed
+#     trampoline; the previous Ref value is restored after the call.
 #   * volume/face/corner iterate callbacks carry the callable (plus data_type
 #     and the caller's user_data) in `AMR_iterate_context`, passed through the
 #     p4est_iterate `user_data` channel and recovered in a top-level trampoline.
 #     The forest `user_pointer` is never disturbed.
 # ---------------------------------------------------------------------------
 
-const _AMR_WEIGHT_FN = Ref{Function}()
-const _AMR_INIT_FN = Ref{Function}()
+"""
+Context threaded through the forest `user_pointer` so a single fixed trampoline
+`@cfunction` can dispatch to a runtime-chosen (possibly closure) init function at
+forest creation, without a module-global `Ref`. Mirrors [`AMR_weight_context`]:
+`user_pointer` keeps the object originally passed as the forest `user_pointer`
+(e.g. `kinfo`), which the trampoline restores around each init call; the
+`AMR_4est_new` wrappers restore `user_pointer` once creation finishes.
+"""
+mutable struct AMR_init_context
+    f::Function
+    user_pointer::Ptr{Cvoid}
+end
+
+"""
+Context threaded through the forest `user_pointer` so a single fixed trampoline
+`@cfunction` can dispatch to a runtime-chosen (possibly closure) weight function
+without a module-global `Ref` (which was non-reentrant: only one partition could be
+in flight at a time, and nesting would clobber it). `user_pointer` keeps whatever
+the forest `user_pointer` originally referenced (e.g. `kinfo`/`ka`); the trampoline
+temporarily restores it around each weight call so weight functions that read
+`user_pointer` keep working.
+"""
+mutable struct AMR_weight_context
+    f::Function
+    user_pointer::Ptr{Cvoid}
+end
 
 function _amr_weight_cb_p4est(p4est::Ptr{p4est_t}, which_tree::p4est_topidx_t, quadrant::Ptr{p4est_quadrant_t})::Cint
-    return Cint(_AMR_WEIGHT_FN[](p4est, which_tree, quadrant))
+    fp = PointerWrapper(p4est)
+    ctx = unsafe_pointer_to_objref(pointer(fp.user_pointer))::AMR_weight_context
+    GC.@preserve ctx begin
+        fp.user_pointer = ctx.user_pointer          # expose the original object to the weight fn
+        w = Cint(ctx.f(p4est, which_tree, quadrant))
+        fp.user_pointer = pointer_from_objref(ctx)  # restore ctx for the next quadrant
+    end
+    return w
 end
 function _amr_weight_cb_p8est(p4est::Ptr{p8est_t}, which_tree::p4est_topidx_t, quadrant::Ptr{p8est_quadrant_t})::Cint
-    return Cint(_AMR_WEIGHT_FN[](p4est, which_tree, quadrant))
+    fp = PointerWrapper(p4est)
+    ctx = unsafe_pointer_to_objref(pointer(fp.user_pointer))::AMR_weight_context
+    GC.@preserve ctx begin
+        fp.user_pointer = ctx.user_pointer
+        w = Cint(ctx.f(p4est, which_tree, quadrant))
+        fp.user_pointer = pointer_from_objref(ctx)
+    end
+    return w
 end
 function _amr_init_cb_p4est(p4est::Ptr{p4est_t}, which_tree::p4est_topidx_t, quadrant::Ptr{p4est_quadrant_t})::Cvoid
-    _AMR_INIT_FN[](p4est, which_tree, quadrant)
+    fp = PointerWrapper(p4est)
+    ctx = unsafe_pointer_to_objref(pointer(fp.user_pointer))::AMR_init_context
+    GC.@preserve ctx begin
+        fp.user_pointer = ctx.user_pointer          # expose the original object to the init fn
+        ctx.f(p4est, which_tree, quadrant)
+        fp.user_pointer = pointer_from_objref(ctx)  # restore ctx for the next quadrant
+    end
     return nothing
 end
 function _amr_init_cb_p8est(p4est::Ptr{p8est_t}, which_tree::p4est_topidx_t, quadrant::Ptr{p8est_quadrant_t})::Cvoid
-    _AMR_INIT_FN[](p4est, which_tree, quadrant)
+    fp = PointerWrapper(p4est)
+    ctx = unsafe_pointer_to_objref(pointer(fp.user_pointer))::AMR_init_context
+    GC.@preserve ctx begin
+        fp.user_pointer = ctx.user_pointer
+        ctx.f(p4est, which_tree, quadrant)
+        fp.user_pointer = pointer_from_objref(ctx)
+    end
     return nothing
 end
 
@@ -200,10 +255,10 @@ function AMR_4est_new(
     init_fn::Function,
     user_pointer::Ptr,
 ) where {T}
-    old = isassigned(_AMR_INIT_FN) ? _AMR_INIT_FN[] : nothing
-    _AMR_INIT_FN[] = init_fn
-    try
-        GC.@preserve comm conn min_quads min_level uniform user_pointer init_fn p4est_new_ext(
+    orig = Ptr{Cvoid}(user_pointer)
+    ctx = AMR_init_context(init_fn, orig)
+    GC.@preserve comm conn init_fn ctx begin
+        p4est = p4est_new_ext(
             comm,
             conn,
             min_quads,
@@ -211,10 +266,10 @@ function AMR_4est_new(
             uniform,
             sizeof(T),
             @cfunction(_amr_init_cb_p4est, Cvoid, (Ptr{p4est_t}, p4est_topidx_t, Ptr{p4est_quadrant_t})),
-            user_pointer,
+            pointer_from_objref(ctx),
         )
-    finally
-        old === nothing || (_AMR_INIT_FN[] = old)
+        PointerWrapper(p4est).user_pointer = orig   # restore original user_pointer
+        return p4est
     end
 end
 function AMR_4est_new(
@@ -227,10 +282,10 @@ function AMR_4est_new(
     init_fn::Function,
     user_pointer::Ptr,
 ) where {T}
-    old = isassigned(_AMR_INIT_FN) ? _AMR_INIT_FN[] : nothing
-    _AMR_INIT_FN[] = init_fn
-    try
-        GC.@preserve comm conn min_quads min_level uniform user_pointer init_fn p8est_new_ext(
+    orig = Ptr{Cvoid}(user_pointer)
+    ctx = AMR_init_context(init_fn, orig)
+    GC.@preserve comm conn init_fn ctx begin
+        p8est = p8est_new_ext(
             comm,
             conn,
             min_quads,
@@ -238,10 +293,10 @@ function AMR_4est_new(
             uniform,
             sizeof(T),
             @cfunction(_amr_init_cb_p8est, Cvoid, (Ptr{p8est_t}, p4est_topidx_t, Ptr{p8est_quadrant_t})),
-            user_pointer,
+            pointer_from_objref(ctx),
         )
-    finally
-        old === nothing || (_AMR_INIT_FN[] = old)
+        PointerWrapper(p8est).user_pointer = orig   # restore original user_pointer
+        return p8est
     end
 end
 
@@ -259,10 +314,10 @@ function AMR_4est_new(
     init_fn::Function,
     user_pointer::Ptr,
 ) where {T}
-    old = isassigned(_AMR_INIT_FN) ? _AMR_INIT_FN[] : nothing
-    _AMR_INIT_FN[] = init_fn
-    try
-        GC.@preserve comm conn user_pointer init_fn p4est_new_ext(
+    orig = Ptr{Cvoid}(user_pointer)
+    ctx = AMR_init_context(init_fn, orig)
+    GC.@preserve comm conn init_fn ctx begin
+        p4est = p4est_new_ext(
             comm,
             conn,
             1,
@@ -270,10 +325,10 @@ function AMR_4est_new(
             1,
             sizeof(T),
             @cfunction(_amr_init_cb_p4est, Cvoid, (Ptr{p4est_t}, p4est_topidx_t, Ptr{p4est_quadrant_t})),
-            user_pointer,
+            pointer_from_objref(ctx),
         )
-    finally
-        old === nothing || (_AMR_INIT_FN[] = old)
+        PointerWrapper(p4est).user_pointer = orig   # restore original user_pointer
+        return p4est
     end
 end
 function AMR_4est_new(
@@ -283,10 +338,10 @@ function AMR_4est_new(
     init_fn::Function,
     user_pointer::Ptr,
 ) where {T}
-    old = isassigned(_AMR_INIT_FN) ? _AMR_INIT_FN[] : nothing
-    _AMR_INIT_FN[] = init_fn
-    try
-        GC.@preserve comm conn user_pointer init_fn p8est_new_ext(
+    orig = Ptr{Cvoid}(user_pointer)
+    ctx = AMR_init_context(init_fn, orig)
+    GC.@preserve comm conn init_fn ctx begin
+        p8est = p8est_new_ext(
             comm,
             conn,
             1,
@@ -294,10 +349,10 @@ function AMR_4est_new(
             1,
             sizeof(T),
             @cfunction(_amr_init_cb_p8est, Cvoid, (Ptr{p8est_t}, p4est_topidx_t, Ptr{p8est_quadrant_t})),
-            user_pointer,
+            pointer_from_objref(ctx),
         )
-    finally
-        old === nothing || (_AMR_INIT_FN[] = old)
+        PointerWrapper(p8est).user_pointer = orig   # restore original user_pointer
+        return p8est
     end
 end
 
@@ -342,10 +397,10 @@ function AMR_4est_new(
     ::Type{T},
     init_fn::Function,
 ) where {T}
-    old = isassigned(_AMR_INIT_FN) ? _AMR_INIT_FN[] : nothing
-    _AMR_INIT_FN[] = init_fn
-    try
-        GC.@preserve comm conn init_fn p4est_new_ext(
+    orig = Ptr{Cvoid}(C_NULL)
+    ctx = AMR_init_context(init_fn, orig)
+    GC.@preserve comm conn init_fn ctx begin
+        p4est = p4est_new_ext(
             comm,
             conn,
             1,
@@ -353,10 +408,10 @@ function AMR_4est_new(
             1,
             sizeof(T),
             @cfunction(_amr_init_cb_p4est, Cvoid, (Ptr{p4est_t}, p4est_topidx_t, Ptr{p4est_quadrant_t})),
-            C_NULL,
+            pointer_from_objref(ctx),
         )
-    finally
-        old === nothing || (_AMR_INIT_FN[] = old)
+        PointerWrapper(p4est).user_pointer = orig   # restore original user_pointer (C_NULL)
+        return p4est
     end
 end
 function AMR_4est_new(
@@ -365,10 +420,10 @@ function AMR_4est_new(
     ::Type{T},
     init_fn::Function,
 ) where {T}
-    old = isassigned(_AMR_INIT_FN) ? _AMR_INIT_FN[] : nothing
-    _AMR_INIT_FN[] = init_fn
-    try
-        GC.@preserve comm conn init_fn p8est_new_ext(
+    orig = Ptr{Cvoid}(C_NULL)
+    ctx = AMR_init_context(init_fn, orig)
+    GC.@preserve comm conn init_fn ctx begin
+        p8est = p8est_new_ext(
             comm,
             conn,
             1,
@@ -376,10 +431,10 @@ function AMR_4est_new(
             1,
             sizeof(T),
             @cfunction(_amr_init_cb_p8est, Cvoid, (Ptr{p8est_t}, p4est_topidx_t, Ptr{p8est_quadrant_t})),
-            C_NULL,
+            pointer_from_objref(ctx),
         )
-    finally
-        old === nothing || (_AMR_INIT_FN[] = old)
+        PointerWrapper(p8est).user_pointer = orig   # restore original user_pointer (C_NULL)
+        return p8est
     end
 end
 
@@ -412,26 +467,34 @@ function AMR_partition(p4est::Ptr{p4est_t},weight_fn::T=C_NULL) where{T<:Union{P
     p4est_partition(p4est, 0, weight_fn)
 end
 function AMR_partition(weight_fn::Function,p4est::Ptr{p4est_t})
-    old = isassigned(_AMR_WEIGHT_FN) ? _AMR_WEIGHT_FN[] : nothing
-    _AMR_WEIGHT_FN[] = weight_fn
-    try
-        GC.@preserve weight_fn AMR_partition(p4est,
-            @cfunction(_amr_weight_cb_p4est,Cint,(Ptr{p4est_t},p4est_topidx_t,Ptr{p4est_quadrant_t})))
-    finally
-        old === nothing || (_AMR_WEIGHT_FN[] = old)
+    fp = PointerWrapper(p4est)
+    orig = Ptr{Cvoid}(pointer(fp.user_pointer))            # original user_pointer (e.g. kinfo/ka)
+    ctx = AMR_weight_context(weight_fn, orig)
+    GC.@preserve weight_fn ctx begin
+        fp.user_pointer = pointer_from_objref(ctx)
+        try
+            AMR_partition(p4est,
+                @cfunction(_amr_weight_cb_p4est,Cint,(Ptr{p4est_t},p4est_topidx_t,Ptr{p4est_quadrant_t})))
+        finally
+            fp.user_pointer = orig                         # restore original user_pointer
+        end
     end
 end
 function AMR_partition(p4est::Ptr{p8est_t},weight_fn::T=C_NULL) where{T<:Union{Ptr{Nothing},Base.CFunction}}
     p8est_partition(p4est, 0, weight_fn)
 end
 function AMR_partition(weight_fn::Function,p4est::Ptr{p8est_t})
-    old = isassigned(_AMR_WEIGHT_FN) ? _AMR_WEIGHT_FN[] : nothing
-    _AMR_WEIGHT_FN[] = weight_fn
-    try
-        GC.@preserve weight_fn AMR_partition(p4est,
-            @cfunction(_amr_weight_cb_p8est,Cint,(Ptr{p8est_t},p4est_topidx_t,Ptr{p8est_quadrant_t})))
-    finally
-        old === nothing || (_AMR_WEIGHT_FN[] = old)
+    fp = PointerWrapper(p4est)
+    orig = Ptr{Cvoid}(pointer(fp.user_pointer))            # original user_pointer (e.g. kinfo/ka)
+    ctx = AMR_weight_context(weight_fn, orig)
+    GC.@preserve weight_fn ctx begin
+        fp.user_pointer = pointer_from_objref(ctx)
+        try
+            AMR_partition(p4est,
+                @cfunction(_amr_weight_cb_p8est,Cint,(Ptr{p8est_t},p4est_topidx_t,Ptr{p8est_quadrant_t})))
+        finally
+            fp.user_pointer = orig                         # restore original user_pointer
+        end
     end
 end
 

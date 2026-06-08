@@ -226,13 +226,17 @@ end
 $(TYPEDSIGNATURES)
 """
 function partition!(p4est::Ptr{p4est_t},weight::Function = partition_weight)
-    old = isassigned(_AMR_WEIGHT_FN) ? _AMR_WEIGHT_FN[] : nothing
-    _AMR_WEIGHT_FN[] = weight
-    try
-        GC.@preserve weight partition!(p4est,
-            @cfunction(_amr_weight_cb_p4est,Cint,(Ptr{p4est_t},p4est_topidx_t,Ptr{p4est_quadrant_t})))
-    finally
-        old === nothing || (_AMR_WEIGHT_FN[] = old)
+    fp = PointerWrapper(p4est)
+    orig = Ptr{Cvoid}(pointer(fp.user_pointer))            # original user_pointer (e.g. kinfo/ka)
+    ctx = AMR_weight_context(weight, orig)
+    GC.@preserve weight ctx begin
+        fp.user_pointer = pointer_from_objref(ctx)
+        try
+            return partition!(p4est,
+                @cfunction(_amr_weight_cb_p4est,Cint,(Ptr{p4est_t},p4est_topidx_t,Ptr{p4est_quadrant_t})))
+        finally
+            fp.user_pointer = orig                         # restore original user_pointer
+        end
     end
 end
 function partition!(p4est::Ptr{p4est_t},weight::Union{Ptr{Nothing},Base.CFunction})
@@ -249,13 +253,17 @@ function partition!(p4est::Ptr{p4est_t},weight::Union{Ptr{Nothing},Base.CFunctio
     return src_gfq, gfq, src_flt, src_llt
 end
 function partition!(p4est::Ptr{p8est_t},weight::Function = partition_weight)
-    old = isassigned(_AMR_WEIGHT_FN) ? _AMR_WEIGHT_FN[] : nothing
-    _AMR_WEIGHT_FN[] = weight
-    try
-        GC.@preserve weight partition!(p4est,
-            @cfunction(_amr_weight_cb_p8est,Cint,(Ptr{p8est_t},p4est_topidx_t,Ptr{p8est_quadrant_t})))
-    finally
-        old === nothing || (_AMR_WEIGHT_FN[] = old)
+    fp = PointerWrapper(p4est)
+    orig = Ptr{Cvoid}(pointer(fp.user_pointer))            # original user_pointer (e.g. kinfo/ka)
+    ctx = AMR_weight_context(weight, orig)
+    GC.@preserve weight ctx begin
+        fp.user_pointer = pointer_from_objref(ctx)
+        try
+            return partition!(p4est,
+                @cfunction(_amr_weight_cb_p8est,Cint,(Ptr{p8est_t},p4est_topidx_t,Ptr{p8est_quadrant_t})))
+        finally
+            fp.user_pointer = orig                         # restore original user_pointer
+        end
     end
 end
 function partition!(p4est::Ptr{p8est_t},weight::Union{Ptr{Nothing},Base.CFunction})
