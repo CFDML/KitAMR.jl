@@ -1,0 +1,1426 @@
+
+==============================================================================
+== PROBE getkinfo(ka)  [ka.kinfo field access]
+==============================================================================
+MethodInstance for getkinfo(::KA{2, 2})
+  from getkinfo(ka) @ Main ~/KitAMR_dev/diag_typestab.jl:114
+Arguments
+  #self#::Core.Const(Main.getkinfo)
+  ka::KA{2, 2}
+Body::KINFO
+1 ─ %1 = Base.getproperty(ka, :kinfo)::KINFO
+└──      return %1
+
+
+
+==============================================================================
+== PROBE getflux(ka)   [ka.kinfo.config.solver.flux]
+==============================================================================
+MethodInstance for getflux(::KA{2, 2})
+  from getflux(ka) @ Main ~/KitAMR_dev/diag_typestab.jl:113
+Arguments
+  #self#::Core.Const(Main.getflux)
+  ka::KA{2, 2}
+Body::TYPE{TF} WHERE TF<:ABSTRACTFLUXTYPE
+1 ─ %1 = Base.getproperty(ka, :kinfo)::KINFO
+│   %2 = Base.getproperty(%1, :config)::CONFIGURE
+│   %3 = Base.getproperty(%2, :solver)::SOLVER
+│   %4 = Base.getproperty(%3, :flux)::TYPE{TF} WHERE TF<:ABSTRACTFLUXTYPE
+└──      return %4
+
+
+
+==============================================================================
+== PROBE getfield_kdata(ka) [ka.kdata.field.faces]
+==============================================================================
+MethodInstance for getfield_kdata(::KA{2, 2})
+  from getfield_kdata(ka) @ Main ~/KitAMR_dev/diag_typestab.jl:115
+Arguments
+  #self#::Core.Const(Main.getfield_kdata)
+  ka::KA{2, 2}
+Body::Vector{AbstractFace}
+1 ─ %1 = Base.getproperty(ka, :kdata)::KDATA
+│   %2 = Base.getproperty(%1, :field)::FIELD
+│   %3 = Base.getproperty(%2, :faces)::Vector{AbstractFace}
+└──      return %3
+
+
+
+==============================================================================
+== TOPLEVEL flux!(DomainFace{...}, ka)
+==============================================================================
+MethodInstance for flux!(::DomainFace{2, 2}, ::KA{2, 2})
+  from flux!(face::DomainFace, ka::KA) @ KitAMR ~/KitAMR_dev/src/Flux/Flux.jl:19
+Arguments
+  #self#::Core.Const(KitAMR.flux!)
+  face::DOMAINFACE{2, 2}
+  ka::KA{2, 2}
+Locals
+  @_4::ANY
+  micro_flux::ANY
+  flux::ANY
+  here_vs::FaceVsData{2, 2}
+Body::Nothing
+1 ─ %1  = KitAMR.make_face_vs::Core.Const(KitAMR.make_face_vs)
+│         (here_vs = (%1)(face))
+│   %3  = KitAMR.calc_domain_flux::Core.Const(KitAMR.calc_domain_flux)
+│   %4  = Base.getproperty(ka, :kinfo)::KINFO
+│   %5  = Base.getproperty(%4, :config)::CONFIGURE
+│   %6  = Base.getproperty(%5, :solver)::SOLVER
+│   %7  = Base.getproperty(%6, :flux)::TYPE{TF} WHERE TF<:ABSTRACTFLUXTYPE
+│   %8  = here_vs::FaceVsData{2, 2}
+│   %9  = (%3)(%7, %8, face, ka)::ANY
+│   %10 = Base.indexed_iterate(%9, 1)::ANY
+│         (flux = Core.getfield(%10, 1))
+│         (@_4 = Core.getfield(%10, 2))
+│   %13 = @_4::ANY
+│   %14 = Base.indexed_iterate(%9, 2, %13)::ANY
+│         (micro_flux = Core.getfield(%14, 1))
+│   %16 = KitAMR.update_domain_flux!::Core.Const(KitAMR.update_domain_flux!)
+│   %17 = flux::ANY
+│   %18 = micro_flux::ANY
+│   %19 = here_vs::FaceVsData{2, 2}
+│   %20 = Base.getproperty(%19, :heavi)::Vector{Bool}
+│         (%16)(%17, %18, face, %20)
+│   %22 = KitAMR.nothing::Core.Const(nothing)
+└──       return %22
+
+
+
+==============================================================================
+== TOPLEVEL flux!(FullFace{...}, ka)
+==============================================================================
+MethodInstance for flux!(::FullFace{2, 2}, ::KA{2, 2})
+  from flux!(face::FullFace, ka::KA) @ KitAMR ~/KitAMR_dev/src/Flux/Flux.jl:28
+Arguments
+  #self#::Core.Const(KitAMR.flux!)
+  face::FullFace{2, 2}
+  ka::KA{2, 2}
+Locals
+  @_4::Int64
+  @_5::Int64
+  micro_flux::ANY
+  flux::ANY
+  there_vs::FaceVsData{2, 2}
+  here_vs::FaceVsData{2, 2}
+Body::Nothing
+1 ─ %1  = KitAMR.make_face_vs::Core.Const(KitAMR.make_face_vs)
+│   %2  = (%1)(face)::Core.PartialStruct(Tuple{FaceVsData{2, 2}, FaceVsData{2, 2}}, Any[Core.PartialStruct(FaceVsData{2, 2}, Any[Vector{Bool}, Core.PartialStruct(SubArray{Float64, 1, Vector{Float64}, Tuple{Vector{Int64}}, false}, Any[Vector{Float64}, Tuple{Vector{Int64}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 3, Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])]), FaceVsData{2, 2}])
+│   %3  = Base.indexed_iterate(%2, 1)::Core.PartialStruct(Tuple{FaceVsData{2, 2}, Int64}, Any[Core.PartialStruct(FaceVsData{2, 2}, Any[Vector{Bool}, Core.PartialStruct(SubArray{Float64, 1, Vector{Float64}, Tuple{Vector{Int64}}, false}, Any[Vector{Float64}, Tuple{Vector{Int64}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 3, Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])]), Core.Const(2)])
+│         (here_vs = Core.getfield(%3, 1))
+│         (@_5 = Core.getfield(%3, 2))
+│   %6  = @_5::Core.Const(2)
+│   %7  = Base.indexed_iterate(%2, 2, %6)::Core.PartialStruct(Tuple{FaceVsData{2, 2}, Int64}, Any[FaceVsData{2, 2}, Core.Const(3)])
+│         (there_vs = Core.getfield(%7, 1))
+│   %9  = KitAMR.calc_flux::Core.Const(KitAMR.calc_flux)
+│   %10 = Base.getproperty(ka, :kinfo)::KINFO
+│   %11 = Base.getproperty(%10, :config)::CONFIGURE
+│   %12 = Base.getproperty(%11, :solver)::SOLVER
+│   %13 = Base.getproperty(%12, :flux)::TYPE{TF} WHERE TF<:ABSTRACTFLUXTYPE
+│   %14 = here_vs::Core.PartialStruct(FaceVsData{2, 2}, Any[Vector{Bool}, Core.PartialStruct(SubArray{Float64, 1, Vector{Float64}, Tuple{Vector{Int64}}, false}, Any[Vector{Float64}, Tuple{Vector{Int64}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 3, Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])])
+│   %15 = there_vs::FaceVsData{2, 2}
+│   %16 = (%9)(%13, %14, %15, face, ka)::TUPLE{ANY, ANY}
+│   %17 = Base.indexed_iterate(%16, 1)::Core.PartialStruct(Tuple{Any, Int64}, Any[Any, Core.Const(2)])
+│         (flux = Core.getfield(%17, 1))
+│         (@_4 = Core.getfield(%17, 2))
+│   %20 = @_4::Core.Const(2)
+│   %21 = Base.indexed_iterate(%16, 2, %20)::Core.PartialStruct(Tuple{Any, Int64}, Any[Any, Core.Const(3)])
+│         (micro_flux = Core.getfield(%21, 1))
+│   %23 = KitAMR.update_flux!::Core.Const(KitAMR.update_flux!)
+│   %24 = flux::ANY
+│   %25 = micro_flux::ANY
+│   %26 = here_vs::Core.PartialStruct(FaceVsData{2, 2}, Any[Vector{Bool}, Core.PartialStruct(SubArray{Float64, 1, Vector{Float64}, Tuple{Vector{Int64}}, false}, Any[Vector{Float64}, Tuple{Vector{Int64}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 3, Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])])
+│   %27 = Base.getproperty(%26, :heavi)::Vector{Bool}
+│         (%23)(%24, %25, face, %27)
+│   %29 = KitAMR.nothing::Core.Const(nothing)
+└──       return %29
+
+
+
+==============================================================================
+== TOPLEVEL flux!(HangingFace{...}, ka)
+==============================================================================
+MethodInstance for flux!(::HangingFace{2, 2}, ::KA{2, 2})
+  from flux!(face::HangingFace{DIM, NDF}, ka::KA) where {DIM, NDF} @ KitAMR ~/KitAMR_dev/src/Flux/Flux.jl:37
+Static Parameters
+  DIM = 2
+  NDF = 2
+Arguments
+  #self#::Core.Const(KitAMR.flux!)
+  face::HangingFace{2, 2}
+  ka::KA{2, 2}
+Locals
+  @_4::UNION{NOTHING, TUPLE{INT64, INT64}}
+  @_5::Int64
+  @_6::Int64
+  there_vs::Vector{FaceVsData{2, 2}}
+  here_vs::FaceVsData{2, 2}
+  there_data::Vector{AbstractPsData{2, 2}}
+  here_data::PsData{2, 2}
+  midpoint::Vector{Vector{Float64}}
+  direction::Int64
+  rot::Float64
+  @_14::Int64
+  i::Int64
+  micro_flux::ANY
+  flux::ANY
+  flux_data::FluxData{HangingFace{2, 2}}
+Body::Nothing
+1 ─ %1  = KitAMR.unpack::Core.Const(KitAMR.unpack)
+│   %2  = (%1)(face)::Core.PartialStruct(Base.Generator{UnitRange{Int64}, KitAMR.var"#unpack##0#unpack##1"{HangingFace{2, 2}}}, Any[KitAMR.var"#unpack##0#unpack##1"{HangingFace{2, 2}}, Core.Const(1:5)])
+│   %3  = Base.indexed_iterate(%2, 1)::Core.PartialStruct(Tuple{Float64, Int64}, Any[Float64, Core.Const(1)])
+│         (rot = Core.getfield(%3, 1))
+│         (@_6 = Core.getfield(%3, 2))
+│   %6  = @_6::Core.Const(1)
+│   %7  = Base.indexed_iterate(%2, 2, %6)::Core.PartialStruct(Tuple{Int64, Int64}, Any[Int64, Core.Const(2)])
+│         (direction = Core.getfield(%7, 1))
+│         (@_6 = Core.getfield(%7, 2))
+│   %10 = @_6::Core.Const(2)
+│   %11 = Base.indexed_iterate(%2, 3, %10)::Core.PartialStruct(Tuple{Vector{Vector{Float64}}, Int64}, Any[Vector{Vector{Float64}}, Core.Const(3)])
+│         (midpoint = Core.getfield(%11, 1))
+│         (@_6 = Core.getfield(%11, 2))
+│   %14 = @_6::Core.Const(3)
+│   %15 = Base.indexed_iterate(%2, 4, %14)::Core.PartialStruct(Tuple{PsData{2, 2}, Int64}, Any[PsData{2, 2}, Core.Const(4)])
+│         (here_data = Core.getfield(%15, 1))
+│         (@_6 = Core.getfield(%15, 2))
+│   %18 = @_6::Core.Const(4)
+│   %19 = Base.indexed_iterate(%2, 5, %18)::Core.PartialStruct(Tuple{Vector{AbstractPsData{2, 2}}, Int64}, Any[Vector{AbstractPsData{2, 2}}, Core.Const(5)])
+│         (there_data = Core.getfield(%19, 1))
+│   %21 = KitAMR.make_face_vs::Core.Const(KitAMR.make_face_vs)
+│   %22 = (%21)(face)::Core.PartialStruct(Tuple{FaceVsData{2, 2}, Vector{FaceVsData{2, 2}}}, Any[Core.PartialStruct(FaceVsData{2, 2}, Any[Vector{Bool}, Core.PartialStruct(SubArray{Float64, 1, Vector{Float64}, Tuple{Vector{Int64}}, false}, Any[Vector{Float64}, Tuple{Vector{Int64}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 3, Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])]), Vector{FaceVsData{2, 2}}])
+│   %23 = Base.indexed_iterate(%22, 1)::Core.PartialStruct(Tuple{FaceVsData{2, 2}, Int64}, Any[Core.PartialStruct(FaceVsData{2, 2}, Any[Vector{Bool}, Core.PartialStruct(SubArray{Float64, 1, Vector{Float64}, Tuple{Vector{Int64}}, false}, Any[Vector{Float64}, Tuple{Vector{Int64}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 3, Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])]), Core.Const(2)])
+│         (here_vs = Core.getfield(%23, 1))
+│         (@_5 = Core.getfield(%23, 2))
+│   %26 = @_5::Core.Const(2)
+│   %27 = Base.indexed_iterate(%22, 2, %26)::Core.PartialStruct(Tuple{Vector{FaceVsData{2, 2}}, Int64}, Any[Vector{FaceVsData{2, 2}}, Core.Const(3)])
+│         (there_vs = Core.getfield(%27, 1))
+│   %29 = KitAMR.eachindex::Core.Const(eachindex)
+│   %30 = there_vs::Vector{FaceVsData{2, 2}}
+│   %31 = (%29)(%30)::Base.OneTo{Int64}
+│         (@_4 = Base.iterate(%31))
+│   %33 = @_4::UNION{NOTHING, TUPLE{INT64, INT64}}
+│   %34 = (%33 === nothing)::Bool
+│   %35 = Base.not_int(%34)::Bool
+└──       goto #4 if not %35
+2 ┄ %37 = @_4::Tuple{Int64, Int64}
+│         (i = Core.getfield(%37, 1))
+│   %39 = Core.getfield(%37, 2)::Int64
+│   %40 = KitAMR.FluxData::Core.Const(FluxData)
+│   %41 = KitAMR.HangingFace::Core.Const(HangingFace)
+│   %42 = $(Expr(:static_parameter, 1))::Core.Const(2)
+│   %43 = $(Expr(:static_parameter, 2))::Core.Const(2)
+│   %44 = Core.apply_type(%41, %42, %43)::Core.Const(HangingFace{2, 2})
+│   %45 = Core.apply_type(%40, %44)::Core.Const(FluxData{HangingFace{2, 2}})
+│   %46 = rot::Float64
+│   %47 = direction::Int64
+│   %48 = midpoint::Vector{Vector{Float64}}
+│   %49 = i::Int64
+│   %50 = Base.getindex(%48, %49)::Vector{Float64}
+│   %51 = here_data::PsData{2, 2}
+│   %52 = there_data::Vector{AbstractPsData{2, 2}}
+│   %53 = i::Int64
+│   %54 = Base.getindex(%52, %53)::ABSTRACTPSDATA{2, 2}
+│         (flux_data = (%45)(%46, %47, %50, %51, %54))
+│   %56 = KitAMR.calc_flux::Core.Const(KitAMR.calc_flux)
+│   %57 = Base.getproperty(ka, :kinfo)::KINFO
+│   %58 = Base.getproperty(%57, :config)::CONFIGURE
+│   %59 = Base.getproperty(%58, :solver)::SOLVER
+│   %60 = Base.getproperty(%59, :flux)::TYPE{TF} WHERE TF<:ABSTRACTFLUXTYPE
+│   %61 = here_vs::Core.PartialStruct(FaceVsData{2, 2}, Any[Vector{Bool}, Core.PartialStruct(SubArray{Float64, 1, Vector{Float64}, Tuple{Vector{Int64}}, false}, Any[Vector{Float64}, Tuple{Vector{Int64}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 3, Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])])
+│   %62 = there_vs::Vector{FaceVsData{2, 2}}
+│   %63 = i::Int64
+│   %64 = Base.getindex(%62, %63)::FaceVsData{2, 2}
+│   %65 = flux_data::Core.PartialStruct(FluxData{HangingFace{2, 2}}, Any[Float64, Int64, Vector{Float64}, PsData{2, 2}, AbstractPsData{2, 2}])
+│   %66 = (%56)(%60, %61, %64, %65, ka)::TUPLE{ANY, ANY}
+│   %67 = Base.indexed_iterate(%66, 1)::Core.PartialStruct(Tuple{Any, Int64}, Any[Any, Core.Const(2)])
+│         (flux = Core.getfield(%67, 1))
+│         (@_14 = Core.getfield(%67, 2))
+│   %70 = @_14::Core.Const(2)
+│   %71 = Base.indexed_iterate(%66, 2, %70)::Core.PartialStruct(Tuple{Any, Int64}, Any[Any, Core.Const(3)])
+│         (micro_flux = Core.getfield(%71, 1))
+│   %73 = KitAMR.update_flux!::Core.Const(KitAMR.update_flux!)
+│   %74 = flux::ANY
+│   %75 = micro_flux::ANY
+│   %76 = flux_data::Core.PartialStruct(FluxData{HangingFace{2, 2}}, Any[Float64, Int64, Vector{Float64}, PsData{2, 2}, AbstractPsData{2, 2}])
+│   %77 = here_vs::Core.PartialStruct(FaceVsData{2, 2}, Any[Vector{Bool}, Core.PartialStruct(SubArray{Float64, 1, Vector{Float64}, Tuple{Vector{Int64}}, false}, Any[Vector{Float64}, Tuple{Vector{Int64}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 3, Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])])
+│   %78 = Base.getproperty(%77, :heavi)::Vector{Bool}
+│         (%73)(%74, %75, %76, %78)
+│         (@_4 = Base.iterate(%31, %39))
+│   %81 = @_4::UNION{NOTHING, TUPLE{INT64, INT64}}
+│   %82 = (%81 === nothing)::Bool
+│   %83 = Base.not_int(%82)::Bool
+└──       goto #4 if not %83
+3 ─       goto #2
+4 ┄ %86 = KitAMR.nothing::Core.Const(nothing)
+└──       return %86
+
+
+
+==============================================================================
+== TOPLEVEL flux!(BackHangingFace{...}, ka)
+==============================================================================
+MethodInstance for flux!(::BackHangingFace{2, 2}, ::KA{2, 2})
+  from flux!(face::BackHangingFace{DIM, NDF}, ka::KA) where {DIM, NDF} @ KitAMR ~/KitAMR_dev/src/Flux/Flux.jl:50
+Static Parameters
+  DIM = 2
+  NDF = 2
+Arguments
+  #self#::Core.Const(KitAMR.flux!)
+  face::BackHangingFace{2, 2}
+  ka::KA{2, 2}
+Locals
+  @_4::UNION{NOTHING, TUPLE{INT64, INT64}}
+  @_5::Int64
+  @_6::Int64
+  there_vs::FaceVsData{2, 2}
+  here_vs::Vector{FaceVsData{2, 2}}
+  there_data::ABSTRACTPSDATA{2, 2}
+  here_data::Vector{PsData{2, 2}}
+  midpoint::Vector{Vector{Float64}}
+  direction::Int64
+  rot::Float64
+  @_14::Int64
+  i::Int64
+  micro_flux::ANY
+  flux::ANY
+  flux_data::FluxData{BackHangingFace{2, 2}}
+Body::Nothing
+1 ─ %1  = KitAMR.unpack::Core.Const(KitAMR.unpack)
+│   %2  = (%1)(face)::Core.PartialStruct(Base.Generator{UnitRange{Int64}, KitAMR.var"#unpack##0#unpack##1"{BackHangingFace{2, 2}}}, Any[KitAMR.var"#unpack##0#unpack##1"{BackHangingFace{2, 2}}, Core.Const(1:5)])
+│   %3  = Base.indexed_iterate(%2, 1)::Core.PartialStruct(Tuple{Float64, Int64}, Any[Float64, Core.Const(1)])
+│         (rot = Core.getfield(%3, 1))
+│         (@_6 = Core.getfield(%3, 2))
+│   %6  = @_6::Core.Const(1)
+│   %7  = Base.indexed_iterate(%2, 2, %6)::Core.PartialStruct(Tuple{Int64, Int64}, Any[Int64, Core.Const(2)])
+│         (direction = Core.getfield(%7, 1))
+│         (@_6 = Core.getfield(%7, 2))
+│   %10 = @_6::Core.Const(2)
+│   %11 = Base.indexed_iterate(%2, 3, %10)::Core.PartialStruct(Tuple{Vector{Vector{Float64}}, Int64}, Any[Vector{Vector{Float64}}, Core.Const(3)])
+│         (midpoint = Core.getfield(%11, 1))
+│         (@_6 = Core.getfield(%11, 2))
+│   %14 = @_6::Core.Const(3)
+│   %15 = Base.indexed_iterate(%2, 4, %14)::Core.PartialStruct(Tuple{Vector{PsData{2, 2}}, Int64}, Any[Vector{PsData{2, 2}}, Core.Const(4)])
+│         (here_data = Core.getfield(%15, 1))
+│         (@_6 = Core.getfield(%15, 2))
+│   %18 = @_6::Core.Const(4)
+│   %19 = Base.indexed_iterate(%2, 5, %18)::Core.PartialStruct(Tuple{AbstractPsData{2, 2}, Int64}, Any[AbstractPsData{2, 2}, Core.Const(5)])
+│         (there_data = Core.getfield(%19, 1))
+│   %21 = KitAMR.make_face_vs::Core.Const(KitAMR.make_face_vs)
+│   %22 = (%21)(face)::Tuple{Vector{FaceVsData{2, 2}}, FaceVsData{2, 2}}
+│   %23 = Base.indexed_iterate(%22, 1)::Core.PartialStruct(Tuple{Vector{FaceVsData{2, 2}}, Int64}, Any[Vector{FaceVsData{2, 2}}, Core.Const(2)])
+│         (here_vs = Core.getfield(%23, 1))
+│         (@_5 = Core.getfield(%23, 2))
+│   %26 = @_5::Core.Const(2)
+│   %27 = Base.indexed_iterate(%22, 2, %26)::Core.PartialStruct(Tuple{FaceVsData{2, 2}, Int64}, Any[FaceVsData{2, 2}, Core.Const(3)])
+│         (there_vs = Core.getfield(%27, 1))
+│   %29 = KitAMR.eachindex::Core.Const(eachindex)
+│   %30 = here_vs::Vector{FaceVsData{2, 2}}
+│   %31 = (%29)(%30)::Base.OneTo{Int64}
+│         (@_4 = Base.iterate(%31))
+│   %33 = @_4::UNION{NOTHING, TUPLE{INT64, INT64}}
+│   %34 = (%33 === nothing)::Bool
+│   %35 = Base.not_int(%34)::Bool
+└──       goto #4 if not %35
+2 ┄ %37 = @_4::Tuple{Int64, Int64}
+│         (i = Core.getfield(%37, 1))
+│   %39 = Core.getfield(%37, 2)::Int64
+│   %40 = KitAMR.FluxData::Core.Const(FluxData)
+│   %41 = KitAMR.BackHangingFace::Core.Const(BackHangingFace)
+│   %42 = $(Expr(:static_parameter, 1))::Core.Const(2)
+│   %43 = $(Expr(:static_parameter, 2))::Core.Const(2)
+│   %44 = Core.apply_type(%41, %42, %43)::Core.Const(BackHangingFace{2, 2})
+│   %45 = Core.apply_type(%40, %44)::Core.Const(FluxData{BackHangingFace{2, 2}})
+│   %46 = rot::Float64
+│   %47 = direction::Int64
+│   %48 = midpoint::Vector{Vector{Float64}}
+│   %49 = i::Int64
+│   %50 = Base.getindex(%48, %49)::Vector{Float64}
+│   %51 = here_data::Vector{PsData{2, 2}}
+│   %52 = i::Int64
+│   %53 = Base.getindex(%51, %52)::PsData{2, 2}
+│   %54 = there_data::ABSTRACTPSDATA{2, 2}
+│         (flux_data = (%45)(%46, %47, %50, %53, %54))
+│   %56 = KitAMR.calc_flux::Core.Const(KitAMR.calc_flux)
+│   %57 = Base.getproperty(ka, :kinfo)::KINFO
+│   %58 = Base.getproperty(%57, :config)::CONFIGURE
+│   %59 = Base.getproperty(%58, :solver)::SOLVER
+│   %60 = Base.getproperty(%59, :flux)::TYPE{TF} WHERE TF<:ABSTRACTFLUXTYPE
+│   %61 = here_vs::Vector{FaceVsData{2, 2}}
+│   %62 = i::Int64
+│   %63 = Base.getindex(%61, %62)::FaceVsData{2, 2}
+│   %64 = there_vs::FaceVsData{2, 2}
+│   %65 = flux_data::Core.PartialStruct(FluxData{BackHangingFace{2, 2}}, Any[Float64, Int64, Vector{Float64}, PsData{2, 2}, AbstractPsData{2, 2}])
+│   %66 = (%56)(%60, %63, %64, %65, ka)::TUPLE{ANY, ANY}
+│   %67 = Base.indexed_iterate(%66, 1)::Core.PartialStruct(Tuple{Any, Int64}, Any[Any, Core.Const(2)])
+│         (flux = Core.getfield(%67, 1))
+│         (@_14 = Core.getfield(%67, 2))
+│   %70 = @_14::Core.Const(2)
+│   %71 = Base.indexed_iterate(%66, 2, %70)::Core.PartialStruct(Tuple{Any, Int64}, Any[Any, Core.Const(3)])
+│         (micro_flux = Core.getfield(%71, 1))
+│   %73 = KitAMR.update_flux!::Core.Const(KitAMR.update_flux!)
+│   %74 = flux::ANY
+│   %75 = micro_flux::ANY
+│   %76 = flux_data::Core.PartialStruct(FluxData{BackHangingFace{2, 2}}, Any[Float64, Int64, Vector{Float64}, PsData{2, 2}, AbstractPsData{2, 2}])
+│   %77 = here_vs::Vector{FaceVsData{2, 2}}
+│   %78 = i::Int64
+│   %79 = Base.getindex(%77, %78)::FaceVsData{2, 2}
+│   %80 = Base.getproperty(%79, :heavi)::Vector{Bool}
+│         (%73)(%74, %75, %76, %80)
+│         (@_4 = Base.iterate(%31, %39))
+│   %83 = @_4::UNION{NOTHING, TUPLE{INT64, INT64}}
+│   %84 = (%83 === nothing)::Bool
+│   %85 = Base.not_int(%84)::Bool
+└──       goto #4 if not %85
+3 ─       goto #2
+4 ┄ %88 = KitAMR.nothing::Core.Const(nothing)
+└──       return %88
+
+
+
+==============================================================================
+== INNER make_face_vs(FullFace)
+==============================================================================
+MethodInstance for make_face_vs(::FullFace{2, 2})
+  from make_face_vs(face::FullFace{DIM, NDF}) where {DIM, NDF} @ KitAMR ~/KitAMR_dev/src/Flux/Flux.jl:362
+Static Parameters
+  DIM = 2
+  NDF = 2
+Arguments
+  #self#::Core.Const(KitAMR.make_face_vs)
+  face::FullFace{2, 2}
+Locals
+  #164::KitAMR.var"#make_face_vs##4#make_face_vs##5"
+  #163::KitAMR.var"#make_face_vs##2#make_face_vs##3"
+  @_5::Int64
+  there_vs::FaceVsData{2, 2}
+  here_vs::FaceVsData{2, 2}
+  nheavi::ANY
+  heavi::Vector{Bool}
+  there_mid::ANY
+  here_mid::Matrix{Float64}
+  nvs_data::ANY
+  vs_data::VsData{2, 2}
+  there_data::ABSTRACTPSDATA{2, 2}
+  here_data::PsData{2, 2}
+  direction::Int64
+  rot::Float64
+Body::Tuple{FaceVsData{2, 2}, FaceVsData{2, 2}}
+1 ─ %1   = KitAMR.unpack::Core.Const(KitAMR.unpack)
+│   %2   = (%1)(face)::Core.PartialStruct(Base.Generator{UnitRange{Int64}, KitAMR.var"#unpack##0#unpack##1"{FullFace{2, 2}}}, Any[KitAMR.var"#unpack##0#unpack##1"{FullFace{2, 2}}, Core.Const(1:5)])
+│   %3   = Base.indexed_iterate(%2, 1)::Core.PartialStruct(Tuple{Float64, Int64}, Any[Float64, Core.Const(1)])
+│          (rot = Core.getfield(%3, 1))
+│          (@_5 = Core.getfield(%3, 2))
+│   %6   = @_5::Core.Const(1)
+│   %7   = Base.indexed_iterate(%2, 2, %6)::Core.PartialStruct(Tuple{Int64, Int64}, Any[Int64, Core.Const(2)])
+│          (direction = Core.getfield(%7, 1))
+│          (@_5 = Core.getfield(%7, 2))
+│   %10  = @_5::Core.Const(2)
+│   %11  = Base.indexed_iterate(%2, 3, %10)::Core.PartialStruct(Tuple{Vector{Float64}, Int64}, Any[Vector{Float64}, Core.Const(3)])
+│          Core.getfield(%11, 1)
+│          (@_5 = Core.getfield(%11, 2))
+│   %14  = @_5::Core.Const(3)
+│   %15  = Base.indexed_iterate(%2, 4, %14)::Core.PartialStruct(Tuple{PsData{2, 2}, Int64}, Any[PsData{2, 2}, Core.Const(4)])
+│          (here_data = Core.getfield(%15, 1))
+│          (@_5 = Core.getfield(%15, 2))
+│   %18  = @_5::Core.Const(4)
+│   %19  = Base.indexed_iterate(%2, 5, %18)::Core.PartialStruct(Tuple{AbstractPsData{2, 2}, Int64}, Any[AbstractPsData{2, 2}, Core.Const(5)])
+│          (there_data = Core.getfield(%19, 1))
+│   %21  = here_data::PsData{2, 2}
+│          (vs_data = Base.getproperty(%21, :vs_data))
+│   %23  = there_data::ABSTRACTPSDATA{2, 2}
+│          (nvs_data = Base.getproperty(%23, :vs_data))
+│   %25  = vs_data::VsData{2, 2}
+│          (here_mid = Base.getproperty(%25, :midpoint))
+│   %27  = nvs_data::ANY
+│          (there_mid = Base.getproperty(%27, :midpoint))
+│   %29  = KitAMR.:(var"#make_face_vs##2#make_face_vs##3")::Core.Const(KitAMR.var"#make_face_vs##2#make_face_vs##3")
+│          (#163 = %new(%29))
+│   %31  = #163::Core.Const(KitAMR.var"#make_face_vs##2#make_face_vs##3"())
+│   %32  = KitAMR.:*::Core.Const(*)
+│   %33  = rot::Float64
+│   %34  = here_mid::Matrix{Float64}
+│   %35  = KitAMR.:(:)::Core.Const(Colon())
+│   %36  = direction::Int64
+│   %37  = (Base.maybeview)(%34, %35, %36)::Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}, Any[Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, Int64, Core.Const(1)])
+│   %38  = Base.broadcasted(%32, %33, %37)::Core.PartialStruct(Base.Broadcast.Broadcasted{Base.Broadcast.DefaultArrayStyle{1}, Nothing, typeof(*), Tuple{Float64, SubArray{Float64, 1, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}}, Any[Core.Const(Base.Broadcast.DefaultArrayStyle{1}()), Core.Const(*), Core.PartialStruct(Tuple{Float64, SubArray{Float64, 1, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}, Any[Float64, Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}, Any[Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, Int64, Core.Const(1)])]), Core.Const(nothing)])
+│   %39  = Base.materialize(%38)::Vector{Float64}
+│   %40  = Base.Generator(%31, %39)::Base.Generator{Vector{Float64}, KitAMR.var"#make_face_vs##2#make_face_vs##3"}
+│          (heavi = Base.collect(%40))
+│   %42  = KitAMR.:(var"#make_face_vs##4#make_face_vs##5")::Core.Const(KitAMR.var"#make_face_vs##4#make_face_vs##5")
+│          (#164 = %new(%42))
+│   %44  = #164::Core.Const(KitAMR.var"#make_face_vs##4#make_face_vs##5"())
+│   %45  = KitAMR.:*::Core.Const(*)
+│   %46  = rot::Float64
+│   %47  = there_mid::ANY
+│   %48  = KitAMR.:(:)::Core.Const(Colon())
+│   %49  = direction::Int64
+│   %50  = (Base.maybeview)(%47, %48, %49)::ANY
+│   %51  = Base.broadcasted(%45, %46, %50)::ANY
+│   %52  = Base.materialize(%51)::ANY
+│   %53  = Base.Generator(%44, %52)::BASE.GENERATOR{_A, KITAMR.VAR"#MAKE_FACE_VS##4#MAKE_FACE_VS##5"} WHERE _A
+│          (nheavi = Base.collect(%53))
+│   %55  = KitAMR.FaceVsData::Core.Const(FaceVsData)
+│   %56  = $(Expr(:static_parameter, 1))::Core.Const(2)
+│   %57  = $(Expr(:static_parameter, 2))::Core.Const(2)
+│   %58  = Core.apply_type(%55, %56, %57)::Core.Const(FaceVsData{2, 2})
+│   %59  = heavi::Vector{Bool}
+│   %60  = vs_data::VsData{2, 2}
+│   %61  = Base.getproperty(%60, :weight)::Vector{Float64}
+│   %62  = heavi::Vector{Bool}
+│   %63  = (Base.maybeview)(%61, %62)::Core.PartialStruct(SubArray{Float64, 1, Vector{Float64}, Tuple{Vector{Int64}}, false}, Any[Vector{Float64}, Tuple{Vector{Int64}}, Core.Const(0), Core.Const(0)])
+│   %64  = here_mid::Matrix{Float64}
+│   %65  = heavi::Vector{Bool}
+│   %66  = KitAMR.:(:)::Core.Const(Colon())
+│   %67  = (Base.maybeview)(%64, %65, %66)::Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])
+│   %68  = here_mid::Matrix{Float64}
+│   %69  = heavi::Vector{Bool}
+│   %70  = direction::Int64
+│   %71  = (Base.maybeview)(%68, %69, %70)::Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)])
+│   %72  = vs_data::VsData{2, 2}
+│   %73  = Base.getproperty(%72, :df)::Matrix{Float64}
+│   %74  = heavi::Vector{Bool}
+│   %75  = KitAMR.:(:)::Core.Const(Colon())
+│   %76  = (Base.maybeview)(%73, %74, %75)::Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])
+│   %77  = vs_data::VsData{2, 2}
+│   %78  = Base.getproperty(%77, :sdf)::Array{Float64, 3}
+│   %79  = heavi::Vector{Bool}
+│   %80  = KitAMR.:(:)::Core.Const(Colon())
+│   %81  = KitAMR.:(:)::Core.Const(Colon())
+│   %82  = (Base.maybeview)(%78, %79, %80, %81)::Core.PartialStruct(SubArray{Float64, 3, Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])
+│          (here_vs = (%58)(%59, %63, %67, %71, %76, %82))
+│   %84  = KitAMR.FaceVsData::Core.Const(FaceVsData)
+│   %85  = $(Expr(:static_parameter, 1))::Core.Const(2)
+│   %86  = $(Expr(:static_parameter, 2))::Core.Const(2)
+│   %87  = Core.apply_type(%84, %85, %86)::Core.Const(FaceVsData{2, 2})
+│   %88  = nheavi::ANY
+│   %89  = nvs_data::ANY
+│   %90  = Base.getproperty(%89, :weight)::ANY
+│   %91  = nheavi::ANY
+│   %92  = (Base.maybeview)(%90, %91)::ANY
+│   %93  = there_mid::ANY
+│   %94  = nheavi::ANY
+│   %95  = KitAMR.:(:)::Core.Const(Colon())
+│   %96  = (Base.maybeview)(%93, %94, %95)::ANY
+│   %97  = there_mid::ANY
+│   %98  = nheavi::ANY
+│   %99  = direction::Int64
+│   %100 = (Base.maybeview)(%97, %98, %99)::ANY
+│   %101 = nvs_data::ANY
+│   %102 = Base.getproperty(%101, :df)::ANY
+│   %103 = nheavi::ANY
+│   %104 = KitAMR.:(:)::Core.Const(Colon())
+│   %105 = (Base.maybeview)(%102, %103, %104)::ANY
+│   %106 = nvs_data::ANY
+│   %107 = Base.getproperty(%106, :sdf)::ANY
+│   %108 = nheavi::ANY
+│   %109 = KitAMR.:(:)::Core.Const(Colon())
+│   %110 = KitAMR.:(:)::Core.Const(Colon())
+│   %111 = (Base.maybeview)(%107, %108, %109, %110)::ANY
+│          (there_vs = (%87)(%88, %92, %96, %100, %105, %111))
+│   %113 = here_vs::Core.PartialStruct(FaceVsData{2, 2}, Any[Vector{Bool}, Core.PartialStruct(SubArray{Float64, 1, Vector{Float64}, Tuple{Vector{Int64}}, false}, Any[Vector{Float64}, Tuple{Vector{Int64}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 3, Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])])
+│   %114 = there_vs::FaceVsData{2, 2}
+│   %115 = Core.tuple(%113, %114)::Core.PartialStruct(Tuple{FaceVsData{2, 2}, FaceVsData{2, 2}}, Any[Core.PartialStruct(FaceVsData{2, 2}, Any[Vector{Bool}, Core.PartialStruct(SubArray{Float64, 1, Vector{Float64}, Tuple{Vector{Int64}}, false}, Any[Vector{Float64}, Tuple{Vector{Int64}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 3, Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])]), FaceVsData{2, 2}])
+└──        return %115
+
+
+
+==============================================================================
+== INNER calc_flux(CAIDVM, FullFace)
+==============================================================================
+MethodInstance for calc_flux(::Type{CAIDVM}, ::FaceVsData{2, 2}, ::FaceVsData{2, 2}, ::FullFace{2, 2}, ::KA{2, 2})
+  from calc_flux(::Type{CAIDVM}, here_vs, there_vs, flux_data::Union{FluxData, FullFace}, ka::KA{DIM, NDF}) where {DIM, NDF} @ KitAMR ~/KitAMR_dev/src/Flux/CAIDVM.jl:99
+Static Parameters
+  DIM = 2
+  NDF = 2
+Arguments
+  #self#::Core.Const(KitAMR.calc_flux)
+  _::Core.Const(CAIDVM)
+  here_vs::FaceVsData{2, 2}
+  there_vs::FaceVsData{2, 2}
+  flux_data::FullFace{2, 2}
+  ka::KA{2, 2}
+Locals
+  #129::KITAMR.VAR"#CALC_FLUX##6#CALC_FLUX##7"{<:ABSTRACTMATRIX{FLOAT64}, <:ABSTRACTVECTOR{FLOAT64}}
+  #128::KITAMR.VAR"#CALC_FLUX##4#CALC_FLUX##5"{_A, <:ABSTRACTARRAY{FLOAT64, N}, <:ABSTRACTMATRIX{FLOAT64}, <:ABSTRACTVECTOR{FLOAT64}} WHERE {_A, N}
+  #127::KITAMR.VAR"#CALC_FLUX##2#CALC_FLUX##3"{_A, <:ABSTRACTMATRIX{FLOAT64}, FLOAT64, VECTOR{FLOAT64}} WHERE _A
+  #126::KITAMR.VAR"#CALC_FLUX##0#CALC_FLUX##1"{VECTOR{FLOAT64}, <:ABSTRACTMATRIX{FLOAT64}, FLOAT64, VECTOR{FLOAT64}}
+  val::ANY
+  @_12::Int64
+  fw::ANY
+  there_weight::ABSTRACTVECTOR{FLOAT64}
+  here_weight::ABSTRACTVECTOR{FLOAT64}
+  there_micro::ANY
+  here_micro::ANY
+  ndx::ANY
+  dx::ANY
+  there_ps_mid::ANY
+  here_ps_mid::Vector{Float64}
+  there_sdf::ABSTRACTARRAY{FLOAT64}
+  here_sdf::ABSTRACTARRAY{FLOAT64}
+  there_df::ABSTRACTMATRIX{FLOAT64}
+  here_df::ABSTRACTMATRIX{FLOAT64}
+  there_vn::ABSTRACTVECTOR{FLOAT64}
+  here_vn::ABSTRACTVECTOR{FLOAT64}
+  there_mid::ABSTRACTMATRIX{FLOAT64}
+  here_mid::ABSTRACTMATRIX{FLOAT64}
+  Δt::Float64
+  there_data::ABSTRACTPSDATA{2, 2}
+  here_data::PsData{2, 2}
+  midpoint::Vector{Float64}
+  @_34::ANY
+Body::TUPLE{ANY, ANY}
+1 ─        Core.NewvarNode(:(#129))
+│          Core.NewvarNode(:(#128))
+│          Core.NewvarNode(:(val))
+│          Core.NewvarNode(:(fw))
+│          Core.NewvarNode(:(there_weight))
+│          Core.NewvarNode(:(here_weight))
+│          Core.NewvarNode(:(there_micro))
+│          Core.NewvarNode(:(here_micro))
+│   %9   = KitAMR.unpack::Core.Const(KitAMR.unpack)
+│   %10  = (%9)(flux_data)::Core.PartialStruct(Base.Generator{UnitRange{Int64}, KitAMR.var"#unpack##0#unpack##1"{FullFace{2, 2}}}, Any[KitAMR.var"#unpack##0#unpack##1"{FullFace{2, 2}}, Core.Const(1:5)])
+│   %11  = Base.indexed_iterate(%10, 1)::Core.PartialStruct(Tuple{Float64, Int64}, Any[Float64, Core.Const(1)])
+│          Core.getfield(%11, 1)
+│          (@_12 = Core.getfield(%11, 2))
+│   %14  = @_12::Core.Const(1)
+│   %15  = Base.indexed_iterate(%10, 2, %14)::Core.PartialStruct(Tuple{Int64, Int64}, Any[Int64, Core.Const(2)])
+│          Core.getfield(%15, 1)
+│          (@_12 = Core.getfield(%15, 2))
+│   %18  = @_12::Core.Const(2)
+│   %19  = Base.indexed_iterate(%10, 3, %18)::Core.PartialStruct(Tuple{Vector{Float64}, Int64}, Any[Vector{Float64}, Core.Const(3)])
+│          (midpoint = Core.getfield(%19, 1))
+│          (@_12 = Core.getfield(%19, 2))
+│   %22  = @_12::Core.Const(3)
+│   %23  = Base.indexed_iterate(%10, 4, %22)::Core.PartialStruct(Tuple{PsData{2, 2}, Int64}, Any[PsData{2, 2}, Core.Const(4)])
+│          (here_data = Core.getfield(%23, 1))
+│          (@_12 = Core.getfield(%23, 2))
+│   %26  = @_12::Core.Const(4)
+│   %27  = Base.indexed_iterate(%10, 5, %26)::Core.PartialStruct(Tuple{AbstractPsData{2, 2}, Int64}, Any[AbstractPsData{2, 2}, Core.Const(5)])
+│          (there_data = Core.getfield(%27, 1))
+│   %29  = Base.getproperty(ka, :kinfo)::KINFO
+│   %30  = Base.getproperty(%29, :status)::Status
+│          (Δt = Base.getproperty(%30, :Δt))
+│          (here_mid = Base.getproperty(here_vs, :midpoint))
+│          (there_mid = Base.getproperty(there_vs, :midpoint))
+│          (here_vn = Base.getproperty(here_vs, :vn))
+│          (there_vn = Base.getproperty(there_vs, :vn))
+│          (here_df = Base.getproperty(here_vs, :df))
+│          (there_df = Base.getproperty(there_vs, :df))
+│          (here_sdf = Base.getproperty(here_vs, :sdf))
+│          (there_sdf = Base.getproperty(there_vs, :sdf))
+│   %40  = here_data::PsData{2, 2}
+│          (here_ps_mid = Base.getproperty(%40, :midpoint))
+│   %42  = there_data::ABSTRACTPSDATA{2, 2}
+│          (there_ps_mid = Base.getproperty(%42, :midpoint))
+│          nothing
+│   %45  = KitAMR.:(var"#calc_flux##0#calc_flux##1")::Core.Const(KitAMR.var"#calc_flux##0#calc_flux##1")
+│   %46  = here_ps_mid::Vector{Float64}
+│   %47  = Core._typeof_captured_variable(%46)::Core.Const(Vector{Float64})
+│   %48  = here_mid::ABSTRACTMATRIX{FLOAT64}
+│   %49  = Core._typeof_captured_variable(%48)::TYPE{<:ABSTRACTMATRIX{FLOAT64}}
+│   %50  = Δt::Float64
+│   %51  = Core._typeof_captured_variable(%50)::Core.Const(Float64)
+│   %52  = midpoint::Vector{Float64}
+│   %53  = Core._typeof_captured_variable(%52)::Core.Const(Vector{Float64})
+│   %54  = Core.apply_type(%45, %47, %49, %51, %53)::TYPE{KITAMR.VAR"#CALC_FLUX##0#CALC_FLUX##1"{VECTOR{FLOAT64}, VAR"#S179", FLOAT64, VECTOR{FLOAT64}}} WHERE VAR"#S179"<:ABSTRACTMATRIX{FLOAT64}
+│   %55  = here_ps_mid::Vector{Float64}
+│   %56  = here_mid::ABSTRACTMATRIX{FLOAT64}
+│   %57  = Δt::Float64
+│   %58  = midpoint::Vector{Float64}
+│          (#126 = %new(%54, %55, %56, %57, %58))
+│   %60  = #126::KITAMR.VAR"#CALC_FLUX##0#CALC_FLUX##1"{VECTOR{FLOAT64}, <:ABSTRACTMATRIX{FLOAT64}, FLOAT64, VECTOR{FLOAT64}}
+│   %61  = KitAMR.axes::Core.Const(axes)
+│   %62  = here_mid::ABSTRACTMATRIX{FLOAT64}
+│   %63  = (%61)(%62, 1)::ANY
+│   %64  = KitAMR.axes::Core.Const(axes)
+│   %65  = here_mid::ABSTRACTMATRIX{FLOAT64}
+│   %66  = (%64)(%65, 2)::ANY
+│   %67  = Base.product(%63, %66)::BASE.ITERATORS.PRODUCTITERATOR{T} WHERE T<:TUPLE{ANY, ANY}
+│   %68  = Base.Generator(%60, %67)::BASE.GENERATOR{I, F} WHERE {I<:(BASE.ITERATORS.PRODUCTITERATOR{T} WHERE T<:TUPLE{ANY, ANY}), F<:(KITAMR.VAR"#CALC_FLUX##0#CALC_FLUX##1"{VECTOR{FLOAT64}, <:ABSTRACTMATRIX{FLOAT64}, FLOAT64, VECTOR{FLOAT64}})}
+│          (dx = Base.collect(%68))
+│   %70  = KitAMR.:(var"#calc_flux##2#calc_flux##3")::Core.Const(KitAMR.var"#calc_flux##2#calc_flux##3")
+│   %71  = there_ps_mid::ANY
+│   %72  = Core._typeof_captured_variable(%71)::DATATYPE
+│   %73  = there_mid::ABSTRACTMATRIX{FLOAT64}
+│   %74  = Core._typeof_captured_variable(%73)::TYPE{<:ABSTRACTMATRIX{FLOAT64}}
+│   %75  = Δt::Float64
+│   %76  = Core._typeof_captured_variable(%75)::Core.Const(Float64)
+│   %77  = midpoint::Vector{Float64}
+│   %78  = Core._typeof_captured_variable(%77)::Core.Const(Vector{Float64})
+│   %79  = Core.apply_type(%70, %72, %74, %76, %78)::TYPE{KITAMR.VAR"#CALC_FLUX##2#CALC_FLUX##3"{_A, VAR"#S179", FLOAT64, VECTOR{FLOAT64}}} WHERE {_A, VAR"#S179"<:ABSTRACTMATRIX{FLOAT64}}
+│   %80  = there_ps_mid::ANY
+│   %81  = there_mid::ABSTRACTMATRIX{FLOAT64}
+│   %82  = Δt::Float64
+│   %83  = midpoint::Vector{Float64}
+│          (#127 = %new(%79, %80, %81, %82, %83))
+│   %85  = #127::KITAMR.VAR"#CALC_FLUX##2#CALC_FLUX##3"{_A, <:ABSTRACTMATRIX{FLOAT64}, FLOAT64, VECTOR{FLOAT64}} WHERE _A
+│   %86  = KitAMR.axes::Core.Const(axes)
+│   %87  = there_mid::ABSTRACTMATRIX{FLOAT64}
+│   %88  = (%86)(%87, 1)::ANY
+│   %89  = KitAMR.axes::Core.Const(axes)
+│   %90  = there_mid::ABSTRACTMATRIX{FLOAT64}
+│   %91  = (%89)(%90, 2)::ANY
+│   %92  = Base.product(%88, %91)::BASE.ITERATORS.PRODUCTITERATOR{T} WHERE T<:TUPLE{ANY, ANY}
+│   %93  = Base.Generator(%85, %92)::BASE.GENERATOR{I, F} WHERE {I<:(BASE.ITERATORS.PRODUCTITERATOR{T} WHERE T<:TUPLE{ANY, ANY}), F<:(KITAMR.VAR"#CALC_FLUX##2#CALC_FLUX##3"{_A, <:ABSTRACTMATRIX{FLOAT64}, FLOAT64, VECTOR{FLOAT64}} WHERE _A)}
+│          (ndx = Base.collect(%93))
+│   %95  = KitAMR.:<::Core.Const(<)
+│   %96  = there_data::ABSTRACTPSDATA{2, 2}
+│   %97  = Base.getproperty(%96, :bound_enc)::ANY
+│   %98  = (%95)(%97, 0)::ANY
+└──        goto #3 if not %98
+2 ─ %100 = KitAMR.:(var"#calc_flux##4#calc_flux##5")::Core.Const(KitAMR.var"#calc_flux##4#calc_flux##5")
+│   %101 = dx::ANY
+│   %102 = Core._typeof_captured_variable(%101)::DATATYPE
+│   %103 = here_sdf::ABSTRACTARRAY{FLOAT64}
+│   %104 = Core._typeof_captured_variable(%103)::TYPE{<:ABSTRACTARRAY{FLOAT64, N}} WHERE N
+│   %105 = here_df::ABSTRACTMATRIX{FLOAT64}
+│   %106 = Core._typeof_captured_variable(%105)::TYPE{<:ABSTRACTMATRIX{FLOAT64}}
+│   %107 = here_vn::ABSTRACTVECTOR{FLOAT64}
+│   %108 = Core._typeof_captured_variable(%107)::TYPE{<:ABSTRACTVECTOR{FLOAT64}}
+│   %109 = Core.apply_type(%100, %102, %104, %106, %108)::TYPE{KITAMR.VAR"#CALC_FLUX##4#CALC_FLUX##5"{_A, VAR"#S179", VAR"#S1791", VAR"#S1792"}} WHERE {_A, N, VAR"#S179"<:ABSTRACTARRAY{FLOAT64, N}, VAR"#S1791"<:ABSTRACTMATRIX{FLOAT64}, VAR"#S1792"<:ABSTRACTVECTOR{FLOAT64}}
+│   %110 = dx::ANY
+│   %111 = here_sdf::ABSTRACTARRAY{FLOAT64}
+│   %112 = here_df::ABSTRACTMATRIX{FLOAT64}
+│   %113 = here_vn::ABSTRACTVECTOR{FLOAT64}
+│          (#128 = %new(%109, %110, %111, %112, %113))
+│   %115 = #128::KITAMR.VAR"#CALC_FLUX##4#CALC_FLUX##5"{_A, <:ABSTRACTARRAY{FLOAT64, N}, <:ABSTRACTMATRIX{FLOAT64}, <:ABSTRACTVECTOR{FLOAT64}} WHERE {_A, N}
+│   %116 = KitAMR.axes::Core.Const(axes)
+│   %117 = here_df::ABSTRACTMATRIX{FLOAT64}
+│   %118 = (%116)(%117, 1)::ANY
+│   %119 = KitAMR.axes::Core.Const(axes)
+│   %120 = here_df::ABSTRACTMATRIX{FLOAT64}
+│   %121 = (%119)(%120, 2)::ANY
+│   %122 = Base.product(%118, %121)::BASE.ITERATORS.PRODUCTITERATOR{T} WHERE T<:TUPLE{ANY, ANY}
+│   %123 = Base.Generator(%115, %122)::BASE.GENERATOR{I, F} WHERE {I<:(BASE.ITERATORS.PRODUCTITERATOR{T} WHERE T<:TUPLE{ANY, ANY}), F<:(KITAMR.VAR"#CALC_FLUX##4#CALC_FLUX##5"{_A, <:ABSTRACTARRAY{FLOAT64, N}, <:ABSTRACTMATRIX{FLOAT64}, <:ABSTRACTVECTOR{FLOAT64}} WHERE {_A, N})}
+│          (here_micro = Base.collect(%123))
+│   %125 = KitAMR.:(var"#calc_flux##6#calc_flux##7")::Core.Const(KitAMR.var"#calc_flux##6#calc_flux##7")
+│   %126 = there_df::ABSTRACTMATRIX{FLOAT64}
+│   %127 = Core._typeof_captured_variable(%126)::TYPE{<:ABSTRACTMATRIX{FLOAT64}}
+│   %128 = there_vn::ABSTRACTVECTOR{FLOAT64}
+│   %129 = Core._typeof_captured_variable(%128)::TYPE{<:ABSTRACTVECTOR{FLOAT64}}
+│   %130 = Core.apply_type(%125, %127, %129)::TYPE{KITAMR.VAR"#CALC_FLUX##6#CALC_FLUX##7"{VAR"#S179", VAR"#S1791"}} WHERE {VAR"#S179"<:ABSTRACTMATRIX{FLOAT64}, VAR"#S1791"<:ABSTRACTVECTOR{FLOAT64}}
+│   %131 = there_df::ABSTRACTMATRIX{FLOAT64}
+│   %132 = there_vn::ABSTRACTVECTOR{FLOAT64}
+│          (#129 = %new(%130, %131, %132))
+│   %134 = #129::KITAMR.VAR"#CALC_FLUX##6#CALC_FLUX##7"{<:ABSTRACTMATRIX{FLOAT64}, <:ABSTRACTVECTOR{FLOAT64}}
+│   %135 = KitAMR.axes::Core.Const(axes)
+│   %136 = there_df::ABSTRACTMATRIX{FLOAT64}
+│   %137 = (%135)(%136, 1)::ANY
+│   %138 = KitAMR.axes::Core.Const(axes)
+│   %139 = there_df::ABSTRACTMATRIX{FLOAT64}
+│   %140 = (%138)(%139, 2)::ANY
+│   %141 = Base.product(%137, %140)::BASE.ITERATORS.PRODUCTITERATOR{T} WHERE T<:TUPLE{ANY, ANY}
+│   %142 = Base.Generator(%134, %141)::BASE.GENERATOR{I, F} WHERE {I<:(BASE.ITERATORS.PRODUCTITERATOR{T} WHERE T<:TUPLE{ANY, ANY}), F<:(KITAMR.VAR"#CALC_FLUX##6#CALC_FLUX##7"{<:ABSTRACTMATRIX{FLOAT64}, <:ABSTRACTVECTOR{FLOAT64}})}
+│   %143 = Base.collect(%142)::ANY
+│          (there_micro = %143)
+│          (@_34 = %143)
+└──        goto #4
+3 ─ %147 = KitAMR.positivity_preserving_reconstruct::Core.Const(KitAMR.positivity_preserving_reconstruct)
+│   %148 = here_df::ABSTRACTMATRIX{FLOAT64}
+│   %149 = here_sdf::ABSTRACTARRAY{FLOAT64}
+│   %150 = here_data::PsData{2, 2}
+│   %151 = Base.getproperty(%150, :ds)::Vector{Float64}
+│   %152 = dx::ANY
+│   %153 = here_vn::ABSTRACTVECTOR{FLOAT64}
+│          (here_micro = (%147)(%148, %149, %151, %152, %153))
+│   %155 = KitAMR.positivity_preserving_reconstruct::Core.Const(KitAMR.positivity_preserving_reconstruct)
+│   %156 = there_df::ABSTRACTMATRIX{FLOAT64}
+│   %157 = there_sdf::ABSTRACTARRAY{FLOAT64}
+│   %158 = there_data::ABSTRACTPSDATA{2, 2}
+│   %159 = Base.getproperty(%158, :ds)::ANY
+│   %160 = ndx::ANY
+│   %161 = there_vn::ABSTRACTVECTOR{FLOAT64}
+│   %162 = (%155)(%156, %157, %159, %160, %161)::ANY
+│          (there_micro = %162)
+└──        (@_34 = %162)
+4 ┄ %165 = @_34::ANY
+│          (val = %165)
+│          nothing
+│          val
+│          (here_weight = Base.getproperty(here_vs, :weight))
+│          (there_weight = Base.getproperty(there_vs, :weight))
+│   %171 = KitAMR.:+::Core.Const(+)
+│   %172 = KitAMR.micro_to_macro::Core.Const(KitAMR.micro_to_macro)
+│   %173 = here_micro::ANY
+│   %174 = here_mid::ABSTRACTMATRIX{FLOAT64}
+│   %175 = here_weight::ABSTRACTVECTOR{FLOAT64}
+│   %176 = here_data::PsData{2, 2}
+│   %177 = Base.getproperty(%176, :vs_data)::VsData{2, 2}
+│   %178 = (%172)(%173, %174, %175, %177)::VECTOR
+│   %179 = KitAMR.micro_to_macro::Core.Const(KitAMR.micro_to_macro)
+│   %180 = there_micro::ANY
+│   %181 = there_mid::ABSTRACTMATRIX{FLOAT64}
+│   %182 = there_weight::ABSTRACTVECTOR{FLOAT64}
+│   %183 = there_data::ABSTRACTPSDATA{2, 2}
+│   %184 = Base.getproperty(%183, :vs_data)::ANY
+│   %185 = (%179)(%180, %181, %182, %184)::VECTOR
+│          (fw = (%171)(%178, %185))
+│   %187 = fw::ANY
+│   %188 = here_micro::ANY
+│   %189 = there_micro::ANY
+│   %190 = Base.vect(%188, %189)::ANY
+│   %191 = Core.tuple(%187, %190)::TUPLE{ANY, ANY}
+└──        return %191
+
+
+
+==============================================================================
+== INNER update_flux!(FullFace)
+==============================================================================
+MethodInstance for update_flux!(::Vector{Float64}, ::Vector{Matrix{Float64}}, ::FullFace{2, 2}, ::Vector{Bool})
+  from update_flux!(flux::AbstractVector, micro_flux::Vector{Matrix{Float64}}, face::Union{FluxData, FullFace}, heavi::Vector{Bool}) @ KitAMR ~/KitAMR_dev/src/Flux/Flux.jl:94
+Arguments
+  #self#::Core.Const(KitAMR.update_flux!)
+  flux::Vector{Float64}
+  micro_flux::Vector{Matrix{Float64}}
+  face::FullFace{2, 2}
+  heavi::Vector{Bool}
+Locals
+  @_6::Int64
+  @_7::Int64
+  there_micro::Matrix{Float64}
+  here_micro::Matrix{Float64}
+  area::ANY
+  there_data::ABSTRACTPSDATA{2, 2}
+  here_data::PsData{2, 2}
+  direction::Int64
+  rot::Float64
+Body::Nothing
+1 ─ %1  = KitAMR.unpack::Core.Const(KitAMR.unpack)
+│   %2  = (%1)(face)::Core.PartialStruct(Base.Generator{UnitRange{Int64}, KitAMR.var"#unpack##0#unpack##1"{FullFace{2, 2}}}, Any[KitAMR.var"#unpack##0#unpack##1"{FullFace{2, 2}}, Core.Const(1:5)])
+│   %3  = Base.indexed_iterate(%2, 1)::Core.PartialStruct(Tuple{Float64, Int64}, Any[Float64, Core.Const(1)])
+│         (rot = Core.getfield(%3, 1))
+│         (@_7 = Core.getfield(%3, 2))
+│   %6  = @_7::Core.Const(1)
+│   %7  = Base.indexed_iterate(%2, 2, %6)::Core.PartialStruct(Tuple{Int64, Int64}, Any[Int64, Core.Const(2)])
+│         (direction = Core.getfield(%7, 1))
+│         (@_7 = Core.getfield(%7, 2))
+│   %10 = @_7::Core.Const(2)
+│   %11 = Base.indexed_iterate(%2, 3, %10)::Core.PartialStruct(Tuple{Vector{Float64}, Int64}, Any[Vector{Float64}, Core.Const(3)])
+│         Core.getfield(%11, 1)
+│         (@_7 = Core.getfield(%11, 2))
+│   %14 = @_7::Core.Const(3)
+│   %15 = Base.indexed_iterate(%2, 4, %14)::Core.PartialStruct(Tuple{PsData{2, 2}, Int64}, Any[PsData{2, 2}, Core.Const(4)])
+│         (here_data = Core.getfield(%15, 1))
+│         (@_7 = Core.getfield(%15, 2))
+│   %18 = @_7::Core.Const(4)
+│   %19 = Base.indexed_iterate(%2, 5, %18)::Core.PartialStruct(Tuple{AbstractPsData{2, 2}, Int64}, Any[AbstractPsData{2, 2}, Core.Const(5)])
+│         (there_data = Core.getfield(%19, 1))
+│   %21 = KitAMR.face_area::Core.Const(KitAMR.face_area)
+│   %22 = here_data::PsData{2, 2}
+│   %23 = direction::Int64
+│   %24 = rot::Float64
+│         (area = (%21)(face, %22, %23, %24))
+│   %26 = Base.indexed_iterate(micro_flux, 1)::Core.PartialStruct(Tuple{Matrix{Float64}, Int64}, Any[Matrix{Float64}, Core.Const(2)])
+│         (here_micro = Core.getfield(%26, 1))
+│         (@_6 = Core.getfield(%26, 2))
+│   %29 = @_6::Core.Const(2)
+│   %30 = Base.indexed_iterate(micro_flux, 2, %29)::Core.PartialStruct(Tuple{Matrix{Float64}, Int64}, Any[Matrix{Float64}, Core.Const(3)])
+│         (there_micro = Core.getfield(%30, 1))
+│   %32 = KitAMR.update_macro_flux!::Core.Const(KitAMR.update_macro_flux!)
+│   %33 = KitAMR.:*::Core.Const(*)
+│   %34 = area::ANY
+│   %35 = (%33)(flux, %34)::ANY
+│   %36 = here_data::PsData{2, 2}
+│   %37 = there_data::ABSTRACTPSDATA{2, 2}
+│         (%32)(%35, %36, %37)
+│   %39 = KitAMR.update_micro_flux!::Core.Const(KitAMR.update_micro_flux!)
+│   %40 = KitAMR.:*::Core.Const(*)
+│   %41 = here_micro::Matrix{Float64}
+│   %42 = area::ANY
+│   %43 = (%40)(%41, %42)::ANY
+│   %44 = KitAMR.:*::Core.Const(*)
+│   %45 = there_micro::Matrix{Float64}
+│   %46 = area::ANY
+│   %47 = (%44)(%45, %46)::ANY
+│   %48 = here_data::PsData{2, 2}
+│   %49 = there_data::ABSTRACTPSDATA{2, 2}
+│         (%39)(%43, %47, %48, %49, heavi)
+│   %51 = KitAMR.nothing::Core.Const(nothing)
+└──       return %51
+
+
+
+==============================================================================
+== INNER make_face_vs(DomainFace)
+==============================================================================
+MethodInstance for make_face_vs(::DomainFace{2, 2, Maxwellian})
+  from make_face_vs(face::DomainFace{DIM, NDF}) where {DIM, NDF} @ KitAMR ~/KitAMR_dev/src/Flux/Flux.jl:349
+Static Parameters
+  DIM = 2
+  NDF = 2
+Arguments
+  #self#::Core.Const(KitAMR.make_face_vs)
+  face::DomainFace{2, 2, Maxwellian}
+Locals
+  #162::KitAMR.var"#make_face_vs##0#make_face_vs##1"
+  @_4::Int64
+  here_vs::FaceVsData{2, 2}
+  heavi::Vector{Bool}
+  here_mid::Matrix{Float64}
+  vs_data::VsData{2, 2}
+  ps_data::PsData{2, 2}
+  direction::Int64
+  rot::Float64
+Body::FaceVsData{2, 2}
+1 ─ %1  = KitAMR.unpack::Core.Const(KitAMR.unpack)
+│   %2  = (%1)(face)::Core.PartialStruct(Base.Generator{UnitRange{Int64}, KitAMR.var"#unpack##0#unpack##1"{DomainFace{2, 2, Maxwellian}}}, Any[KitAMR.var"#unpack##0#unpack##1"{DomainFace{2, 2, Maxwellian}}, Core.Const(1:5)])
+│   %3  = Base.indexed_iterate(%2, 1)::Core.PartialStruct(Tuple{Float64, Int64}, Any[Float64, Core.Const(1)])
+│         (rot = Core.getfield(%3, 1))
+│         (@_4 = Core.getfield(%3, 2))
+│   %6  = @_4::Core.Const(1)
+│   %7  = Base.indexed_iterate(%2, 2, %6)::Core.PartialStruct(Tuple{Int64, Int64}, Any[Int64, Core.Const(2)])
+│         (direction = Core.getfield(%7, 1))
+│         (@_4 = Core.getfield(%7, 2))
+│   %10 = @_4::Core.Const(2)
+│   %11 = Base.indexed_iterate(%2, 3, %10)::Core.PartialStruct(Tuple{Vector{Float64}, Int64}, Any[Vector{Float64}, Core.Const(3)])
+│         Core.getfield(%11, 1)
+│         (@_4 = Core.getfield(%11, 2))
+│   %14 = @_4::Core.Const(3)
+│   %15 = Base.indexed_iterate(%2, 4, %14)::Core.PartialStruct(Tuple{Domain{Maxwellian}, Int64}, Any[Domain{Maxwellian}, Core.Const(4)])
+│         Core.getfield(%15, 1)
+│         (@_4 = Core.getfield(%15, 2))
+│   %18 = @_4::Core.Const(4)
+│   %19 = Base.indexed_iterate(%2, 5, %18)::Core.PartialStruct(Tuple{PsData{2, 2}, Int64}, Any[PsData{2, 2}, Core.Const(5)])
+│         (ps_data = Core.getfield(%19, 1))
+│   %21 = ps_data::PsData{2, 2}
+│         (vs_data = Base.getproperty(%21, :vs_data))
+│   %23 = vs_data::VsData{2, 2}
+│         (here_mid = Base.getproperty(%23, :midpoint))
+│   %25 = KitAMR.:(var"#make_face_vs##0#make_face_vs##1")::Core.Const(KitAMR.var"#make_face_vs##0#make_face_vs##1")
+│         (#162 = %new(%25))
+│   %27 = #162::Core.Const(KitAMR.var"#make_face_vs##0#make_face_vs##1"())
+│   %28 = KitAMR.:*::Core.Const(*)
+│   %29 = rot::Float64
+│   %30 = here_mid::Matrix{Float64}
+│   %31 = KitAMR.:(:)::Core.Const(Colon())
+│   %32 = direction::Int64
+│   %33 = (Base.maybeview)(%30, %31, %32)::Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}, Any[Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, Int64, Core.Const(1)])
+│   %34 = Base.broadcasted(%28, %29, %33)::Core.PartialStruct(Base.Broadcast.Broadcasted{Base.Broadcast.DefaultArrayStyle{1}, Nothing, typeof(*), Tuple{Float64, SubArray{Float64, 1, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}}, Any[Core.Const(Base.Broadcast.DefaultArrayStyle{1}()), Core.Const(*), Core.PartialStruct(Tuple{Float64, SubArray{Float64, 1, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}, Any[Float64, Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}, Any[Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, Int64, Core.Const(1)])]), Core.Const(nothing)])
+│   %35 = Base.materialize(%34)::Vector{Float64}
+│   %36 = Base.Generator(%27, %35)::Base.Generator{Vector{Float64}, KitAMR.var"#make_face_vs##0#make_face_vs##1"}
+│         (heavi = Base.collect(%36))
+│   %38 = KitAMR.FaceVsData::Core.Const(FaceVsData)
+│   %39 = $(Expr(:static_parameter, 1))::Core.Const(2)
+│   %40 = $(Expr(:static_parameter, 2))::Core.Const(2)
+│   %41 = Core.apply_type(%38, %39, %40)::Core.Const(FaceVsData{2, 2})
+│   %42 = heavi::Vector{Bool}
+│   %43 = vs_data::VsData{2, 2}
+│   %44 = Base.getproperty(%43, :weight)::Vector{Float64}
+│   %45 = heavi::Vector{Bool}
+│   %46 = (Base.maybeview)(%44, %45)::Core.PartialStruct(SubArray{Float64, 1, Vector{Float64}, Tuple{Vector{Int64}}, false}, Any[Vector{Float64}, Tuple{Vector{Int64}}, Core.Const(0), Core.Const(0)])
+│   %47 = here_mid::Matrix{Float64}
+│   %48 = heavi::Vector{Bool}
+│   %49 = KitAMR.:(:)::Core.Const(Colon())
+│   %50 = (Base.maybeview)(%47, %48, %49)::Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])
+│   %51 = here_mid::Matrix{Float64}
+│   %52 = heavi::Vector{Bool}
+│   %53 = direction::Int64
+│   %54 = (Base.maybeview)(%51, %52, %53)::Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)])
+│   %55 = vs_data::VsData{2, 2}
+│   %56 = Base.getproperty(%55, :df)::Matrix{Float64}
+│   %57 = heavi::Vector{Bool}
+│   %58 = KitAMR.:(:)::Core.Const(Colon())
+│   %59 = (Base.maybeview)(%56, %57, %58)::Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])
+│   %60 = vs_data::VsData{2, 2}
+│   %61 = Base.getproperty(%60, :sdf)::Array{Float64, 3}
+│   %62 = heavi::Vector{Bool}
+│   %63 = KitAMR.:(:)::Core.Const(Colon())
+│   %64 = KitAMR.:(:)::Core.Const(Colon())
+│   %65 = (Base.maybeview)(%61, %62, %63, %64)::Core.PartialStruct(SubArray{Float64, 3, Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])
+│         (here_vs = (%41)(%42, %46, %50, %54, %59, %65))
+│   %67 = here_vs::Core.PartialStruct(FaceVsData{2, 2}, Any[Vector{Bool}, Core.PartialStruct(SubArray{Float64, 1, Vector{Float64}, Tuple{Vector{Int64}}, false}, Any[Vector{Float64}, Tuple{Vector{Int64}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 3, Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])])
+└──       return %67
+
+
+
+==============================================================================
+== INNER calc_domain_flux(CAIDVM, DomainFace)
+==============================================================================
+MethodInstance for calc_domain_flux(::Type{CAIDVM}, ::FaceVsData{2, 2}, ::DomainFace{2, 2, Maxwellian}, ::KA{2, 2})
+  from calc_domain_flux(::Type{CAIDVM}, here_vs::FaceVsData, face::DomainFace{DIM, NDF, Maxwellian}, ka::KA) where {DIM, NDF} @ KitAMR ~/KitAMR_dev/src/Flux/CAIDVM.jl:4
+Static Parameters
+  DIM = 2
+  NDF = 2
+Arguments
+  #self#::Core.Const(KitAMR.calc_domain_flux)
+  _::Core.Const(CAIDVM)
+  here_vs::FaceVsData{2, 2}
+  face::DomainFace{2, 2, Maxwellian}
+  ka::KA{2, 2}
+Locals
+  #110::KitAMR.var"#calc_domain_flux##8#calc_domain_flux##9"{Matrix{Float64}, SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}}
+  val@_7::Matrix{Float64}
+  #109::KITAMR.VAR"#CALC_DOMAIN_FLUX##6#CALC_DOMAIN_FLUX##7"{_A, <:ABSTRACTVECTOR{FLOAT64}} WHERE _A
+  val@_9::ANY
+  @_10::UNION{NOTHING, TUPLE{INT64, INT64}}
+  #108::KITAMR.VAR"#CALC_DOMAIN_FLUX##4#CALC_DOMAIN_FLUX##5"{_A, <:ABSTRACTARRAY{FLOAT64, N}, <:ABSTRACTMATRIX{FLOAT64}} WHERE {_A, N}
+  val@_12::ANY
+  #107::KITAMR.VAR"#CALC_DOMAIN_FLUX##2#CALC_DOMAIN_FLUX##3"{FLOAT64, <:ABSTRACTMATRIX{FLOAT64}, PSDATA{2, 2}, VECTOR{FLOAT64}}
+  val@_14::ANY
+  #106::KitAMR.var"#calc_domain_flux##0#calc_domain_flux##1"
+  @_16::Int64
+  @_17::Int64
+  fw::ANY
+  there_micro::Matrix{Float64}
+  here_micro::ANY
+  there_df::Matrix{Float64}
+  bc::VECTOR
+  df::ANY
+  dx::ANY
+  there_vn::SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}
+  there_weight::SubArray{Float64, 1, Vector{Float64}, Tuple{Vector{Int64}}, false}
+  there_mid::SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}
+  nheavi::Vector{Bool}
+  vs_data::VsData{2, 2}
+  Δt::Float64
+  here_sdf::ABSTRACTARRAY{FLOAT64}
+  here_df::ABSTRACTMATRIX{FLOAT64}
+  here_vn::ABSTRACTVECTOR{FLOAT64}
+  here_mid::ABSTRACTMATRIX{FLOAT64}
+  here_weight::ABSTRACTVECTOR{FLOAT64}
+  heavi::Vector{Bool}
+  ps_data::PsData{2, 2}
+  midpoint::Vector{Float64}
+  direction::Int64
+  i::Int64
+Body::TUPLE{ANY, ANY}
+1 ─        Core.NewvarNode(:(#110))
+│          Core.NewvarNode(:(val@_7))
+│          Core.NewvarNode(:(#109))
+│          Core.NewvarNode(:(val@_9))
+│          Core.NewvarNode(:(fw))
+│          Core.NewvarNode(:(there_micro))
+│          Core.NewvarNode(:(here_micro))
+│   %8   = KitAMR.unpack::Core.Const(KitAMR.unpack)
+│   %9   = (%8)(face)::Core.PartialStruct(Base.Generator{UnitRange{Int64}, KitAMR.var"#unpack##0#unpack##1"{DomainFace{2, 2, Maxwellian}}}, Any[KitAMR.var"#unpack##0#unpack##1"{DomainFace{2, 2, Maxwellian}}, Core.Const(1:5)])
+│   %10  = Base.indexed_iterate(%9, 1)::Core.PartialStruct(Tuple{Float64, Int64}, Any[Float64, Core.Const(1)])
+│          Core.getfield(%10, 1)
+│          (@_17 = Core.getfield(%10, 2))
+│   %13  = @_17::Core.Const(1)
+│   %14  = Base.indexed_iterate(%9, 2, %13)::Core.PartialStruct(Tuple{Int64, Int64}, Any[Int64, Core.Const(2)])
+│          (direction = Core.getfield(%14, 1))
+│          (@_17 = Core.getfield(%14, 2))
+│   %17  = @_17::Core.Const(2)
+│   %18  = Base.indexed_iterate(%9, 3, %17)::Core.PartialStruct(Tuple{Vector{Float64}, Int64}, Any[Vector{Float64}, Core.Const(3)])
+│          (midpoint = Core.getfield(%18, 1))
+│          (@_17 = Core.getfield(%18, 2))
+│   %21  = @_17::Core.Const(3)
+│   %22  = Base.indexed_iterate(%9, 4, %21)::Core.PartialStruct(Tuple{Domain{Maxwellian}, Int64}, Any[Domain{Maxwellian}, Core.Const(4)])
+│          Core.getfield(%22, 1)
+│          (@_17 = Core.getfield(%22, 2))
+│   %25  = @_17::Core.Const(4)
+│   %26  = Base.indexed_iterate(%9, 5, %25)::Core.PartialStruct(Tuple{PsData{2, 2}, Int64}, Any[PsData{2, 2}, Core.Const(5)])
+│          (ps_data = Core.getfield(%26, 1))
+│   %28  = KitAMR.unpack::Core.Const(KitAMR.unpack)
+│   %29  = (%28)(here_vs)::Core.PartialStruct(Base.Generator{UnitRange{Int64}, KitAMR.var"#unpack##0#unpack##1"{FaceVsData{2, 2}}}, Any[KitAMR.var"#unpack##0#unpack##1"{FaceVsData{2, 2}}, Core.Const(1:6)])
+│   %30  = Base.indexed_iterate(%29, 1)::Core.PartialStruct(Tuple{Vector{Bool}, Int64}, Any[Vector{Bool}, Core.Const(1)])
+│          (heavi = Core.getfield(%30, 1))
+│          (@_16 = Core.getfield(%30, 2))
+│   %33  = @_16::Core.Const(1)
+│   %34  = Base.indexed_iterate(%29, 2, %33)::Core.PartialStruct(Tuple{AbstractVector{Float64}, Int64}, Any[AbstractVector{Float64}, Core.Const(2)])
+│          (here_weight = Core.getfield(%34, 1))
+│          (@_16 = Core.getfield(%34, 2))
+│   %37  = @_16::Core.Const(2)
+│   %38  = Base.indexed_iterate(%29, 3, %37)::Core.PartialStruct(Tuple{AbstractMatrix{Float64}, Int64}, Any[AbstractMatrix{Float64}, Core.Const(3)])
+│          (here_mid = Core.getfield(%38, 1))
+│          (@_16 = Core.getfield(%38, 2))
+│   %41  = @_16::Core.Const(3)
+│   %42  = Base.indexed_iterate(%29, 4, %41)::Core.PartialStruct(Tuple{AbstractVector{Float64}, Int64}, Any[AbstractVector{Float64}, Core.Const(4)])
+│          (here_vn = Core.getfield(%42, 1))
+│          (@_16 = Core.getfield(%42, 2))
+│   %45  = @_16::Core.Const(4)
+│   %46  = Base.indexed_iterate(%29, 5, %45)::Core.PartialStruct(Tuple{AbstractMatrix{Float64}, Int64}, Any[AbstractMatrix{Float64}, Core.Const(5)])
+│          (here_df = Core.getfield(%46, 1))
+│          (@_16 = Core.getfield(%46, 2))
+│   %49  = @_16::Core.Const(5)
+│   %50  = Base.indexed_iterate(%29, 6, %49)::Core.PartialStruct(Tuple{AbstractArray{Float64}, Int64}, Any[AbstractArray{Float64}, Core.Const(6)])
+│          (here_sdf = Core.getfield(%50, 1))
+│   %52  = Base.getproperty(ka, :kinfo)::KINFO
+│   %53  = Base.getproperty(%52, :status)::Status
+│          (Δt = Base.getproperty(%53, :Δt))
+│   %55  = ps_data::PsData{2, 2}
+│          (vs_data = Base.getproperty(%55, :vs_data))
+│   %57  = KitAMR.:(var"#calc_domain_flux##0#calc_domain_flux##1")::Core.Const(KitAMR.var"#calc_domain_flux##0#calc_domain_flux##1")
+│          (#106 = %new(%57))
+│   %59  = #106::Core.Const(KitAMR.var"#calc_domain_flux##0#calc_domain_flux##1"())
+│   %60  = heavi::Vector{Bool}
+│   %61  = Base.Generator(%59, %60)::Base.Generator{Vector{Bool}, KitAMR.var"#calc_domain_flux##0#calc_domain_flux##1"}
+│          (nheavi = Base.collect(%61))
+│   %63  = vs_data::VsData{2, 2}
+│   %64  = Base.getproperty(%63, :midpoint)::Matrix{Float64}
+│   %65  = nheavi::Vector{Bool}
+│   %66  = KitAMR.:(:)::Core.Const(Colon())
+│          (there_mid = (Base.maybeview)(%64, %65, %66))
+│   %68  = vs_data::VsData{2, 2}
+│   %69  = Base.getproperty(%68, :weight)::Vector{Float64}
+│   %70  = nheavi::Vector{Bool}
+│          (there_weight = (Base.maybeview)(%69, %70))
+│   %72  = there_mid::Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])
+│   %73  = KitAMR.:(:)::Core.Const(Colon())
+│   %74  = direction::Int64
+│          (there_vn = (Base.maybeview)(%72, %73, %74))
+│          nothing
+│   %77  = KitAMR.:(var"#calc_domain_flux##2#calc_domain_flux##3")::Core.Const(KitAMR.var"#calc_domain_flux##2#calc_domain_flux##3")
+│   %78  = Δt::Float64
+│   %79  = Core._typeof_captured_variable(%78)::Core.Const(Float64)
+│   %80  = here_mid::ABSTRACTMATRIX{FLOAT64}
+│   %81  = Core._typeof_captured_variable(%80)::TYPE{<:ABSTRACTMATRIX{FLOAT64}}
+│   %82  = ps_data::PsData{2, 2}
+│   %83  = Core._typeof_captured_variable(%82)::Core.Const(PsData{2, 2})
+│   %84  = midpoint::Vector{Float64}
+│   %85  = Core._typeof_captured_variable(%84)::Core.Const(Vector{Float64})
+│   %86  = Core.apply_type(%77, %79, %81, %83, %85)::TYPE{KITAMR.VAR"#CALC_DOMAIN_FLUX##2#CALC_DOMAIN_FLUX##3"{FLOAT64, VAR"#S179", PSDATA{2, 2}, VECTOR{FLOAT64}}} WHERE VAR"#S179"<:ABSTRACTMATRIX{FLOAT64}
+│   %87  = Δt::Float64
+│   %88  = here_mid::ABSTRACTMATRIX{FLOAT64}
+│   %89  = ps_data::PsData{2, 2}
+│   %90  = midpoint::Vector{Float64}
+│          (#107 = %new(%86, %87, %88, %89, %90))
+│   %92  = #107::KITAMR.VAR"#CALC_DOMAIN_FLUX##2#CALC_DOMAIN_FLUX##3"{FLOAT64, <:ABSTRACTMATRIX{FLOAT64}, PSDATA{2, 2}, VECTOR{FLOAT64}}
+│   %93  = KitAMR.axes::Core.Const(axes)
+│   %94  = here_mid::ABSTRACTMATRIX{FLOAT64}
+│   %95  = (%93)(%94, 1)::ANY
+│   %96  = KitAMR.axes::Core.Const(axes)
+│   %97  = here_mid::ABSTRACTMATRIX{FLOAT64}
+│   %98  = (%96)(%97, 2)::ANY
+│   %99  = Base.product(%95, %98)::BASE.ITERATORS.PRODUCTITERATOR{T} WHERE T<:TUPLE{ANY, ANY}
+│   %100 = Base.Generator(%92, %99)::BASE.GENERATOR{I, F} WHERE {I<:(BASE.ITERATORS.PRODUCTITERATOR{T} WHERE T<:TUPLE{ANY, ANY}), F<:(KITAMR.VAR"#CALC_DOMAIN_FLUX##2#CALC_DOMAIN_FLUX##3"{FLOAT64, <:ABSTRACTMATRIX{FLOAT64}, PSDATA{2, 2}, VECTOR{FLOAT64}})}
+│   %101 = Base.collect(%100)::ANY
+│          (dx = %101)
+│          (val@_14 = %101)
+│          nothing
+│          val@_14
+│          nothing
+│   %107 = KitAMR.:(var"#calc_domain_flux##4#calc_domain_flux##5")::Core.Const(KitAMR.var"#calc_domain_flux##4#calc_domain_flux##5")
+│   %108 = dx::ANY
+│   %109 = Core._typeof_captured_variable(%108)::DATATYPE
+│   %110 = here_sdf::ABSTRACTARRAY{FLOAT64}
+│   %111 = Core._typeof_captured_variable(%110)::TYPE{<:ABSTRACTARRAY{FLOAT64, N}} WHERE N
+│   %112 = here_df::ABSTRACTMATRIX{FLOAT64}
+│   %113 = Core._typeof_captured_variable(%112)::TYPE{<:ABSTRACTMATRIX{FLOAT64}}
+│   %114 = Core.apply_type(%107, %109, %111, %113)::TYPE{KITAMR.VAR"#CALC_DOMAIN_FLUX##4#CALC_DOMAIN_FLUX##5"{_A, VAR"#S179", VAR"#S1791"}} WHERE {_A, N, VAR"#S179"<:ABSTRACTARRAY{FLOAT64, N}, VAR"#S1791"<:ABSTRACTMATRIX{FLOAT64}}
+│   %115 = dx::ANY
+│   %116 = here_sdf::ABSTRACTARRAY{FLOAT64}
+│   %117 = here_df::ABSTRACTMATRIX{FLOAT64}
+│          (#108 = %new(%114, %115, %116, %117))
+│   %119 = #108::KITAMR.VAR"#CALC_DOMAIN_FLUX##4#CALC_DOMAIN_FLUX##5"{_A, <:ABSTRACTARRAY{FLOAT64, N}, <:ABSTRACTMATRIX{FLOAT64}} WHERE {_A, N}
+│   %120 = KitAMR.axes::Core.Const(axes)
+│   %121 = here_df::ABSTRACTMATRIX{FLOAT64}
+│   %122 = (%120)(%121, 1)::ANY
+│   %123 = KitAMR.axes::Core.Const(axes)
+│   %124 = here_df::ABSTRACTMATRIX{FLOAT64}
+│   %125 = (%123)(%124, 2)::ANY
+│   %126 = Base.product(%122, %125)::BASE.ITERATORS.PRODUCTITERATOR{T} WHERE T<:TUPLE{ANY, ANY}
+│   %127 = Base.Generator(%119, %126)::BASE.GENERATOR{I, F} WHERE {I<:(BASE.ITERATORS.PRODUCTITERATOR{T} WHERE T<:TUPLE{ANY, ANY}), F<:(KITAMR.VAR"#CALC_DOMAIN_FLUX##4#CALC_DOMAIN_FLUX##5"{_A, <:ABSTRACTARRAY{FLOAT64, N}, <:ABSTRACTMATRIX{FLOAT64}} WHERE {_A, N})}
+│   %128 = Base.collect(%127)::ANY
+│          (df = %128)
+│          (val@_12 = %128)
+│          nothing
+│          val@_12
+│   %133 = KitAMR.get_bc::Core.Const(KitAMR.get_bc)
+│   %134 = Base.getproperty(face, :domain)::Domain{Maxwellian}
+│   %135 = Base.getproperty(%134, :bc)::UNION{FUNCTION, VECTOR}
+│          (bc = (%133)(%135))
+│   %137 = KitAMR.calc_ρw::Core.Const(KitAMR.calc_ρw)
+│   %138 = there_mid::Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])
+│   %139 = df::ANY
+│   %140 = bc::VECTOR
+│   %141 = here_vn::ABSTRACTVECTOR{FLOAT64}
+│   %142 = there_vn::Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)])
+│   %143 = here_weight::ABSTRACTVECTOR{FLOAT64}
+│   %144 = there_weight::Core.PartialStruct(SubArray{Float64, 1, Vector{Float64}, Tuple{Vector{Int64}}, false}, Any[Vector{Float64}, Tuple{Vector{Int64}}, Core.Const(0), Core.Const(0)])
+│   %145 = (%137)(%138, %139, %140, %141, %142, %143, %144, ka)::ANY
+│   %146 = bc::VECTOR
+│          Base.setindex!(%146, %145, 1)
+│   %148 = KitAMR.Matrix::Core.Const(Matrix)
+│   %149 = KitAMR.Float64::Core.Const(Float64)
+│   %150 = Core.apply_type(%148, %149)::Core.Const(Matrix{Float64})
+│   %151 = KitAMR.undef::Core.Const(UndefInitializer())
+│   %152 = KitAMR.size::Core.Const(size)
+│   %153 = there_mid::Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])
+│   %154 = (%152)(%153, 1)::Int64
+│   %155 = $(Expr(:static_parameter, 2))::Core.Const(2)
+│          (there_df = (%150)(%151, %154, %155))
+│   %157 = KitAMR.axes::Core.Const(axes)
+│   %158 = there_df::Matrix{Float64}
+│   %159 = (%157)(%158, 1)::Base.OneTo{Int64}
+│          (@_10 = Base.iterate(%159))
+│   %161 = @_10::UNION{NOTHING, TUPLE{INT64, INT64}}
+│   %162 = (%161 === nothing)::Bool
+│   %163 = Base.not_int(%162)::Bool
+└──        goto #4 if not %163
+2 ┄ %165 = @_10::Tuple{Int64, Int64}
+│          (i = Core.getfield(%165, 1))
+│   %167 = Core.getfield(%165, 2)::Int64
+│   %168 = there_df::Matrix{Float64}
+│   %169 = i::Int64
+│   %170 = KitAMR.:(:)::Core.Const(Colon())
+│   %171 = Base.dotview(%168, %169, %170)::SubArray{Float64, 1, Matrix{Float64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}
+│   %172 = KitAMR.discrete_maxwell::Core.Const(KitAMR.discrete_maxwell)
+│   %173 = there_mid::Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])
+│   %174 = i::Int64
+│   %175 = KitAMR.:(:)::Core.Const(Colon())
+│   %176 = (Base.maybeview)(%173, %174, %175)::SubArray{Float64, 1, Matrix{Float64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}
+│   %177 = bc::VECTOR
+│   %178 = Base.getproperty(ka, :kinfo)::KINFO
+│   %179 = (%172)(%176, %177, %178)::ANY
+│   %180 = Base.broadcasted(Base.identity, %179)::ANY
+│          Base.materialize!(%171, %180)
+│          (@_10 = Base.iterate(%159, %167))
+│   %183 = @_10::UNION{NOTHING, TUPLE{INT64, INT64}}
+│   %184 = (%183 === nothing)::Bool
+│   %185 = Base.not_int(%184)::Bool
+└──        goto #4 if not %185
+3 ─        goto #2
+4 ┄        nothing
+│   %189 = KitAMR.:(var"#calc_domain_flux##6#calc_domain_flux##7")::Core.Const(KitAMR.var"#calc_domain_flux##6#calc_domain_flux##7")
+│   %190 = df::ANY
+│   %191 = Core._typeof_captured_variable(%190)::DATATYPE
+│   %192 = here_vn::ABSTRACTVECTOR{FLOAT64}
+│   %193 = Core._typeof_captured_variable(%192)::TYPE{<:ABSTRACTVECTOR{FLOAT64}}
+│   %194 = Core.apply_type(%189, %191, %193)::TYPE{KITAMR.VAR"#CALC_DOMAIN_FLUX##6#CALC_DOMAIN_FLUX##7"{_A, VAR"#S179"}} WHERE {_A, VAR"#S179"<:ABSTRACTVECTOR{FLOAT64}}
+│   %195 = df::ANY
+│   %196 = here_vn::ABSTRACTVECTOR{FLOAT64}
+│          (#109 = %new(%194, %195, %196))
+│   %198 = #109::KITAMR.VAR"#CALC_DOMAIN_FLUX##6#CALC_DOMAIN_FLUX##7"{_A, <:ABSTRACTVECTOR{FLOAT64}} WHERE _A
+│   %199 = KitAMR.axes::Core.Const(axes)
+│   %200 = df::ANY
+│   %201 = (%199)(%200, 1)::ANY
+│   %202 = KitAMR.axes::Core.Const(axes)
+│   %203 = df::ANY
+│   %204 = (%202)(%203, 2)::ANY
+│   %205 = Base.product(%201, %204)::BASE.ITERATORS.PRODUCTITERATOR{T} WHERE T<:TUPLE{ANY, ANY}
+│   %206 = Base.Generator(%198, %205)::BASE.GENERATOR{I, F} WHERE {I<:(BASE.ITERATORS.PRODUCTITERATOR{T} WHERE T<:TUPLE{ANY, ANY}), F<:(KITAMR.VAR"#CALC_DOMAIN_FLUX##6#CALC_DOMAIN_FLUX##7"{_A, <:ABSTRACTVECTOR{FLOAT64}} WHERE _A)}
+│   %207 = Base.collect(%206)::ANY
+│          (here_micro = %207)
+│          (val@_9 = %207)
+│          nothing
+│          val@_9
+│          nothing
+│   %213 = KitAMR.:(var"#calc_domain_flux##8#calc_domain_flux##9")::Core.Const(KitAMR.var"#calc_domain_flux##8#calc_domain_flux##9")
+│   %214 = there_df::Matrix{Float64}
+│   %215 = Core._typeof_captured_variable(%214)::Core.Const(Matrix{Float64})
+│   %216 = there_vn::Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)])
+│   %217 = Core._typeof_captured_variable(%216)::Core.Const(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false})
+│   %218 = Core.apply_type(%213, %215, %217)::Core.Const(KitAMR.var"#calc_domain_flux##8#calc_domain_flux##9"{Matrix{Float64}, SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}})
+│   %219 = there_df::Matrix{Float64}
+│   %220 = there_vn::Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)])
+│          (#110 = %new(%218, %219, %220))
+│   %222 = #110::Core.PartialStruct(KitAMR.var"#calc_domain_flux##8#calc_domain_flux##9"{Matrix{Float64}, SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}}, Any[Matrix{Float64}, Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)])])
+│   %223 = KitAMR.axes::Core.Const(axes)
+│   %224 = there_df::Matrix{Float64}
+│   %225 = (%223)(%224, 1)::Base.OneTo{Int64}
+│   %226 = KitAMR.axes::Core.Const(axes)
+│   %227 = there_df::Matrix{Float64}
+│   %228 = (%226)(%227, 2)::Base.OneTo{Int64}
+│   %229 = Base.product(%225, %228)::Base.Iterators.ProductIterator{Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}}
+│   %230 = Base.Generator(%222, %229)::Core.PartialStruct(Base.Generator{Base.Iterators.ProductIterator{Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}}, KitAMR.var"#calc_domain_flux##8#calc_domain_flux##9"{Matrix{Float64}, SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}}}, Any[Core.PartialStruct(KitAMR.var"#calc_domain_flux##8#calc_domain_flux##9"{Matrix{Float64}, SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}}, Any[Matrix{Float64}, Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)])]), Base.Iterators.ProductIterator{Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}}])
+│   %231 = Base.collect(%230)::Matrix{Float64}
+│          (there_micro = %231)
+│          (val@_7 = %231)
+│          nothing
+│          val@_7
+│   %236 = KitAMR.:+::Core.Const(+)
+│   %237 = KitAMR.micro_to_macro::Core.Const(KitAMR.micro_to_macro)
+│   %238 = here_micro::ANY
+│   %239 = here_mid::ABSTRACTMATRIX{FLOAT64}
+│   %240 = here_weight::ABSTRACTVECTOR{FLOAT64}
+│   %241 = vs_data::VsData{2, 2}
+│   %242 = (%237)(%238, %239, %240, %241)::VECTOR
+│   %243 = KitAMR.micro_to_macro::Core.Const(KitAMR.micro_to_macro)
+│   %244 = there_micro::Matrix{Float64}
+│   %245 = there_mid::Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])
+│   %246 = there_weight::Core.PartialStruct(SubArray{Float64, 1, Vector{Float64}, Tuple{Vector{Int64}}, false}, Any[Vector{Float64}, Tuple{Vector{Int64}}, Core.Const(0), Core.Const(0)])
+│   %247 = vs_data::VsData{2, 2}
+│   %248 = (%243)(%244, %245, %246, %247)::Vector{Float64}
+│          (fw = (%236)(%242, %248))
+│   %250 = fw::ANY
+│   %251 = here_micro::ANY
+│   %252 = there_micro::Matrix{Float64}
+│   %253 = Base.vect(%251, %252)::ANY
+│   %254 = Core.tuple(%250, %253)::TUPLE{ANY, ANY}
+└──        return %254
+
+
+
+==============================================================================
+== INNER make_face_vs(HangingFace)
+==============================================================================
+MethodInstance for make_face_vs(::HangingFace{2, 2})
+  from make_face_vs(face::HangingFace{DIM, NDF}) where {DIM, NDF} @ KitAMR ~/KitAMR_dev/src/Flux/Flux.jl:381
+Static Parameters
+  DIM = 2
+  NDF = 2
+Arguments
+  #self#::Core.Const(KitAMR.make_face_vs)
+  face::HangingFace{2, 2}
+Locals
+  @_3::UNION{NOTHING, TUPLE{INT64, INT64}}
+  #165::KitAMR.var"#make_face_vs##6#make_face_vs##7"
+  @_5::Int64
+  there_vs::Vector{FaceVsData{2, 2}}
+  here_vs::FaceVsData{2, 2}
+  heavi::Vector{Bool}
+  here_mid::Matrix{Float64}
+  vs_data::VsData{2, 2}
+  there_data::Vector{AbstractPsData{2, 2}}
+  here_data::PsData{2, 2}
+  direction::Int64
+  rot::Float64
+  #166::KitAMR.var"#make_face_vs##8#make_face_vs##9"
+  i::Int64
+  nheavi::ANY
+  there_mid::ANY
+  nvs_data::ANY
+Body::Tuple{FaceVsData{2, 2}, Vector{FaceVsData{2, 2}}}
+1 ─ %1   = KitAMR.unpack::Core.Const(KitAMR.unpack)
+│   %2   = (%1)(face)::Core.PartialStruct(Base.Generator{UnitRange{Int64}, KitAMR.var"#unpack##0#unpack##1"{HangingFace{2, 2}}}, Any[KitAMR.var"#unpack##0#unpack##1"{HangingFace{2, 2}}, Core.Const(1:5)])
+│   %3   = Base.indexed_iterate(%2, 1)::Core.PartialStruct(Tuple{Float64, Int64}, Any[Float64, Core.Const(1)])
+│          (rot = Core.getfield(%3, 1))
+│          (@_5 = Core.getfield(%3, 2))
+│   %6   = @_5::Core.Const(1)
+│   %7   = Base.indexed_iterate(%2, 2, %6)::Core.PartialStruct(Tuple{Int64, Int64}, Any[Int64, Core.Const(2)])
+│          (direction = Core.getfield(%7, 1))
+│          (@_5 = Core.getfield(%7, 2))
+│   %10  = @_5::Core.Const(2)
+│   %11  = Base.indexed_iterate(%2, 3, %10)::Core.PartialStruct(Tuple{Vector{Vector{Float64}}, Int64}, Any[Vector{Vector{Float64}}, Core.Const(3)])
+│          Core.getfield(%11, 1)
+│          (@_5 = Core.getfield(%11, 2))
+│   %14  = @_5::Core.Const(3)
+│   %15  = Base.indexed_iterate(%2, 4, %14)::Core.PartialStruct(Tuple{PsData{2, 2}, Int64}, Any[PsData{2, 2}, Core.Const(4)])
+│          (here_data = Core.getfield(%15, 1))
+│          (@_5 = Core.getfield(%15, 2))
+│   %18  = @_5::Core.Const(4)
+│   %19  = Base.indexed_iterate(%2, 5, %18)::Core.PartialStruct(Tuple{Vector{AbstractPsData{2, 2}}, Int64}, Any[Vector{AbstractPsData{2, 2}}, Core.Const(5)])
+│          (there_data = Core.getfield(%19, 1))
+│   %21  = here_data::PsData{2, 2}
+│          (vs_data = Base.getproperty(%21, :vs_data))
+│   %23  = vs_data::VsData{2, 2}
+│          (here_mid = Base.getproperty(%23, :midpoint))
+│   %25  = KitAMR.:(var"#make_face_vs##6#make_face_vs##7")::Core.Const(KitAMR.var"#make_face_vs##6#make_face_vs##7")
+│          (#165 = %new(%25))
+│   %27  = #165::Core.Const(KitAMR.var"#make_face_vs##6#make_face_vs##7"())
+│   %28  = KitAMR.:*::Core.Const(*)
+│   %29  = rot::Float64
+│   %30  = here_mid::Matrix{Float64}
+│   %31  = KitAMR.:(:)::Core.Const(Colon())
+│   %32  = direction::Int64
+│   %33  = (Base.maybeview)(%30, %31, %32)::Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}, Any[Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, Int64, Core.Const(1)])
+│   %34  = Base.broadcasted(%28, %29, %33)::Core.PartialStruct(Base.Broadcast.Broadcasted{Base.Broadcast.DefaultArrayStyle{1}, Nothing, typeof(*), Tuple{Float64, SubArray{Float64, 1, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}}, Any[Core.Const(Base.Broadcast.DefaultArrayStyle{1}()), Core.Const(*), Core.PartialStruct(Tuple{Float64, SubArray{Float64, 1, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}, Any[Float64, Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}, Any[Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, Int64, Core.Const(1)])]), Core.Const(nothing)])
+│   %35  = Base.materialize(%34)::Vector{Float64}
+│   %36  = Base.Generator(%27, %35)::Base.Generator{Vector{Float64}, KitAMR.var"#make_face_vs##6#make_face_vs##7"}
+│          (heavi = Base.collect(%36))
+│   %38  = KitAMR.FaceVsData::Core.Const(FaceVsData)
+│   %39  = $(Expr(:static_parameter, 1))::Core.Const(2)
+│   %40  = $(Expr(:static_parameter, 2))::Core.Const(2)
+│   %41  = Core.apply_type(%38, %39, %40)::Core.Const(FaceVsData{2, 2})
+│   %42  = heavi::Vector{Bool}
+│   %43  = vs_data::VsData{2, 2}
+│   %44  = Base.getproperty(%43, :weight)::Vector{Float64}
+│   %45  = heavi::Vector{Bool}
+│   %46  = (Base.maybeview)(%44, %45)::Core.PartialStruct(SubArray{Float64, 1, Vector{Float64}, Tuple{Vector{Int64}}, false}, Any[Vector{Float64}, Tuple{Vector{Int64}}, Core.Const(0), Core.Const(0)])
+│   %47  = here_mid::Matrix{Float64}
+│   %48  = heavi::Vector{Bool}
+│   %49  = KitAMR.:(:)::Core.Const(Colon())
+│   %50  = (Base.maybeview)(%47, %48, %49)::Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])
+│   %51  = here_mid::Matrix{Float64}
+│   %52  = heavi::Vector{Bool}
+│   %53  = direction::Int64
+│   %54  = (Base.maybeview)(%51, %52, %53)::Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)])
+│   %55  = vs_data::VsData{2, 2}
+│   %56  = Base.getproperty(%55, :df)::Matrix{Float64}
+│   %57  = heavi::Vector{Bool}
+│   %58  = KitAMR.:(:)::Core.Const(Colon())
+│   %59  = (Base.maybeview)(%56, %57, %58)::Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])
+│   %60  = vs_data::VsData{2, 2}
+│   %61  = Base.getproperty(%60, :sdf)::Array{Float64, 3}
+│   %62  = heavi::Vector{Bool}
+│   %63  = KitAMR.:(:)::Core.Const(Colon())
+│   %64  = KitAMR.:(:)::Core.Const(Colon())
+│   %65  = (Base.maybeview)(%61, %62, %63, %64)::Core.PartialStruct(SubArray{Float64, 3, Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])
+│          (here_vs = (%41)(%42, %46, %50, %54, %59, %65))
+│   %67  = KitAMR.Vector::Core.Const(Vector)
+│   %68  = KitAMR.FaceVsData::Core.Const(FaceVsData)
+│   %69  = $(Expr(:static_parameter, 1))::Core.Const(2)
+│   %70  = $(Expr(:static_parameter, 2))::Core.Const(2)
+│   %71  = Core.apply_type(%68, %69, %70)::Core.Const(FaceVsData{2, 2})
+│   %72  = Core.apply_type(%67, %71)::Core.Const(Vector{FaceVsData{2, 2}})
+│   %73  = KitAMR.undef::Core.Const(UndefInitializer())
+│   %74  = KitAMR.length::Core.Const(length)
+│   %75  = there_data::Vector{AbstractPsData{2, 2}}
+│   %76  = (%74)(%75)::Int64
+│          (there_vs = (%72)(%73, %76))
+│   %78  = KitAMR.eachindex::Core.Const(eachindex)
+│   %79  = there_data::Vector{AbstractPsData{2, 2}}
+│   %80  = (%78)(%79)::Base.OneTo{Int64}
+│          (@_3 = Base.iterate(%80))
+│   %82  = @_3::UNION{NOTHING, TUPLE{INT64, INT64}}
+│   %83  = (%82 === nothing)::Bool
+│   %84  = Base.not_int(%83)::Bool
+└──        goto #4 if not %84
+2 ┄ %86  = @_3::Tuple{Int64, Int64}
+│          (i = Core.getfield(%86, 1))
+│   %88  = Core.getfield(%86, 2)::Int64
+│   %89  = there_data::Vector{AbstractPsData{2, 2}}
+│   %90  = i::Int64
+│   %91  = Base.getindex(%89, %90)::ABSTRACTPSDATA{2, 2}
+│          (nvs_data = Base.getproperty(%91, :vs_data))
+│   %93  = nvs_data::ANY
+│          (there_mid = Base.getproperty(%93, :midpoint))
+│   %95  = KitAMR.:(var"#make_face_vs##8#make_face_vs##9")::Core.Const(KitAMR.var"#make_face_vs##8#make_face_vs##9")
+│          (#166 = %new(%95))
+│   %97  = #166::Core.Const(KitAMR.var"#make_face_vs##8#make_face_vs##9"())
+│   %98  = KitAMR.:*::Core.Const(*)
+│   %99  = rot::Float64
+│   %100 = there_mid::ANY
+│   %101 = KitAMR.:(:)::Core.Const(Colon())
+│   %102 = direction::Int64
+│   %103 = (Base.maybeview)(%100, %101, %102)::ANY
+│   %104 = Base.broadcasted(%98, %99, %103)::ANY
+│   %105 = Base.materialize(%104)::ANY
+│   %106 = Base.Generator(%97, %105)::BASE.GENERATOR{_A, KITAMR.VAR"#MAKE_FACE_VS##8#MAKE_FACE_VS##9"} WHERE _A
+│          (nheavi = Base.collect(%106))
+│   %108 = KitAMR.FaceVsData::Core.Const(FaceVsData)
+│   %109 = $(Expr(:static_parameter, 1))::Core.Const(2)
+│   %110 = $(Expr(:static_parameter, 2))::Core.Const(2)
+│   %111 = Core.apply_type(%108, %109, %110)::Core.Const(FaceVsData{2, 2})
+│   %112 = nheavi::ANY
+│   %113 = nvs_data::ANY
+│   %114 = Base.getproperty(%113, :weight)::ANY
+│   %115 = nheavi::ANY
+│   %116 = (Base.maybeview)(%114, %115)::ANY
+│   %117 = there_mid::ANY
+│   %118 = nheavi::ANY
+│   %119 = KitAMR.:(:)::Core.Const(Colon())
+│   %120 = (Base.maybeview)(%117, %118, %119)::ANY
+│   %121 = there_mid::ANY
+│   %122 = nheavi::ANY
+│   %123 = direction::Int64
+│   %124 = (Base.maybeview)(%121, %122, %123)::ANY
+│   %125 = nvs_data::ANY
+│   %126 = Base.getproperty(%125, :df)::ANY
+│   %127 = nheavi::ANY
+│   %128 = KitAMR.:(:)::Core.Const(Colon())
+│   %129 = (Base.maybeview)(%126, %127, %128)::ANY
+│   %130 = nvs_data::ANY
+│   %131 = Base.getproperty(%130, :sdf)::ANY
+│   %132 = nheavi::ANY
+│   %133 = KitAMR.:(:)::Core.Const(Colon())
+│   %134 = KitAMR.:(:)::Core.Const(Colon())
+│   %135 = (Base.maybeview)(%131, %132, %133, %134)::ANY
+│   %136 = (%111)(%112, %116, %120, %124, %129, %135)::FaceVsData{2, 2}
+│   %137 = there_vs::Vector{FaceVsData{2, 2}}
+│   %138 = i::Int64
+│          Base.setindex!(%137, %136, %138)
+│          (@_3 = Base.iterate(%80, %88))
+│   %141 = @_3::UNION{NOTHING, TUPLE{INT64, INT64}}
+│   %142 = (%141 === nothing)::Bool
+│   %143 = Base.not_int(%142)::Bool
+└──        goto #4 if not %143
+3 ─        goto #2
+4 ┄ %146 = here_vs::Core.PartialStruct(FaceVsData{2, 2}, Any[Vector{Bool}, Core.PartialStruct(SubArray{Float64, 1, Vector{Float64}, Tuple{Vector{Int64}}, false}, Any[Vector{Float64}, Tuple{Vector{Int64}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 3, Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])])
+│   %147 = there_vs::Vector{FaceVsData{2, 2}}
+│   %148 = Core.tuple(%146, %147)::Core.PartialStruct(Tuple{FaceVsData{2, 2}, Vector{FaceVsData{2, 2}}}, Any[Core.PartialStruct(FaceVsData{2, 2}, Any[Vector{Bool}, Core.PartialStruct(SubArray{Float64, 1, Vector{Float64}, Tuple{Vector{Int64}}, false}, Any[Vector{Float64}, Tuple{Vector{Int64}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 1, Matrix{Float64}, Tuple{Vector{Int64}, Int64}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Int64}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 2, Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Matrix{Float64}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)]), Core.PartialStruct(SubArray{Float64, 3, Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, false}, Any[Array{Float64, 3}, Tuple{Vector{Int64}, Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, Core.Const(0), Core.Const(0)])]), Vector{FaceVsData{2, 2}}])
+└──        return %148
+
+

@@ -149,7 +149,12 @@ $(TYPEDEF)
 Face shared by cells with the same refinement level.
 $(TYPEDFIELDS)
 """
-struct FullFace{DIM,NDF}<:InnerFace
+# RC-5 fix: `there_data` (the across-face cell, possibly a ghost) was typed by the
+# abstract `AbstractPsData`, so reads of its fields inside the user-facing
+# `calc_flux` were type-unstable. Capturing its concrete type as a parameter `TD`
+# lets `calc_flux` specialize on the concrete face, keeping `calc_flux` itself a
+# single uniform method (the per-face dispatch already happens at the faces loop).
+struct FullFace{DIM,NDF,TD<:AbstractPsData{DIM,NDF}}<:InnerFace
     "Rotational coefficient of the face. `-1` if `here_data` locates at the negative direction relative to the face."
     rot::Float64
     "Direction of the face's normal. 1, 2, 3 correspond to x, y, z respectively."
@@ -159,7 +164,12 @@ struct FullFace{DIM,NDF}<:InnerFace
     "`PsData` on one side of the face. It is guaranteed to be local."
     here_data::PsData{DIM,NDF}
     "`AbstractPsData` on the other side of the face. It can be a ghost one."
-    there_data::AbstractPsData{DIM,NDF}
+    there_data::TD
+end
+# Outer constructor: existing `FullFace{DIM,NDF}(...)` call sites keep working;
+# `TD` is taken from the concrete runtime type of `there_data`.
+function FullFace{DIM,NDF}(rot,direction,midpoint,here_data::PsData{DIM,NDF},there_data::AbstractPsData{DIM,NDF}) where {DIM,NDF}
+    return FullFace{DIM,NDF,typeof(there_data)}(rot,direction,midpoint,here_data,there_data)
 end
 
 """
@@ -181,12 +191,15 @@ $(TYPEDEF)
 Faces shared by cells with different refinement levels. The cell with lower level is ghost.
 $(TYPEDFIELDS)
 """
-struct BackHangingFace{DIM,NDF}<:InnerFace
+struct BackHangingFace{DIM,NDF,TD<:AbstractPsData{DIM,NDF}}<:InnerFace
     rot::Float64
     direction::Int
     midpoint::Vector{Vector{Float64}}
     here_data::Vector{PsData{DIM,NDF}}
-    there_data::AbstractPsData{DIM,NDF}
+    there_data::TD
+end
+function BackHangingFace{DIM,NDF}(rot,direction,midpoint,here_data::Vector{PsData{DIM,NDF}},there_data::AbstractPsData{DIM,NDF}) where {DIM,NDF}
+    return BackHangingFace{DIM,NDF,typeof(there_data)}(rot,direction,midpoint,here_data,there_data)
 end
 
 """
@@ -194,12 +207,19 @@ $(TYPEDEF)
 Struct for flux calculation corresponding to a single face.
 $(TYPEDFIELDS)
 """
-struct FluxData{T<:InnerFace}
+# RC-5: parametrize on the concrete here/there cell types so the user-facing
+# `calc_flux` is type-stable on the hanging-face paths too. The per-element
+# `calc_flux(...)` call already acts as the function barrier that specializes on
+# the concrete `FluxData` type built here.
+struct FluxData{T<:InnerFace,HD<:AbstractPsData,TD<:AbstractPsData}
     rot::Float64
     direction::Int # face normal direction
     midpoint::Vector{Float64} # midpoint of the face
-    here_data::AbstractPsData
-    there_data::AbstractPsData
+    here_data::HD
+    there_data::TD
+end
+function FluxData{T}(rot,direction,midpoint,here_data::AbstractPsData,there_data::AbstractPsData) where {T<:InnerFace}
+    return FluxData{T,typeof(here_data),typeof(there_data)}(rot,direction,midpoint,here_data,there_data)
 end
 
 mutable struct MeshData

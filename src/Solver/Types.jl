@@ -592,12 +592,12 @@ Structure that collects all of the data.
 $(TYPEDFIELDS)
 """
 mutable struct KA{DIM,NDF}
-    kinfo::KInfo
-    kdata::KData
+    kinfo::KInfo{DIM,NDF}
+    kdata::KData{DIM,NDF}
 end
-function KA(kinfo::KInfo{DIM,NDF},kdata::KData{DIM,NDF}) where{DIM,NDF}
-    return KA{DIM,NDF}(kinfo,kdata)
-end
+# NB: with the fields typed `KInfo{DIM,NDF}`/`KData{DIM,NDF}`, Julia auto-generates
+# the outer constructor `KA(::KInfo{DIM,NDF}, ::KData{DIM,NDF})` that infers {DIM,NDF};
+# an explicit one would be a duplicate (a hard precompile error on Julia ≥1.12).
 # partition
 struct TransferData{DIM,NDF}
     encs::Vector{Int}

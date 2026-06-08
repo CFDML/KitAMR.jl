@@ -1,0 +1,6 @@
+baseline	nranks=1	tot_faces=9960	tot_allocs=11486160	tot_mem_MiB=859423104.000	max_tmed_us=388972.06	allocs_per_face=1153.229	bytes_per_face=86287.46
+fixed	nranks=1	tot_faces=9960	tot_allocs=11466096	tot_mem_MiB=855711552.000	max_tmed_us=394259.49	allocs_per_face=1151.214	bytes_per_face=85914.81
+rc3	nranks=1	tot_faces=9960	tot_allocs=11375376	tot_mem_MiB=863155456.000	max_tmed_us=394918.92	allocs_per_face=1142.106	bytes_per_face=86662.19
+rc5	nranks=1	tot_faces=9960	tot_allocs=11049864	tot_mem_MiB=838409472.000	max_tmed_us=429557.26	allocs_per_face=1109.424	bytes_per_face=84177.66
+rc5_posfix	nranks=1	tot_faces=9960	tot_allocs=899976	tot_mem_MiB=432400640.000	max_tmed_us=280986.04	allocs_per_face=90.359	bytes_per_face=43413.72
+rc5_posfix_np64	nranks=64	tot_faces=11470	tot_allocs=1028303	tot_mem_MiB=498323400.000	max_tmed_us=5558.00	allocs_per_face=89.652	bytes_per_face=43445.81

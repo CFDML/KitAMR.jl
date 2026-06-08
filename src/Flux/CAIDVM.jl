@@ -125,8 +125,18 @@ $(TYPEDSIGNATURES)
 Positivity preserving reconstruction (10.1016/j.jcp.2009.12.030).
 """
 function positivity_preserving_reconstruct(here_df,here_sdf,here_ds,dx,vn) # positivity preserving reconstruct (10.1016/j.jcp.2009.12.030)
-    @views begin
-        micro = [(here_df[i,j]+min(abs((here_df[i,j]-eps())/(0.5*dot(here_ds,abs.(here_sdf[i,j,:]))+EPS)),1.)*dot(dx[i,:],here_sdf[i,j,:]))*vn[i] for i in axes(here_df,1),j in axes(here_df,2)]
-    end
+    # The inner contractions over the velocity-component axis are written as
+    # explicit `sum(... for k)` generators instead of `dot(here_ds,abs.(here_sdf[i,j,:]))`
+    # / `dot(dx[i,:],here_sdf[i,j,:])`. The previous form allocated a temporary
+    # array (`abs.(...)`) and view slices for EVERY (i,j) — the dominant heap
+    # allocation in the flux kernel. Generators allocate nothing and, with the
+    # now-concrete `here_sdf` (RC-3), stay type-stable. Numerically identical.
+    @inbounds micro = [
+        let s_abs = sum(here_ds[k]*abs(here_sdf[i,j,k]) for k in axes(here_sdf,3)),
+            s_dx  = sum(dx[i,k]*here_sdf[i,j,k] for k in axes(here_sdf,3))
+            (here_df[i,j]+min(abs((here_df[i,j]-eps())/(0.5*s_abs+EPS)),1.)*s_dx)*vn[i]
+        end
+        for i in axes(here_df,1), j in axes(here_df,2)
+    ]
     return micro
 end

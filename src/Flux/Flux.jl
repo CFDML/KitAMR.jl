@@ -16,30 +16,30 @@ end
 """
 $(TYPEDSIGNATURES)
 """
-function flux!(face::DomainFace,ka::KA)
+function flux!(::Type{F},face::DomainFace,ka::KA) where {F<:AbstractFluxType}
     here_vs = make_face_vs(face)
-    flux,micro_flux = calc_domain_flux(ka.kinfo.config.solver.flux,here_vs,face,ka)
+    flux,micro_flux = calc_domain_flux(F,here_vs,face,ka)
     update_domain_flux!(flux,micro_flux,face,here_vs.heavi)
     return nothing
 end
 """
 $(TYPEDSIGNATURES)
 """
-function flux!(face::FullFace,ka::KA)
+function flux!(::Type{F},face::FullFace,ka::KA) where {F<:AbstractFluxType}
     here_vs,there_vs = make_face_vs(face)
-    flux,micro_flux = calc_flux(ka.kinfo.config.solver.flux,here_vs,there_vs,face,ka)
+    flux,micro_flux = calc_flux(F,here_vs,there_vs,face,ka)
     update_flux!(flux,micro_flux,face,here_vs.heavi)
     return nothing
 end
 """
 $(TYPEDSIGNATURES)
 """
-function flux!(face::HangingFace{DIM,NDF},ka::KA) where{DIM,NDF}
+function flux!(::Type{F},face::HangingFace{DIM,NDF},ka::KA) where {DIM,NDF,F<:AbstractFluxType}
     rot,direction,midpoint,here_data,there_data = unpack(face)
     here_vs,there_vs = make_face_vs(face)
     for i in eachindex(there_vs)
         flux_data = FluxData{HangingFace{DIM,NDF}}(rot,direction,midpoint[i],here_data,there_data[i])
-        flux,micro_flux = calc_flux(ka.kinfo.config.solver.flux,here_vs,there_vs[i],flux_data,ka)
+        flux,micro_flux = calc_flux(F,here_vs,there_vs[i],flux_data,ka)
         update_flux!(flux,micro_flux,flux_data,here_vs.heavi)
     end
     return nothing
@@ -47,12 +47,12 @@ end
 """
 $(TYPEDSIGNATURES)
 """
-function flux!(face::BackHangingFace{DIM,NDF},ka::KA) where{DIM,NDF}
+function flux!(::Type{F},face::BackHangingFace{DIM,NDF},ka::KA) where {DIM,NDF,F<:AbstractFluxType}
     rot,direction,midpoint,here_data,there_data = unpack(face)
     here_vs,there_vs = make_face_vs(face)
     for i in eachindex(here_vs)
         flux_data = FluxData{BackHangingFace{DIM,NDF}}(rot,direction,midpoint[i],here_data[i],there_data)
-        flux,micro_flux = calc_flux(ka.kinfo.config.solver.flux,here_vs[i],there_vs,flux_data,ka)
+        flux,micro_flux = calc_flux(F,here_vs[i],there_vs,flux_data,ka)
         update_flux!(flux,micro_flux,flux_data,here_vs[i].heavi)
     end
     return nothing
@@ -428,9 +428,17 @@ $(TYPEDSIGNATURES)
 Outer function for flux computation and update. The iteration is carried out through faces, which avoids redundant computation.
 """
 function flux!(ka::KA)
-    faces = ka.kdata.field.faces
+    # Function barrier on the numerical-flux scheme (RC-1 fix): `solver.flux` is an
+    # abstractly-typed field (`Type{<:AbstractFluxType}`). Read it ONCE here, then
+    # dispatch the whole face loop on the concrete scheme type `F` so that
+    # calc_flux/calc_domain_flux are statically dispatched and no longer return
+    # `Tuple{Any,Any}` (which previously boxed every face's flux result).
+    _flux_faces!(ka.kinfo.config.solver.flux, ka.kdata.field.faces, ka)
+    return nothing
+end
+function _flux_faces!(::Type{F}, faces, ka::KA) where {F<:AbstractFluxType}
     for face in faces
-        flux!(face,ka)
+        flux!(F, face, ka)
     end
     return nothing
 end
@@ -456,15 +464,16 @@ function flux!(p4est::P_pxest_t, ka::KA{DIM,NDF}) where {DIM,NDF}
     # 2. begin async solid exchange
     recv_bufs = solid_exchange_begin!(p4est, ka)
 
+    # Read the flux scheme once (RC-1 fix); pass the concrete type `F` into the
+    # barrier helpers so the inner flux calls are statically dispatched.
+    F = ka.kinfo.config.solver.flux
+
     # 3. compute non-IB face fluxes (overlapped with MPI communication)
     ib_face_set = Set{UInt}()
     for ib in ibs
         for f in ib.faces; push!(ib_face_set, objectid(f)); end
     end
-    for face in ka.kdata.field.faces
-        objectid(face) in ib_face_set && continue
-        flux!(face, ka)
-    end
+    _flux_nonib_faces!(F, ka.kdata.field.faces, ib_face_set, ka)
 
     # 4. finish async solid exchange (Waitall + scatter)
     solid_exchange_finish!(ka, recv_bufs)
@@ -473,11 +482,22 @@ function flux!(p4est::P_pxest_t, ka::KA{DIM,NDF}) where {DIM,NDF}
     update_solid_neighbor!(ka)
 
     # 6. compute IB face fluxes
+    _flux_ib_faces!(F, ibs, ka)
+
+    return nothing
+end
+function _flux_nonib_faces!(::Type{F}, faces, ib_face_set, ka::KA) where {F<:AbstractFluxType}
+    for face in faces
+        objectid(face) in ib_face_set && continue
+        flux!(F, face, ka)
+    end
+    return nothing
+end
+function _flux_ib_faces!(::Type{F}, ibs, ka::KA) where {F<:AbstractFluxType}
     for ib in ibs
         for face in ib.faces
-            flux!(face, ka)
+            flux!(F, face, ka)
         end
     end
-
     return nothing
 end

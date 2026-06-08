@@ -37,15 +37,33 @@ $(TYPEDEF)
 Information of the velocity space corresponding to the face during the calculation of numerical flux.
 $(TYPEDFIELDS)
 """
-struct FaceVsData{DIM,NDF} # different sides of the face combining the face-velocity-space
+# RC-3 fix: the face velocity-space data is built by `@views` boolean-slicing the
+# cell `VsData` arrays, so the concrete field types (SubArray / Matrix) are known
+# at construction. Capturing them as type parameters (instead of the abstract
+# `AbstractVector/Matrix/Array{Float64}`) makes field reads in `calc_flux`
+# type-stable, so the per-velocity-cell comprehensions infer `Float64` element
+# types and stop boxing (the dominant allocation source in the flux kernel).
+struct FaceVsData{DIM,NDF,
+                  W<:AbstractVector{Float64},
+                  M<:AbstractMatrix{Float64},
+                  V<:AbstractVector{Float64},
+                  D<:AbstractMatrix{Float64},
+                  S<:AbstractArray{Float64}} # different sides of the face combining the face-velocity-space
     "Upwinding flags. Upwinding velocities are set to `true`."
     heavi::Vector{Bool}
-    weight::AbstractVector{Float64}
-    midpoint::AbstractMatrix{Float64}
+    weight::W
+    midpoint::M
     "Normal component of velocities across the face."
-    vn::AbstractVector{Float64}
-    df::AbstractMatrix{Float64}
-    sdf::AbstractArray{Float64}
+    vn::V
+    df::D
+    sdf::S
+end
+# Outer constructor: lets existing `FaceVsData{DIM,NDF}(...)` call sites keep
+# working while the remaining (array-type) parameters are inferred from the args.
+function FaceVsData{DIM,NDF}(heavi::Vector{Bool},weight::W,midpoint::M,vn::V,df::D,sdf::S) where {DIM,NDF,
+        W<:AbstractVector{Float64},M<:AbstractMatrix{Float64},V<:AbstractVector{Float64},
+        D<:AbstractMatrix{Float64},S<:AbstractArray{Float64}}
+    return FaceVsData{DIM,NDF,W,M,V,D,S}(heavi,weight,midpoint,vn,df,sdf)
 end
 function FaceVsData(fvd::FaceVsData{DIM,NDF},df::AbstractMatrix) where{DIM,NDF}
     return FaceVsData{DIM,NDF}(fvd.heavi,fvd.weight,fvd.midpoint,fvd.vn,df,fvd.sdf)
