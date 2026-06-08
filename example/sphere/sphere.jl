@@ -42,27 +42,7 @@ config = Configure(solver;
 )
 
 p4est,ka = initialize(config);
-listen_for_save!()
-i = 0
-while !reached_max_time(ka)
-    global i += 1
-    if MPI.Comm_rank(MPI.COMM_WORLD)==0
-        @show i
-    end
-    adaptive_mesh_refinement!(p4est,ka;vs_interval=10,partition_interval=40)
-    limit_Δt!(ka)   # shrink Δt to land exactly on the next animation frame / max_sim_time
-    update_slope!(ka)
-    slope_exchange!(p4est, ka)
-    update_solid_cell!(ka)
-    solid_exchange!(p4est, ka)
-    update_solid_neighbor!(ka)
-    flux!(ka)
-    iterate!(ka)
-    data_exchange!(p4est, ka)
-    check_for_animsave!(p4est,ka)   # write a frame if this step landed on a frame time
-    check_for_convergence(ka)&&break
-    check!(p4est,ka)
-end
+solve!(p4est, ka; prerefine_steps = 0, vs_interval = 10, partition_interval = 40)
 save_result(p4est,ka)
 finalize!(p4est,ka)
 MPI.Finalize()

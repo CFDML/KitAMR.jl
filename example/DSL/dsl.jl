@@ -56,30 +56,9 @@ config = Configure(solver;
 )
 
 p4est,ka = initialize(config);
-slope!(p4est,ka)
-for _ in 1:3
-    KitAMR.ps_adaptive_mesh_refinement!(p4est,ka;recursive = false)
-    KitAMR.amr_recover!(p4est,ka)
-end
-KitAMR.execute_check!(p4est,ka)
-listen_for_save!()
-check_for_animsave!(p4est, ka)   # initial animation frame (no-op unless output.anim_dt>0)
-i = 0
-while !reached_max_time(ka)
-    global i += 1
-    if MPI.Comm_rank(MPI.COMM_WORLD)==0
-        @show i
-    end
-    adaptive_mesh_refinement!(p4est,ka;ps_interval = 20, vs_interval = 40, partition_interval = 20, vs_balance = false)
-    limit_Δt!(ka) # Shrink Δt to land exactly on the next animation frame / max_sim_time.
-    slope!(p4est,ka) # Update `sdf` in `AbstractVsData` and `sw` in `PsData`.
-    flux!(p4est, ka) # Compute and update numerical fluxes.
-    iterate!(p4est, ka) # Collision process and time marching.
-    check_for_animsave!(p4est, ka) # Write a frame if this step landed on a frame time.
-    check!(p4est,ka) # Check for save and output simulation status to `stdout`.
-    check_for_convergence(ka)&&break # Check for convergence.
-end
-KitAMR.execute_check!(p4est,ka)
+solve!(p4est, ka;
+    prerefine_steps = 3,
+    ps_interval = 20, vs_interval = 40, partition_interval = 20)
 save_result(p4est,ka)
 finalize!(p4est,ka)
 MPI.Finalize()
