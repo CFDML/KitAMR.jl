@@ -59,6 +59,14 @@ function check_for_save!(p4est::P_pxest_t,ka;rank=0)
     return nothing
 end
 
+"""
+$(TYPEDSIGNATURES)
+Write one animation frame to `path` when the current `sim_time` has reached the next frame time
+(integer multiples of `output.anim_dt`; the `t = 0` state is also written). No-op when animation
+is disabled (`output.anim_dt <= 0`, the default). Which cells write their velocity space is
+controlled by `output.vs_output_criterion` (see [`Output`](@ref)). Intended to be called once
+per step after [`iterate!`](@ref); [`solve!`](@ref) does this when `animation = true`.
+"""
 function check_for_animsave!(p4est::P_pxest_t,ka;path="./animation")
     output = ka.kinfo.config.output
     output.anim_dt <= 0. && return nothing   # animation disabled; safe no-op

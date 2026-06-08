@@ -1,21 +1,38 @@
 """
 $(TYPEDEF)
 
-Uniform initial condition. The field will be initialized with the Maxwellian distribution determined by the unified primary macroscopic variables in ic.
+Uniform initial condition: every cell is initialized to the Maxwellian distribution determined
+by one primitive-variable vector `ic`, identical across the whole domain.
+
+The primitive vector is ordered `[ρ, U₁, …, U_DIM, λ]` (length `DIM+2`), where `ρ` is the
+density, `Uᵢ` the bulk-velocity components, and `λ = ρ/(2p)` the inverse temperature
+(`p` is the pressure). This ordering is shared by [`PCoordFn`](@ref) and the [`Domain`](@ref)
+boundary states.
 
 ## Fields
 
 $(TYPEDFIELDS)
 
 """
-struct Uniform<:AbstractInitCond 
+struct Uniform<:AbstractInitCond
+    "Primitive macroscopic variables `[ρ, U₁, …, U_DIM, λ]` applied uniformly to every cell."
     ic::AbstractVector
 end
 """
 $(TYPEDEF)
 
-Physical-coordinates-determined initial condition. The field will be initialized with the Maxwellian distribution determined by the user-defined-function in PCIC_fn.
-The function will return primary macroscopic variables vector according to the information of the physical grid (mostly the physical coordinates).
+Coordinate-dependent initial condition: each cell is initialized to the Maxwellian determined
+by the primitive vector returned by the user function `PCIC_fn` evaluated at the cell centre.
+Use this for any non-uniform initial state (shock tubes, Riemann/blast initial data, buffer
+zones around immersed bodies, …).
+
+`PCIC_fn` must have the signature
+
+    PCIC_fn(midpoint::Vector{Float64}, kinfo::KInfo) -> Vector{Float64}
+
+where `midpoint` is the cell-centre coordinate (length `DIM`) and the return value is the
+primitive vector `[ρ, U₁, …, U_DIM, λ]` (length `DIM+2`, `λ = ρ/(2p)`). See the
+[User-defined functions](@ref) page for the full convention and worked examples.
 
 ## Fields
 
@@ -23,6 +40,7 @@ $(TYPEDFIELDS)
 
 """
 struct PCoordFn<:AbstractInitCond # A function that accepts physical coordinates and returns initial primary variable at the position.
+    "Function `(midpoint, kinfo) -> prim` returning the primitive vector at a physical coordinate."
     PCIC_fn::Function
 end
 
@@ -137,7 +155,10 @@ end
 """
 $(TYPEDEF)
 
-Structure of user-defined-functions.
+Container for the optional user-supplied callbacks that steer adaptive mesh refinement.
+Construct with `UDF(; static_ps_refine_flag = …, dynamic_ps_refine_flag = …)`; any field left
+unset defaults to a no-op. See the [User-defined functions](@ref) page for the full convention
+and worked examples.
 
 ## Fields
 
@@ -145,12 +166,30 @@ $(TYPEDFIELDS)
 
 """
 mutable struct UDF
-    "The static AMR flag in physical space. (`midpoint`::Vector{Float64},`ds`::Vector{Float64},`kinfo`::[`KInfo`](@ref),`level`::Int)->Bool"
+    """
+    Static, geometry-driven physical-space refinement flag. Evaluated once during the initial
+    refinement at setup ([`pre_refine!`](@ref), called inside [`initialize`](@ref)). Signature
+
+        static_ps_refine_flag(midpoint::Vector{Float64}, ds::Vector{Float64},
+                              kinfo::KInfo, level::Int) -> Bool
+
+    `midpoint`/`ds` are the candidate cell's centre/size, `level` its current refinement level.
+    Return `true` to force the cell to refine; such cells are also protected from coarsening.
+    Default (`null_udf`): never force refinement.
+    """
     static_ps_refine_flag::Function
-    "The dynamic AMR flag in physical space. (`ps_data`::[`AbstractPsData`](@ref),`level`::Int,`ka`::[`KA`](@ref))->Bool"
+    """
+    Dynamic, solution-driven physical-space refinement flag. Evaluated every refinement step
+    ([`adaptive_mesh_refinement!`](@ref)) to *gate* the Löhner sensor. Signature
+
+        dynamic_ps_refine_flag(ps_data::AbstractPsData, level::Int, ka::KA) -> Bool
+
+    Return `false` to forbid dynamic refinement of `ps_data` (e.g. to freeze the mesh outside a
+    region of interest); `true` lets the sensor decide. Default (unset): always allow.
+    """
     dynamic_ps_refine_flag::Function
-    "The static AMR flag in velocity space."
-    static_vs_refine_flag::Function 
+    "Reserved for a static velocity-space refinement flag. **Currently unused** — the field is stored but never invoked."
+    static_vs_refine_flag::Function
 end
 null_udf(args...;kwargs...) = false
 function UDF(;kwargs...)
@@ -178,9 +217,18 @@ mutable struct Output
     vtk_celltype::Union{Type{<:AbstractVTKCellType},Vector}
     "VTK cell type in velocity space. Available options: `Pixel` for 2D."
     vs_vtk_celltype::Type{Tv} where{Tv<:AbstractVTKCellType}
-    "Time interval between animation frames."
+    "Time interval between animation frames. `0` (default) disables animation output, making [`check_for_animsave!`](@ref) a no-op."
     anim_dt::Float64
-    "User-defined-function determining the physical cells need to output the velocity space."
+    """
+    Optional callback selecting which physical cells write their (per-cell) velocity-space
+    distribution. Two call conventions, one per output path:
+    - Final result ([`save_result`](@ref)): `vs_output_criterion(ps_data, ka) -> Bool` —
+      return `true` to include this cell's velocity space. Default (unset): include every cell.
+    - Animation frames ([`check_for_animsave!`](@ref)): `vs_output_criterion(; ps_data, ka)
+      -> (id::Int, flag::Bool)` — `flag` selects the cell and `id` names its output file.
+      Default (unset): write no per-cell velocity space.
+    See the [User-defined functions](@ref) page.
+    """
     vs_output_criterion::Function
     "Index of the last saved animation frame."
     anim_index::Int

@@ -23,12 +23,12 @@ flux!(::KA)
 ---
 
 ```@docs
-flux!(::DomainFace,::KA)
-flux!(::FullFace,::KA)
-flux!(::HangingFace{DIM,NDF},::KA) where{DIM,NDF}
-flux!(::BackHangingFace{DIM,NDF},::KA) where{DIM,NDF}
+flux!(::Type{F},::DomainFace,::KA) where {F<:AbstractFluxType}
+flux!(::Type{F},::FullFace,::KA) where {F<:AbstractFluxType}
+flux!(::Type{F},::HangingFace{DIM,NDF},::KA) where {DIM,NDF,F<:AbstractFluxType}
+flux!(::Type{F},::BackHangingFace{DIM,NDF},::KA) where {DIM,NDF,F<:AbstractFluxType}
 ```
-Methods for different types of faces. Through these methods, different scenarios are decomposed into a unified interface, and the same core functions can be invoked for solving.
+Methods for different types of faces. The numerical-flux scheme `F` is passed as a type parameter (read once from the configuration by [`flux!(::KA)`](@ref) and threaded through the face loop) so that the scheme is resolved statically. Through these methods, different scenarios are decomposed into a unified interface, and the same core functions can be invoked for solving.
 
 ---
 ```@docs

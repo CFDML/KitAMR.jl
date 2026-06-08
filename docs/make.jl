@@ -11,6 +11,7 @@ type_page = [
     "Output"=>"type_output.md"
 ]
 methods_page = [
+    "Running a simulation"=>"methods_solve.md",
     "Initialization"=>"methods_initialize.md",
     "Reconstruction"=>"methods_reconstruct.md",
     "Flux"=>"methods_flux.md",
@@ -28,6 +29,7 @@ makedocs(;
         "Home"=>"index.md",
         "Types"=>type_page,
         "Functions and Methods"=>methods_page,
+        "User-defined functions"=>"user_defined.md",
         "Tutorial"=>"tutorial.md",
         "Cluster deployment"=>"cluster_deployment.md",
         "Index"=>"index_internal.md",

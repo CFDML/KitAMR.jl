@@ -144,16 +144,16 @@ function InsideSolidData(DIM,NDF;kwargs...)
 end
 AbstractInsideSolidData = Union{InsideSolidData,GhostInsideSolidData}
 
-"""
-$(TYPEDEF)
-Face shared by cells with the same refinement level.
-$(TYPEDFIELDS)
-"""
 # RC-5 fix: `there_data` (the across-face cell, possibly a ghost) was typed by the
 # abstract `AbstractPsData`, so reads of its fields inside the user-facing
 # `calc_flux` were type-unstable. Capturing its concrete type as a parameter `TD`
 # lets `calc_flux` specialize on the concrete face, keeping `calc_flux` itself a
 # single uniform method (the per-face dispatch already happens at the faces loop).
+"""
+$(TYPEDEF)
+Face shared by cells with the same refinement level.
+$(TYPEDFIELDS)
+"""
 struct FullFace{DIM,NDF,TD<:AbstractPsData{DIM,NDF}}<:InnerFace
     "Rotational coefficient of the face. `-1` if `here_data` locates at the negative direction relative to the face."
     rot::Float64
@@ -207,10 +207,6 @@ $(TYPEDEF)
 Struct for flux calculation corresponding to a single face.
 $(TYPEDFIELDS)
 """
-# RC-5: parametrize on the concrete here/there cell types so the user-facing
-# `calc_flux` is type-stable on the hanging-face paths too. The per-element
-# `calc_flux(...)` call already acts as the function barrier that specializes on
-# the concrete `FluxData` type built here.
 struct FluxData{T<:InnerFace,HD<:AbstractPsData,TD<:AbstractPsData}
     rot::Float64
     direction::Int # face normal direction

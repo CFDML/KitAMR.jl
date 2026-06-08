@@ -509,6 +509,23 @@ function initialize(config::Dict)
     initialize_immersed_boundaries!(ka)
     return p4est,ka
 end
+"""
+$(TYPEDSIGNATURES)
+Build the full solver state from a [`Configure`](@ref) and return `(p4est, ka)`. This is the
+entry point of every run and must be called before any time stepping.
+
+It creates the `p4est` forest, generates and geometry-adaptively refines the physical mesh,
+builds the velocity-space grids, initializes the field from the configuration's initial
+condition, sets up ghost layers, neighbor maps, faces and immersed boundaries, and performs the
+first load-balancing partition.
+
+Returns `(p4est, ka)`:
+- `p4est` — opaque pointer to the p4est forest (the parallel mesh topology);
+- `ka` — the [`KA`](@ref) object holding all solver data, configuration and status.
+
+Pass both to [`solve!`](@ref) (or to the individual per-step driver functions), then to
+[`save_result`](@ref) and [`finalize!`](@ref).
+"""
 function initialize(config::Configure{DIM,NDF}) where{DIM,NDF}
     kinfo = KInfo(config)
     p4est, trees = initialize_trees!(kinfo)

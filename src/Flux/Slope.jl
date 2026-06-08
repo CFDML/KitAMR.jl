@@ -1034,6 +1034,16 @@ function update_macro_slope!(ka::KA{DIM}) where{DIM}
         end
     end
 end
+"""
+$(TYPEDSIGNATURES)
+Reconstruct the slopes used by the second-order flux: update the velocity-space slopes `sdf` in
+[`VsData`](@ref) and the macroscopic slopes `sw` in [`PsData`](@ref). The reconstruction is done
+level by level (with the transverse correction applied on coarse/fine faces) and the freshly
+corrected mirror/ghost data is exchanged over MPI between levels.
+
+Call once per step **after** [`adaptive_mesh_refinement!`](@ref) / [`limit_Δt!`](@ref) and
+**before** [`flux!`](@ref), which consumes these slopes. (The [`solve!`](@ref) driver does this.)
+"""
 function slope!(p4est::P_pxest_t,ka::KA{DIM}) where{DIM}
     L_min = min_cell_level(ka)
     L_max = ka.kinfo.config.solver.AMR_PS_MAXLEVEL

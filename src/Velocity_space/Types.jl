@@ -32,17 +32,17 @@ mutable struct GhostVsData{DIM,NDF} <: AbstractVsData{DIM,NDF}
     sdf::Array{Float64,3} # vs_num x NDF x DIM
 end
 
-"""
-$(TYPEDEF)
-Information of the velocity space corresponding to the face during the calculation of numerical flux.
-$(TYPEDFIELDS)
-"""
 # RC-3 fix: the face velocity-space data is built by `@views` boolean-slicing the
 # cell `VsData` arrays, so the concrete field types (SubArray / Matrix) are known
 # at construction. Capturing them as type parameters (instead of the abstract
 # `AbstractVector/Matrix/Array{Float64}`) makes field reads in `calc_flux`
 # type-stable, so the per-velocity-cell comprehensions infer `Float64` element
 # types and stop boxing (the dominant allocation source in the flux kernel).
+"""
+$(TYPEDEF)
+Information of the velocity space corresponding to the face during the calculation of numerical flux.
+$(TYPEDFIELDS)
+"""
 struct FaceVsData{DIM,NDF,
                   W<:AbstractVector{Float64},
                   M<:AbstractMatrix{Float64},

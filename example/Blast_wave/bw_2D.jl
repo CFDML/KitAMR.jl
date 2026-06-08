@@ -73,7 +73,6 @@ config = Configure(solver;
 
 p4est, ka = initialize(config)
 solve!(p4est, ka;
-    prerefine_steps = 4, prerefine_reinit_ic = true,
     ps_interval = 20, vs_interval = 40, partition_interval = 40)
 save_result(p4est, ka)
 finalize!(p4est, ka)

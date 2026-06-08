@@ -3,6 +3,13 @@
 ## Slope
 In current version, the distribution function is reconstructed as a linear function. Besides the function value at center of the cell, the slope is also required. The slope is obtained by finite difference. To eliminate the oscillation near discontinuities, the vanLeer limiter is adopted. 
 
+The per-step entry point, which recomputes every slope and exchanges the ghost data over MPI, is
+
+```@docs
+slope!
+```
+---
+
 ```@docs
 vanleer
 ```

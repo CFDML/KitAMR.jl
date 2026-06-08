@@ -2,6 +2,11 @@
 ```@docs
 initialize
 ```
+The initial condition can be re-applied to a (re)refined mesh — e.g. between the initial
+pre-refinement passes — with
+```@docs
+reinitialize_initial_condition!
+```
 ---
 ```@docs
 initialize_ghost

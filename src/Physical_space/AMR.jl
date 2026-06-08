@@ -1096,7 +1096,14 @@ end
 
 """
 $(TYPEDSIGNATURES)
-Outer function of AMR in physical space.
+Run one physical-space adaptation pass: recompute the slopes and the refinement criterion, then
+refine, coarsen and 2:1-balance the forest. With `recursive = true` a single call refines /
+coarsens recursively up to the level limits.
+
+This low-level pass does **not** rebuild the ghost/neighbor/face data structures — call
+[`amr_recover!`](@ref) afterwards. For routine use prefer the higher-level
+[`adaptive_mesh_refinement!`](@ref) (interval-driven, recovers automatically) or simply
+[`solve!`](@ref), which also uses it for the optional initial pre-refinement.
 """
 function ps_adaptive_mesh_refinement!(p4est::P_pxest_t,ka::KA;recursive = false)
     # update_gradmax!(ka)
