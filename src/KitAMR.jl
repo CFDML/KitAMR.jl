@@ -43,6 +43,14 @@ include("Velocity_space/Velocity_space.jl")
 # oversubscription / busy-wait spinning.
 function __init__()
     BLAS.set_num_threads(1)
+    # Quiet p4est's C library (libsc): by default it prints an informational line for every
+    # forest operation (new/refine/coarsen/balance/partition/ghost). Raise its log threshold
+    # so only genuine errors are shown. Override with the `KITAMR_P4EST_LOG` environment
+    # variable, set to an `SC_LP_*` integer threshold — e.g. `6` (SC_LP_PRODUCTION) to restore
+    # the per-operation chatter, `8` (SC_LP_ERROR, the default here), `9` (SC_LP_SILENT) to mute
+    # everything including errors.
+    threshold = something(tryparse(Cint, get(ENV, "KITAMR_P4EST_LOG", "")), Cint(SC_LP_ERROR))
+    p4est_init(C_NULL, threshold)
 end
 
 end # module
