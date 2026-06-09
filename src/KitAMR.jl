@@ -4,7 +4,6 @@ using MPI
 using JLD2
 using Dates
 using LinearAlgebra
-using Parameters
 using SpecialFunctions
 using StaticArrays
 using Suppressor
