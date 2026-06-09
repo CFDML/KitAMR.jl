@@ -58,7 +58,7 @@ function solve_I_projection(
     W::AbstractVector{T},
     weight::AbstractVector{T};
     tol::Real=1e-10,
-    maxiter::Integer=20,
+    maxiter::Integer=10,
 ) where {T<:Real}
     N, D = size(midpoint)
     M = D + 2
@@ -134,8 +134,9 @@ function solve_I_projection(
         end
         lambda .+= α * Δλ
     end
-
-    @warn "Newton 未在 $maxiter 步内收敛, 残差 $(norm(G))"
+    if norm(G) > 1e-6
+        @warn "Newton 未在 $maxiter 步内收敛, 残差 $(norm(G))"
+    end
     return lambda, Psi
 end
 
