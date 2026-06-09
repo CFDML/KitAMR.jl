@@ -40,6 +40,7 @@ makedocs(;
     format = Documenter.HTML()
 )
 
-deploydocs(;devbranch = "ge",
+deploydocs(;devbranch = "main",
     repo = "github.com/CFDML/KitAMR.jl.git",
+    push_preview = true,
 )

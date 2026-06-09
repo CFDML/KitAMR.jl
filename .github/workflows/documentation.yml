@@ -3,8 +3,8 @@ name: Documentation
 on:
   push:
     branches:
-      - ge # update to match your development branch (master, main, dev, trunk, ...)
-    tags: '*'
+      - main # development branch -> deploys the `dev` docs
+    tags: '*' # release tags (vX.Y.Z) -> versioned docs; `stable` aliases the latest
   pull_request:
 
 jobs:
