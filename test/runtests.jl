@@ -9,6 +9,7 @@ solver = Solver(;
     VS_DYNAMIC_AMR = false,
     flux = CAIDVM,
     time_marching = CAIDVM_Marching,
+    max_sim_time = 0.25,
 )
 gas = Gas(;
     K = 0.0,
@@ -35,16 +36,7 @@ config = Configure(solver;
 )
 
 p4est,ka = initialize(config);
-max_sim_time = 0.25
-nt = max_sim_time / ka.kinfo.status.Δt + 1.0 |> floor |> Int
-for i in 1:10
-    # adaptive_mesh_refinement!(p4est, ka; ps_interval = 20, vs_interval = 40, partition_interval = 40, vs_balance = false)
-    slope!(p4est, ka)
-    flux!(p4est, ka)
-    iterate!(p4est, ka)
-    check!(p4est, ka)
-    check_for_convergence(ka) && break
-end
+solve!(p4est,ka)
 # save_result(p4est,ka)
 finalize!(p4est,ka)
 MPI.Finalize()

@@ -25,12 +25,20 @@ function execute_check!(p4est,ka)
         println("Total number of phase grids: $total_phase_num")
     end
 end
+# The interactive `save` listener needs a stdin that supports async reading — a libuv stream (TTY or
+# pipe) or a `BufferStream`. When stdin is an `IOStream` (Pkg.test, or redirected input/`< file`),
+# `Base.start_reading` has no applicable method, so the feature is silently disabled rather than
+# crashing the run. `applicable` covers every stdin type that has a `start_reading` method.
+_stdin_listenable() = applicable(Base.start_reading, stdin)
 """
 $(SIGNATURES)
 Start listening for the input from command line. Must be called before calling [`check_for_save!`](@ref).
+
+No-op when `stdin` does not support async reading — e.g. an `IOStream` under `Pkg.test` or redirected
+input — in which case the runtime `save` command is unavailable for that run.
 """
 function listen_for_save!(;rank=0)
-    if MPI.Comm_rank(MPI.COMM_WORLD)==rank
+    if MPI.Comm_rank(MPI.COMM_WORLD)==rank && _stdin_listenable()
         Base.start_reading(stdin)
     end
     return nothing
@@ -41,7 +49,7 @@ Check whether `save` is input during the iteration. If the result is true, a sav
 """
 function check_for_save!(p4est::P_pxest_t,ka;rank=0)
     save_flag = ka.kinfo.status.save_flag
-    if MPI.Comm_rank(MPI.COMM_WORLD)==rank
+    if MPI.Comm_rank(MPI.COMM_WORLD)==rank && _stdin_listenable()
         if bytesavailable(stdin)!=0
             input = readline(stdin)
             if input=="save"
