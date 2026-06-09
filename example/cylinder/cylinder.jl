@@ -43,8 +43,8 @@ config = Configure(solver;
 )
 
 
-p4est,ka = initialize(config);
-solve!(p4est, ka; prerefine_steps = 0, ps_interval = 40, partition_interval = 40)
+p4est,ka = initialize(config; prerefine_steps = 0);
+solve!(p4est, ka; ps_interval = 40, partition_interval = 40)
 save_result(p4est,ka)
 finalize!(p4est,ka)
 MPI.Finalize()

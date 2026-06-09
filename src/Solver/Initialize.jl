@@ -494,7 +494,20 @@ end
 $(TYPEDSIGNATURES)
 Initialize everthing according to `config` dictionary.
 """
-function initialize(config::Dict)
+# Initial mesh pre-refinement, run at the end of `initialize`: apply `ps_adaptive_mesh_refinement!`
+# `steps` times (each followed by `amr_recover!` to rebuild ghost/neighbor/face data), optionally
+# re-applying the initial condition after each pass so newly refined cells get the exact IC.
+function _prerefine!(p4est::P_pxest_t, ka::KA, steps::Integer, recursive::Bool, reinit_ic::Bool)
+    for _ in 1:steps
+        ps_adaptive_mesh_refinement!(p4est, ka; recursive = recursive)
+        reinit_ic && reinitialize_initial_condition!(ka)
+        amr_recover!(p4est, ka)
+    end
+    return nothing
+end
+function initialize(config::Dict;
+        prerefine_steps::Integer = Solver(config).AMR_DYNAMIC_PS_MAXLEVEL,
+        prerefine_recursive::Bool = false, prerefine_reinit_ic::Bool = true)
     kinfo = KInfo(config)
     p4est, trees = initialize_trees!(kinfo)
     kdata = KData(trees)
@@ -507,6 +520,8 @@ function initialize(config::Dict)
     initialize_solid_neighbor!(ka)
     initialize_faces!(p4est, ka)
     initialize_immersed_boundaries!(ka)
+    _prerefine!(p4est, ka, prerefine_steps, prerefine_recursive, prerefine_reinit_ic)
+    execute_check!(p4est, ka)   # report the status once initialization (incl. pre-refinement) is complete
     return p4est,ka
 end
 """
@@ -516,8 +531,9 @@ entry point of every run and must be called before any time stepping.
 
 It creates the `p4est` forest, generates and geometry-adaptively refines the physical mesh,
 builds the velocity-space grids, initializes the field from the configuration's initial
-condition, sets up ghost layers, neighbor maps, faces and immersed boundaries, and performs the
-first load-balancing partition.
+condition, sets up ghost layers, neighbor maps, faces and immersed boundaries, performs the
+first load-balancing partition, runs the solution-driven initial mesh pre-refinement (see the
+keyword arguments below), and finally reports the initial status.
 
 Returns `(p4est, ka)`:
 - `p4est` — opaque pointer to the p4est forest (the parallel mesh topology);
@@ -525,8 +541,19 @@ Returns `(p4est, ka)`:
 
 Pass both to [`solve!`](@ref) (or to the individual per-step driver functions), then to
 [`save_result`](@ref) and [`finalize!`](@ref).
+
+# Keyword arguments — initial mesh pre-refinement
+- `prerefine_steps::Integer = solver.AMR_DYNAMIC_PS_MAXLEVEL` — number of
+  [`ps_adaptive_mesh_refinement!`](@ref) passes applied after the base setup; the default builds
+  the mesh up to the dynamic physical-space max level. Pass `0` to skip.
+- `prerefine_recursive::Bool = false` — `recursive` flag for those passes.
+- `prerefine_reinit_ic::Bool = true` — re-apply the initial condition
+  ([`reinitialize_initial_condition!`](@ref)) after each pass, so newly refined cells get the
+  exact IC (recommended for sharp initial conditions, e.g. Riemann / blast waves).
 """
-function initialize(config::Configure{DIM,NDF}) where{DIM,NDF}
+function initialize(config::Configure{DIM,NDF};
+        prerefine_steps::Integer = config.solver.AMR_DYNAMIC_PS_MAXLEVEL,
+        prerefine_recursive::Bool = false, prerefine_reinit_ic::Bool = true) where{DIM,NDF}
     kinfo = KInfo(config)
     p4est, trees = initialize_trees!(kinfo)
     kdata = KData(trees)
@@ -540,5 +567,7 @@ function initialize(config::Configure{DIM,NDF}) where{DIM,NDF}
     initialize_solid_neighbor!(ka)
     initialize_faces!(p4est, ka)
     initialize_immersed_boundaries!(ka)
+    _prerefine!(p4est, ka, prerefine_steps, prerefine_recursive, prerefine_reinit_ic)
+    execute_check!(p4est, ka)   # report the status once initialization (incl. pre-refinement) is complete
     return p4est,ka
 end

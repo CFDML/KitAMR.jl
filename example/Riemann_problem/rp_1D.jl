@@ -50,9 +50,8 @@ config = Configure(solver;
     user_defined = udf
 )
 
-p4est,ka = initialize(config);
+p4est,ka = initialize(config; prerefine_steps = 1, prerefine_recursive = true);
 solve!(p4est, ka;
-    prerefine_steps = 1, prerefine_recursive = true,
     ps_interval = 20, vs_interval = 20, partition_interval = 20)
 save_result(p4est,ka)
 finalize!(p4est,ka)

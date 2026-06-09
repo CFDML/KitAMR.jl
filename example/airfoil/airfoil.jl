@@ -40,8 +40,8 @@ config = Configure(solver;
     user_defined = udf
 )
 
-p4est,ka = initialize(config)
-solve!(p4est, ka; prerefine_steps = 0, partition_interval = 160)
+p4est,ka = initialize(config; prerefine_steps = 0)
+solve!(p4est, ka; partition_interval = 160)
 save_result(p4est,ka)
 finalize!(p4est,ka)
 MPI.Finalize()

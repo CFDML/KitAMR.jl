@@ -49,13 +49,12 @@ config = Configure(solver;
 )
 # ----------------------------------------------------------------------------------------------------
 
-p4est,ka = initialize(config) # Initialization for `KitAMR_Data`.
+p4est,ka = initialize(config; prerefine_steps = 0) # Initialization for `KitAMR_Data`.
 #=
 Run the time-stepping loop. `max_sim_time` is set in the `Solver` above; `solve!`
 terminates (and lands the last step) exactly on it via `reached_max_time` / `limit_Δt!`.
 =#
 solve!(p4est, ka;
-    prerefine_steps = 0,
     ps_interval = 40, vs_interval = 40, partition_interval = 40)
 save_result(p4est,ka) # Save converging results.
 finalize!(p4est,ka) # Finalize `p4est` things. Release the memory managed by `C`.

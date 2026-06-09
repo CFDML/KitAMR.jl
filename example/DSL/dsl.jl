@@ -55,9 +55,8 @@ config = Configure(solver;
     user_defined = udf
 )
 
-p4est,ka = initialize(config);
+p4est,ka = initialize(config; prerefine_steps = 3);
 solve!(p4est, ka;
-    prerefine_steps = 3,
     ps_interval = 20, vs_interval = 40, partition_interval = 20)
 save_result(p4est,ka)
 finalize!(p4est,ka)

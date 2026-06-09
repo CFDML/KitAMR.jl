@@ -1,8 +1,10 @@
 include("Check.jl")
 include("Input.jl")
 include("Output.jl")
+include("Restart.jl")
 
 export read_config, save_result, listen_for_save!, check_for_save!, check!, check_for_animsave!
+export save_for_restart, restart
 
 function string_to_Cstring(s::String)
     t = codeunits(s)
