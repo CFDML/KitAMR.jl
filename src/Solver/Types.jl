@@ -276,9 +276,17 @@ struct Configure{DIM,NDF}<:AbstractConfig{DIM,NDF}
     geometry::Vector{Float64}
     "Number of tree roots for each dimension. For 2D case, it should be aligned as [x_num,y_num]"
     trees_num::Vector{Int64}
-    "For Vector type, it represents the range of the velocity space. For 2D case, it should be aligned as [umin,umax,vmin,vmax]. The `AbstractQuadrature` type is reserved for other quadrature rule like Gauss-Hermite."
+    """
+    For `Vector` type, it represents the range of the velocity space. For 2D case, it should be
+    aligned as `[umin,umax,vmin,vmax]`. **Implicit requirement: the origin `v = 0` must lie on a
+    velocity-grid corner**, i.e. for every dimension `(0 - min)/(max - min)*vs_trees_num` must be
+    an integer (checked at construction by [`check_vs_setting`](@ref)). This keeps the upwinding
+    split at `v·n = 0` unambiguous and is easy to satisfy — e.g. a symmetric range `[-a, a]` with
+    an even `vs_trees_num`. The `AbstractQuadrature` type is reserved for other quadrature rules
+    like Gauss-Hermite.
+    """
     quadrature::Union{AbstractQuadrature,Vector{Float64}}
-    "Number of tree roots for each dimension in velocity space."
+    "Number of tree roots for each dimension in velocity space. Together with `quadrature` it must place the origin `v = 0` on a root-grid corner (see `quadrature`; checked by [`check_vs_setting`](@ref))."
     vs_trees_num::Vector{Int64}
     "Initial condition defined by [`AbstractInitCond`](@ref)."
     IC::AbstractInitCond
@@ -309,6 +317,40 @@ end
 function config_IB(ib::Triangles,config::Dict)
     Triangles(ib,config)
 end
+"""
+$(TYPEDSIGNATURES)
+Validate the Cartesian velocity-space setting (`quadrature` range + `vs_trees_num`).
+
+The kinetic scheme carries an **implicit requirement: the origin `v = 0` must lie on a
+velocity-grid corner** (a root-cell vertex), never inside a cell. This keeps the upwinding split
+at `v·n = 0` unambiguous (no cell whose centre is exactly `v = 0`) and, because refinement only
+bisects cells, guarantees 0 stays on a corner at every level. Equivalently, for each dimension
+`(0 - min)/(max - min) * vs_trees_num` must be an integer in `0:vs_trees_num`.
+
+The requirement is left to the user to satisfy through a sensible choice of range and root count —
+it is trivial, e.g. a symmetric range `[-a, a]` with an even `vs_trees_num`. This function only
+checks it, throwing an `ErrorException` that names the offending dimension when violated. It is a
+no-op for a non-Cartesian `AbstractQuadrature`.
+"""
+function check_vs_setting(quadrature, vs_trees_num, DIM::Integer)
+    quadrature isa AbstractVector || return nothing   # non-Cartesian quadrature: requirement N/A
+    length(quadrature) == 2DIM || error("`quadrature` must have length 2*DIM = $(2DIM) (got $(length(quadrature))): an increasing [min,max] pair per velocity dimension.")
+    length(vs_trees_num) == DIM || error("`vs_trees_num` must have length DIM = $DIM (got $(length(vs_trees_num))).")
+    for d in 1:DIM
+        lo = quadrature[2d-1]; hi = quadrature[2d]; n = vs_trees_num[d]
+        hi > lo || error("velocity-space dimension $d: `quadrature` range [$lo, $hi] must be increasing.")
+        n >= 1 || error("velocity-space dimension $d: `vs_trees_num[$d]` = $n must be ≥ 1.")
+        k = -lo * n / (hi - lo)        # fractional root-grid index of the v = 0 vertex
+        i = round(k)
+        (0 <= i <= n && abs(k - i) <= 1e-8 * max(1, n)) || error(
+            "Invalid velocity-space setting in dimension $d: the origin v = 0 must lie on a " *
+            "root-grid corner. With range [$lo, $hi] and `vs_trees_num[$d]` = $n, 0 falls at " *
+            "fractional cell index $k (it must be an integer in 0:$n). Adjust the `quadrature` " *
+            "range and/or `vs_trees_num` so that (0 - min)/(max - min)*vs_trees_num is an integer " *
+            "— e.g. a symmetric range [-a, a] with an even `vs_trees_num`.")
+    end
+    return nothing
+end
 function Configure(config::Dict)
     gas = Gas()
     for i in fieldnames(Gas)
@@ -331,6 +373,7 @@ function Configure(config::Dict)
             setfield!(user_defined,i,null_udf)
         end
     end
+    check_vs_setting(config[:quadrature], config[:vs_trees_num], config[:DIM])
     return Configure{config[:DIM],config[:NDF]}(config[:geometry],config[:trees_num],
         config[:quadrature],config[:vs_trees_num],config[:IC],config[:domain],IB,
         gas,Solver(config),Output(config),user_defined)
@@ -349,6 +392,7 @@ function Configure(solver::Solver{DIM,NDF};kwargs...) where{DIM,NDF}
     for i in eachindex(IB)
         IB[i] = config_IB(IB[i],config_dict)
     end
+    check_vs_setting(kwargs[:quadrature], kwargs[:vs_trees_num], DIM)
     return Configure{DIM,NDF}(
         geometry,
         trees_num,
