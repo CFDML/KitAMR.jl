@@ -1,84 +1,238 @@
 """
 $(TYPEDSIGNATURES)
 """
-function contribution_refine_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, vr::Velocity_Resolution, kinfo::KInfo)
-    return local_contribution_refine_flag(w,U,midpoint,df,weight,kinfo)||global_contribution_refine_flag(U,midpoint,df,weight,vr,kinfo)
+function contribution_refine_flag(
+    w::AbstractVector,
+    U::AbstractVector,
+    midpoint::AbstractVector,
+    df::AbstractVector,
+    weight::Float64,
+    vr::Velocity_Resolution,
+    kinfo::KInfo,
+)
+    return local_contribution_refine_flag(w, U, midpoint, df, weight, kinfo)||global_contribution_refine_flag(
+        U,
+        midpoint,
+        df,
+        weight,
+        vr,
+        kinfo,
+    )
 end
 """
 $(TYPEDSIGNATURES)
 """
-function contribution_coarsen_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractMatrix, df::AbstractMatrix, weight::AbstractVector, vr::Velocity_Resolution, kinfo::KInfo)
-    return local_contribution_coarsen_flag(w,U,midpoint,df,weight,kinfo)&&global_contribution_coarsen_flag(U,midpoint,df,weight,vr,kinfo)
+function contribution_coarsen_flag(
+    w::AbstractVector,
+    U::AbstractVector,
+    midpoint::AbstractMatrix,
+    df::AbstractMatrix,
+    weight::AbstractVector,
+    vr::Velocity_Resolution,
+    kinfo::KInfo,
+)
+    return local_contribution_coarsen_flag(w, U, midpoint, df, weight, kinfo)&&global_contribution_coarsen_flag(
+        U,
+        midpoint,
+        df,
+        weight,
+        vr,
+        kinfo,
+    )
 end
 
 
 
 
 
-function local_contribution_refine_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, kinfo::KInfo{DIM,2}) where{DIM}
-    max(abs(0.5 * (sum((U - midpoint) .^ 2) * df[1] + df[2])* weight) /
-    (w[end]  - 0.5 * w[1] * sum((U) .^ 2)),df[1]*weight/w[1]) > kinfo.config.solver.ADAPT_COEFFI_VS_LOCAL ? true : false
+function local_contribution_refine_flag(
+    w::AbstractVector,
+    U::AbstractVector,
+    midpoint::AbstractVector,
+    df::AbstractVector,
+    weight::Float64,
+    kinfo::KInfo{DIM,2},
+) where {DIM}
+    max(
+        abs(0.5 * (sum((U - midpoint) .^ 2) * df[1] + df[2]) * weight) /
+        (w[end] - 0.5 * w[1] * sum((U) .^ 2)),
+        df[1]*weight/w[1],
+    ) > kinfo.config.solver.ADAPT_COEFFI_VS_LOCAL ? true : false
 end
-function local_contribution_refine_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, kinfo::KInfo{DIM,1}) where{DIM}
-    max(abs(0.5 * sum((U - midpoint) .^ 2) * df[1]* weight) /
-    (w[end] - 0.5 * w[1] * sum((U) .^ 2)),df[1]*weight/w[1]) > kinfo.config.solver.ADAPT_COEFFI_VS_LOCAL ? true : false
+function local_contribution_refine_flag(
+    w::AbstractVector,
+    U::AbstractVector,
+    midpoint::AbstractVector,
+    df::AbstractVector,
+    weight::Float64,
+    kinfo::KInfo{DIM,1},
+) where {DIM}
+    max(
+        abs(0.5 * sum((U - midpoint) .^ 2) * df[1] * weight) /
+        (w[end] - 0.5 * w[1] * sum((U) .^ 2)),
+        df[1]*weight/w[1],
+    ) > kinfo.config.solver.ADAPT_COEFFI_VS_LOCAL ? true : false
 end
-function local_contribution_coarsen_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractMatrix, df::AbstractMatrix, weight::AbstractVector, kinfo::KInfo{DIM,2}) where{DIM}
-    for i = 1:2^DIM
-        !local_contribution_coarsen_flag(w, U, @view(midpoint[i, :]), @view(df[i, :]), weight[i], kinfo) &&
-            return false
+function local_contribution_coarsen_flag(
+    w::AbstractVector,
+    U::AbstractVector,
+    midpoint::AbstractMatrix,
+    df::AbstractMatrix,
+    weight::AbstractVector,
+    kinfo::KInfo{DIM,2},
+) where {DIM}
+    for i = 1:(2^DIM)
+        !local_contribution_coarsen_flag(
+            w,
+            U,
+            @view(midpoint[i, :]),
+            @view(df[i, :]),
+            weight[i],
+            kinfo,
+        ) && return false
     end
     return true
 end
-function local_contribution_coarsen_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractMatrix, df::AbstractMatrix, weight::AbstractVector, kinfo::KInfo{DIM,1}) where{DIM}
-    for i = 1:2^DIM
-        !local_contribution_coarsen_flag(w, U, @view(midpoint[i, :]), @view(df[i, :]), weight[i], kinfo) &&
-            return false
+function local_contribution_coarsen_flag(
+    w::AbstractVector,
+    U::AbstractVector,
+    midpoint::AbstractMatrix,
+    df::AbstractMatrix,
+    weight::AbstractVector,
+    kinfo::KInfo{DIM,1},
+) where {DIM}
+    for i = 1:(2^DIM)
+        !local_contribution_coarsen_flag(
+            w,
+            U,
+            @view(midpoint[i, :]),
+            @view(df[i, :]),
+            weight[i],
+            kinfo,
+        ) && return false
     end
     return true
 end
-function local_contribution_coarsen_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, kinfo::KInfo{DIM,2}) where{DIM}
-    max(0.5 * (sum((U - midpoint) .^ 2) * df[1] + df[2])* weight /
-    (w[end] - 0.5 * w[1] * sum((U) .^ 2)),df[1]*weight/w[1]) < kinfo.config.solver.ADAPT_COEFFI_VS_LOCAL/ 2^DIM
+function local_contribution_coarsen_flag(
+    w::AbstractVector,
+    U::AbstractVector,
+    midpoint::AbstractVector,
+    df::AbstractVector,
+    weight::Float64,
+    kinfo::KInfo{DIM,2},
+) where {DIM}
+    max(
+        0.5 * (sum((U - midpoint) .^ 2) * df[1] + df[2]) * weight /
+        (w[end] - 0.5 * w[1] * sum((U) .^ 2)),
+        df[1]*weight/w[1],
+    ) < kinfo.config.solver.ADAPT_COEFFI_VS_LOCAL / 2^DIM
 end
-function local_contribution_coarsen_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, kinfo::KInfo{DIM,1}) where{DIM}
-    max(0.5 * (sum((U - midpoint) .^ 2) * df[1])* weight /
-    (w[end] - 0.5 * w[1] * sum((U) .^ 2)),df[1]*weight/w[1]) < kinfo.config.solver.ADAPT_COEFFI_VS_LOCAL/ 2^DIM
+function local_contribution_coarsen_flag(
+    w::AbstractVector,
+    U::AbstractVector,
+    midpoint::AbstractVector,
+    df::AbstractVector,
+    weight::Float64,
+    kinfo::KInfo{DIM,1},
+) where {DIM}
+    max(
+        0.5 * (sum((U - midpoint) .^ 2) * df[1]) * weight /
+        (w[end] - 0.5 * w[1] * sum((U) .^ 2)),
+        df[1]*weight/w[1],
+    ) < kinfo.config.solver.ADAPT_COEFFI_VS_LOCAL / 2^DIM
 end
 
 
 
 
 
-function global_contribution_refine_flag(U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, vr::Velocity_Resolution, kinfo::KInfo{DIM,2}) where{DIM}
-    df[1]*weight > kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL*vr.density || 0.5 * (sum((U - midpoint) .^ 2) * df[1] + df[2])* weight>vr.energy*kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL
+function global_contribution_refine_flag(
+    U::AbstractVector,
+    midpoint::AbstractVector,
+    df::AbstractVector,
+    weight::Float64,
+    vr::Velocity_Resolution,
+    kinfo::KInfo{DIM,2},
+) where {DIM}
+    df[1]*weight > kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL*vr.density ||
+        0.5 * (sum((U - midpoint) .^ 2) * df[1] + df[2]) * weight>vr.energy*kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL
 end
-function global_contribution_refine_flag(U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, vr::Velocity_Resolution, kinfo::KInfo{DIM,1}) where{DIM}
-    df[1]*weight > vr.density*kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL || 0.5 * (sum((U - midpoint) .^ 2) * df[1])* weight>vr.energy*kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL
+function global_contribution_refine_flag(
+    U::AbstractVector,
+    midpoint::AbstractVector,
+    df::AbstractVector,
+    weight::Float64,
+    vr::Velocity_Resolution,
+    kinfo::KInfo{DIM,1},
+) where {DIM}
+    df[1]*weight > vr.density*kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL ||
+        0.5 * (sum((U - midpoint) .^ 2) * df[1]) * weight>vr.energy*kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL
 end
 
-function global_contribution_coarsen_flag(U::AbstractVector, midpoint::AbstractMatrix, df::AbstractMatrix, weight::AbstractVector, vr::Velocity_Resolution, kinfo::KInfo{DIM,2}) where{DIM}
-    for i = 1:2^DIM
-        !global_contribution_coarsen_flag(U, @view(midpoint[i, :]), @view(df[i, :]), weight[i], vr, kinfo) &&
-            return false
+function global_contribution_coarsen_flag(
+    U::AbstractVector,
+    midpoint::AbstractMatrix,
+    df::AbstractMatrix,
+    weight::AbstractVector,
+    vr::Velocity_Resolution,
+    kinfo::KInfo{DIM,2},
+) where {DIM}
+    for i = 1:(2^DIM)
+        !global_contribution_coarsen_flag(
+            U,
+            @view(midpoint[i, :]),
+            @view(df[i, :]),
+            weight[i],
+            vr,
+            kinfo,
+        ) && return false
     end
     return true
 end
-function global_contribution_coarsen_flag(U::AbstractVector, midpoint::AbstractMatrix, df::AbstractMatrix, weight::AbstractVector, vr::Velocity_Resolution, kinfo::KInfo{DIM,1}) where{DIM}
-    for i = 1:2^DIM
-        !global_contribution_coarsen_flag(U, @view(midpoint[i, :]), @view(df[i, :]), weight[i], vr, kinfo) &&
-            return false
+function global_contribution_coarsen_flag(
+    U::AbstractVector,
+    midpoint::AbstractMatrix,
+    df::AbstractMatrix,
+    weight::AbstractVector,
+    vr::Velocity_Resolution,
+    kinfo::KInfo{DIM,1},
+) where {DIM}
+    for i = 1:(2^DIM)
+        !global_contribution_coarsen_flag(
+            U,
+            @view(midpoint[i, :]),
+            @view(df[i, :]),
+            weight[i],
+            vr,
+            kinfo,
+        ) && return false
     end
     return true
 end
-function global_contribution_coarsen_flag(U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, vr::Velocity_Resolution, kinfo::KInfo{DIM,2}) where{DIM}
-    df[1]*weight < kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL*vr.density/2^DIM && 0.5 * (sum((U - midpoint) .^ 2) * df[1] + df[2])* weight<vr.energy*kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL/2^DIM
+function global_contribution_coarsen_flag(
+    U::AbstractVector,
+    midpoint::AbstractVector,
+    df::AbstractVector,
+    weight::Float64,
+    vr::Velocity_Resolution,
+    kinfo::KInfo{DIM,2},
+) where {DIM}
+    df[1]*weight < kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL*vr.density/2^DIM &&
+        0.5 * (sum((U - midpoint) .^ 2) * df[1] + df[2]) * weight<vr.energy*kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL/2^DIM
 end
-function global_contribution_coarsen_flag(U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, vr::Velocity_Resolution, kinfo::KInfo{DIM,1}) where{DIM}
-    df[1]*weight < vr.density*kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL/2^DIM && 0.5 * (sum((U - midpoint) .^ 2) * df[1])* weight<vr.energy*kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL/2^DIM
+function global_contribution_coarsen_flag(
+    U::AbstractVector,
+    midpoint::AbstractVector,
+    df::AbstractVector,
+    weight::Float64,
+    vr::Velocity_Resolution,
+    kinfo::KInfo{DIM,1},
+) where {DIM}
+    df[1]*weight < vr.density*kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL/2^DIM &&
+        0.5 * (sum((U - midpoint) .^ 2) * df[1]) * weight<vr.energy*kinfo.config.solver.ADAPT_COEFFI_VS_GLOBAL/2^DIM
 end
 
-function macro_estimate_refine_flag(prim::AbstractVector,U,midpoint,ds,level)
+function macro_estimate_refine_flag(prim::AbstractVector, U, midpoint, ds, level)
     return false
     if norm(midpoint-U)-norm(ds)/2^(level+1)<√(1/prim[end])
         return true
@@ -86,9 +240,13 @@ function macro_estimate_refine_flag(prim::AbstractVector,U,midpoint,ds,level)
         return false
     end
 end
-function macro_estimate_IB_refine_flag(prim,bc,U,midpoint,ds,level)
-    Ub = bc[2:length(midpoint)+1]
-    if (norm(midpoint-U)-norm(ds)/2^(level+1)<√(1/prim[end])||norm(midpoint-Ub)-norm(ds)/2^(level+1)<√(1/bc[end]))
+function macro_estimate_IB_refine_flag(prim, bc, U, midpoint, ds, level)
+    Ub = bc[2:(length(midpoint)+1)]
+    if (
+        norm(midpoint-U)-norm(ds)/2^(level+1)<√(1/prim[end])||norm(midpoint-Ub)-norm(ds)/2^(
+            level+1
+        )<√(1/bc[end])
+    )
         return true
     else
         return false
@@ -99,7 +257,7 @@ end
 $(SIGNATURES)
 Analytical integral of the Maxwellian distribution over a Cartesian grid.
 """
-function maxwellian_dρ(midpoint,du,U,prim)
+function maxwellian_dρ(midpoint, du, U, prim)
     c = midpoint-U
     dg = prim[1]
     vth = 1.0/√prim[end]
@@ -119,12 +277,16 @@ end
 # and recursive refinement then homes in.
 # ------------------------------------------------------------------------------------------
 
-"Relative mass/energy floor for the analytic initial-grid criterion."
+"""
+Relative mass/energy floor for the analytic initial-grid criterion.
+"""
 const MAXWELLIAN_INIT_FLOOR = 1e-3
 
 # 1-D integrals over [c-du/2, c+du/2] of exp(-λs²) and s²exp(-λs²) (analytic, erf-based).
 @inline function _maxwellian_1d(c::Real, du::Real, λ::Real)
-    sqλ = sqrt(λ); a = c - 0.5 * du; b = c + 0.5 * du
+    sqλ = sqrt(λ);
+    a = c - 0.5 * du;
+    b = c + 0.5 * du
     I0 = 0.5 * sqrt(π / λ) * (erf(sqλ * b) - erf(sqλ * a))
     I2 = (a * exp(-λ * a^2) - b * exp(-λ * b^2)) / (2λ) + I0 / (2λ)
     return I0, I2
@@ -143,10 +305,12 @@ by the (large) peak-times-volume.  The denominator carries a deep-tail floor so 
 negligible mass (where both terms vanish) read ≈0 instead of `0/0`.
 """
 function maxwellian_quad_error(dρ, midpoint, du, U, prim, ::Val{DIM}) where {DIM}
-    λ = prim[end]; ρ = prim[1]
+    λ = prim[end];
+    ρ = prim[1]
     pref = ρ * (λ / π)^(DIM / 2)
-    V = 1.0; sumc2 = 0.0
-    @inbounds for d in 1:DIM
+    V = 1.0;
+    sumc2 = 0.0
+    @inbounds for d = 1:DIM
         V *= du[d]
         sumc2 += (midpoint[d] - U[d])^2
     end
@@ -162,21 +326,30 @@ energy contribution exceeds [`MAXWELLIAN_INIT_FLOOR`](@ref), or (in `:lohner` mo
 Maxwellian curvature exceeds `ADAPT_COEFFI_VS_LOHNER`.  `I0buf`/`I2buf` are reused length-`DIM`
 scratch vectors.
 """
-function maxwellian_refine_flag(midpoint, du, U, prim, kinfo::KInfo{DIM,NDF}, I0buf, I2buf) where {DIM,NDF}
-    λ = prim[end]; ρ = prim[1]
-    @inbounds for d in 1:DIM
+function maxwellian_refine_flag(
+    midpoint,
+    du,
+    U,
+    prim,
+    kinfo::KInfo{DIM,NDF},
+    I0buf,
+    I2buf,
+) where {DIM,NDF}
+    λ = prim[end];
+    ρ = prim[1]
+    @inbounds for d = 1:DIM
         I0buf[d], I2buf[d] = _maxwellian_1d(midpoint[d] - U[d], du[d], λ)
     end
     pref = ρ * (λ / π)^(DIM / 2)
     prodI0 = 1.0
-    @inbounds for d in 1:DIM
+    @inbounds for d = 1:DIM
         prodI0 *= I0buf[d]
     end
     dρ = pref * prodI0                            # exact cell mass
     dc2 = 0.0                                      # exact ∫ c² M_h over the cell
-    @inbounds for d in 1:DIM
+    @inbounds for d = 1:DIM
         p = 1.0
-        for e in 1:DIM
+        for e = 1:DIM
             e != d && (p *= I0buf[e])
         end
         dc2 += I2buf[d] * p
@@ -192,7 +365,8 @@ function maxwellian_refine_flag(midpoint, du, U, prim, kinfo::KInfo{DIM,NDF}, I0
     end
     max(dρ / ρ, dE / Eint) > MAXWELLIAN_INIT_FLOOR && return true
     if kinfo.config.solver.ADAPT_VS_MODE === :lohner
-        return maxwellian_quad_error(dρ, midpoint, du, U, prim, Val(DIM)) > kinfo.config.solver.ADAPT_COEFFI_VS_LOHNER
+        return maxwellian_quad_error(dρ, midpoint, du, U, prim, Val(DIM)) >
+               kinfo.config.solver.ADAPT_COEFFI_VS_LOHNER
     end
     return false
 end
@@ -208,21 +382,38 @@ end
 # `local_contribution_*` retained as a relative mass/energy floor.
 # ------------------------------------------------------------------------------------------
 
-"Löhner ripple-filter coefficient (relative noise floor)."
+"""
+Löhner ripple-filter coefficient (relative noise floor).
+"""
 const VS_LOHNER_EPS_FLT = 1e-2
-"Löhner absolute floor coefficient: structure below `EPS_ABS * scale` is ignored."
+"""
+Löhner absolute floor coefficient: structure below `EPS_ABS * scale` is ignored.
+"""
 const VS_LOHNER_EPS_ABS = 1e-3
-"Coarsen-eligibility fraction of the refine threshold (hysteresis)."
+"""
+Coarsen-eligibility fraction of the refine threshold (hysteresis).
+"""
 const VS_LOHNER_COARSEN_RATIO = 0.3
 
 # Normalized non-uniform Löhner ratio from left/center/right values at center-to-neighbor
 # distances `dsL`/`dsR`.  Same weighting as the physical-space `lohner_value`, so the second
 # difference is correct across velocity cells of differing size (coarse/fine interfaces).
-@inline function _lohner_ratio(L::Real, C::Real, R::Real, dsL::Real, dsR::Real, εflt::Real, εabs::Real, scale::Real)
+@inline function _lohner_ratio(
+    L::Real,
+    C::Real,
+    R::Real,
+    dsL::Real,
+    dsR::Real,
+    εflt::Real,
+    εabs::Real,
+    scale::Real,
+)
     num = abs(dsR * L - (dsL + dsR) * C + dsL * R)
-    den = dsR * abs(L - C) + dsL * abs(R - C) +
-          εflt * (dsR * abs(L) + (dsL + dsR) * abs(C) + dsL * abs(R)) +
-          εabs * scale * (dsL + dsR)
+    den =
+        dsR * abs(L - C) +
+        dsL * abs(R - C) +
+        εflt * (dsR * abs(L) + (dsL + dsR) * abs(C) + dsL * abs(R)) +
+        εabs * scale * (dsL + dsR)
     return den > 0 ? num / den : 0.0
 end
 
@@ -237,11 +428,14 @@ Per-physical-cell reference magnitudes (peaks of the mass distribution `h` and, 
 Löhner ratio.
 """
 function vs_lohner_scales(vs::AbstractVsData{DIM,NDF}) where {DIM,NDF}
-    s1 = 0.0; s2 = 0.0
-    @inbounds for j in 1:vs.vs_num
-        a1 = abs(vs.df[j, 1]); a1 > s1 && (s1 = a1)
+    s1 = 0.0;
+    s2 = 0.0
+    @inbounds for j = 1:vs.vs_num
+        a1 = abs(vs.df[j, 1]);
+        a1 > s1 && (s1 = a1)
         if NDF == 2
-            a2 = abs(vs.df[j, 2]); a2 > s2 && (s2 = a2)
+            a2 = abs(vs.df[j, 2]);
+            a2 > s2 && (s2 = a2)
         end
     end
     return s1, s2
@@ -256,13 +450,20 @@ the independent internal-energy distribution `b = df[:,2]`.  The second differen
 on the raw distributions (no `c^2` weight, which would inject the spurious curvature of the
 velocity weight itself).  `s1`/`s2` are the scales from [`vs_lohner_scales`](@ref).
 """
-function vs_lohner_indicator(vs::AbstractVsData{DIM,NDF}, idx::VsNeighborIndex{DIM}, i::Integer, s1::Real, s2::Real) where {DIM,NDF}
-    εflt = VS_LOHNER_EPS_FLT; εabs = VS_LOHNER_EPS_ABS
+function vs_lohner_indicator(
+    vs::AbstractVsData{DIM,NDF},
+    idx::VsNeighborIndex{DIM},
+    i::Integer,
+    s1::Real,
+    s2::Real,
+) where {DIM,NDF}
+    εflt = VS_LOHNER_EPS_FLT;
+    εabs = VS_LOHNER_EPS_ABS
     @inbounds begin
         h0 = vs.df[i, 1]
         b0 = NDF == 2 ? vs.df[i, 2] : 0.0
         η = 0.0
-        for d in 1:DIM
+        for d = 1:DIM
             hi = _vs_cell_size(idx, vs, i, d)
             Ln = vs_face_neighbor(idx, vs, i, d, -1)
             Rn = vs_face_neighbor(idx, vs, i, d, +1)

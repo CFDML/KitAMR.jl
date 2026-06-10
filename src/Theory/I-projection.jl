@@ -6,10 +6,10 @@
 function build_psi_matrix(midpoint::AbstractMatrix{T}) where {T<:Real}
     N, D = size(midpoint)
     Psi = Matrix{T}(undef, N, D + 2)
-    @inbounds for k in 1:N
+    @inbounds for k = 1:N
         Psi[k, 1] = one(T)
         s = zero(T)
-        for d in 1:D
+        for d = 1:D
             x = midpoint[k, d]
             Psi[k, 1+d] = x
             s += x * x
@@ -23,7 +23,7 @@ end
     dual_objective(Psi, f, W, weight, lambda)
 
 I-投影的对偶目标
-    Φ(λ) = ⟨f* exp(λ·ψ)⟩ - λ·W = Σ_k ω_k f_k exp(λ·ψ_k) - λ·W.
+Φ(λ) = ⟨f* exp(λ·ψ)⟩ - λ·W = Σ_k ω_k f_k exp(λ·ψ_k) - λ·W.
 
 满足 ∇Φ = G, ∇²Φ = J. 严格凸, Newton 方向是 Φ 的下降方向, 可用于 Armijo.
 """
@@ -36,9 +36,9 @@ function dual_objective(
 ) where {T<:Real}
     N, M = size(Psi)
     acc = zero(T)
-    @inbounds for k in 1:N
+    @inbounds for k = 1:N
         dot_lp = zero(T)
-        for i in 1:M
+        for i = 1:M
             dot_lp += lambda[i] * Psi[k, i]
         end
         acc += weight[k] * f[k] * exp(dot_lp)
@@ -57,8 +57,8 @@ function solve_I_projection(
     f::AbstractVector{T},
     W::AbstractVector{T},
     weight::AbstractVector{T};
-    tol::Real=1e-10,
-    maxiter::Integer=10,
+    tol::Real = 1e-10,
+    maxiter::Integer = 10,
 ) where {T<:Real}
     N, D = size(midpoint)
     M = D + 2
@@ -83,22 +83,22 @@ function solve_I_projection(
     end
 
 
-    for _ in 1:maxiter
+    for _ = 1:maxiter
         fill!(G, zero(T))
         fill!(J, zero(T))
 
-        @inbounds for k in 1:N
+        @inbounds for k = 1:N
             dot_lp = zero(T)
-            for i in 1:M
+            for i = 1:M
                 dot_lp += lambda[i] * Psi[k, i]
             end
             c = weight[k] * f[k] * exp(dot_lp)
 
-            for i in 1:M
+            for i = 1:M
                 psi_ki = Psi[k, i]
                 ci = c * psi_ki
                 G[i] += ci
-                for j in i:M
+                for j = i:M
                     J[i, j] += ci * Psi[k, j]
                 end
             end
@@ -106,11 +106,11 @@ function solve_I_projection(
 
         G .-= W
         G_norm = norm(G)
-        
+
         if G_norm < tol_eff
             return lambda, Psi
         end
-        
+
         # 检测停滞: 残差不再显著下降
         if G_norm > 0.9 * G_prev_norm
             stall_count += 1
@@ -126,7 +126,7 @@ function solve_I_projection(
         Φ0 = dual_objective(Psi, f, W, weight, lambda)
         slope = dot(G, Δλ)              # = ∇Φ·Δλ < 0
         α = one(T)
-        for _ in 1:maxiter
+        for _ = 1:maxiter
             if dual_objective(Psi, f, W, weight, lambda + α*Δλ) ≤ Φ0 + 1e-4*α*slope
                 break
             end
@@ -141,24 +141,30 @@ function solve_I_projection(
 end
 
 
-function conserved_I_porjection!(vs_data::VsData{2,2},w::AbstractVector)
-    e_int = @views dot(vs_data.weight,vs_data.df[:,2])/2
-    w_trans = copy(w);w_trans[end]-=e_int
-    λ,Ψ = @views solve_I_projection(vs_data.midpoint,vs_data.df[:,1],w_trans,vs_data.weight)
-    for i in axes(vs_data.df,1)
-        vs_data.df[i,1]*= @views exp(dot(λ,Ψ[i,:]))
+function conserved_I_porjection!(vs_data::VsData{2,2}, w::AbstractVector)
+    e_int = @views dot(vs_data.weight, vs_data.df[:, 2])/2
+    w_trans = copy(w);
+    w_trans[end]-=e_int
+    λ, Ψ = @views solve_I_projection(
+        vs_data.midpoint,
+        vs_data.df[:, 1],
+        w_trans,
+        vs_data.weight,
+    )
+    for i in axes(vs_data.df, 1)
+        vs_data.df[i, 1] *= @views exp(dot(λ, Ψ[i, :]))
     end
 end
 
-function conserved_I_porjection!(vs_data::VsData{3,1},w::AbstractVector)
-    λ,Ψ = @views solve_I_projection(vs_data.midpoint,vs_data.df[:,1],w,vs_data.weight)
-    for i in axes(vs_data.df,1)
-        vs_data.df[i,1]*= @views exp(dot(λ,Ψ[i,:]))
+function conserved_I_porjection!(vs_data::VsData{3,1}, w::AbstractVector)
+    λ, Ψ = @views solve_I_projection(vs_data.midpoint, vs_data.df[:, 1], w, vs_data.weight)
+    for i in axes(vs_data.df, 1)
+        vs_data.df[i, 1] *= @views exp(dot(λ, Ψ[i, :]))
     end
 end
 
 
-function iterate!(::Type{CIP_Marching},ka::KA)
+function iterate!(::Type{CIP_Marching}, ka::KA)
     kinfo = ka.kinfo
     gas = kinfo.config.gas
     trees = ka.kdata.field.trees
@@ -166,24 +172,24 @@ function iterate!(::Type{CIP_Marching},ka::KA)
     for i in eachindex(trees.data)
         @inbounds for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
-            isa(ps_data,InsideSolidData) && continue
+            isa(ps_data, InsideSolidData) && continue
             ps_data.bound_enc<0 && continue
             vs_data = ps_data.vs_data
             area = reduce(*, ps_data.ds)
-            ps_data.w .+= ps_data.flux .*Δt / area # Macroscopic update
-            positivity_preserving_ib!(ps_data,area,Δt)
+            ps_data.w .+= ps_data.flux .* Δt / area # Macroscopic update
+            positivity_preserving_ib!(ps_data, area, Δt)
             prim_c = get_prim(ps_data, kinfo) # Conserved macroscopic variables
             f = vs_data.df
-            f.+= Δt/area*vs_data.flux # Convection first
+            f .+= Δt/area*vs_data.flux # Convection first
             F_c = discrete_maxwell(vs_data.midpoint, prim_c, kinfo)
             ps_data.qf .= qf = calc_qf(vs_data, prim_c) # Heatflux after convection
             F_c .+= shakhov_part(vs_data.midpoint, F_c, prim_c, qf, kinfo) # g^{S,n+1}
-            conserved_I_porjection!(vs_data,ps_data.w)
+            conserved_I_porjection!(vs_data, ps_data.w)
             # Collision process
             τ = get_τ(prim_c, gas.μᵣ, gas.ω) # τ^{n+1}
             f .*= τ/(τ+Δt)
             @. f += Δt/(τ+Δt)*F_c
-            residual_check!(ps_data,prim_c,kinfo)
+            residual_check!(ps_data, prim_c, kinfo)
             ps_data.prim .= prim_c
             ps_data.flux .= 0.0
             vs_data.flux .= 0.0

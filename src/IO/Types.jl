@@ -19,26 +19,44 @@ struct StatusForSave
     vs_adapt_step::Int
     partition_step::Int
 end
-function ConfigureForSave(config::Configure{DIM,NDF}) where{DIM,NDF}
+function ConfigureForSave(config::Configure{DIM,NDF}) where {DIM,NDF}
     return ConfigureForSave{DIM,NDF}(
-        config.geometry,config.trees_num,config.quadrature,
-        config.vs_trees_num,config.IC,config.domain,
-        config.IB,config.gas,
+        config.geometry,
+        config.trees_num,
+        config.quadrature,
+        config.vs_trees_num,
+        config.IC,
+        config.domain,
+        config.IB,
+        config.gas,
         config.solver,
-        config.user_defined
+        config.user_defined,
     )
 end
 function StatusForSave(status::Status)
     return StatusForSave(
-        status.gradmax,status.Δt,
-        status.Δt_ξ,status.sim_time,status.ps_adapt_step,
-        status.vs_adapt_step,status.partition_step
+        status.gradmax,
+        status.Δt,
+        status.Δt_ξ,
+        status.sim_time,
+        status.ps_adapt_step,
+        status.vs_adapt_step,
+        status.partition_step,
     )
 end
 function Status(status::StatusForSave, DIM::Int)
-    return Status(status.gradmax,status.Δt,
-        status.Δt_ξ,status.sim_time,status.ps_adapt_step,
-        status.vs_adapt_step,status.partition_step,Residual(DIM),Ref(false),false)
+    return Status(
+        status.gradmax,
+        status.Δt,
+        status.Δt_ξ,
+        status.sim_time,
+        status.ps_adapt_step,
+        status.vs_adapt_step,
+        status.partition_step,
+        Residual(DIM),
+        Ref(false),
+        false,
+    )
 end
 struct SolverSet
     config::ConfigureForSave
@@ -53,17 +71,21 @@ struct Boundary_PS_Solution
     qf::Vector{Float64}
     p::Vector{Float64}
 end
-function PS_Solution(ps_data::PsData{DIM}) where{DIM}
+function PS_Solution(ps_data::PsData{DIM}) where {DIM}
     if ps_data.bound_enc<0
-        prim = Vector{Float64}(undef,DIM+2);prim.=NaN
-        qf = Vector{Float64}(undef,DIM);qf.=NaN
+        prim = Vector{Float64}(undef, DIM+2);
+        prim.=NaN
+        qf = Vector{Float64}(undef, DIM);
+        qf.=NaN
         return PS_Solution(prim, qf)
     end
     return PS_Solution(ps_data.prim, ps_data.qf)
 end
-function PS_Solution(::InsideSolidData{DIM,NDF}) where{DIM,NDF}
-    prim = Vector{Float64}(undef,DIM+2);prim.=NaN
-    qf = Vector{Float64}(undef,DIM);qf.=NaN
+function PS_Solution(::InsideSolidData{DIM,NDF}) where {DIM,NDF}
+    prim = Vector{Float64}(undef, DIM+2);
+    prim.=NaN
+    qf = Vector{Float64}(undef, DIM);
+    qf.=NaN
     return PS_Solution(prim, qf)
 end
 struct VS_Solution
