@@ -2,10 +2,10 @@
 $(TYPEDSIGNATURES)
 Update residuals.
 """
-function residual_check!(ps_data::PsData,prim::Vector{Float64},kinfo::KInfo)
+function residual_check!(ps_data::PsData, prim::Vector{Float64}, kinfo::KInfo)
     Res = kinfo.status.residual
     kinfo.status.step%kinfo.config.solver.ST_CHECK_INTERVAL!=0&&(return nothing)
-    @. Res.sumRes+=(prim-ps_data.prim).^2
+    @. Res.sumRes+=(prim-ps_data.prim) .^ 2
     @. Res.sumAvg+=abs(prim)
     return nothing
 end
@@ -14,20 +14,23 @@ function residual_comm!(kinfo::KInfo)
     fp = PointerWrapper(kinfo.forest.p4est)
     N = fp.global_num_quadrants[]
     kinfo.status.step%kinfo.config.solver.ST_CHECK_INTERVAL!=0&&(return nothing)
-    MPI.Reduce!(Res.sumRes,+,0,MPI.COMM_WORLD)
-    MPI.Reduce!(Res.sumAvg,+,0,MPI.COMM_WORLD)
+    MPI.Reduce!(Res.sumRes, +, 0, MPI.COMM_WORLD)
+    MPI.Reduce!(Res.sumAvg, +, 0, MPI.COMM_WORLD)
     if MPI.Comm_rank(MPI.COMM_WORLD)==0
         @. Res.residual=sqrt(Res.sumRes*N)/(Res.sumAvg+EPS)
     end
-    MPI.Bcast!(Res.residual,0,MPI.COMM_WORLD)
-    Res.sumRes.=0.;Res.sumAvg.=0.
+    MPI.Bcast!(Res.residual, 0, MPI.COMM_WORLD)
+    Res.sumRes.=0.0;
+    Res.sumAvg.=0.0
 end
 """
 $(SIGNATURES)
 Check whether the `residual` and `redundant_step` in [`Status`](@ref) satisfies the convergence criterion.
 """
 function check_for_convergence(ka::KA)
-    maximum(ka.kinfo.status.residual.residual)<ka.kinfo.config.solver.TOLERANCE&&(ka.kinfo.status.residual.redundant_step+=1)
+    maximum(ka.kinfo.status.residual.residual)<ka.kinfo.config.solver.TOLERANCE&&(
+        ka.kinfo.status.residual.redundant_step+=1
+    )
     return ka.kinfo.status.residual.redundant_step>ka.kinfo.config.solver.REDUNDANT_STEPS_NUM
 end
 

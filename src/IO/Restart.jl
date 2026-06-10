@@ -41,9 +41,11 @@ function _bcast_string(s::String)
 end
 function _human_bytes(n::Real)
     units = ("B", "KiB", "MiB", "GiB", "TiB")
-    x = float(n); i = 1
+    x = float(n);
+    i = 1
     while x >= 1024 && i < length(units)
-        x /= 1024; i += 1
+        x /= 1024;
+        i += 1
     end
     return string(round(x; digits = 2), " ", units[i])
 end
@@ -70,7 +72,12 @@ configuration (`solverset.jld2` incl. the initial-condition / user-defined funct
 Call after a time step (e.g. inside or after [`solve!`](@ref)); the saved distribution `df` is taken
 as-is, so no slope/macro update is performed.
 """
-function save_for_restart(p4est::P_pxest_t, ka::KA{DIM,NDF}; dir_path::String = "restart", confirm::Bool = true) where{DIM,NDF}
+function save_for_restart(
+    p4est::P_pxest_t,
+    ka::KA{DIM,NDF};
+    dir_path::String = "restart",
+    confirm::Bool = true,
+) where {DIM,NDF}
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
     mpi_size = MPI.Comm_size(comm)
@@ -108,7 +115,7 @@ function save_for_restart(p4est::P_pxest_t, ka::KA{DIM,NDF}; dir_path::String = 
             isa(ps_data, InsideSolidData) && continue
             vs_data = ps_data.vs_data
             vn = vs_data.vs_num
-            rng = offset+1:offset+vn
+            rng = (offset+1):(offset+vn)
             vs_levels[rng] .= vs_data.level
             vs_midpoints[rng, :] .= vs_data.midpoint
             vs_df[rng, :] .= vs_data.df
@@ -117,13 +124,20 @@ function save_for_restart(p4est::P_pxest_t, ka::KA{DIM,NDF}; dir_path::String = 
     end
 
     # Size estimate (raw, uncompressed) and optional confirmation.
-    local_bytes = sizeof(vs_nums) + sizeof(bound_encs) + sizeof(ws) +
-                  sizeof(vs_levels) + sizeof(vs_midpoints) + sizeof(vs_df)
+    local_bytes =
+        sizeof(vs_nums) +
+        sizeof(bound_encs) +
+        sizeof(ws) +
+        sizeof(vs_levels) +
+        sizeof(vs_midpoints) +
+        sizeof(vs_df)
     total_bytes = MPI.Reduce(local_bytes, +, 0, comm)
     proceed = true
     if rank == 0
-        println("Restart checkpoint: ≈ $(_human_bytes(total_bytes)) of phase-space data " *
-                "($(mpi_size) rank file(s)) → $(dir_path)/")
+        println(
+            "Restart checkpoint: ≈ $(_human_bytes(total_bytes)) of phase-space data " *
+            "($(mpi_size) rank file(s)) → $(dir_path)/",
+        )
         if confirm && isa(stdin, Base.TTY)
             print("Continue saving? [y/N]: ")
             ans = strip(readline())
@@ -218,12 +232,34 @@ function _restart_load_forest(dir::String, DIM::Integer)
     # balance the load across the (possibly different) current number of ranks.
     dsz = Csize_t(sizeof(P4estPsData))
     if DIM == 2
-        cnn = Ptr{Ptr{p4est_connectivity_t}}(Libc.malloc(sizeof(Ptr{Ptr{p4est_connectivity_t}})))
-        p4est = GC.@preserve cnn p4est_load_ext("p", MPI.COMM_WORLD, Cint(0), Cint(0), Cint(1), Cint(0), C_NULL, cnn)
+        cnn = Ptr{Ptr{p4est_connectivity_t}}(
+            Libc.malloc(sizeof(Ptr{Ptr{p4est_connectivity_t}})),
+        )
+        p4est = GC.@preserve cnn p4est_load_ext(
+            "p",
+            MPI.COMM_WORLD,
+            Cint(0),
+            Cint(0),
+            Cint(1),
+            Cint(0),
+            C_NULL,
+            cnn,
+        )
         GC.@preserve p4est p4est_reset_data(p4est, dsz, C_NULL, C_NULL)
     else
-        cnn = Ptr{Ptr{p8est_connectivity_t}}(Libc.malloc(sizeof(Ptr{Ptr{p8est_connectivity_t}})))
-        p4est = GC.@preserve cnn p8est_load_ext("p", MPI.COMM_WORLD, Cint(0), Cint(0), Cint(1), Cint(0), C_NULL, cnn)
+        cnn = Ptr{Ptr{p8est_connectivity_t}}(
+            Libc.malloc(sizeof(Ptr{Ptr{p8est_connectivity_t}})),
+        )
+        p4est = GC.@preserve cnn p8est_load_ext(
+            "p",
+            MPI.COMM_WORLD,
+            Cint(0),
+            Cint(0),
+            Cint(1),
+            Cint(0),
+            C_NULL,
+            cnn,
+        )
         GC.@preserve p4est p8est_reset_data(p4est, dsz, C_NULL, C_NULL)
     end
     cd(pro_path)
@@ -234,15 +270,18 @@ end
 function _restart_integrity_message(dir::String, manifest)
     problems = String[]
     old_size = manifest["mpi_size"]
-    manifest["format_version"] == RESTART_FORMAT_VERSION ||
-        push!(problems, "manifest format_version $(manifest["format_version"]) ≠ expected $(RESTART_FORMAT_VERSION)")
+    manifest["format_version"] == RESTART_FORMAT_VERSION || push!(
+        problems,
+        "manifest format_version $(manifest["format_version"]) ≠ expected $(RESTART_FORMAT_VERSION)",
+    )
     for f in ("solverset.jld2", "output.jld2", "status.jld2")
         isfile(dir * f) || push!(problems, "missing metadata file: $(dir*f)")
     end
     isempty(filter(f -> startswith(f, "p"), readdir(dir))) &&
         push!(problems, "missing p4est forest files (prefix 'p') in $(dir)")
-    lqn = manifest["local_quad_nums"]; vst = manifest["vs_totals"]
-    for r in 0:old_size-1
+    lqn = manifest["local_quad_nums"];
+    vst = manifest["vs_totals"]
+    for r = 0:(old_size-1)
         f = dir * "restart_" * string(r) * ".jld2"
         if !isfile(f)
             push!(problems, "missing per-rank data file: $f")
@@ -252,25 +291,35 @@ function _restart_integrity_message(dir::String, manifest)
             vsn = jldopen(io -> io["vs_nums"], f)        # cheap per-cell array
             length(vsn) == lqn[r+1] ||
                 push!(problems, "$f: cell count $(length(vsn)) ≠ manifest $(lqn[r+1])")
-            sum(vsn) == vst[r+1] ||
-                push!(problems, "$f: velocity-cell total $(sum(vsn)) ≠ manifest $(vst[r+1])")
+            sum(vsn) == vst[r+1] || push!(
+                problems,
+                "$f: velocity-cell total $(sum(vsn)) ≠ manifest $(vst[r+1])",
+            )
         catch e
             push!(problems, "$f: failed to read ($e)")
         end
     end
-    return isempty(problems) ? "" : "Restart integrity check failed:\n  - " * join(problems, "\n  - ")
+    return isempty(problems) ? "" :
+           "Restart integrity check failed:\n  - " * join(problems, "\n  - ")
 end
 
 # Reconstruct this rank's ordered ps_data list from the saved per-cell arrays, mapping the saved
 # partition (gfq_old, old_size files) onto this rank's global quadrant range under the *current*
 # communicator. p4est save/load preserves the global Morton ordering, so concatenating the
 # overlapping old-rank files in order and slicing out [G0, G1) is exact.
-function _restart_build_ps_list(dir::String, kinfo::KInfo{DIM,NDF}, gfq_old::Vector{Int}, p4est::P_pxest_t) where{DIM,NDF}
+function _restart_build_ps_list(
+    dir::String,
+    kinfo::KInfo{DIM,NDF},
+    gfq_old::Vector{Int},
+    p4est::P_pxest_t,
+) where {DIM,NDF}
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
     fp = PointerWrapper(p4est)
-    gfq_new = unsafe_wrap(Vector{Int}, pointer(fp.global_first_quadrant), MPI.Comm_size(comm) + 1)
-    G0 = gfq_new[rank+1]; G1 = gfq_new[rank+2]
+    gfq_new =
+        unsafe_wrap(Vector{Int}, pointer(fp.global_first_quadrant), MPI.Comm_size(comm) + 1)
+    G0 = gfq_new[rank+1];
+    G1 = gfq_new[rank+2]
     count = G1 - G0
     ps_list = Vector{AbstractPsData{DIM,NDF}}(undef, count)
     count == 0 && return ps_list
@@ -278,14 +327,16 @@ function _restart_build_ps_list(dir::String, kinfo::KInfo{DIM,NDF}, gfq_old::Vec
     first_old = searchsortedlast(gfq_old, G0) - 1          # old rank owning global cell G0
     last_old = searchsortedlast(gfq_old, G1 - 1) - 1       # old rank owning global cell G1-1
 
-    vs_nums = Int[]; bound_encs = Int[]
+    vs_nums = Int[];
+    bound_encs = Int[]
     ws = Matrix{Float64}(undef, 0, DIM + 2)
     vs_levels = Int8[]
     vs_midpoints = Matrix{Float64}(undef, 0, DIM)
     vs_df = Matrix{Float64}(undef, 0, NDF)
-    for r in first_old:last_old
+    for r = first_old:last_old
         d = load(dir * "restart_" * string(r) * ".jld2")
-        append!(vs_nums, d["vs_nums"]); append!(bound_encs, d["bound_encs"])
+        append!(vs_nums, d["vs_nums"]);
+        append!(bound_encs, d["bound_encs"])
         ws = vcat(ws, d["ws"])
         append!(vs_levels, d["vs_levels"])
         vs_midpoints = vcat(vs_midpoints, d["vs_midpoints"])
@@ -306,19 +357,34 @@ function _restart_build_ps_list(dir::String, kinfo::KInfo{DIM,NDF}, gfq_old::Vec
     tree_weight = vs_space / reduce(*, kinfo.config.vs_trees_num)
 
     voff = vs_start
-    for i in 1:count
+    for i = 1:count
         ci = sa + i - 1
         vn = vs_nums[ci]
         if vn == 0
             ps_list[i] = InsideSolidData(DIM, NDF; bound_enc = bound_encs[ci])
         else
             w = ws[ci, :]
-            levels = vs_levels[voff+1:voff+vn]
-            mids = vs_midpoints[voff+1:voff+vn, :]
-            df = vs_df[voff+1:voff+vn, :]
+            levels = vs_levels[(voff+1):(voff+vn)]
+            mids = vs_midpoints[(voff+1):(voff+vn), :]
+            df = vs_df[(voff+1):(voff+vn), :]
             weight = @. tree_weight / 2.0^(DIM * levels)
-            vs_data = VsData{DIM,NDF}(vn, levels, weight, mids, df, zeros(vn, NDF, DIM), zeros(vn, NDF))
-            ps_list[i] = PsData(DIM, NDF; bound_enc = bound_encs[ci], w = w, prim = get_prim(w, kinfo), vs_data = vs_data)
+            vs_data = VsData{DIM,NDF}(
+                vn,
+                levels,
+                weight,
+                mids,
+                df,
+                zeros(vn, NDF, DIM),
+                zeros(vn, NDF),
+            )
+            ps_list[i] = PsData(
+                DIM,
+                NDF;
+                bound_enc = bound_encs[ci],
+                w = w,
+                prim = get_prim(w, kinfo),
+                vs_data = vs_data,
+            )
         end
         voff += vn
     end
@@ -326,9 +392,15 @@ function _restart_build_ps_list(dir::String, kinfo::KInfo{DIM,NDF}, gfq_old::Vec
 end
 
 # Attach the reconstructed ps_data to the loaded quadrants (in local order) and build the trees.
-function _restart_attach!(p4est::P_pxest_t, kinfo::KInfo{DIM,NDF}, ps_list::Vector{AbstractPsData{DIM,NDF}}) where{DIM,NDF}
+function _restart_attach!(
+    p4est::P_pxest_t,
+    kinfo::KInfo{DIM,NDF},
+    ps_list::Vector{AbstractPsData{DIM,NDF}},
+) where {DIM,NDF}
     fp = PointerWrapper(p4est)
-    trees_data = [AbstractPsData{DIM,NDF}[] for _ in 1:fp.last_local_tree[]-fp.first_local_tree[]+1]
+    trees_data = [
+        AbstractPsData{DIM,NDF}[] for _ = 1:(fp.last_local_tree[]-fp.first_local_tree[]+1)
+    ]
     trees = PsTrees{DIM,NDF}(trees_data, fp.first_local_tree[] - 1)
     ctx = Any[trees, ps_list, Ref(0)]
     p_data = pointer_from_objref(ctx)
@@ -372,7 +444,8 @@ function restart(dir_path::String; config = nothing, check_integrity::Bool = tru
     dir = endswith(dir_path, "/") ? dir_path : dir_path * "/"
 
     manifest = load(dir * "manifest.jld2")
-    DIM = manifest["DIM"]; NDF = manifest["NDF"]
+    DIM = manifest["DIM"];
+    NDF = manifest["NDF"]
 
     if check_integrity
         msg = MPI.Comm_rank(comm) == 0 ? _restart_integrity_message(dir, manifest) : ""
@@ -384,12 +457,27 @@ function restart(dir_path::String; config = nothing, check_integrity::Bool = tru
     if config === nothing
         solverset = load(dir * "solverset.jld2")["solverset"]
         cfs = solverset.config
-        output = isfile(dir * "output.jld2") ? load(dir * "output.jld2")["output"] : Output(cfs.solver)
-        config = Configure{DIM,NDF}(cfs.geometry, cfs.trees_num, cfs.quadrature, cfs.vs_trees_num,
-            cfs.IC, cfs.domain, cfs.IB, cfs.gas, cfs.solver, output, cfs.user_defined)
+        output =
+            isfile(dir * "output.jld2") ? load(dir * "output.jld2")["output"] :
+            Output(cfs.solver)
+        config = Configure{DIM,NDF}(
+            cfs.geometry,
+            cfs.trees_num,
+            cfs.quadrature,
+            cfs.vs_trees_num,
+            cfs.IC,
+            cfs.domain,
+            cfs.IB,
+            cfs.gas,
+            cfs.solver,
+            output,
+            cfs.user_defined,
+        )
     else
         (typeof(config).parameters[1] == DIM && typeof(config).parameters[2] == NDF) ||
-            error("supplied `config` is $(typeof(config).parameters[1])D/NDF=$(typeof(config).parameters[2]); checkpoint is $(DIM)D/NDF=$NDF.")
+            error(
+                "supplied `config` is $(typeof(config).parameters[1])D/NDF=$(typeof(config).parameters[2]); checkpoint is $(DIM)D/NDF=$NDF.",
+            )
     end
 
     kinfo = KInfo(config)
@@ -425,7 +513,9 @@ function restart(dir_path::String; config = nothing, check_integrity::Bool = tru
     status.vs_adapt_step = st["vs_adapt_step"]
     status.partition_step = st["partition_step"]
 
-    MPI.Comm_rank(comm) == 0 && println("Restarted from $(dir) at step $(status.step), sim_time $(status.sim_time).")
+    MPI.Comm_rank(comm) == 0 && println(
+        "Restarted from $(dir) at step $(status.step), sim_time $(status.sim_time).",
+    )
     execute_check!(p4est, ka)
     return p4est, ka
 end
