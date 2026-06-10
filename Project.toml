@@ -1,6 +1,6 @@
 name = "KitAMR"
 uuid = "c7589248-7317-493e-9871-fc2fc0963dfd"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["CFDML and contributors"]
 
 [deps]
