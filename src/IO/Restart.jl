@@ -147,14 +147,14 @@ function save_for_restart(p4est::P_pxest_t, ka::KA{DIM,NDF}; dir_path::String = 
     MPI.Barrier(comm)
 
     # Save the forest (topology only; per-quad user_data is a meaningless Julia pointer).
-    pro_path = pwd()
-    cd(dir)
+    # Absolute path instead of cd("p"): cd mutates the process-global CWD (unsafe and
+    # not restored if the collective save throws); the Cstring filename takes a full path.
+    fpath = joinpath(abspath(dir), "p")
     if DIM == 2
-        GC.@preserve p4est p4est_save_ext("p", p4est, Cint(0), Cint(0))
+        GC.@preserve p4est p4est_save_ext(fpath, p4est, Cint(0), Cint(0))
     else
-        GC.@preserve p4est p8est_save_ext("p", p4est, Cint(0), Cint(0))
+        GC.@preserve p4est p8est_save_ext(fpath, p4est, Cint(0), Cint(0))
     end
-    cd(pro_path)
 
     # Rank-0 metadata.
     if rank == 0
@@ -209,24 +209,23 @@ end
 # Load the forest saved by `save_for_restart` (topology only). `p4est_load_ext` allocates and fills the
 # connectivity through `cnn`; it lives inside the returned forest and is freed by `finalize!`.
 function _restart_load_forest(dir::String, DIM::Integer)
-    pro_path = pwd()
-    cd(dir)
     # The forest was saved with save_data = 0 (no per-quad section). `*_load_ext` therefore restores a
     # forest whose quadrant data_size is 0 — so we load topology only (data_size = 0, load_data = 0),
     # then `*_reset_data` to allocate a fresh per-quad `user_data` layer of `sizeof(P4estPsData)` into
     # which `_restart_attach!` writes the Julia `P4estPsData` pointers. autopartition = 1 lets p4est
     # balance the load across the (possibly different) current number of ranks.
+    # Absolute path (matches save_for_restart) instead of cd("p"): no process-global CWD mutation.
+    fpath = joinpath(abspath(dir), "p")
     dsz = Csize_t(sizeof(P4estPsData))
     if DIM == 2
         cnn = Ptr{Ptr{p4est_connectivity_t}}(Libc.malloc(sizeof(Ptr{Ptr{p4est_connectivity_t}})))
-        p4est = GC.@preserve cnn p4est_load_ext("p", MPI.COMM_WORLD, Cint(0), Cint(0), Cint(1), Cint(0), C_NULL, cnn)
+        p4est = GC.@preserve cnn p4est_load_ext(fpath, MPI.COMM_WORLD, Cint(0), Cint(0), Cint(1), Cint(0), C_NULL, cnn)
         GC.@preserve p4est p4est_reset_data(p4est, dsz, C_NULL, C_NULL)
     else
         cnn = Ptr{Ptr{p8est_connectivity_t}}(Libc.malloc(sizeof(Ptr{Ptr{p8est_connectivity_t}})))
-        p4est = GC.@preserve cnn p8est_load_ext("p", MPI.COMM_WORLD, Cint(0), Cint(0), Cint(1), Cint(0), C_NULL, cnn)
+        p4est = GC.@preserve cnn p8est_load_ext(fpath, MPI.COMM_WORLD, Cint(0), Cint(0), Cint(1), Cint(0), C_NULL, cnn)
         GC.@preserve p4est p8est_reset_data(p4est, dsz, C_NULL, C_NULL)
     end
-    cd(pro_path)
     return p4est
 end
 

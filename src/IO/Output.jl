@@ -239,10 +239,11 @@ function save_result(p4est::Ptr{p4est_t},ka::KA{DIM,NDF};dir_path="") where{DIM,
         !isdir(dir_path*"vtk/")&&mkpath(dir_path*"vtk/")
     end
     MPI.Barrier(MPI.COMM_WORLD)
-    pro_path = pwd()
-    cd(dir_path)
-    p4est_save_ext("p",p4est,Cint(0),Cint(0))
-    cd(pro_path)
+    # Absolute path avoids the cd()-based workaround: cd mutates the process-global
+    # working directory (unsafe under any concurrency, and not restored if the
+    # collective save throws). p4est_save_ext takes the filename as a Cstring, so a
+    # full path works directly (verified for parallel save/load round-trips).
+    p4est_save_ext(joinpath(abspath(dir_path), "p"),p4est,Cint(0),Cint(0))
     if rank==0
         size = MPI.Comm_size(MPI.COMM_WORLD)
         solverset = SolverSet(ConfigureForSave(config),size)
@@ -296,10 +297,11 @@ function save_result(p4est::Ptr{p8est_t},ka::KA{DIM,NDF};dir_path="") where{DIM,
         !isdir(dir_path*"vtk/")&&mkpath(dir_path*"vtk/")
     end
     MPI.Barrier(MPI.COMM_WORLD)
-    pro_path = pwd()
-    cd(dir_path)
-    p4est_save_ext("p",p4est,Cint(0),Cint(0))
-    cd(pro_path)
+    # Absolute path avoids the cd()-based workaround: cd mutates the process-global
+    # working directory (unsafe under any concurrency, and not restored if the
+    # collective save throws). p4est_save_ext takes the filename as a Cstring, so a
+    # full path works directly (verified for parallel save/load round-trips).
+    p4est_save_ext(joinpath(abspath(dir_path), "p"),p4est,Cint(0),Cint(0))
     if rank==0
         size = MPI.Comm_size(MPI.COMM_WORLD)
         solverset = SolverSet(ConfigureForSave(config),size)
@@ -773,10 +775,8 @@ function result2vtk(dirname::String,vtkname::String)
     if typeof(solverset.config).parameters[1]==2
         DIM=2
         cnn = Ptr{Ptr{p4est_connectivity_t}}(Libc.malloc(sizeof(Ptr{Ptr{p4est_connectivity_t}})))
-        pro_path = pwd()
-        cd(dirname)
-        p4est = p4est_load_ext("p",MPI.COMM_WORLD,Cint(0),Cint(0),Cint(1),Cint(0),C_NULL,cnn)
-        cd(pro_path)
+        # Absolute path instead of cd("p"): no process-global CWD mutation (Cstring takes a full path).
+        p4est = p4est_load_ext(joinpath(abspath(dirname), "p"),MPI.COMM_WORLD,Cint(0),Cint(0),Cint(1),Cint(0),C_NULL,cnn)
         result = nothing
         ranks = nothing
         for i = 1:solverset.mpi_size
