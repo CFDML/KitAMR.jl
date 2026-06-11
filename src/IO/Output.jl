@@ -949,7 +949,7 @@ function save_anim_field(path,p4est,ka,celltype,step,sim_time,first_step,suffix)
         end
     else
         pvtk_grid(path*"/step$step"*suffix,vertices,cells;part = MPI.Comm_rank(MPI.COMM_WORLD)+1,nparts = MPI.Comm_size(MPI.COMM_WORLD)) do pvtk
-            write_anim_field_data!(pvtk,solutions,point_solutions,ranks)
+            write_anim_field_data!(pvtk,solutions,point_solutions,ranks,ka)
         end
     end
     return nothing
