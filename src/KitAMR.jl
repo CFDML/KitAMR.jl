@@ -11,8 +11,6 @@ using Suppressor
 using WriteVTK
 using DocStringExtensions
 using Reexport
-using CSV
-using DataFrames
 using Statistics
 using FileIO,NearestNeighbors,AbstractTrees
 using GeometryBasics:Mesh

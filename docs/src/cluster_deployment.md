@@ -92,6 +92,145 @@ running REPL is too late):
 export LD_LIBRARY_PATH=/abs/path/to/libp4est/lib:$LD_LIBRARY_PATH
 ```
 
+## Faster startup & lower memory: build a sysimage
+
+On a cluster you launch **one Julia process per MPI rank**, and every rank pays the
+full Julia runtime cost on its own: it JIT-compiles the same methods and keeps a
+*private* copy of that native code, the compiler's data structures and the GC heap.
+This private part is roughly **two-thirds (~70%) of each rank's baseline memory**,
+and it is replicated on every rank — at 64 ranks/node that is a large fixed cost
+before a single phase-space cell is stored, plus a multi-second JIT delay at every
+launch.
+
+A **sysimage** — a `.so` produced by
+[`PackageCompiler.jl`](https://github.com/JuliaLang/PackageCompiler.jl) — bakes
+KitAMR's compiled code into a memory-mapped image. The OS maps that image **once per
+node and shares it across all ranks**, so the code moves from private to shared
+memory. In a controlled measurement this cut each rank's private memory by **~50%**
+and roughly **halved the true per-node Julia baseline**, and it removes the startup
+JIT. The parallel (pure-MPI) structure is unchanged — this is purely a launch-time
+image swap.
+
+### Step 1 — Install PackageCompiler (a build tool)
+
+It is only needed to *build* the image, not to run KitAMR. Install it in your
+default environment so it stays separate from the environment you run jobs in:
+
+```bash
+julia -e 'using Pkg; Pkg.add("PackageCompiler")'
+```
+
+With the default `JULIA_LOAD_PATH`, a later `julia --project` still finds
+PackageCompiler through the default environment while KitAMR resolves from your
+project environment.
+
+### Step 2 — Write a precompile workload
+
+A small script that exercises the code paths you actually run (initialize → AMR →
+flux/iterate → output). PackageCompiler records every method specialization it
+touches and bakes them in. Keep it small and gentle — what matters is the *types and
+code paths*, not the physics or the problem size (see
+[Coverage](@ref Coverage) below):
+
+```julia
+# precompile_workload.jl
+using KitAMR, MPI
+MPI.Init()
+ic(mp, kinfo) = [1.0, 0.0, 0.0, 1.0]                 # any valid IC; only the types matter
+solver = Solver(; DIM=2, NDF=2, CFL=0.4, AMR_PS_MAXLEVEL=1, AMR_VS_MAXLEVEL=3,
+    PS_DYNAMIC_AMR=true, VS_DYNAMIC_AMR=true, flux=CAIDVM,
+    time_marching=CIP_Marching, max_sim_time=1.0)
+gas = Gas(; K=1.0, Kn=1e-3, ω=0.81, ωᵣ=0.81)
+config = Configure(solver; geometry=[0.,1.,0.,1.], trees_num=[8,8],
+    quadrature=[-10.,10.,-10.,10.], vs_trees_num=[8,8], IC=PCoordFn(ic),
+    domain=[Domain(Period,i) for i in 1:4],
+    output=Output(solver), gas=gas, user_defined=UDF())
+p4est, ka = initialize(config; prerefine_steps=1)
+solve!(p4est, ka; max_steps=3, listen_for_save=false, progress=false)
+save_result(p4est, ka; dir_path=joinpath(mktempdir(), "r"))
+KitAMR.finalize!(p4est, ka)
+MPI.Finalize()
+```
+
+### Step 3 — Build the sysimage
+
+```julia
+# build_sysimage.jl
+using PackageCompiler
+create_sysimage(
+    [:KitAMR, :MPI, :JLD2];
+    sysimage_path = "kitamr_sys.so",
+    precompile_execution_file  = "precompile_workload.jl",
+    # precompile_statements_file = "stmts.jl",       # optional, recommended — see Coverage
+    sysimage_build_args = `--strip-metadata`,        # smaller image, no debug info
+    # cpu_target = "generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)",  # for cross-CPU portability
+)
+```
+
+```bash
+julia --project build_sysimage.jl                    # takes several minutes -> kitamr_sys.so
+```
+
+!!! warning
+    Build on the **same CPU microarchitecture** you run on (the baked native code is
+    CPU-specific), or set `cpu_target`. **Rebuild** whenever you update KitAMR or its
+    dependencies — a stale image silently runs old code.
+
+### Step 4 — Run with the sysimage
+
+Point Julia at it; nothing else changes:
+
+```bash
+mpiexec -n <N> julia --project --sysimage=kitamr_sys.so your_script.jl
+# SLURM:
+srun    -n <N> julia --project --sysimage=kitamr_sys.so your_script.jl
+```
+
+!!! tip
+    Pair it with `--heap-size-hint=<size>` (e.g. `--heap-size-hint=3G`) to cap the GC
+    heap and keep peak RSS lower — the cheapest guard against transient
+    out-of-memory on memory-bound runs.
+
+### [Coverage](@id Coverage) — what gets baked in, and what if a method is missed
+
+A sysimage is an **optimization, not a sealed set of methods**. Any method *not*
+captured by the workload is simply JIT-compiled the normal way the first time it is
+called at run time. Results stay correct; you only lose the benefit *for that
+method* — its code stays private per rank, and there is a one-time compilation pause
+at first use. So **100% coverage is not required**, and a miss never causes a crash.
+
+What a method gets compiled for is the **types and code paths** exercised, **not the
+problem size**. Larger meshes, more ranks (beyond two), deeper AMR levels or more
+steps are run-time *data* — they add no new compiled methods. To cover what a
+production run needs, the workload must match the same *type combinations* and
+*trigger* the same paths, at any small scale:
+
+* **Types** — `DIM`/`NDF`, `flux`/`time_marching`, the boundary / immersed-boundary
+  kinds, and the output cell types. A 2-D image does **not** cover 3-D; a periodic
+  workload does **not** cover immersed-boundary methods.
+* **Paths** — dynamic AMR (make it both **refine and coarsen**), and the **parallel
+  communication paths** (ghost exchange, partition). The latter are only invoked
+  with **≥ 2 ranks**, so a single-process build misses them.
+
+Because `precompile_execution_file` runs single-process, capture the parallel
+methods by also recording a `precompile_statements_file` from a small **2-rank** run
+of a representative case, then pass it to `create_sysimage` (Step 3):
+
+```bash
+mpiexec -n 2 julia --project --trace-compile=stmts.jl your_small_case.jl
+```
+
+To check for residual gaps, run a small case **with** the finished sysimage and
+`--trace-compile`; anything still printed is a method that was *not* in the image —
+feed it back and rebuild:
+
+```bash
+mpiexec -n 2 julia --project --sysimage=kitamr_sys.so --trace-compile=missing.jl your_small_case.jl
+```
+
+[`SnoopCompile.jl`](https://github.com/timholy/SnoopCompile.jl) automates this
+discovery if you want a more systematic sweep.
+
 ## Switching back to the bundled binaries
 
 ```julia

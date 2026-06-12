@@ -100,13 +100,21 @@ $(TYPEDSIGNATURES)
 - `file` is the path to the `.csv` file.
 """
 function Vertices(::Type{T},file::String,solid,refine_coeffi,bc) where{T<:AbstractBoundCond}
-    s = CSV.read(file,DataFrame;header=true)
-    DIM = length(names(s))
-    vertices = [[s.x[i],s.y[i]] for i in eachindex(s.x)]
+    lines = readlines(file)
+    header = split(strip(lines[1]),',')
+    DIM = length(header)
+    xi = findfirst(==("x"),header); yi = findfirst(==("y"),header)
+    xs = Float64[]; ys = Float64[]
+    for l in @view lines[2:end]
+        isempty(strip(l)) && continue
+        cols = split(strip(l),',')
+        push!(xs,parse(Float64,cols[xi])); push!(ys,parse(Float64,cols[yi]))
+    end
+    vertices = [[xs[i],ys[i]] for i in eachindex(xs)]
     if vertices[1]==vertices[end]
         vertices = vertices[1:end-1]
     end
-    box = [[minimum(s.x),minimum(s.y)],[maximum(s.x),maximum(s.y)]]
+    box = [[minimum(xs),minimum(ys)],[maximum(xs),maximum(ys)]]
     return Vertices{DIM,T}(vertices,solid,bc,box,refine_coeffi)
 end
 function Vertices(v::Vertices{DIM,T},config) where{DIM,T<:AbstractBoundCond}

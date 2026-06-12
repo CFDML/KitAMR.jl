@@ -24,3 +24,4 @@ debug_Mach20.jl
 *.vtu
 LocalPreferences.toml
 effi_study
+*.so
