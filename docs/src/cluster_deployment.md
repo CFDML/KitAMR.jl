@@ -129,8 +129,8 @@ project environment.
 A small script that exercises the code paths you actually run (initialize → AMR →
 flux/iterate → output). PackageCompiler records every method specialization it
 touches and bakes them in. Keep it small and gentle — what matters is the *types and
-code paths*, not the physics or the problem size (see
-[Coverage](@ref Coverage) below):
+code paths*, not the physics or the problem size (see the **Coverage** section
+below):
 
 ```julia
 # precompile_workload.jl
@@ -191,7 +191,7 @@ srun    -n <N> julia --project --sysimage=kitamr_sys.so your_script.jl
     heap and keep peak RSS lower — the cheapest guard against transient
     out-of-memory on memory-bound runs.
 
-### [Coverage](@id Coverage) — what gets baked in, and what if a method is missed
+### Coverage — what gets baked in, and what if a method is missed
 
 A sysimage is an **optimization, not a sealed set of methods**. Any method *not*
 captured by the workload is simply JIT-compiled the normal way the first time it is
