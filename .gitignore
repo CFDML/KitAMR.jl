@@ -23,4 +23,5 @@ deprecated
 debug_Mach20.jl
 *.vtu
 LocalPreferences.toml
-example
+dev
+*.so

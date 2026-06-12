@@ -717,35 +717,31 @@ function save_boundary_result(dir_path::String,ka::KA{DIM,NDF}) where{DIM,NDF}
 end
 function boundary_write_csv(csvname,results,config::ConfigureForSave{2})
     for i in eachindex(config.IB)
-        df = DataFrame()
-        df.x=[x[1] for x in results[i].midpoints];df.y=[x[2] for x in results[i].midpoints]
-        df.nx = [x[1] for x in results[i].normal];df.ny = [x[2] for x in results[i].normal]
-        df.rho=[x.prim[1] for x in results[i].ps_solutions]
-        df.u=[x.prim[2] for x in results[i].ps_solutions]
-        df.v=[x.prim[3] for x in results[i].ps_solutions]
-        df.T=[1/x.prim[4] for x in results[i].ps_solutions]
-        df.qfx=[x.qf[1] for x in results[i].ps_solutions];df.qfy=[x.qf[2] for x in results[i].ps_solutions]
-        df.p11 = [x.p[1] for x in results[i].ps_solutions];df.p12 = [x.p[2] for x in results[i].ps_solutions]
-        df.p22 = [x.p[3] for x in results[i].ps_solutions]
-        CSV.write(csvname*"_"*string(i)*".csv",df)
+        mids = results[i].midpoints; nrms = results[i].normal; sols = results[i].ps_solutions
+        open(csvname*"_"*string(i)*".csv","w") do io
+            println(io,"x,y,nx,ny,rho,u,v,T,qfx,qfy,p11,p12,p22")
+            for j in eachindex(sols)
+                s = sols[j]; mp = mids[j]; nm = nrms[j]
+                println(io, join((mp[1],mp[2],nm[1],nm[2],
+                    s.prim[1],s.prim[2],s.prim[3],1/s.prim[4],
+                    s.qf[1],s.qf[2],s.p[1],s.p[2],s.p[3]), ","))
+            end
+        end
     end
 end
 function boundary_write_csv(csvname,results,config::ConfigureForSave{3})
     for i in eachindex(config.IB)
-        df = DataFrame()
-        df.x=[x[1] for x in results[i].midpoints];df.y=[x[2] for x in results[i].midpoints]
-        df.nx = [x[1] for x in results[i].normal];df.ny = [x[2] for x in results[i].normal]
-        df.rho=[x.prim[1] for x in results[i].ps_solutions]
-        df.u=[x.prim[2] for x in results[i].ps_solutions]
-        df.v=[x.prim[3] for x in results[i].ps_solutions]
-        df.w=[x.prim[4] for x in results[i].ps_solutions]
-        df.T=[1/x.prim[4] for x in results[i].ps_solutions]
-        df.qfx=[x.qf[1] for x in results[i].ps_solutions];df.qfy=[x.qf[2] for x in results[i].ps_solutions]
-        df.qfz=[x.qf[3] for x in results[i].ps_solutions]
-        df.p11 = [x.p[1] for x in results[i].ps_solutions];df.p12 = [x.p[2] for x in results[i].ps_solutions]
-        df.p13 = [x.p[3] for x in results[i].ps_solutions];df.p22 = [x.p[4] for x in results[i].ps_solutions];
-        df.p23 = [x.p[5] for x in results[i].ps_solutions];df.p33 = [x.p[6] for x in results[i].ps_solutions];
-        CSV.write(csvname*"_"*string(i)*".csv",df)
+        mids = results[i].midpoints; nrms = results[i].normal; sols = results[i].ps_solutions
+        open(csvname*"_"*string(i)*".csv","w") do io
+            println(io,"x,y,nx,ny,rho,u,v,w,T,qfx,qfy,qfz,p11,p12,p13,p22,p23,p33")
+            for j in eachindex(sols)
+                s = sols[j]; mp = mids[j]; nm = nrms[j]
+                println(io, join((mp[1],mp[2],nm[1],nm[2],
+                    s.prim[1],s.prim[2],s.prim[3],s.prim[4],1/s.prim[4],
+                    s.qf[1],s.qf[2],s.qf[3],
+                    s.p[1],s.p[2],s.p[3],s.p[4],s.p[5],s.p[6]), ","))
+            end
+        end
     end
 end
 function boundary_result2csv(dirname::String,csvname::String)
