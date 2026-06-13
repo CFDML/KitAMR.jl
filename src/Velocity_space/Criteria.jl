@@ -23,6 +23,19 @@ function local_contribution_refine_flag(w::AbstractVector, U::AbstractVector, mi
     max(abs(0.5 * sum((U - midpoint) .^ 2) * df[1]* weight) /
     (w[end] - 0.5 * w[1] * sum((U) .^ 2)),df[1]*weight/w[1]) > kinfo.config.solver.ADAPT_COEFFI_VS_LOCAL ? true : false
 end
+
+function local_contribution_ratio(w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, ::KInfo{DIM,2}) where{DIM}
+    e_int = abs(w[end] - 0.5 * w[1] * sum((U) .^ 2)) + EPS
+    mass = abs(df[1] * weight) / (abs(w[1]) + EPS)
+    energy = abs(0.5 * (sum((U - midpoint) .^ 2) * df[1] + df[2]) * weight) / e_int
+    return max(mass, energy)
+end
+function local_contribution_ratio(w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, ::KInfo{DIM,1}) where{DIM}
+    e_int = abs(w[end] - 0.5 * w[1] * sum((U) .^ 2)) + EPS
+    mass = abs(df[1] * weight) / (abs(w[1]) + EPS)
+    energy = abs(0.5 * sum((U - midpoint) .^ 2) * df[1] * weight) / e_int
+    return max(mass, energy)
+end
 function local_contribution_coarsen_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractMatrix, df::AbstractMatrix, weight::AbstractVector, kinfo::KInfo{DIM,2}) where{DIM}
     for i = 1:2^DIM
         !local_contribution_coarsen_flag(w, U, @view(midpoint[i, :]), @view(df[i, :]), weight[i], kinfo) &&
@@ -278,6 +291,139 @@ function vs_lohner_indicator(vs::AbstractVsData{DIM,NDF}, idx::VsNeighborIndex{D
                 η = max(η, _lohner_ratio(bL, b0, bR, dsL, dsR, εflt, εabs, s2))
             end
         end
+    end
+    return η
+end
+
+# ------------------------------------------------------------------------------------------
+# Local linear least-squares residual indicator (ADAPT_VS_MODE == :lsr).
+#
+# This sensor is dimension-unsplit: it fits a local affine model in the actual velocity
+# coordinates around one velocity cell and measures the normalized residual.  Linear slopes
+# are absorbed by the fit, so coarse/fine center offsets do not masquerade as directional
+# second derivatives.  Boundary vacuum points are not injected; only existing velocity cells
+# participate in the local fit.
+# ------------------------------------------------------------------------------------------
+
+@inline function _push_lsr_neighbor!(buf::Vector{Int}, nb::Integer, center::Integer)
+    nb == 0 && return nothing
+    nb == center && return nothing
+    @inbounds for x in buf
+        x == nb && return nothing
+    end
+    push!(buf, Int(nb))
+    return nothing
+end
+
+function _lsr_neighbors!(buf::Vector{Int}, vs::AbstractVsData{DIM}, idx::VsNeighborIndex{DIM}, i::Integer) where {DIM}
+    empty!(buf)
+    @inbounds for d in 1:DIM
+        _push_lsr_neighbor!(buf, vs_face_neighbor(idx, vs, i, d, -1), i)
+        _push_lsr_neighbor!(buf, vs_face_neighbor(idx, vs, i, d, 1), i)
+    end
+    n1 = length(buf)
+    @inbounds for p in 1:n1
+        j = buf[p]
+        for d in 1:DIM
+            _push_lsr_neighbor!(buf, vs_face_neighbor(idx, vs, j, d, -1), i)
+            _push_lsr_neighbor!(buf, vs_face_neighbor(idx, vs, j, d, 1), i)
+        end
+    end
+    return buf
+end
+
+function _lsr_component_indicator(
+    vs::AbstractVsData{DIM,NDF},
+    idx::VsNeighborIndex{DIM},
+    i::Integer,
+    k::Integer,
+    scale::Real,
+    neighbors::Vector{Int},
+    normal::AbstractMatrix{Float64},
+    rhs::AbstractVector{Float64},
+    x::AbstractVector{Float64},
+) where {DIM,NDF}
+    length(neighbors) < DIM + 1 && return 0.0
+    fill!(normal, 0.0)
+    fill!(rhs, 0.0)
+
+    f0 = vs.df[i, k]
+    wsum = 0.0
+    variation = 0.0
+    @inbounds for nb in neighbors
+        dist2 = 0.0
+        for d in 1:DIM
+            h = _vs_cell_size(idx, vs, i, d)
+            x[d] = (vs.midpoint[nb, d] - vs.midpoint[i, d]) / h
+            dist2 += x[d]^2
+        end
+        dist2 <= EPS && continue
+        wt = 1.0 / (1.0 + dist2)
+        df = vs.df[nb, k] - f0
+        wsum += wt
+        variation += wt * df^2
+        for a in 1:DIM
+            rhs[a] += wt * x[a] * df
+            for b in 1:DIM
+                normal[a, b] += wt * x[a] * x[b]
+            end
+        end
+    end
+    wsum <= 0.0 && return 0.0
+
+    traceN = 0.0
+    @inbounds for d in 1:DIM
+        traceN += normal[d, d]
+    end
+    ridge = 1e-12 * max(traceN, 1.0)
+    @inbounds for d in 1:DIM
+        normal[d, d] += ridge
+    end
+
+    gradient = try
+        Symmetric(normal) \ rhs
+    catch
+        return 0.0
+    end
+
+    residual = 0.0
+    @inbounds for nb in neighbors
+        dist2 = 0.0
+        for d in 1:DIM
+            h = _vs_cell_size(idx, vs, i, d)
+            x[d] = (vs.midpoint[nb, d] - vs.midpoint[i, d]) / h
+            dist2 += x[d]^2
+        end
+        dist2 <= EPS && continue
+        wt = 1.0 / (1.0 + dist2)
+        pred = 0.0
+        for d in 1:DIM
+            pred += gradient[d] * x[d]
+        end
+        r = (vs.df[nb, k] - f0) - pred
+        residual += wt * r^2
+    end
+
+    num = sqrt(residual / wsum)
+    den = sqrt(variation / wsum) + VS_LOHNER_EPS_ABS * max(abs(scale), abs(f0), EPS)
+    return min(num / den, 1.0)
+end
+
+function vs_lsr_indicator(
+    vs::AbstractVsData{DIM,NDF},
+    idx::VsNeighborIndex{DIM},
+    i::Integer,
+    s1::Real,
+    s2::Real,
+    neighbors::Vector{Int},
+    normal::AbstractMatrix{Float64},
+    rhs::AbstractVector{Float64},
+    x::AbstractVector{Float64},
+) where {DIM,NDF}
+    _lsr_neighbors!(neighbors, vs, idx, i)
+    η = _lsr_component_indicator(vs, idx, i, 1, s1, neighbors, normal, rhs, x)
+    if NDF == 2
+        η = max(η, _lsr_component_indicator(vs, idx, i, 2, s2, neighbors, normal, rhs, x))
     end
     return η
 end

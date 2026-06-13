@@ -30,16 +30,25 @@ function vs_refine!(va_data::Velocity_Adaptive_Data, ka::KA{DIM,NDF}) where{DIM,
     kinfo.config.vs_trees_num[i] for i in 1:DIM]
     va_flags = va_data.va_flags
     id = 0
-    lohner = kinfo.config.solver.ADAPT_VS_MODE === :lohner
+    mode = kinfo.config.solver.ADAPT_VS_MODE
+    lohner = mode === :lohner
+    lsr = mode === :lsr
+    indexed = lohner || lsr
     vmin = ntuple(d -> kinfo.config.quadrature[2*d-1], DIM)
     ds0 = ntuple(d -> ds[d], DIM)
     vstn = kinfo.config.vs_trees_num
     maxlevel = kinfo.config.solver.AMR_VS_MAXLEVEL
     τL = kinfo.config.solver.ADAPT_COEFFI_VS_LOHNER
-    vsidx = lohner ? VsNeighborIndex{DIM}() : nothing
+    τR = kinfo.config.solver.ADAPT_COEFFI_VS_LSR
+    lsr_floor = kinfo.config.solver.ADAPT_COEFFI_VS_LSR_FLOOR
+    vsidx = indexed ? VsNeighborIndex{DIM}() : nothing
     refine_flags = Bool[]
     cdf_i = Vector{Float64}(undef, NDF)
     mid_i = Vector{Float64}(undef, DIM)
+    lsr_neighbors = Int[]
+    lsr_normal = zeros(Float64, DIM, DIM)
+    lsr_rhs = zeros(Float64, DIM)
+    lsr_x = zeros(Float64, DIM)
     for i in eachindex(trees.data)
         for j in eachindex(trees.data[i])
             id += 1
@@ -49,7 +58,7 @@ function vs_refine!(va_data::Velocity_Adaptive_Data, ka::KA{DIM,NDF}) where{DIM,
             U = @view(ps_data.prim[2:1+DIM])
             n = vs_data.vs_num
             s1 = 0.0; s2 = 0.0
-            if lohner
+            if indexed
                 build_vs_index!(vsidx, vs_data, vmin, ds0, vstn, maxlevel)
                 s1, s2 = vs_lohner_scales(vs_data)
             end
@@ -59,6 +68,9 @@ function vs_refine!(va_data::Velocity_Adaptive_Data, ka::KA{DIM,NDF}) where{DIM,
                 base = lohner ?
                     (vs_lohner_indicator(vs_data, vsidx, c, s1, s2) > τL ||
                      local_contribution_refine_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo)) :
+                    lsr ?
+                    (vs_lsr_indicator(vs_data, vsidx, c, s1, s2, lsr_neighbors, lsr_normal, lsr_rhs, lsr_x) > τR &&
+                     local_contribution_ratio(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo) > lsr_floor) :
                     contribution_refine_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], va_data.vr, kinfo)
                 refine_flags[c] = vs_data.level[c] < maxlevel && base
             end
@@ -76,16 +88,25 @@ function vs_coarsen!(va_data::Velocity_Adaptive_Data,ka::KA{DIM,NDF})where{DIM,N
     kinfo.config.vs_trees_num[i] for i in 1:DIM]
     va_flags = va_data.va_flags
     id = 0
-    lohner = kinfo.config.solver.ADAPT_VS_MODE === :lohner
+    mode = kinfo.config.solver.ADAPT_VS_MODE
+    lohner = mode === :lohner
+    lsr = mode === :lsr
+    indexed = lohner || lsr
     vmin = ntuple(d -> kinfo.config.quadrature[2*d-1], DIM)
     ds0 = ntuple(d -> ds[d], DIM)
     vstn = kinfo.config.vs_trees_num
     maxlevel = kinfo.config.solver.AMR_VS_MAXLEVEL
     τc = VS_LOHNER_COARSEN_RATIO * kinfo.config.solver.ADAPT_COEFFI_VS_LOHNER
-    vsidx = lohner ? VsNeighborIndex{DIM}() : nothing
+    τr_c = VS_LOHNER_COARSEN_RATIO * kinfo.config.solver.ADAPT_COEFFI_VS_LSR
+    lsr_floor = kinfo.config.solver.ADAPT_COEFFI_VS_LSR_FLOOR
+    vsidx = indexed ? VsNeighborIndex{DIM}() : nothing
     coarsen_ok = Bool[]
     cdf_i = Vector{Float64}(undef, NDF)
     mid_i = Vector{Float64}(undef, DIM)
+    lsr_neighbors = Int[]
+    lsr_normal = zeros(Float64, DIM, DIM)
+    lsr_rhs = zeros(Float64, DIM)
+    lsr_x = zeros(Float64, DIM)
     for i in eachindex(trees.data)
         for j in eachindex(trees.data[i])
             id += 1
@@ -95,7 +116,7 @@ function vs_coarsen!(va_data::Velocity_Adaptive_Data,ka::KA{DIM,NDF})where{DIM,N
             U = @view(ps_data.prim[2:1+DIM])
             n = vs_data.vs_num
             s1 = 0.0; s2 = 0.0
-            if lohner
+            if indexed
                 build_vs_index!(vsidx, vs_data, vmin, ds0, vstn, maxlevel)
                 s1, s2 = vs_lohner_scales(vs_data)
             end
@@ -104,6 +125,10 @@ function vs_coarsen!(va_data::Velocity_Adaptive_Data,ka::KA{DIM,NDF})where{DIM,N
                 _criterion_cell!(cdf_i, mid_i, vs_data, ps_data.ds, c)
                 coarsen_ok[c] = lohner ?
                     (vs_lohner_indicator(vs_data, vsidx, c, s1, s2) < τc &&
+                     local_contribution_coarsen_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo)) :
+                    lsr ?
+                    ((vs_lsr_indicator(vs_data, vsidx, c, s1, s2, lsr_neighbors, lsr_normal, lsr_rhs, lsr_x) < τr_c ||
+                      local_contribution_ratio(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo) < lsr_floor) &&
                      local_contribution_coarsen_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo)) :
                     (local_contribution_coarsen_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo) &&
                      global_contribution_coarsen_flag(U, mid_i, cdf_i, vs_data.weight[c], va_data.vr, kinfo))
