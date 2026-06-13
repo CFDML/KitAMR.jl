@@ -79,7 +79,7 @@ struct Solver{DIM,NDF}
     ADAPT_COEFFI_VS_GLOBAL::Float64
     "Proportion that a refinement-required velocity cell contributes to the macroscopic quantities in a local physical cell. Default is `0.01`."
     ADAPT_COEFFI_VS_LOCAL::Float64
-    "Velocity-space refinement criterion. `:lohner` (default) uses the moment-weighted Löhner indicator with `local_contribution_*` as a relative mass/energy floor; `:lsr` uses a dimension-unsplit local linear least-squares residual; `:contribution` uses the legacy magnitude/contribution flags."
+    "Velocity-space refinement criterion. `:lsr` (default) uses a dimension-unsplit local linear least-squares residual; `:lohner` uses the moment-weighted Löhner indicator with `local_contribution_*` as a relative mass/energy floor; `:contribution` uses the legacy magnitude/contribution flags."
     ADAPT_VS_MODE::Symbol
     "Threshold of the moment-weighted Löhner indicator (in `[0,1]`) for velocity-space refinement when `ADAPT_VS_MODE == :lohner`. Default is `0.6`."
     ADAPT_COEFFI_VS_LOHNER::Float64
@@ -100,7 +100,7 @@ function Solver(config::Dict)
     ADAPT_COEFFI_PS = haskey(config,:ADAPT_COEFFI_PS) ? config[:ADAPT_COEFFI_PS] : 0.25
     ADAPT_COEFFI_VS_GLOBAL = haskey(config,:ADAPT_COEFFI_VS_GLOBAL) ? config[:ADAPT_COEFFI_VS_GLOBAL] : 0.125
     ADAPT_COEFFI_VS_LOCAL = haskey(config,:ADAPT_COEFFI_VS_LOCAL) ? config[:ADAPT_COEFFI_VS_LOCAL] : 1e-2
-    ADAPT_VS_MODE = haskey(config,:ADAPT_VS_MODE) ? Symbol(config[:ADAPT_VS_MODE]) : :lohner
+    ADAPT_VS_MODE = haskey(config,:ADAPT_VS_MODE) ? Symbol(config[:ADAPT_VS_MODE]) : :lsr
     ADAPT_COEFFI_VS_LOHNER = haskey(config,:ADAPT_COEFFI_VS_LOHNER) ? config[:ADAPT_COEFFI_VS_LOHNER] : 0.6
     ADAPT_COEFFI_VS_LSR = haskey(config,:ADAPT_COEFFI_VS_LSR) ? config[:ADAPT_COEFFI_VS_LSR] : 0.35
     ADAPT_COEFFI_VS_LSR_FLOOR = haskey(config,:ADAPT_COEFFI_VS_LSR_FLOOR) ? config[:ADAPT_COEFFI_VS_LSR_FLOOR] : 5e-4
@@ -134,7 +134,7 @@ function Solver(;kwargs...)
     ADAPT_COEFFI_PS = haskey(kwargs,:ADAPT_COEFFI_PS) ? kwargs[:ADAPT_COEFFI_PS] : 0.25
     ADAPT_COEFFI_VS_GLOBAL = haskey(kwargs,:ADAPT_COEFFI_VS_GLOBAL) ? kwargs[:ADAPT_COEFFI_VS_GLOBAL] : 0.125
     ADAPT_COEFFI_VS_LOCAL = haskey(kwargs,:ADAPT_COEFFI_VS_LOCAL) ? kwargs[:ADAPT_COEFFI_VS_LOCAL] : 1e-2
-    ADAPT_VS_MODE = haskey(kwargs,:ADAPT_VS_MODE) ? Symbol(kwargs[:ADAPT_VS_MODE]) : :lohner
+    ADAPT_VS_MODE = haskey(kwargs,:ADAPT_VS_MODE) ? Symbol(kwargs[:ADAPT_VS_MODE]) : :lsr
     ADAPT_COEFFI_VS_LOHNER = haskey(kwargs,:ADAPT_COEFFI_VS_LOHNER) ? kwargs[:ADAPT_COEFFI_VS_LOHNER] : 0.6
     ADAPT_COEFFI_VS_LSR = haskey(kwargs,:ADAPT_COEFFI_VS_LSR) ? kwargs[:ADAPT_COEFFI_VS_LSR] : 0.35
     ADAPT_COEFFI_VS_LSR_FLOOR = haskey(kwargs,:ADAPT_COEFFI_VS_LSR_FLOOR) ? kwargs[:ADAPT_COEFFI_VS_LSR_FLOOR] : 5e-4

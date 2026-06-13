@@ -152,7 +152,7 @@ function vs_conserved_correction!(va_data::Velocity_Adaptive_Data,ka)
             ps_data = trees.data[i][j]
             (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0)&&continue
             vs_data = ps_data.vs_data
-            conserved_I_porjection!(vs_data,ps_data.w)
+            conserved_I_porjection!(vs_data,ps_data.w,ps_data.qf)
         end
     end
 end

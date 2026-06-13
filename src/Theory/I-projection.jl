@@ -20,6 +20,35 @@ function build_psi_matrix(midpoint::AbstractMatrix{T}) where {T<:Real}
 end
 
 """
+    build_heat_flux_psi_matrix_2D(midpoint, U)
+
+构造二维 2F 情况下作用于 h=df[:,1] 的 Ψ ∈ ℝ^{N×6}. 前四列为守恒量
+(1, ξ₁, ξ₂, |ξ|²/2), 后两列为热流中 h 的贡献
+0.5*cᵢ*|c|², 其中 c = ξ - U.
+"""
+function build_heat_flux_psi_matrix_2D(midpoint::AbstractMatrix{T}, U::AbstractVector) where {T<:Real}
+    N, D = size(midpoint)
+    D == 2 || throw(ArgumentError("heat-flux constrained I-projection is only implemented for 2D"))
+    Psi = Matrix{T}(undef, N, 6)
+    U1 = U[1]
+    U2 = U[2]
+    @inbounds for k in 1:N
+        u = midpoint[k, 1]
+        v = midpoint[k, 2]
+        c1 = u - U1
+        c2 = v - U2
+        c_sq = c1 * c1 + c2 * c2
+        Psi[k, 1] = one(T)
+        Psi[k, 2] = u
+        Psi[k, 3] = v
+        Psi[k, 4] = (u * u + v * v) / 2
+        Psi[k, 5] = 0.5 * c1 * c_sq
+        Psi[k, 6] = 0.5 * c2 * c_sq
+    end
+    return Psi
+end
+
+"""
     dual_objective(Psi, f, W, weight, lambda)
 
 I-投影的对偶目标
@@ -60,9 +89,19 @@ function solve_I_projection(
     tol::Real=1e-10,
     maxiter::Integer=10,
 ) where {T<:Real}
-    N, D = size(midpoint)
-    M = D + 2
     Psi = build_psi_matrix(midpoint)
+    return _solve_I_projection(Psi, f, W, weight; tol=tol, maxiter=maxiter)
+end
+
+function _solve_I_projection(
+    Psi::AbstractMatrix{T},
+    f::AbstractVector{T},
+    W::AbstractVector{T},
+    weight::AbstractVector{T};
+    tol::Real=1e-10,
+    maxiter::Integer=10,
+) where {T<:Real}
+    N, M = size(Psi)
     lambda = zeros(T, M)
     G = Vector{T}(undef, M)
     J = Matrix{T}(undef, M, M)
@@ -140,22 +179,71 @@ function solve_I_projection(
     return lambda, Psi
 end
 
+function _apply_I_projection!(f::AbstractVector, λ::AbstractVector, Ψ::AbstractMatrix)
+    N, M = size(Ψ)
+    @inbounds for i in 1:N
+        dot_lp = zero(eltype(Ψ))
+        for j in 1:M
+            dot_lp += λ[j] * Ψ[i, j]
+        end
+        f[i] *= exp(dot_lp)
+    end
+    return f
+end
+
+function _heat_flux_h_system_2D2F(
+    midpoint::AbstractMatrix{T},
+    b::AbstractVector{T},
+    w::AbstractVector{T},
+    qf::AbstractVector{T},
+    weight::AbstractVector{T},
+) where {T<:Real}
+    U = @views w[2:3] ./ w[1]
+    Ψ = build_heat_flux_psi_matrix_2D(midpoint, U)
+    W = Vector{T}(undef, 6)
+    @inbounds for i in 1:4
+        W[i] = w[i]
+    end
+    W[4] -= 0.5 * dot(weight, b)
+
+    q_b1 = zero(T)
+    q_b2 = zero(T)
+    U1 = U[1]
+    U2 = U[2]
+    @inbounds for i in eachindex(b)
+        q_b1 += 0.5 * weight[i] * (midpoint[i, 1] - U1) * b[i]
+        q_b2 += 0.5 * weight[i] * (midpoint[i, 2] - U2) * b[i]
+    end
+    W[5] = qf[1] - q_b1
+    W[6] = qf[2] - q_b2
+    return Ψ, W
+end
+
 
 function conserved_I_porjection!(vs_data::VsData{2,2},w::AbstractVector)
     e_int = @views dot(vs_data.weight,vs_data.df[:,2])/2
     w_trans = copy(w);w_trans[end]-=e_int
-    λ,Ψ = @views solve_I_projection(vs_data.midpoint,vs_data.df[:,1],w_trans,vs_data.weight)
-    for i in axes(vs_data.df,1)
-        vs_data.df[i,1]*= @views exp(dot(λ,Ψ[i,:]))
-    end
+    h = @view vs_data.df[:,1]
+    λ,Ψ = solve_I_projection(vs_data.midpoint,h,w_trans,vs_data.weight)
+    _apply_I_projection!(h,λ,Ψ)
+end
+
+function conserved_I_porjection!(vs_data::VsData{2,2},w::AbstractVector,qf::AbstractVector)
+    h = @view vs_data.df[:,1]
+    b = @view vs_data.df[:,2]
+    Ψ,W = _heat_flux_h_system_2D2F(vs_data.midpoint,b,w,qf,vs_data.weight)
+    λ,Ψ = _solve_I_projection(Ψ,h,W,vs_data.weight)
+    _apply_I_projection!(h,λ,Ψ)
 end
 
 function conserved_I_porjection!(vs_data::VsData{3,1},w::AbstractVector)
-    λ,Ψ = @views solve_I_projection(vs_data.midpoint,vs_data.df[:,1],w,vs_data.weight)
-    for i in axes(vs_data.df,1)
-        vs_data.df[i,1]*= @views exp(dot(λ,Ψ[i,:]))
-    end
+    h = @view vs_data.df[:,1]
+    λ,Ψ = solve_I_projection(vs_data.midpoint,h,w,vs_data.weight)
+    _apply_I_projection!(h,λ,Ψ)
 end
+
+conserved_I_porjection!(vs_data::VsData{3,1},w::AbstractVector,::AbstractVector) =
+    conserved_I_porjection!(vs_data,w)
 
 
 function iterate!(::Type{CIP_Marching},ka::KA)
@@ -178,7 +266,7 @@ function iterate!(::Type{CIP_Marching},ka::KA)
             F_c = discrete_maxwell(vs_data.midpoint, prim_c, kinfo)
             ps_data.qf .= qf = calc_qf(vs_data, prim_c) # Heatflux after convection
             F_c .+= shakhov_part(vs_data.midpoint, F_c, prim_c, qf, kinfo) # g^{S,n+1}
-            conserved_I_porjection!(vs_data,ps_data.w)
+            conserved_I_porjection!(vs_data,ps_data.w,ps_data.qf)
             # Collision process
             τ = get_τ(prim_c, gas.μᵣ, gas.ω) # τ^{n+1}
             f .*= τ/(τ+Δt)

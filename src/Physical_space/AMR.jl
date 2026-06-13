@@ -578,6 +578,7 @@ function ps_copy(data::PsData{DIM,NDF}) where{DIM,NDF}
     p = PsData(DIM,NDF;
         ds=copy(data.ds),
         midpoint=copy(data.midpoint),
+        qf=copy(data.qf),
         w=copy(data.w),
         sw=copy(data.sw),
         lohner=copy(data.lohner),
@@ -597,6 +598,7 @@ function ps_merge(Odatas::Vector,index::Int,kinfo::KInfo{DIM,NDF}) where{DIM,NDF
             ds = data.ds *2.0,
             midpoint = data.midpoint - 0.5 * data.ds .* RMT[DIM][index],
             w = w_new,
+            qf = [sum([x.qf[i] for x in Odatas]) for i in 1:DIM]./2^DIM,
             prim = get_prim(w_new,kinfo),
             sw = [sum([x.sw[i,j] for x in Odatas]) for i in 1:DIM+2,j in 1:DIM]./2^DIM,
             flux = [sum([x.flux[i] for x in Odatas]) for i in 1:DIM+2]./2^DIM,
@@ -658,6 +660,7 @@ function ps_replace!(::Val{1}, out_quad, in_quads, which_tree, ka::KA{DIM}) wher
             end
             ps_data.w = calc_w0(ps_data)
             ps_data.prim = get_prim(ps_data.w,ka.kinfo)
+            ps_data.qf .= calc_qf(vs_data,ps_data.prim)
         end
         insert!(datas, index - 1 + i, ps_data)
         dp[] = P4estPsData(pointer_from_objref(ps_data))
@@ -693,6 +696,7 @@ function ps_replace!(::ChildNum, out_quad, in_quads, which_tree, ka::KA{DIM,NDF}
         vs_merge!(vs_data.df,vs_data_n.df,vs_data.level,vs_data_n.level,ka)
     end
     vs_data.df./=2^DIM;vs_data.sdf./=2^DIM
+    ps_data.qf .= calc_qf(vs_data,ps_data.prim)
     ps_data.neighbor.state[1] = BALANCE_FLAG
     ps_data.neighbor.data[1] = Odatas
     index = findfirst(x -> x === Odatas[1], datas)
