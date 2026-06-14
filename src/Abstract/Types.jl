@@ -151,7 +151,7 @@ abstract type AxisSymmetric <: AbstractBoundCond end
 $(TYPEDEF)
 """
 abstract type Period <: AbstractBoundCond end
-const AbstractBCType = Union{Vector,Function}
+const AbstractBCType = Union{AbstractVector,Function}
 
 """
 $(TYPEDEF)

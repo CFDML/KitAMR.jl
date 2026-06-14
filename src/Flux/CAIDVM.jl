@@ -12,7 +12,7 @@ function calc_domain_flux(::Type{CAIDVM},here_vs::FaceVsData,face::DomainFace{DI
     there_vn = @views there_mid[:,direction]
     @inbounds @views dx = [midpoint[j]-here_mid[i,j]*Δt-ps_data.midpoint[j] for i in axes(here_mid,1),j in axes(here_mid,2)]
     @inbounds @views df = [here_df[i,j]+dot(dx[i,:],here_sdf[i,j,:]) for i in axes(here_df,1),j in axes(here_df,2)]
-    bc = get_bc(face.domain.bc)
+    bc = get_domain_bc(face, ka)
     bc[1] = calc_ρw(there_mid,df,bc,here_vn,there_vn,here_weight,there_weight,ka)
     there_df = Matrix{Float64}(undef,size(there_mid,1),NDF)
     for i in axes(there_df,1)
@@ -37,7 +37,7 @@ function calc_domain_flux(::Type{CAIDVM},here_vs::FaceVsData,face::DomainFace{DI
     there_weight = @views vs_data.weight[nheavi]
     @inbounds @views dx = [midpoint[j]-here_mid[i,j]*Δt-ps_data.midpoint[j] for i in axes(here_mid,1),j in axes(here_mid,2)]
     @inbounds @views df = [here_df[i,j]+dot(dx[i,:],here_sdf[i,j,:]) for i in axes(here_df,1),j in axes(here_df,2)]
-    bc = get_bc(face.domain.bc)
+    bc = get_domain_bc(face, ka)
     there_df = Matrix{Float64}(undef,size(there_mid,1),NDF)
     for i in axes(there_df,1)
         @views there_df[i,:] .= discrete_maxwell(there_mid[i,:],bc,ka.kinfo)

@@ -79,13 +79,15 @@ struct Solver{DIM,NDF}
     ADAPT_COEFFI_VS_GLOBAL::Float64
     "Proportion that a refinement-required velocity cell contributes to the macroscopic quantities in a local physical cell. Default is `0.01`."
     ADAPT_COEFFI_VS_LOCAL::Float64
-    "Velocity-space refinement criterion. `:lsr` (default) uses a dimension-unsplit local linear least-squares residual; `:lohner` uses the moment-weighted Löhner indicator with `local_contribution_*` as a relative mass/energy floor; `:contribution` uses the legacy magnitude/contribution flags."
+    "Threshold of the analytic Maxwellian quadrature-error criterion used during initial velocity-space refinement. Default is `0.22`."
+    ADAPT_COEFFI_VS_INIT::Float64
+    "Velocity-space refinement criterion. `:lsr` (default) uses a dimension-unsplit local linear least-squares residual with a heat-flux-aware contribution floor; `:lohner` uses the moment-weighted Löhner indicator with `local_contribution_*` as a relative mass/energy floor; `:contribution` uses the legacy magnitude/contribution flags."
     ADAPT_VS_MODE::Symbol
     "Threshold of the moment-weighted Löhner indicator (in `[0,1]`) for velocity-space refinement when `ADAPT_VS_MODE == :lohner`. Default is `0.6`."
     ADAPT_COEFFI_VS_LOHNER::Float64
-    "Threshold of the local linear least-squares residual indicator (in `[0,1]`) for velocity-space refinement when `ADAPT_VS_MODE == :lsr`. Default is `0.35`."
+    "Threshold of the local linear least-squares residual indicator (in `[0,1]`) for velocity-space refinement when `ADAPT_VS_MODE == :lsr`. Default is `0.16`."
     ADAPT_COEFFI_VS_LSR::Float64
-    "Minimum relative local mass/energy contribution required before the `:lsr` residual is allowed to refine a velocity cell. Default is `5e-4`."
+    "Minimum relative local mass/energy/heat-flux contribution required before the `:lsr` residual is allowed to refine a velocity cell. Default is `2e-4`."
     ADAPT_COEFFI_VS_LSR_FLOOR::Float64
     "Tolerance for convergence judgement. Default is `1e-6`."
     TOLERANCE::Float64
@@ -102,8 +104,9 @@ function Solver(config::Dict)
     ADAPT_COEFFI_VS_LOCAL = haskey(config,:ADAPT_COEFFI_VS_LOCAL) ? config[:ADAPT_COEFFI_VS_LOCAL] : 1e-2
     ADAPT_VS_MODE = haskey(config,:ADAPT_VS_MODE) ? Symbol(config[:ADAPT_VS_MODE]) : :lsr
     ADAPT_COEFFI_VS_LOHNER = haskey(config,:ADAPT_COEFFI_VS_LOHNER) ? config[:ADAPT_COEFFI_VS_LOHNER] : 0.6
-    ADAPT_COEFFI_VS_LSR = haskey(config,:ADAPT_COEFFI_VS_LSR) ? config[:ADAPT_COEFFI_VS_LSR] : 0.35
-    ADAPT_COEFFI_VS_LSR_FLOOR = haskey(config,:ADAPT_COEFFI_VS_LSR_FLOOR) ? config[:ADAPT_COEFFI_VS_LSR_FLOOR] : 5e-4
+    ADAPT_COEFFI_VS_INIT = haskey(config,:ADAPT_COEFFI_VS_INIT) ? config[:ADAPT_COEFFI_VS_INIT] : 0.22
+    ADAPT_COEFFI_VS_LSR = haskey(config,:ADAPT_COEFFI_VS_LSR) ? config[:ADAPT_COEFFI_VS_LSR] : 0.16
+    ADAPT_COEFFI_VS_LSR_FLOOR = haskey(config,:ADAPT_COEFFI_VS_LSR_FLOOR) ? config[:ADAPT_COEFFI_VS_LSR_FLOOR] : 2e-4
     TOLERANCE = haskey(config,:TOLERANCE) ? config[:TOLERANCE] : 1e-6
     ST_CHECK_INTERVAL = haskey(config,:ST_CHECK_INTERVAL) ? config[:ST_CHECK_INTERVAL] : 100
     REDUNDANT_STEPS_NUM = haskey(config,:REDUNDANT_STEPS_NUM) ? config[:REDUNDANT_STEPS_NUM] : 100
@@ -116,6 +119,7 @@ function Solver(config::Dict)
         ADAPT_COEFFI_PS,
         ADAPT_COEFFI_VS_GLOBAL,
         ADAPT_COEFFI_VS_LOCAL,
+        ADAPT_COEFFI_VS_INIT,
         ADAPT_VS_MODE,
         ADAPT_COEFFI_VS_LOHNER,
         ADAPT_COEFFI_VS_LSR,
@@ -136,8 +140,9 @@ function Solver(;kwargs...)
     ADAPT_COEFFI_VS_LOCAL = haskey(kwargs,:ADAPT_COEFFI_VS_LOCAL) ? kwargs[:ADAPT_COEFFI_VS_LOCAL] : 1e-2
     ADAPT_VS_MODE = haskey(kwargs,:ADAPT_VS_MODE) ? Symbol(kwargs[:ADAPT_VS_MODE]) : :lsr
     ADAPT_COEFFI_VS_LOHNER = haskey(kwargs,:ADAPT_COEFFI_VS_LOHNER) ? kwargs[:ADAPT_COEFFI_VS_LOHNER] : 0.6
-    ADAPT_COEFFI_VS_LSR = haskey(kwargs,:ADAPT_COEFFI_VS_LSR) ? kwargs[:ADAPT_COEFFI_VS_LSR] : 0.35
-    ADAPT_COEFFI_VS_LSR_FLOOR = haskey(kwargs,:ADAPT_COEFFI_VS_LSR_FLOOR) ? kwargs[:ADAPT_COEFFI_VS_LSR_FLOOR] : 5e-4
+    ADAPT_COEFFI_VS_INIT = haskey(kwargs,:ADAPT_COEFFI_VS_INIT) ? kwargs[:ADAPT_COEFFI_VS_INIT] : 0.22
+    ADAPT_COEFFI_VS_LSR = haskey(kwargs,:ADAPT_COEFFI_VS_LSR) ? kwargs[:ADAPT_COEFFI_VS_LSR] : 0.16
+    ADAPT_COEFFI_VS_LSR_FLOOR = haskey(kwargs,:ADAPT_COEFFI_VS_LSR_FLOOR) ? kwargs[:ADAPT_COEFFI_VS_LSR_FLOOR] : 2e-4
     TOLERANCE = haskey(kwargs,:TOLERANCE) ? kwargs[:TOLERANCE] : 1e-6
     ST_CHECK_INTERVAL = haskey(kwargs,:ST_CHECK_INTERVAL) ? kwargs[:ST_CHECK_INTERVAL] : 100
     REDUNDANT_STEPS_NUM = haskey(kwargs,:REDUNDANT_STEPS_NUM) ? kwargs[:REDUNDANT_STEPS_NUM] : 100
@@ -149,6 +154,7 @@ function Solver(;kwargs...)
         ADAPT_COEFFI_PS,
         ADAPT_COEFFI_VS_GLOBAL,
         ADAPT_COEFFI_VS_LOCAL,
+        ADAPT_COEFFI_VS_INIT,
         ADAPT_VS_MODE,
         ADAPT_COEFFI_VS_LOHNER,
         ADAPT_COEFFI_VS_LSR,

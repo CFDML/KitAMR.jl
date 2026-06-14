@@ -101,6 +101,68 @@ function _solve_I_projection(
     tol::Real=1e-10,
     maxiter::Integer=10,
 ) where {T<:Real}
+    _shave_negative_distribution!(f)
+    Psi_s, W_s, A = _whiten_I_projection_system(Psi, f, W, weight)
+    lambda_s, _ = _solve_I_projection_newton(Psi_s, f, W_s, weight; tol=tol, maxiter=maxiter)
+    return A * lambda_s, Psi
+end
+
+function _shave_negative_distribution!(f::AbstractVector{T}) where {T<:Real}
+    f_min = 1.1 * minimum(f)
+    if f_min < 0
+        fp_min = minimum(x for x in f if x > 0)
+        d = fp_min - f_min
+        @inbounds for i in eachindex(f)
+            if f[i] < 0
+                f[i] = (f[i] - f_min) / d * fp_min
+            end
+        end
+    end
+    return f
+end
+
+function _whiten_I_projection_system(
+    Psi::AbstractMatrix{T},
+    f::AbstractVector{T},
+    W::AbstractVector{T},
+    weight::AbstractVector{T},
+) where {T<:Real}
+    N, M = size(Psi)
+    H = zeros(T, M, M)
+    @inbounds for k in 1:N
+        c = weight[k] * f[k]
+        for i in 1:M
+            ci = c * Psi[k, i]
+            for j in i:M
+                H[i, j] += ci * Psi[k, j]
+            end
+        end
+    end
+    scale = zero(T)
+    @inbounds for i in 1:M
+        H[i, i] > scale && (scale = H[i, i])
+    end
+    reg = sqrt(eps(T)) * max(scale, one(T))
+    @inbounds for i in 1:M
+        H[i, i] += reg
+    end
+
+    F = cholesky(Symmetric(H, :U), check=false)
+    if !issuccess(F)
+        return Psi, W, Matrix{T}(I, M, M)
+    end
+    A = F.U \ Matrix{T}(I, M, M)
+    return Psi * A, A' * W, A
+end
+
+function _solve_I_projection_newton(
+    Psi::AbstractMatrix{T},
+    f::AbstractVector{T},
+    W::AbstractVector{T},
+    weight::AbstractVector{T};
+    tol::Real=1e-10,
+    maxiter::Integer=10,
+) where {T<:Real}
     N, M = size(Psi)
     lambda = zeros(T, M)
     G = Vector{T}(undef, M)
@@ -108,19 +170,6 @@ function _solve_I_projection(
     tol_eff = tol * max(one(T), norm(W))
     G_prev_norm = T(Inf)
     stall_count = 0
-
-    # shave negative distribution
-    f_min = 1.1*minimum(f)
-    if f_min<0
-        fp_min = minimum(x for x in f if x>0)
-        d = fp_min-f_min
-        for i in eachindex(f)
-            if f[i]<0
-                f[i] = (f[i]-f_min)/d*fp_min
-            end
-        end
-    end
-
 
     for _ in 1:maxiter
         fill!(G, zero(T))

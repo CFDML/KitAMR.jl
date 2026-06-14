@@ -883,9 +883,9 @@ function result2vtk(dirname::String,vtkname::String)
                 [0. for _ in result.solution.ps_solutions])
             vtk["mpi_rank"] = ranks
         end
-		fp = PointerWrapper(p4est)
-        p4est_connectivity_destroy(pointer(fp.connectivity))
+        conn = pointer(PointerWrapper(p4est).connectivity)
         p4est_destroy(p4est)
+        p4est_connectivity_destroy(conn)
     else
         @error "Only support 2D now"
     end

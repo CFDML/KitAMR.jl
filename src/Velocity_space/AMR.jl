@@ -65,13 +65,16 @@ function vs_refine!(va_data::Velocity_Adaptive_Data, ka::KA{DIM,NDF}) where{DIM,
             resize!(refine_flags, n)
             @inbounds for c in 1:n
                 _criterion_cell!(cdf_i, mid_i, vs_data, ps_data.ds, c)
-                base = lohner ?
-                    (vs_lohner_indicator(vs_data, vsidx, c, s1, s2) > τL ||
-                     local_contribution_refine_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo)) :
-                    lsr ?
-                    (vs_lsr_indicator(vs_data, vsidx, c, s1, s2, lsr_neighbors, lsr_normal, lsr_rhs, lsr_x) > τR &&
-                     local_contribution_ratio(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo) > lsr_floor) :
-                    contribution_refine_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], va_data.vr, kinfo)
+                if lohner
+                    base = vs_lohner_indicator(vs_data, vsidx, c, s1, s2) > τL ||
+                           local_contribution_refine_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo)
+                elseif lsr
+                    η = vs_lsr_indicator(vs_data, vsidx, c, s1, s2, lsr_neighbors, lsr_normal, lsr_rhs, lsr_x)
+                    ratio = local_contribution_ratio(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo)
+                    base = η > τR && ratio > lsr_floor
+                else
+                    base = contribution_refine_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], va_data.vr, kinfo)
+                end
                 refine_flags[c] = vs_data.level[c] < maxlevel && base
             end
             refine_grid_stream!(vs_data, refine_flags, ds) && (va_flags[id] = true)
@@ -123,15 +126,18 @@ function vs_coarsen!(va_data::Velocity_Adaptive_Data,ka::KA{DIM,NDF})where{DIM,N
             resize!(coarsen_ok, n)
             @inbounds for c in 1:n
                 _criterion_cell!(cdf_i, mid_i, vs_data, ps_data.ds, c)
-                coarsen_ok[c] = lohner ?
-                    (vs_lohner_indicator(vs_data, vsidx, c, s1, s2) < τc &&
-                     local_contribution_coarsen_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo)) :
-                    lsr ?
-                    ((vs_lsr_indicator(vs_data, vsidx, c, s1, s2, lsr_neighbors, lsr_normal, lsr_rhs, lsr_x) < τr_c ||
-                      local_contribution_ratio(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo) < lsr_floor) &&
-                     local_contribution_coarsen_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo)) :
-                    (local_contribution_coarsen_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo) &&
-                     global_contribution_coarsen_flag(U, mid_i, cdf_i, vs_data.weight[c], va_data.vr, kinfo))
+                if lohner
+                    coarsen_ok[c] = vs_lohner_indicator(vs_data, vsidx, c, s1, s2) < τc &&
+                                    local_contribution_coarsen_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo)
+                elseif lsr
+                    η = vs_lsr_indicator(vs_data, vsidx, c, s1, s2, lsr_neighbors, lsr_normal, lsr_rhs, lsr_x)
+                    ratio = local_contribution_ratio(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo)
+                    coarsen_ok[c] = ((η < τr_c && ratio < lsr_floor) || ratio < 0.5 * lsr_floor) &&
+                                    local_contribution_coarsen_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo)
+                else
+                    coarsen_ok[c] = local_contribution_coarsen_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo) &&
+                                    global_contribution_coarsen_flag(U, mid_i, cdf_i, vs_data.weight[c], va_data.vr, kinfo)
+                end
             end
             coarsen_grid_stream!(vs_data, coarsen_ok, ds, maxlevel) && (va_flags[id] = true)
         end

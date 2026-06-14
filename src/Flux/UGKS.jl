@@ -11,7 +11,7 @@ function calc_domain_flux(::Type{UGKS},here_vs::FaceVsData,face::DomainFace{2,2,
     there_vn = @views there_mid[:,direction]
     there_sdf = @views vs_data.sdf[nheavi,:,:]
     dx = midpoint-here_data.midpoint
-    bc = get_bc(face.domain.bc)
+    bc = get_domain_bc(face, ka)
     domain_w = get_conserved(bc,kinfo)
     df = copy(here_df)
     for k in axes(here_sdf, 3)

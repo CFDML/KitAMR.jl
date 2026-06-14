@@ -38,11 +38,18 @@ function finalize_ghost!(::GhostBuffer)
 end
 function finalize_p4est!(p4est::Ptr{p4est_t}, ka::KA)
     kinfo = ka.kinfo
-    p4est_ghost_destroy(kinfo.forest.ghost)
-    p4est_mesh_destroy(kinfo.forest.mesh)
-    pp = PointerWrapper(p4est)
-    p4est_connectivity_destroy(pointer(pp.connectivity))
+    conn = pointer(PointerWrapper(p4est).connectivity)
+    if kinfo.forest.mesh != Ptr{p4est_mesh_t}(C_NULL)
+        p4est_mesh_destroy(kinfo.forest.mesh)
+        kinfo.forest.mesh = Ptr{p4est_mesh_t}(C_NULL)
+    end
+    if kinfo.forest.ghost != Ptr{p4est_ghost_t}(C_NULL)
+        p4est_ghost_destroy(kinfo.forest.ghost)
+        kinfo.forest.ghost = Ptr{p4est_ghost_t}(C_NULL)
+    end
     p4est_destroy(p4est)
+    kinfo.forest.p4est = Ptr{p4est_t}(C_NULL)
+    p4est_connectivity_destroy(conn)
 end
 
 """
@@ -56,11 +63,18 @@ end
 
 function finalize_p4est!(p4est::Ptr{p8est_t}, ka::KA)
     kinfo = ka.kinfo
-    p8est_ghost_destroy(kinfo.forest.ghost)
-    p8est_mesh_destroy(kinfo.forest.mesh)
-    pp = PointerWrapper(p4est)
-    p8est_connectivity_destroy(pointer(pp.connectivity))
+    conn = pointer(PointerWrapper(p4est).connectivity)
+    if kinfo.forest.mesh != Ptr{p8est_mesh_t}(C_NULL)
+        p8est_mesh_destroy(kinfo.forest.mesh)
+        kinfo.forest.mesh = Ptr{p8est_mesh_t}(C_NULL)
+    end
+    if kinfo.forest.ghost != Ptr{p8est_ghost_t}(C_NULL)
+        p8est_ghost_destroy(kinfo.forest.ghost)
+        kinfo.forest.ghost = Ptr{p8est_ghost_t}(C_NULL)
+    end
     p8est_destroy(p4est)
+    kinfo.forest.p4est = Ptr{p8est_t}(C_NULL)
+    p8est_connectivity_destroy(conn)
 end
 
 """

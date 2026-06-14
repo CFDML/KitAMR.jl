@@ -24,17 +24,45 @@ function local_contribution_refine_flag(w::AbstractVector, U::AbstractVector, mi
     (w[end] - 0.5 * w[1] * sum((U) .^ 2)),df[1]*weight/w[1]) > kinfo.config.solver.ADAPT_COEFFI_VS_LOCAL ? true : false
 end
 
+@inline function _local_moment_scales(w::AbstractVector, U::AbstractVector)
+    u2 = 0.0
+    @inbounds for d in eachindex(U)
+        u2 += U[d]^2
+    end
+    rho = abs(w[1]) + EPS
+    e_int = abs(w[end] - 0.5 * w[1] * u2) + EPS
+    qscale = e_int * sqrt(max(e_int / rho, EPS)) + EPS
+    return rho, e_int, qscale
+end
+
+@inline function _relative_moment_ratios(w::AbstractVector, U::AbstractVector, c2::Real,
+                                         mass_cell::Real, energy_cell::Real)
+    rho, e_int, qscale = _local_moment_scales(w, U)
+    mass = abs(mass_cell) / rho
+    energy = abs(energy_cell) / e_int
+    heatflux = sqrt(c2) * abs(energy_cell) / qscale
+    return mass, energy, heatflux
+end
+
 function local_contribution_ratio(w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, ::KInfo{DIM,2}) where{DIM}
-    e_int = abs(w[end] - 0.5 * w[1] * sum((U) .^ 2)) + EPS
-    mass = abs(df[1] * weight) / (abs(w[1]) + EPS)
-    energy = abs(0.5 * (sum((U - midpoint) .^ 2) * df[1] + df[2]) * weight) / e_int
-    return max(mass, energy)
+    c2 = 0.0
+    @inbounds for d in 1:DIM
+        c = midpoint[d] - U[d]
+        c2 += c^2
+    end
+    mass, energy, heatflux = _relative_moment_ratios(
+        w, U, c2, df[1] * weight, 0.5 * (c2 * df[1] + df[2]) * weight)
+    return max(mass, energy, heatflux)
 end
 function local_contribution_ratio(w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, ::KInfo{DIM,1}) where{DIM}
-    e_int = abs(w[end] - 0.5 * w[1] * sum((U) .^ 2)) + EPS
-    mass = abs(df[1] * weight) / (abs(w[1]) + EPS)
-    energy = abs(0.5 * sum((U - midpoint) .^ 2) * df[1] * weight) / e_int
-    return max(mass, energy)
+    c2 = 0.0
+    @inbounds for d in 1:DIM
+        c = midpoint[d] - U[d]
+        c2 += c^2
+    end
+    mass, energy, heatflux = _relative_moment_ratios(
+        w, U, c2, df[1] * weight, 0.5 * c2 * df[1] * weight)
+    return max(mass, energy, heatflux)
 end
 function local_contribution_coarsen_flag(w::AbstractVector, U::AbstractVector, midpoint::AbstractMatrix, df::AbstractMatrix, weight::AbstractVector, kinfo::KInfo{DIM,2}) where{DIM}
     for i = 1:2^DIM
@@ -171,9 +199,9 @@ end
 $(TYPEDSIGNATURES)
 Analytic initial-grid refine flag for velocity cell with center `midpoint`, size `du`.  Mirrors
 the dynamic criterion using exact Maxwellian quantities: refine if the relative mass *or*
-energy contribution exceeds [`MAXWELLIAN_INIT_FLOOR`](@ref), or (in `:lohner` mode) the analytic
-Maxwellian curvature exceeds `ADAPT_COEFFI_VS_LOHNER`.  `I0buf`/`I2buf` are reused length-`DIM`
-scratch vectors.
+energy contribution exceeds [`MAXWELLIAN_INIT_FLOOR`](@ref), or if the analytic Maxwellian
+quadrature error exceeds `ADAPT_COEFFI_VS_INIT`.  This initialization criterion is independent
+of the dynamic velocity-space AMR mode.  `I0buf`/`I2buf` are reused length-`DIM` scratch vectors.
 """
 function maxwellian_refine_flag(midpoint, du, U, prim, kinfo::KInfo{DIM,NDF}, I0buf, I2buf) where {DIM,NDF}
     λ = prim[end]; ρ = prim[1]
@@ -204,10 +232,7 @@ function maxwellian_refine_flag(midpoint, du, U, prim, kinfo::KInfo{DIM,NDF}, I0
         Eint = ρ * DIM / (4λ)
     end
     max(dρ / ρ, dE / Eint) > MAXWELLIAN_INIT_FLOOR && return true
-    if kinfo.config.solver.ADAPT_VS_MODE === :lohner
-        return maxwellian_quad_error(dρ, midpoint, du, U, prim, Val(DIM)) > kinfo.config.solver.ADAPT_COEFFI_VS_LOHNER
-    end
-    return false
+    return maxwellian_quad_error(dρ, midpoint, du, U, prim, Val(DIM)) > kinfo.config.solver.ADAPT_COEFFI_VS_INIT
 end
 
 # ------------------------------------------------------------------------------------------
@@ -301,8 +326,8 @@ end
 # This sensor is dimension-unsplit: it fits a local affine model in the actual velocity
 # coordinates around one velocity cell and measures the normalized residual.  Linear slopes
 # are absorbed by the fit, so coarse/fine center offsets do not masquerade as directional
-# second derivatives.  Boundary vacuum points are not injected; only existing velocity cells
-# participate in the local fit.
+# second derivatives.  Boundary vacuum points are not injected; only existing face-neighbor
+# 1-ring velocity cells participate in the local fit.
 # ------------------------------------------------------------------------------------------
 
 @inline function _push_lsr_neighbor!(buf::Vector{Int}, nb::Integer, center::Integer)
@@ -320,14 +345,6 @@ function _lsr_neighbors!(buf::Vector{Int}, vs::AbstractVsData{DIM}, idx::VsNeigh
     @inbounds for d in 1:DIM
         _push_lsr_neighbor!(buf, vs_face_neighbor(idx, vs, i, d, -1), i)
         _push_lsr_neighbor!(buf, vs_face_neighbor(idx, vs, i, d, 1), i)
-    end
-    n1 = length(buf)
-    @inbounds for p in 1:n1
-        j = buf[p]
-        for d in 1:DIM
-            _push_lsr_neighbor!(buf, vs_face_neighbor(idx, vs, j, d, -1), i)
-            _push_lsr_neighbor!(buf, vs_face_neighbor(idx, vs, j, d, 1), i)
-        end
     end
     return buf
 end
