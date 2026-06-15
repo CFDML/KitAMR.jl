@@ -29,7 +29,7 @@ function limit_Δt!(ka::KA)
     output = ka.kinfo.config.output
     Δt = status.Δt_ξ
     if output.anim_dt > 0.
-        Δt_anim = (output.anim_index+1)*output.anim_dt - status.sim_time
+        Δt_anim = _next_anim_step(output)*output.anim_dt - status.sim_time
         Δt_anim > 0. && (Δt = min(Δt, Δt_anim))
     end
     Δt_end = ka.kinfo.config.solver.max_sim_time - status.sim_time

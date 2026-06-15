@@ -235,6 +235,82 @@ function initial_prim(ic::PCoordFn;midpoint::AbstractVector{Float64},kinfo::KInf
     return ic.PCIC_fn(midpoint,kinfo)
 end
 
+@inline function _domain_boundary_dir(domain::Domain)
+    return Int((domain.id - 1) ÷ 2) + 1
+end
+@inline function _near_domain_boundary(domain::Domain, midpoint::AbstractVector, ds::AbstractVector, kinfo::KInfo)
+    dir = _domain_boundary_dir(domain)
+    return abs(midpoint[dir] - kinfo.config.geometry[domain.id]) < ds[dir]
+end
+function _domain_bc_prim(domain::Domain, midpoint::AbstractVector, kinfo::KInfo)
+    isdefined(domain, :bc) || return nothing
+    bc = domain.bc
+    if bc isa AbstractVector
+        return Float64.(collect(bc))
+    elseif bc isa Function
+        if applicable(bc, midpoint, kinfo)
+            return Float64.(collect(bc(midpoint, kinfo)))
+        elseif applicable(bc, midpoint)
+            return Float64.(collect(bc(midpoint)))
+        end
+        return Float64.(collect(bc(; midpoint)))
+    end
+    return nothing
+end
+
+function _domain_face_sample_point!(
+    face_midpoint::AbstractVector,
+    midpoint::AbstractVector,
+    ds::AbstractVector,
+    domain::Domain,
+    kinfo::KInfo,
+    sample::Integer,
+)
+    face_midpoint .= midpoint
+    dir = _domain_boundary_dir(domain)
+    face_midpoint[dir] = kinfo.config.geometry[domain.id]
+
+    q = sample - 1
+    nfrac = length(PS_BOUNDARY_SENSOR_FRACTIONS)
+    @inbounds for d in eachindex(midpoint)
+        d == dir && continue
+        i = mod(q, nfrac) + 1
+        q = div(q, nfrac)
+        x = midpoint[d] + PS_BOUNDARY_SENSOR_FRACTIONS[i] * ds[d]
+        face_midpoint[d] = clamp(x, kinfo.config.geometry[2d - 1], kinfo.config.geometry[2d])
+    end
+    return face_midpoint
+end
+
+function _push_initial_vs_refine_prim!(
+    prims::Vector{AbstractVector{Float64}},
+    prim::AbstractVector{Float64},
+    domain::Domain,
+    face_midpoint::AbstractVector,
+    kinfo::KInfo,
+)
+    bc_prim = _domain_bc_prim(domain, face_midpoint, kinfo)
+    bc_prim === nothing && return nothing
+    length(bc_prim) == length(prim) ||
+        error("Domain boundary $(domain.id) returned a primitive vector of length $(length(bc_prim)); expected $(length(prim)).")
+    push!(prims, bc_prim)
+    return nothing
+end
+
+function initial_vs_refine_prims(prim::AbstractVector{Float64}, midpoint::AbstractVector, ds::AbstractVector, kinfo::KInfo)
+    prims = AbstractVector{Float64}[prim]
+    face_midpoint = similar(midpoint)
+    nsamples = length(PS_BOUNDARY_SENSOR_FRACTIONS)^(length(midpoint) - 1)
+    for domain in kinfo.config.domain
+        _near_domain_boundary(domain, midpoint, ds, kinfo) || continue
+        for sample in 1:nsamples
+            _domain_face_sample_point!(face_midpoint, midpoint, ds, domain, kinfo, sample)
+            _push_initial_vs_refine_prim!(prims, prim, domain, face_midpoint, kinfo)
+        end
+    end
+    return length(prims) == 1 ? (prim,) : prims
+end
+
 function re_init_vs4est!(trees, kinfo)
     for i in eachindex(trees.data)
         for j in eachindex(trees.data[i])
@@ -252,8 +328,9 @@ $(TYPEDSIGNATURES)
 Reapply the configured initial condition on the current physical mesh.
 
 This is intended for initial physical-space AMR: after refinement creates
-children from interpolated parent data, call this before rebuilding ghosts so
-new fine cells receive the exact initial state at their own cell centers.
+children from interpolated parent data and the topology is recovered, call this
+so new fine cells receive the exact initial state at their own cell centers
+while keeping the velocity grid inherited from their parent cell.
 """
 function reinitialize_initial_condition!(ka::KA{DIM,NDF}) where{DIM,NDF}
     kinfo = ka.kinfo
@@ -268,7 +345,9 @@ function reinitialize_initial_condition!(ka::KA{DIM,NDF}) where{DIM,NDF}
             fill!(ps_data.flux, 0.0)
             fill!(ps_data.sw, 0.0)
             fill!(ps_data.lohner, 0.0)
-            ps_data.vs_data = initialize_vs_data(ps_data.prim, kinfo)
+            ps_data.vs_data.df .= discrete_maxwell(ps_data.vs_data.midpoint, ps_data.prim, kinfo)
+            fill!(ps_data.vs_data.sdf, 0.0)
+            fill!(ps_data.vs_data.flux, 0.0)
         end
     end
     return nothing
@@ -365,7 +444,8 @@ function initialize_ps!(p4est::Ptr{p4est_t},kinfo::KInfo{DIM,NDF}) where{DIM,NDF
             ps_data.midpoint .= midpoint
             ps_data.prim .= initial_prim(ic;midpoint = ps_data.midpoint,kinfo = kinfo)
             ps_data.w .= get_conserved(ps_data, kinfo)
-            ps_data.vs_data = initialize_vs_data(ps_data.prim, kinfo)
+            refine_prims = initial_vs_refine_prims(ps_data.prim, ps_data.midpoint, ps_data.ds, kinfo)
+            ps_data.vs_data = initialize_vs_data(ps_data.prim, kinfo; refine_prims)
             if mesh_data.is_ghost_cell
                 ps_data.bound_enc = -mesh_data.in_search_radius
             end
@@ -403,7 +483,8 @@ function initialize_ps!(p4est::Ptr{p8est_t},kinfo::KInfo{DIM,NDF}) where{DIM,NDF
             ps_data.midpoint .= midpoint
             ps_data.prim .= initial_prim(ic;midpoint = ps_data.midpoint,kinfo)
             ps_data.w .= get_conserved(ps_data, kinfo)
-            ps_data.vs_data = initialize_vs_data(ps_data.prim, kinfo)
+            refine_prims = initial_vs_refine_prims(ps_data.prim, ps_data.midpoint, ps_data.ds, kinfo)
+            ps_data.vs_data = initialize_vs_data(ps_data.prim, kinfo; refine_prims)
             if mesh_data.is_ghost_cell
                 ps_data.bound_enc = -mesh_data.in_search_radius
             end
@@ -490,6 +571,24 @@ function initialize_balanced_vs!(ka::KA)
     update_neighbor!(ka.kinfo.forest.p4est,ka)
 end
 
+function _balance_initial_vs!(p4est::P_pxest_t, ka::KA)
+    initialize_balanced_vs!(ka)
+    if _has_immersed_boundaries(ka)
+        update_solid!(ka)
+    end
+    update_faces!(p4est, ka)
+    _finish_immersed_boundary_recover!(ka)
+    return nothing
+end
+
+function _exchange_reinitialized_vs!(p4est::P_pxest_t, ka::KA)
+    if MPI.Comm_size(MPI.COMM_WORLD) > 1
+        vs_ghost_exchange!(p4est, ka)
+        update_faces!(p4est, ka)
+    end
+    return nothing
+end
+
 """
 $(TYPEDSIGNATURES)
 Initialize everthing according to `config` dictionary.
@@ -500,8 +599,11 @@ Initialize everthing according to `config` dictionary.
 function _prerefine!(p4est::P_pxest_t, ka::KA, steps::Integer, recursive::Bool, reinit_ic::Bool)
     for _ in 1:steps
         ps_adaptive_mesh_refinement!(p4est, ka; recursive = recursive)
-        reinit_ic && reinitialize_initial_condition!(ka)
         amr_recover!(p4est, ka)
+        if reinit_ic
+            reinitialize_initial_condition!(ka)
+            _exchange_reinitialized_vs!(p4est, ka)
+        end
     end
     return nothing
 end
@@ -520,6 +622,7 @@ function initialize(config::Dict;
     initialize_solid_neighbor!(ka)
     initialize_faces!(p4est, ka)
     initialize_immersed_boundaries!(ka)
+    _balance_initial_vs!(p4est, ka)
     _prerefine!(p4est, ka, prerefine_steps, prerefine_recursive, prerefine_reinit_ic)
     execute_check!(p4est, ka)   # report the status once initialization (incl. pre-refinement) is complete
     return p4est,ka
@@ -563,10 +666,10 @@ function initialize(config::Configure{DIM,NDF};
     initialize_forest!(p4est,kinfo)
     kdata.ghost = initialize_ghost(p4est, kinfo)
     initialize_neighbor_data!(p4est, ka)
-    initialize_balanced_vs!(ka)
     initialize_solid_neighbor!(ka)
     initialize_faces!(p4est, ka)
     initialize_immersed_boundaries!(ka)
+    _balance_initial_vs!(p4est, ka)
     _prerefine!(p4est, ka, prerefine_steps, prerefine_recursive, prerefine_reinit_ic)
     execute_check!(p4est, ka)   # report the status once initialization (incl. pre-refinement) is complete
     return p4est,ka

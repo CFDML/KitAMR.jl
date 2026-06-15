@@ -70,28 +70,33 @@ end
 """
 $(TYPEDSIGNATURES)
 Write one animation frame to `path` when the current `sim_time` has reached the next frame time
-(integer multiples of `output.anim_dt`; the `t = 0` state is also written). No-op when animation
-is disabled (`output.anim_dt <= 0`, the default). Which cells write their velocity space is
-controlled by `output.vs_output_criterion` (see [`Output`](@ref)). Intended to be called once
-per step after [`iterate!`](@ref); [`solve!`](@ref) does this when `animation = true`.
+(integer multiples of `output.anim_dt`; the `t = 0` state is also written when called before the
+first step). No-op when animation is disabled (`output.anim_dt <= 0`, the default). Which cells
+write their velocity space is controlled by `output.vs_output_criterion` (see [`Output`](@ref)).
+Custom time loops usually call this after [`iterate!`](@ref); [`solve!`](@ref) also calls it once
+before the loop so animation output starts from `step0` at `t = 0`.
 """
+_next_anim_step(output) = max(output.anim_index + 1, 1)
+
 function check_for_animsave!(p4est::P_pxest_t,ka;path="./animation")
     output = ka.kinfo.config.output
     output.anim_dt <= 0. && return nothing   # animation disabled; safe no-op
     sim_time = ka.kinfo.status.sim_time
-    if sim_time==0.
-        step = output.anim_index
+    if iszero(sim_time) && output.anim_index < 0
+        step = 0
         for (celltype,suffix) in celltype_outputs(output.vtk_celltype)
             save_anim_field(path,p4est,ka,celltype,step,sim_time,0,suffix)
         end
         save_anim_vs(path,ka,step,sim_time,0)
-    elseif sim_time >= (output.anim_index+1)*output.anim_dt - 1e-10*output.anim_dt
-        step = output.anim_index+1
+        output.anim_index = step
+    elseif sim_time >= _next_anim_step(output)*output.anim_dt - 1e-10*output.anim_dt
+        step = _next_anim_step(output)
+        first_step = output.anim_index < 0 ? step : 0
         for (celltype,suffix) in celltype_outputs(output.vtk_celltype)
-            save_anim_field(path,p4est,ka,celltype,step,sim_time,1,suffix)
+            save_anim_field(path,p4est,ka,celltype,step,sim_time,first_step,suffix)
         end
-        save_anim_vs(path,ka,step,sim_time,1)
-        output.anim_index += 1
+        save_anim_vs(path,ka,step,sim_time,first_step)
+        output.anim_index = step
     end
 end
 

@@ -2,6 +2,7 @@ const PS_COARSEN_SENSOR_RATIO = 0.3
 const PS_LOHNER_ABS_FLOOR = 1e-4
 const PS_PRIMITIVE_REL_JUMP_FLOOR = 1e-3
 const PS_VORTICITY_JUMP_FLOOR = 2e-2
+const PS_BOUNDARY_SENSOR_FRACTIONS = (-0.5, -0.25, 0.0, 0.25, 0.5)
 
 @inline function lohner_rowmax(lohner::AbstractMatrix, row::Integer)
     value = zero(eltype(lohner))
@@ -63,6 +64,138 @@ end
 @inline function vorticity_amplitude_ok(left::Real, center::Real, right::Real, prim::AbstractVector, h::Real)
     omega = max(abs(left), max(abs(center), abs(right)))
     omega * h >= PS_VORTICITY_JUMP_FLOOR * velocity_scale(prim)
+end
+
+@inline _ps_domain_face_id(dir::Integer, boundary_on_left::Bool) =
+    boundary_on_left ? 2 * dir - 1 : 2 * dir
+
+function _ps_domain_for_face(kinfo::KInfo, faceid::Integer)
+    domains = kinfo.config.domain
+    faceid <= length(domains) && domains[faceid].id == faceid && return domains[faceid]
+    i = findfirst(domain -> domain.id == faceid, domains)
+    return i === nothing ? nothing : domains[i]
+end
+
+function _ps_domain_bc_prim(domain::Domain, midpoint::AbstractVector, kinfo::KInfo)
+    isdefined(domain, :bc) || return nothing
+    bc = domain.bc
+    if bc isa AbstractVector
+        return Float64.(collect(bc))
+    elseif bc isa Function
+        if applicable(bc, midpoint, kinfo)
+            return Float64.(collect(bc(midpoint, kinfo)))
+        elseif applicable(bc, midpoint)
+            return Float64.(collect(bc(midpoint)))
+        end
+        return Float64.(collect(bc(; midpoint)))
+    end
+    return nothing
+end
+
+function _ps_boundary_sample_point!(
+    face_midpoint::AbstractVector,
+    ps_data::PsData{DIM,NDF},
+    kinfo::KInfo,
+    faceid::Integer,
+    dir::Integer,
+    sample::Integer,
+) where {DIM,NDF}
+    face_midpoint .= ps_data.midpoint
+    face_midpoint[dir] = kinfo.config.geometry[faceid]
+
+    q = sample - 1
+    nfrac = length(PS_BOUNDARY_SENSOR_FRACTIONS)
+    @inbounds for d in 1:DIM
+        d == dir && continue
+        i = mod(q, nfrac) + 1
+        q = div(q, nfrac)
+        x = ps_data.midpoint[d] + PS_BOUNDARY_SENSOR_FRACTIONS[i] * ps_data.ds[d]
+        face_midpoint[d] = clamp(x, kinfo.config.geometry[2d - 1], kinfo.config.geometry[2d])
+    end
+    return face_midpoint
+end
+
+@inline function _ps_valid_neighbor(data)
+    return data !== nothing && !isa(data, InsideSolidData) && !isa(data, GhostInsideSolidData)
+end
+
+function _ps_average_neighbor_prim!(
+    prim::Vector{Float64},
+    neighbor_data::AbstractVector,
+    ps_data::PsData{DIM,NDF},
+    dir::Integer,
+    ds_neighbor::Real,
+    kinfo::KInfo,
+) where {DIM,NDF}
+    fill!(prim, 0.0)
+    n = 0
+    first_neighbor = nothing
+    @inbounds for data in neighbor_data
+        _ps_valid_neighbor(data) || continue
+        first_neighbor === nothing && (first_neighbor = data)
+        @. prim += data.w
+        n += 1
+    end
+    if n == 0
+        prim .= ps_data.prim
+        return prim
+    end
+
+    if ds_neighbor > ps_data.ds[dir] && first_neighbor !== nothing
+        dx = (ps_data.midpoint - first_neighbor.midpoint)[FAT[DIM - 1][dir]]
+        @inbounds for j in eachindex(prim)
+            @views prim[j] += dot(dx, first_neighbor.sw[j, FAT[DIM - 1][dir]])
+        end
+    end
+
+    prim ./= n
+    prim .= get_prim(prim, kinfo)
+    return prim
+end
+
+function update_Lohner_boundary_ps!(
+    ps_data::PsData{DIM,NDF},
+    interior_data::AbstractVector,
+    ds_boundary::Real,
+    ds_interior::Real,
+    dir::Integer,
+    boundary_on_left::Bool,
+    ws_boundary::Vector{Float64},
+    ws_interior::Vector{Float64},
+    kinfo::KInfo,
+) where {DIM,NDF}
+    faceid = _ps_domain_face_id(dir, boundary_on_left)
+    domain = _ps_domain_for_face(kinfo, faceid)
+    if domain === nothing || !isdefined(domain, :bc)
+        ps_data.lohner[:, dir] .= 0.0
+        return nothing
+    end
+
+    _ps_average_neighbor_prim!(ws_interior, interior_data, ps_data, dir, ds_interior, kinfo)
+    dsL = boundary_on_left ? ds_boundary : ds_interior
+    dsR = boundary_on_left ? ds_interior : ds_boundary
+    eps_l = 0.2 * ps_data.ds[dir]
+
+    ps_data.lohner[:, dir] .= 0.0
+    face_midpoint = similar(ps_data.midpoint)
+    nsamples = length(PS_BOUNDARY_SENSOR_FRACTIONS)^(DIM - 1)
+    @inbounds for sample in 1:nsamples
+        _ps_boundary_sample_point!(face_midpoint, ps_data, kinfo, faceid, dir, sample)
+        boundary_prim = _ps_domain_bc_prim(domain, face_midpoint, kinfo)
+        boundary_prim === nothing && continue
+        length(boundary_prim) == length(ps_data.prim) ||
+            error("Domain boundary $faceid returned a primitive vector of length $(length(boundary_prim)); expected $(length(ps_data.prim)).")
+        ws_boundary .= boundary_prim
+
+        left = boundary_on_left ? ws_boundary : ws_interior
+        right = boundary_on_left ? ws_interior : ws_boundary
+        for j in eachindex(ps_data.prim)
+            value = primitive_amplitude_ok(left[j], ps_data.prim[j], right[j]) ?
+                lohner_value(left[j], ps_data.prim[j], right[j], dsL, dsR, eps_l) : 0.0
+            ps_data.lohner[j, dir] = max(ps_data.lohner[j, dir], value)
+        end
+    end
+    return nothing
 end
 
 """

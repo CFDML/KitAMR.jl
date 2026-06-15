@@ -211,12 +211,14 @@ function vs_adaptive_mesh_refinement!(ka;vs_balance = false)
     return Bool(MPI.Allreduce(Int(changed), +, MPI.COMM_WORLD) > 0)
 end
 
-function initial_vs_adaptive_mesh_refinement!(prim,vs_data,kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
+function initial_vs_adaptive_mesh_refinement!(prim::AbstractVector{<:Real},vs_data,kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
+    return initial_vs_adaptive_mesh_refinement!((prim,),vs_data,kinfo)
+end
+function initial_vs_adaptive_mesh_refinement!(prims,vs_data,kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
     ds = [(kinfo.config.quadrature[2*i] - kinfo.config.quadrature[2*i-1]) /
         kinfo.config.vs_trees_num[i] for i in 1:DIM]
     maxlevel = kinfo.config.solver.AMR_VS_MAXLEVEL
     ddus = [ds ./ 2.0^i for i in 0:maxlevel]      # cell size per level
-    U = @view(prim[2:1+DIM])
     n = vs_data.vs_num
     refine_flags = Vector{Bool}(undef, n)
     I0buf = Vector{Float64}(undef, DIM)
@@ -224,8 +226,17 @@ function initial_vs_adaptive_mesh_refinement!(prim,vs_data,kinfo::KInfo{DIM,NDF}
     @inbounds for c in 1:n
         L = vs_data.level[c]
         mid = @view(vs_data.midpoint[c, :])
-        refine_flags[c] = L < maxlevel &&
-            maxwellian_refine_flag(mid, ddus[L+1], U, prim, kinfo, I0buf, I2buf)
+        flag = false
+        if L < maxlevel
+            for prim in prims
+                U = @view(prim[2:1+DIM])
+                if maxwellian_refine_flag(mid, ddus[L+1], U, prim, kinfo, I0buf, I2buf)
+                    flag = true
+                    break
+                end
+            end
+        end
+        refine_flags[c] = flag
     end
     refine_grid_stream!(vs_data, refine_flags, ds)
     return nothing

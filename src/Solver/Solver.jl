@@ -15,7 +15,8 @@ Run the kinetic solver's time-stepping loop to completion, so a simulation is ju
 `p4est, ka = initialize(config)` followed by `solve!(p4est, ka)`. Encapsulates the
 canonical per-step sequence (replacing the hand-written loop in the examples):
 
-    adaptive_mesh_refinement! → limit_Δt! → slope! → flux! → iterate!
+    check_for_animsave!(t = 0, when animation is enabled)
+        → adaptive_mesh_refinement! → limit_Δt! → slope! → flux! → iterate!
         → check_for_animsave! → check! → (convergence break)
 
 Returns `ka`.
@@ -35,7 +36,8 @@ Loop control:
 
 Lifecycle / IO (toggle `false` to manage these yourself):
 - `listen_for_save::Bool=true`   — [`listen_for_save!`](@ref) before the loop.
-- `animation::Bool=true`, `anim_path::String="./animation"` — per-step [`check_for_animsave!`](@ref).
+- `animation::Bool=true`, `anim_path::String="./animation"` — [`check_for_animsave!`](@ref)
+  before the first step and after each step.
 - `status_check::Bool=true`      — per-step [`check!`](@ref) (periodic status print + save hook).
 - `progress::Bool=true`          — show a `ProgressMeter` bar (rank 0 only) whose length is one
   `ST_CHECK_INTERVAL` window, i.e. how far the current step is from the next [`check!`](@ref); it
@@ -51,6 +53,7 @@ function solve!(
         status_check::Bool = true, progress::Bool = true,
     )
     listen_for_save && listen_for_save!()
+    animation && check_for_animsave!(p4est, ka; path = anim_path)
     # Progress bar (rank 0 only): one bar spans a single `ST_CHECK_INTERVAL` window, i.e. it shows
     # how far the current step is from the next `check!`; it completes and restarts at each check.
     interval = ka.kinfo.config.solver.ST_CHECK_INTERVAL

@@ -171,7 +171,8 @@ function update_criterion!(
     ws_swL::Vector{Float64},
     ws_swR::Vector{Float64},
 ) where {DIM,NDF}
-    ps_data.lohner[:,dir] .= 0.
+    ds = ps_data.ds[dir]
+    update_Lohner_boundary_ps!(ps_data, Rdata, ds, ds, dir, true, ws_swL, ws_swR, kinfo)
 end
 """
 $(TYPEDSIGNATURES)
@@ -187,7 +188,8 @@ function update_criterion!(
     ws_swL::Vector{Float64},
     ws_swR::Vector{Float64},
 ) where {DIM,NDF}
-    ps_data.lohner[:,dir] .= 0.
+    ds = ps_data.ds[dir]
+    update_Lohner_boundary_ps!(ps_data, Ldata, ds, ds, dir, false, ws_swR, ws_swL, kinfo)
 end
 """
 $(TYPEDSIGNATURES)
@@ -203,7 +205,8 @@ function update_criterion!(
     ws_swL::Vector{Float64},
     ws_swR::Vector{Float64},
 ) where {DIM,NDF}
-    ps_data.lohner[:,dir] .= 0.
+    ds = ps_data.ds[dir]
+    update_Lohner_boundary_ps!(ps_data, Ldata, ds, 0.75 * ds, dir, false, ws_swR, ws_swL, kinfo)
 end
 """
 $(TYPEDSIGNATURES)
@@ -219,7 +222,8 @@ function update_criterion!(
     ws_swL::Vector{Float64},
     ws_swR::Vector{Float64},
 ) where {DIM,NDF}
-    ps_data.lohner[:,dir] .= 0.
+    ds = ps_data.ds[dir]
+    update_Lohner_boundary_ps!(ps_data, Rdata, ds, 0.75 * ds, dir, true, ws_swL, ws_swR, kinfo)
 end
 """
 $(TYPEDSIGNATURES)
@@ -235,7 +239,8 @@ function update_criterion!(
     ws_swL::Vector{Float64},
     ws_swR::Vector{Float64},
 ) where {DIM,NDF}
-    ps_data.lohner[:,dir] .= 0.
+    ds = ps_data.ds[dir]
+    update_Lohner_boundary_ps!(ps_data, Rdata, ds, 1.5 * ds, dir, true, ws_swL, ws_swR, kinfo)
 end
 """
 $(TYPEDSIGNATURES)
@@ -251,7 +256,28 @@ function update_criterion!(
     ws_swL::Vector{Float64},
     ws_swR::Vector{Float64},
 ) where {DIM,NDF}
-    ps_data.lohner[:,dir] .= 0.
+    ds = ps_data.ds[dir]
+    update_Lohner_boundary_ps!(ps_data, Ldata, ds, 1.5 * ds, dir, false, ws_swR, ws_swL, kinfo)
+end
+"""
+$(TYPEDSIGNATURES)
+"""
+function update_criterion!(
+    ::Val{0},
+    ::Val{0},
+    ps_data::PsData,
+    kinfo::KInfo{DIM,NDF},
+    Ldata::AbstractVector,
+    Rdata::AbstractVector,
+    dir::Integer,
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
+) where {DIM,NDF}
+    ds = ps_data.ds[dir]
+    update_Lohner_boundary_ps!(ps_data, Rdata, ds, ds, dir, true, ws_swL, ws_swR, kinfo)
+    left_lohner = copy(@view ps_data.lohner[:, dir])
+    update_Lohner_boundary_ps!(ps_data, Ldata, ds, ds, dir, false, ws_swR, ws_swL, kinfo)
+    @. ps_data.lohner[:, dir] = max(left_lohner, ps_data.lohner[:, dir])
 end
 function update_criterion!(ka::KA{DIM,NDF}) where{DIM,NDF}
     trees = ka.kdata.field.trees

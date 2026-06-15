@@ -1,12 +1,17 @@
 
-function initialize_vs_data(prim::AbstractVector,kinfo::KInfo)
+function initialize_vs_data(prim::AbstractVector,kinfo::KInfo;kwargs...)
     quadrature = kinfo.config.quadrature
-    initialize_vs_data(prim,kinfo,quadrature)
+    initialize_vs_data(prim,kinfo,quadrature;kwargs...)
 end
 function initialize_vs_data(vs_data::VsData)
     return deepcopy(vs_data)
 end
-function initialize_vs_data(prim::AbstractVector,kinfo::KInfo{DIM,NDF},quadrature::Vector{Float64}) where{DIM,NDF}
+function initialize_vs_data(
+    prim::AbstractVector,
+    kinfo::KInfo{DIM,NDF},
+    quadrature::Vector{Float64};
+    refine_prims = (prim,),
+) where{DIM,NDF}
     trees_num = kinfo.config.vs_trees_num
     vs_num = reduce(*, trees_num)
     midpoint = zeros(vs_num, DIM)
@@ -30,7 +35,7 @@ function initialize_vs_data(prim::AbstractVector,kinfo::KInfo{DIM,NDF},quadratur
     flux = zeros(vs_num, NDF)
     vs_data = VsData{DIM,NDF}(vs_num, zeros(Int, vs_num), weight, midpoint, df, sdf, flux)
     for _ in 1:kinfo.config.solver.AMR_VS_MAXLEVEL
-        initial_vs_adaptive_mesh_refinement!(prim,vs_data,kinfo)
+        initial_vs_adaptive_mesh_refinement!(refine_prims,vs_data,kinfo)
     end
     vs_data.df = discrete_maxwell(vs_data.midpoint, prim, kinfo)
     return vs_data

@@ -248,14 +248,14 @@ mutable struct Output
     See the [User-defined functions](@ref) page.
     """
     vs_output_criterion::Function
-    "Index of the last saved animation frame."
+    "Index of the last saved animation frame. `-1` means no animation frame has been written yet."
     anim_index::Int
 end
 function Output(config::Dict)
     output = Output(
         config[:DIM]==2 ? Triangle : Tetra,
         config[:DIM]==2 ? Pixel : Voxel,
-        0.,null_udf,0
+        0.,null_udf,-1
     )
     for i in fieldnames(Output)
         if haskey(config,i)
@@ -268,7 +268,7 @@ function Output(solver::Solver{DIM,NDF};kwargs...) where{DIM,NDF}
     output = Output(
         DIM==2 ? Triangle : Tetra,
         DIM==2 ? Pixel : Voxel,
-        0.,null_udf,0
+        0.,null_udf,-1
     )
     for i in fieldnames(Output)
         if haskey(kwargs,i)
