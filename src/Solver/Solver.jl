@@ -27,7 +27,27 @@ Returns `ka`.
 arguments, not here.)
 
 AMR / load balancing (forwarded to [`adaptive_mesh_refinement!`](@ref) each step):
-- `ps_interval=40`, `vs_interval=80`, `partition_interval=40`
+- `ps_interval=:auto`, `vs_interval=:auto`, `partition_interval=:auto`
+- `ps_interval` and `vs_interval` accept `:auto`, a positive integer, or a custom function.
+- `:auto` starts from short cached intervals and refreshes them only after AMR/recovery using
+  kinetic transport statistics; this lets early AMR react quickly while avoiding an MPI-wide
+  statistic every step.
+- Tune the automatic interval policy through `Solver` fields
+  `AUTO_AMR_PS_TRAVEL_FRACTION`, `AUTO_AMR_VS_TRAVEL_FRACTION`,
+  `AUTO_AMR_PS_MAX_INTERVAL`, and `AUTO_AMR_VS_MAX_INTERVAL`.
+- The automatic transport statistic only samples cells in a physical-space sensor band
+  (`AUTO_AMR_PS_SENSOR_FRACTION * ADAPT_COEFFI_PS`) and uses a contribution-weighted
+  `AUTO_AMR_RATE_QUANTILE`, so isolated fast velocity-tail cells do not dominate the schedule.
+- With the default `AUTO_AMR_ALIGN_INTERVALS=true`, automatic PS/VS intervals are adjusted to an
+  integer-multiple pair and are co-triggered only when both are due, avoiding standalone recovery
+  passes.
+- Positive integers recover fixed spacing, e.g. `ps_interval=40, vs_interval=80`.
+- Function-valued intervals may use `(p4est, ka, kind)`, `(p4est, ka)`, `(ka, kind)`, or `(ka)`,
+  where `kind` is `:ps` or `:vs`; return a positive integer or `:auto`.
+- `partition_interval=:auto` means partition every two resolved physical-space AMR intervals;
+  pass a positive integer to fix it explicitly. Partitioning is checked only after PS- or VS-AMR
+  has actually run in the current scheduler call, and is skipped unless the weighted load
+  imbalance exceeds `PARTITION_IMBALANCE_THRESHOLD` (`0.10` by default).
 - `ps_recursive::Bool=false`, `vs_balance::Bool=false`
 
 Loop control:
@@ -45,7 +65,7 @@ Lifecycle / IO (toggle `false` to manage these yourself):
 """
 function solve!(
         p4est::P_pxest_t, ka::KA;
-        ps_interval = 40, vs_interval = 80, partition_interval = 40,
+        ps_interval = :auto, vs_interval = :auto, partition_interval = :auto,
         ps_recursive::Bool = false, vs_balance::Bool = false,
         max_steps = typemax(Int), break_on_convergence::Bool = true,
         listen_for_save::Bool = true,

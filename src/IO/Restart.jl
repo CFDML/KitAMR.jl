@@ -176,6 +176,9 @@ function save_for_restart(p4est::P_pxest_t, ka::KA{DIM,NDF}; dir_path::String = 
             f["ps_adapt_step"] = status.ps_adapt_step
             f["vs_adapt_step"] = status.vs_adapt_step
             f["partition_step"] = status.partition_step
+            f["ps_interval_cached"] = status.ps_interval_cached
+            f["vs_interval_cached"] = status.vs_interval_cached
+            f["amr_transport_rate"] = status.amr_transport_rate
         end
         jldopen(dir * "manifest.jld2", "w") do f
             f["format_version"] = RESTART_FORMAT_VERSION
@@ -423,6 +426,9 @@ function restart(dir_path::String; config = nothing, check_integrity::Bool = tru
     status.ps_adapt_step = st["ps_adapt_step"]
     status.vs_adapt_step = st["vs_adapt_step"]
     status.partition_step = st["partition_step"]
+    status.ps_interval_cached = get(st, "ps_interval_cached", 5)
+    status.vs_interval_cached = get(st, "vs_interval_cached", 5)
+    status.amr_transport_rate = get(st, "amr_transport_rate", 0.0)
 
     MPI.Comm_rank(comm) == 0 && println("Restarted from $(dir) at step $(status.step), sim_time $(status.sim_time).")
     execute_check!(p4est, ka)

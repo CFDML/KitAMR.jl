@@ -12,12 +12,18 @@ struct ConfigureForSave{DIM,NDF}<:AbstractConfig{DIM,NDF}
 end
 struct StatusForSave
     gradmax::Vector{Float64}
+    max_vs_num::Int
+    total_phase_num::Int
     Δt::Float64
     Δt_ξ::Float64
     sim_time::Float64
+    step::Int
     ps_adapt_step::Int
     vs_adapt_step::Int
     partition_step::Int
+    ps_interval_cached::Int
+    vs_interval_cached::Int
+    amr_transport_rate::Float64
 end
 function ConfigureForSave(config::Configure{DIM,NDF}) where{DIM,NDF}
     return ConfigureForSave{DIM,NDF}(
@@ -30,15 +36,20 @@ function ConfigureForSave(config::Configure{DIM,NDF}) where{DIM,NDF}
 end
 function StatusForSave(status::Status)
     return StatusForSave(
-        status.gradmax,status.Δt,
-        status.Δt_ξ,status.sim_time,status.ps_adapt_step,
-        status.vs_adapt_step,status.partition_step
+        status.gradmax,status.max_vs_num,status.total_phase_num,
+        status.Δt,status.Δt_ξ,status.sim_time,status.step,
+        status.ps_adapt_step,status.vs_adapt_step,status.partition_step,
+        status.ps_interval_cached,status.vs_interval_cached,status.amr_transport_rate
     )
 end
 function Status(status::StatusForSave, DIM::Int)
-    return Status(status.gradmax,status.Δt,
-        status.Δt_ξ,status.sim_time,status.ps_adapt_step,
-        status.vs_adapt_step,status.partition_step,Residual(DIM),Ref(false),false)
+    return Status(
+        status.gradmax,status.max_vs_num,status.total_phase_num,
+        status.Δt,status.Δt_ξ,status.sim_time,status.step,
+        status.ps_adapt_step,status.vs_adapt_step,status.partition_step,
+        status.ps_interval_cached,status.vs_interval_cached,status.amr_transport_rate,
+        Residual(DIM),Ref(false),MPI.Request[]
+    )
 end
 struct SolverSet
     config::ConfigureForSave

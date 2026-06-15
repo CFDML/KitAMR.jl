@@ -89,6 +89,22 @@ struct Solver{DIM,NDF}
     ADAPT_COEFFI_VS_LSR::Float64
     "Minimum relative local mass/energy/heat-flux contribution required before the `:lsr` residual is allowed to refine a velocity cell. Default is `2e-4`."
     ADAPT_COEFFI_VS_LSR_FLOOR::Float64
+    "Fraction of a finest physical-space cell that a relevant kinetic wave may cross between automatic PS-AMR checks. Smaller values check more often. Default is `2.0`."
+    AUTO_AMR_PS_TRAVEL_FRACTION::Float64
+    "Fraction of a finest physical-space cell that a relevant kinetic wave may cross between automatic VS-AMR checks. Smaller values check more often. Default is `1.0`."
+    AUTO_AMR_VS_TRAVEL_FRACTION::Float64
+    "Upper clamp for `ps_interval = :auto`. Default is `40`."
+    AUTO_AMR_PS_MAX_INTERVAL::Int
+    "Upper clamp for `vs_interval = :auto`. Default is `40`."
+    AUTO_AMR_VS_MAX_INTERVAL::Int
+    "Physical-space sensor gate used by automatic AMR interval statistics. Only cells with `ps_sensor > AUTO_AMR_PS_SENSOR_FRACTION * ADAPT_COEFFI_PS` contribute kinetic transport samples. `0` disables this gate. Default is `0.5`."
+    AUTO_AMR_PS_SENSOR_FRACTION::Float64
+    "Weighted quantile of the contribution-weighted kinetic transport-rate distribution used for automatic AMR intervals. `1.0` recovers a max-like estimate; smaller values ignore faster tails with negligible cumulative macroscopic contribution. Default is `0.99`."
+    AUTO_AMR_RATE_QUANTILE::Float64
+    "When both `ps_interval` and `vs_interval` are `:auto`, adjust the cached intervals to an integer-multiple pair and co-trigger PS-AMR/VS-AMR only when both are due, avoiding standalone recovery passes. Default is `true`."
+    AUTO_AMR_ALIGN_INTERVALS::Bool
+    "Minimum weighted MPI load imbalance required before a due partition is executed. The metric is `max(local_weight) / mean(local_weight) - 1`; set `0` to partition whenever the interval is due. Default is `0.10`."
+    PARTITION_IMBALANCE_THRESHOLD::Float64
     "Tolerance for convergence judgement. Default is `1e-6`."
     TOLERANCE::Float64
     "Number of steps between two checks of status. Default is `100`."
@@ -97,6 +113,38 @@ struct Solver{DIM,NDF}
     REDUNDANT_STEPS_NUM::Int
     "Simulation termination time (dimensionless). The main loop runs until `sim_time` reaches this value, and the last time step is shrunk to land exactly on it (see [`limit_Δt!`](@ref) / [`reached_max_time`](@ref)). Default is `Inf` (no time limit; terminate by convergence)."
     max_sim_time::Float64
+end
+function _solver_positive_float(value, name::Symbol)
+    x = Float64(value)
+    x > 0 || error("`$name` must be positive; got $x.")
+    return x
+end
+function _solver_positive_int(value, name::Symbol)
+    x = Int(value)
+    x > 0 || error("`$name` must be positive; got $x.")
+    return x
+end
+function _solver_nonnegative_float(value, name::Symbol)
+    x = Float64(value)
+    x >= 0 || error("`$name` must be non-negative; got $x.")
+    return x
+end
+function _solver_unit_float(value, name::Symbol; allow_zero::Bool = true)
+    x = Float64(value)
+    ok = allow_zero ? (0.0 <= x <= 1.0) : (0.0 < x <= 1.0)
+    ok || error("`$name` must be in $(allow_zero ? "[0, 1]" : "(0, 1]"); got $x.")
+    return x
+end
+_solver_bool(value::Bool, name::Symbol) = value
+_solver_bool(value::Integer, name::Symbol) = value != 0
+function _solver_bool(value::AbstractString, name::Symbol)
+    v = lowercase(strip(value))
+    v in ("1", "true", "yes", "on") && return true
+    v in ("0", "false", "no", "off") && return false
+    error("`$name` must be a Bool-like value; got $(repr(value)).")
+end
+function _solver_bool(value, name::Symbol)
+    error("`$name` must be a Bool-like value; got $(repr(value)).")
 end
 function Solver(config::Dict)
     ADAPT_COEFFI_PS = haskey(config,:ADAPT_COEFFI_PS) ? config[:ADAPT_COEFFI_PS] : 0.25
@@ -107,6 +155,30 @@ function Solver(config::Dict)
     ADAPT_COEFFI_VS_INIT = haskey(config,:ADAPT_COEFFI_VS_INIT) ? config[:ADAPT_COEFFI_VS_INIT] : 0.22
     ADAPT_COEFFI_VS_LSR = haskey(config,:ADAPT_COEFFI_VS_LSR) ? config[:ADAPT_COEFFI_VS_LSR] : 0.16
     ADAPT_COEFFI_VS_LSR_FLOOR = haskey(config,:ADAPT_COEFFI_VS_LSR_FLOOR) ? config[:ADAPT_COEFFI_VS_LSR_FLOOR] : 2e-4
+    AUTO_AMR_PS_TRAVEL_FRACTION =
+        _solver_positive_float(haskey(config,:AUTO_AMR_PS_TRAVEL_FRACTION) ? config[:AUTO_AMR_PS_TRAVEL_FRACTION] : 2.0,
+                               :AUTO_AMR_PS_TRAVEL_FRACTION)
+    AUTO_AMR_VS_TRAVEL_FRACTION =
+        _solver_positive_float(haskey(config,:AUTO_AMR_VS_TRAVEL_FRACTION) ? config[:AUTO_AMR_VS_TRAVEL_FRACTION] : 1.0,
+                               :AUTO_AMR_VS_TRAVEL_FRACTION)
+    AUTO_AMR_PS_MAX_INTERVAL =
+        _solver_positive_int(haskey(config,:AUTO_AMR_PS_MAX_INTERVAL) ? config[:AUTO_AMR_PS_MAX_INTERVAL] : 40,
+                             :AUTO_AMR_PS_MAX_INTERVAL)
+    AUTO_AMR_VS_MAX_INTERVAL =
+        _solver_positive_int(haskey(config,:AUTO_AMR_VS_MAX_INTERVAL) ? config[:AUTO_AMR_VS_MAX_INTERVAL] : 40,
+                             :AUTO_AMR_VS_MAX_INTERVAL)
+    AUTO_AMR_PS_SENSOR_FRACTION =
+        _solver_unit_float(haskey(config,:AUTO_AMR_PS_SENSOR_FRACTION) ? config[:AUTO_AMR_PS_SENSOR_FRACTION] : 0.5,
+                           :AUTO_AMR_PS_SENSOR_FRACTION)
+    AUTO_AMR_RATE_QUANTILE =
+        _solver_unit_float(haskey(config,:AUTO_AMR_RATE_QUANTILE) ? config[:AUTO_AMR_RATE_QUANTILE] : 0.99,
+                           :AUTO_AMR_RATE_QUANTILE; allow_zero = false)
+    AUTO_AMR_ALIGN_INTERVALS =
+        _solver_bool(haskey(config,:AUTO_AMR_ALIGN_INTERVALS) ? config[:AUTO_AMR_ALIGN_INTERVALS] : true,
+                     :AUTO_AMR_ALIGN_INTERVALS)
+    PARTITION_IMBALANCE_THRESHOLD =
+        _solver_nonnegative_float(haskey(config,:PARTITION_IMBALANCE_THRESHOLD) ? config[:PARTITION_IMBALANCE_THRESHOLD] : 0.10,
+                                  :PARTITION_IMBALANCE_THRESHOLD)
     TOLERANCE = haskey(config,:TOLERANCE) ? config[:TOLERANCE] : 1e-6
     ST_CHECK_INTERVAL = haskey(config,:ST_CHECK_INTERVAL) ? config[:ST_CHECK_INTERVAL] : 100
     REDUNDANT_STEPS_NUM = haskey(config,:REDUNDANT_STEPS_NUM) ? config[:REDUNDANT_STEPS_NUM] : 100
@@ -124,6 +196,14 @@ function Solver(config::Dict)
         ADAPT_COEFFI_VS_LOHNER,
         ADAPT_COEFFI_VS_LSR,
         ADAPT_COEFFI_VS_LSR_FLOOR,
+        AUTO_AMR_PS_TRAVEL_FRACTION,
+        AUTO_AMR_VS_TRAVEL_FRACTION,
+        AUTO_AMR_PS_MAX_INTERVAL,
+        AUTO_AMR_VS_MAX_INTERVAL,
+        AUTO_AMR_PS_SENSOR_FRACTION,
+        AUTO_AMR_RATE_QUANTILE,
+        AUTO_AMR_ALIGN_INTERVALS,
+        PARTITION_IMBALANCE_THRESHOLD,
         TOLERANCE,
         ST_CHECK_INTERVAL,
         REDUNDANT_STEPS_NUM,
@@ -131,7 +211,7 @@ function Solver(config::Dict)
         )
 end
 function Solver(;kwargs...)
-    CFL = haskey(kwargs,:CFL) ? kwargs[:CFL] : 0.4 
+    CFL = haskey(kwargs,:CFL) ? kwargs[:CFL] : 0.4
     AMR_DYNAMIC_PS_MAXLEVEL = haskey(kwargs,:AMR_DYNAMIC_PS_MAXLEVEL) ? kwargs[:AMR_DYNAMIC_PS_MAXLEVEL] : kwargs[:AMR_PS_MAXLEVEL]
     PS_DYNAMIC_AMR = haskey(kwargs,:PS_DYNAMIC_AMR) ? kwargs[:PS_DYNAMIC_AMR] : true
     VS_DYNAMIC_AMR = haskey(kwargs,:VS_DYNAMIC_AMR) ? kwargs[:VS_DYNAMIC_AMR] : true
@@ -143,6 +223,30 @@ function Solver(;kwargs...)
     ADAPT_COEFFI_VS_INIT = haskey(kwargs,:ADAPT_COEFFI_VS_INIT) ? kwargs[:ADAPT_COEFFI_VS_INIT] : 0.22
     ADAPT_COEFFI_VS_LSR = haskey(kwargs,:ADAPT_COEFFI_VS_LSR) ? kwargs[:ADAPT_COEFFI_VS_LSR] : 0.16
     ADAPT_COEFFI_VS_LSR_FLOOR = haskey(kwargs,:ADAPT_COEFFI_VS_LSR_FLOOR) ? kwargs[:ADAPT_COEFFI_VS_LSR_FLOOR] : 2e-4
+    AUTO_AMR_PS_TRAVEL_FRACTION =
+        _solver_positive_float(haskey(kwargs,:AUTO_AMR_PS_TRAVEL_FRACTION) ? kwargs[:AUTO_AMR_PS_TRAVEL_FRACTION] : 2.0,
+                               :AUTO_AMR_PS_TRAVEL_FRACTION)
+    AUTO_AMR_VS_TRAVEL_FRACTION =
+        _solver_positive_float(haskey(kwargs,:AUTO_AMR_VS_TRAVEL_FRACTION) ? kwargs[:AUTO_AMR_VS_TRAVEL_FRACTION] : 1.0,
+                               :AUTO_AMR_VS_TRAVEL_FRACTION)
+    AUTO_AMR_PS_MAX_INTERVAL =
+        _solver_positive_int(haskey(kwargs,:AUTO_AMR_PS_MAX_INTERVAL) ? kwargs[:AUTO_AMR_PS_MAX_INTERVAL] : 40,
+                             :AUTO_AMR_PS_MAX_INTERVAL)
+    AUTO_AMR_VS_MAX_INTERVAL =
+        _solver_positive_int(haskey(kwargs,:AUTO_AMR_VS_MAX_INTERVAL) ? kwargs[:AUTO_AMR_VS_MAX_INTERVAL] : 40,
+                             :AUTO_AMR_VS_MAX_INTERVAL)
+    AUTO_AMR_PS_SENSOR_FRACTION =
+        _solver_unit_float(haskey(kwargs,:AUTO_AMR_PS_SENSOR_FRACTION) ? kwargs[:AUTO_AMR_PS_SENSOR_FRACTION] : 0.5,
+                           :AUTO_AMR_PS_SENSOR_FRACTION)
+    AUTO_AMR_RATE_QUANTILE =
+        _solver_unit_float(haskey(kwargs,:AUTO_AMR_RATE_QUANTILE) ? kwargs[:AUTO_AMR_RATE_QUANTILE] : 0.99,
+                           :AUTO_AMR_RATE_QUANTILE; allow_zero = false)
+    AUTO_AMR_ALIGN_INTERVALS =
+        _solver_bool(haskey(kwargs,:AUTO_AMR_ALIGN_INTERVALS) ? kwargs[:AUTO_AMR_ALIGN_INTERVALS] : true,
+                     :AUTO_AMR_ALIGN_INTERVALS)
+    PARTITION_IMBALANCE_THRESHOLD =
+        _solver_nonnegative_float(haskey(kwargs,:PARTITION_IMBALANCE_THRESHOLD) ? kwargs[:PARTITION_IMBALANCE_THRESHOLD] : 0.10,
+                                  :PARTITION_IMBALANCE_THRESHOLD)
     TOLERANCE = haskey(kwargs,:TOLERANCE) ? kwargs[:TOLERANCE] : 1e-6
     ST_CHECK_INTERVAL = haskey(kwargs,:ST_CHECK_INTERVAL) ? kwargs[:ST_CHECK_INTERVAL] : 100
     REDUNDANT_STEPS_NUM = haskey(kwargs,:REDUNDANT_STEPS_NUM) ? kwargs[:REDUNDANT_STEPS_NUM] : 100
@@ -159,6 +263,14 @@ function Solver(;kwargs...)
         ADAPT_COEFFI_VS_LOHNER,
         ADAPT_COEFFI_VS_LSR,
         ADAPT_COEFFI_VS_LSR_FLOOR,
+        AUTO_AMR_PS_TRAVEL_FRACTION,
+        AUTO_AMR_VS_TRAVEL_FRACTION,
+        AUTO_AMR_PS_MAX_INTERVAL,
+        AUTO_AMR_VS_MAX_INTERVAL,
+        AUTO_AMR_PS_SENSOR_FRACTION,
+        AUTO_AMR_RATE_QUANTILE,
+        AUTO_AMR_ALIGN_INTERVALS,
+        PARTITION_IMBALANCE_THRESHOLD,
         TOLERANCE,
         ST_CHECK_INTERVAL,
         REDUNDANT_STEPS_NUM,
@@ -504,6 +616,12 @@ mutable struct Status
     vs_adapt_step::Int
     "Number of steps after last partition."
     partition_step::Int
+    "Cached physical-space AMR interval used when `ps_interval = :auto`; initialized short and refreshed after AMR."
+    ps_interval_cached::Int
+    "Cached velocity-space AMR interval used when `vs_interval = :auto`; initialized short and refreshed after AMR."
+    vs_interval_cached::Int
+    "Last MPI-wide kinetic transport-rate estimate used to update automatic AMR intervals."
+    amr_transport_rate::Float64
     "Residual of conserved variables defined by [`Residual`](@ref)."
     residual::Residual
     "Flag indicating whether to save."
@@ -522,7 +640,11 @@ function Status(config::Dict)
         (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
         2^config[:AMR_VS_MAXLEVEL] / 2 for i in 1:DIM] : [maximum(abs.(quadrature.vcoords)) for _ in 1:DIM]
     Δt_ξ = config[:CFL]*minimum(ds ./ U)
-    return Status(zeros(DIM+2), 0,0,Δt_ξ,Δt_ξ,0.,0,1,1,1,Residual(DIM),Ref(false),MPI.Request[])
+    # Automatic AMR intervals intentionally start short.  When the user passes
+    # `ps_interval = :auto` or `vs_interval = :auto`, the first AMR pass refreshes these cached
+    # values from kinetic transport statistics and can then relax them.  Use a shared 5-step
+    # startup cadence so the first automatic PS/VS passes are already an integer-multiple pair.
+    return Status(zeros(DIM+2), 0,0,Δt_ξ,Δt_ξ,0.,0,1,1,1,5,5,0.0,Residual(DIM),Ref(false),MPI.Request[])
 end
 function Status(config::Configure{DIM,NDF}) where{DIM,NDF}
     trees_num = config.trees_num
@@ -534,7 +656,11 @@ function Status(config::Configure{DIM,NDF}) where{DIM,NDF}
         (quadrature[2*i] - quadrature[2*i-1]) / vs_trees_num[i]/
         2^config.solver.AMR_VS_MAXLEVEL / 2 for i in 1:DIM] : [maximum(abs.(quadrature.vcoords)) for _ in 1:DIM]
     Δt_ξ = config.solver.CFL*minimum(ds ./ U)
-    return Status(zeros(DIM+2), 0,0,Δt_ξ,Δt_ξ,0.,0,1,1,1,Residual(DIM),Ref(false),MPI.Request[])
+    # Automatic AMR intervals intentionally start short.  When the user passes
+    # `ps_interval = :auto` or `vs_interval = :auto`, the first AMR pass refreshes these cached
+    # values from kinetic transport statistics and can then relax them.  Use a shared 5-step
+    # startup cadence so the first automatic PS/VS passes are already an integer-multiple pair.
+    return Status(zeros(DIM+2), 0,0,Δt_ξ,Δt_ξ,0.,0,1,1,1,5,5,0.0,Residual(DIM),Ref(false),MPI.Request[])
 end
 
 """
@@ -651,7 +777,7 @@ $(TYPEDEF)
 Structure of cells data managed by `Julia`.
 $(TYPEDFIELDS)
 """
-mutable struct PsTrees{DIM,NDF} 
+mutable struct PsTrees{DIM,NDF}
     data::Vector{Vector{AbstractPsData{DIM,NDF}}}
     "Offset of treeid used in partition."
     offset::Int
