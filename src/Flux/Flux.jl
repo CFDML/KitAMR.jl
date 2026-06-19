@@ -7,6 +7,67 @@ export vanleer, minmod, diff_vs!
 export flux!, update_flux!, update_domain_flux!, update_micro_flux!, update_macro_flux!, make_face_vs
 export calc_flux, calc_domain_flux, positivity_preserving_reconstruct
 
+# Build a temporary face carrying one component boundary type while reusing the same geometry and
+# physical-space cell. The outer Composite domain and every component must refer to the same edge.
+function _composite_component_face(face::DomainFace{DIM,NDF}, domain::Domain{T}) where {DIM,NDF,T}
+    domain.id == face.domain.id ||
+        error("Composite boundary component id $(domain.id) does not match outer Domain id $(face.domain.id).")
+    return DomainFace{DIM,NDF,T}(face.rot, face.direction, face.midpoint, domain, face.ps_data)
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Compute a weighted composite domain flux. The component domains stored in [`CompositeBC`](@ref)
+are evaluated with their normal `calc_domain_flux` methods, then their macro and micro fluxes are
+combined using the normalized composite weights.
+
+All active components must be compatible with the selected flux scheme `F`. A composite may blend
+macro-updating components (for example `CAIDVM`) or micro-only components (for example `DVM`), but
+not both in the same call.
+"""
+function calc_domain_flux(::Type{F}, here_vs::FaceVsData,
+                          face::DomainFace{DIM,NDF,Composite}, ka::KA) where {DIM,NDF,F<:AbstractFluxType}
+    isdefined(face.domain, :bc) ||
+        error("Domain(Composite, $(face.domain.id)) requires a CompositeBC.")
+    composite = face.domain.bc
+    composite isa CompositeBC ||
+        error("Domain(Composite, $(face.domain.id)) requires a CompositeBC, got $(typeof(composite)).")
+    weights = composite_weights(composite, face, ka)
+
+    macro_flux = nothing
+    micro_flux = nothing
+    saw_macro_flux = false
+    saw_micro_only_flux = false
+    @inbounds for i in eachindex(composite.domains)
+        weight = weights[i]
+        weight == 0.0 && continue
+        component_face = _composite_component_face(face, composite.domains[i])
+        # Delegate to the existing boundary implementation for the component type, then blend.
+        component_macro, component_micro = calc_domain_flux(F, here_vs, component_face, ka)
+        if component_macro === nothing
+            saw_micro_only_flux = true
+        else
+            saw_macro_flux = true
+            if macro_flux === nothing
+                macro_flux = weight .* component_macro
+            else
+                macro_flux .+= weight .* component_macro
+            end
+        end
+        if micro_flux === nothing
+            micro_flux = [weight .* component_micro[1], weight .* component_micro[2]]
+        else
+            micro_flux[1] .+= weight .* component_micro[1]
+            micro_flux[2] .+= weight .* component_micro[2]
+        end
+    end
+    saw_macro_flux && saw_micro_only_flux &&
+        error("Composite boundary components cannot mix macro-flux and micro-only domain fluxes.")
+    micro_flux === nothing && error("Composite boundary produced no active component flux.")
+    return macro_flux, micro_flux
+end
+
 function face_area(ps_data::AbstractPsData{2}, DIR::Integer)
     return ps_data.ds[FAT[1][DIR]]
 end

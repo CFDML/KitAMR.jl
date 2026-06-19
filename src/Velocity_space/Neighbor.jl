@@ -19,8 +19,8 @@
 #
 # `vs_face_neighbor` is the reusable primitive: given a grid, a leaf and a face (`dim`, `dir`),
 # it returns the same-or-coarser neighbor leaf across that face (`0` when the face is on the
-# velocity-domain boundary, i.e. the vacuum tail).  It backs both the Löhner refinement
-# indicator and, later, finite-difference velocity-space derivatives.
+# velocity-domain boundary, i.e. the vacuum tail).  It backs the LSR refinement indicator and,
+# later, finite-difference velocity-space derivatives.
 
 const _VS_INDEX_BITS = 24                      # low bits reserved for the leaf id
 const _VS_INDEX_MASK = (UInt64(1) << _VS_INDEX_BITS) - 1
@@ -175,7 +175,7 @@ end
 $(TYPEDSIGNATURES)
 Return the same-or-coarser neighbor leaf of leaf `i` across the face in dimension `dim`
 and direction `dir` (`+1` / `-1`).  Returns `0` when the face is on the velocity-domain
-boundary (treat as vacuum, `f = 0`).  Reusable primitive for Löhner indicators and
+boundary (treat as vacuum, `f = 0`).  Reusable primitive for LSR indicators and
 finite-difference velocity derivatives.
 """
 function vs_face_neighbor(idx::VsNeighborIndex{DIM}, vs::AbstractVsData{DIM}, i::Integer, dim::Integer, dir::Integer) where {DIM}

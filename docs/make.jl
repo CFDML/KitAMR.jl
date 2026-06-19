@@ -1,5 +1,5 @@
 using Documenter
-push!(LOAD_PATH, "..")
+pushfirst!(LOAD_PATH, "..")
 using KitAMR
 type_page = [
     "Configuration"=>"type_configure.md",

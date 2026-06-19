@@ -122,11 +122,7 @@ function _patch_neighbor_ghost_refs!(
     new_ghost_wrap::AbstractVector,
 ) where {DIM,NDF}
     # Map Julia object identity (old ghost) → new ghost object.
-    ghost_patch = Dict{UInt64, AbstractGhostPsData{DIM,NDF}}()
-    sizehint!(ghost_patch, length(old_ghost_wrap))
-    for i in eachindex(old_ghost_wrap)
-        ghost_patch[objectid(old_ghost_wrap[i])] = new_ghost_wrap[i]
-    end
+    ghost_patch, periodic_patch = _ghost_patch_maps(ka, old_ghost_wrap, new_ghost_wrap)
 
     for tree in ka.kdata.field.trees.data
         for ps_data in tree
@@ -136,12 +132,67 @@ function _patch_neighbor_ghost_refs!(
                 for k in eachindex(face_neighbors)
                     nb = face_neighbors[k]
                     nb === nothing && continue
-                    isa(nb, AbstractGhostPsData) || continue
-                    new_nb = get(ghost_patch, objectid(nb), nothing)
-                    new_nb === nothing && continue
+                    new_nb = _patched_ghost_ref(nb, ghost_patch, periodic_patch)
+                    new_nb === nb && continue
                     face_neighbors[k] = new_nb
                 end
             end
+        end
+    end
+    return ghost_patch, periodic_patch
+end
+
+function _ghost_patch_maps(
+    ka::KA{DIM,NDF},
+    old_ghost_wrap::AbstractVector,
+    new_ghost_wrap::AbstractVector,
+) where {DIM,NDF}
+    ghost_patch = Dict{UInt64, AbstractGhostPsData{DIM,NDF}}()
+    periodic_patch = Dict{Tuple{Int,Int}, GhostPsData{DIM,NDF}}()
+    sizehint!(ghost_patch, length(old_ghost_wrap))
+    sizehint!(periodic_patch, length(new_ghost_wrap))
+    for i in eachindex(old_ghost_wrap)
+        new_ghost = new_ghost_wrap[i]::AbstractGhostPsData{DIM,NDF}
+        ghost_patch[objectid(old_ghost_wrap[i])] = new_ghost
+        if new_ghost isa GhostPsData{DIM,NDF}
+            periodic_patch[(new_ghost.owner_rank, new_ghost.quadid)] = new_ghost
+        end
+    end
+    return ghost_patch, periodic_patch
+end
+
+function _patched_ghost_ref(nb, ghost_patch, periodic_patch)
+    isa(nb, AbstractGhostPsData) || return nb
+    new_nb = get(ghost_patch, objectid(nb), nothing)
+    new_nb !== nothing && return new_nb
+    if nb isa GhostPsData
+        base_nb = get(periodic_patch, (nb.owner_rank, nb.quadid), nothing)
+        base_nb === nothing && return nb
+        return periodic_ghost_cell(nb.midpoint, base_nb)
+    end
+    return nb
+end
+
+function _patch_face_ghost_refs!(ka::KA{DIM,NDF}, ghost_patch, periodic_patch) where {DIM,NDF}
+    faces = ka.kdata.field.faces
+    for i in eachindex(faces)
+        face = faces[i]
+        if face isa FullFace
+            new_there = _patched_ghost_ref(face.there_data, ghost_patch, periodic_patch)
+            new_there === face.there_data && continue
+            faces[i] = FullFace{DIM,NDF}(
+                face.rot, face.direction, face.midpoint, face.here_data, new_there)
+        elseif face isa HangingFace
+            for j in eachindex(face.there_data)
+                new_there = _patched_ghost_ref(face.there_data[j], ghost_patch, periodic_patch)
+                new_there === face.there_data[j] && continue
+                face.there_data[j] = new_there
+            end
+        elseif face isa BackHangingFace
+            new_there = _patched_ghost_ref(face.there_data, ghost_patch, periodic_patch)
+            new_there === face.there_data && continue
+            faces[i] = BackHangingFace{DIM,NDF}(
+                face.rot, face.direction, face.midpoint, face.here_data, new_there)
         end
     end
     return nothing
@@ -155,12 +206,12 @@ without rebuilding the physical-mesh ghost topology.
 
 Compared to `update_ghost!`, this function skips the `p4est_ghost_destroy /
 p4est_ghost_new` calls because the physical quadrant adjacency is unchanged.  Ghost-cell
-pointers cached in every local cell's `neighbor.data` are patched in-place so that they
-refer to the freshly allocated ghost objects.
+pointers cached in every local cell's `neighbor.data` and in the existing face list are
+patched in-place so that they refer to the freshly allocated ghost objects.
 
-The p4est mesh and the face list are **not** rebuilt here; call `update_neighbor!` and
-`update_faces!` (or the combined `amr_recover!`) after the full balance loop if those
-structures must be up-to-date for subsequent operations.
+The p4est mesh, face topology, and immersed-boundary face collections are **not** rebuilt
+here; this is valid only when the physical mesh topology is unchanged.  Immersed-boundary
+recoveries still need the full [`amr_recover!`](@ref) path.
 """
 function vs_ghost_exchange!(p4est::P_pxest_t, ka::KA{DIM,NDF}) where {DIM,NDF}
     kinfo = ka.kinfo
@@ -172,8 +223,11 @@ function vs_ghost_exchange!(p4est::P_pxest_t, ka::KA{DIM,NDF}) where {DIM,NDF}
     ka.kdata.ghost.ghost_buffer = new_gb
     ka.kdata.ghost.ghost_info   = new_gi
     ka.kdata.ghost.ghost_wrap   = initialize_ghost_wrap(kinfo, new_gb, new_gi)
-    # Replace stale ghost references in neighbor.data with the new objects.
-    _patch_neighbor_ghost_refs!(ka, old_ghost_wrap, ka.kdata.ghost.ghost_wrap)
+    # Replace stale ghost references in neighbor.data and the already-built faces with the
+    # new objects.  Periodic boundary faces hold ghost copies, so patch them by owner/quadid.
+    ghost_patch, periodic_patch =
+        _patch_neighbor_ghost_refs!(ka, old_ghost_wrap, ka.kdata.ghost.ghost_wrap)
+    _patch_face_ghost_refs!(ka, ghost_patch, periodic_patch)
     return nothing
 end
 
@@ -198,10 +252,10 @@ is satisfied globally.
 For single-rank runs the MPI steps are skipped.
 
 **Note** After this function returns:
-- `ghost_wrap` and `neighbor.data` contain up-to-date velocity-space level data.
-- The p4est mesh and the face list are **not** rebuilt.  Call `update_neighbor!(p4est, ka)`
-  and `update_faces!(p4est, ka)` (or `amr_recover!(p4est, ka)`) afterwards if those
-  structures are needed for flux or slope calculations.
+- `ghost_wrap`, `neighbor.data`, and existing face ghost references contain up-to-date
+  velocity-space level data.
+- The p4est mesh, face topology, and immersed-boundary face collections are **not** rebuilt.
+  Use the full `amr_recover!` path after physical mesh changes or immersed-boundary recovery.
 """
 function vs_balance!(ka::KA{DIM,NDF}) where {DIM,NDF}
     p4est = ka.kinfo.forest.p4est

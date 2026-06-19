@@ -72,8 +72,11 @@ calc_domain_flux(::Type{CAIDVM},::FaceVsData,::DomainFace{DIM,NDF,Maxwellian},::
 calc_domain_flux(::Type{CAIDVM},::FaceVsData,::DomainFace{DIM,NDF,SuperSonicInflow},::KA) where{DIM,NDF}
 calc_domain_flux(::Type{CAIDVM},::FaceVsData,::DomainFace{DIM,NDF,UniformOutflow},::KA) where{DIM,NDF}
 calc_domain_flux(::Type{CAIDVM},::FaceVsData,::DomainFace{2,NDF,InterpolatedOutflow},::KA) where{NDF}
+calc_domain_flux(::Type{F},::FaceVsData,::DomainFace{DIM,NDF,Composite},::KA) where {DIM,NDF,F<:AbstractFluxType}
 ```
 Compute the flux across a single domain face. Methods for different types [`AbstractBoundCond`](@ref) of [`Domain`](@ref) are defined.
+The [`Composite`](@ref) method delegates to the component boundary methods stored in
+[`CompositeBC`](@ref), then blends their returned fluxes with the normalized component weights.
 
 ---
 

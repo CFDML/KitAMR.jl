@@ -23,25 +23,24 @@ end
 """
 $(TYPEDSIGNATURES)
 """
-function vs_refine!(va_data::Velocity_Adaptive_Data, ka::KA{DIM,NDF}) where{DIM,NDF}
+function vs_refine!(
+    va_data::Velocity_Adaptive_Data,
+    ka::KA{DIM,NDF};
+    linear_reconstruction::Bool = false,
+) where{DIM,NDF}
     trees = ka.kdata.field.trees;kinfo = ka.kinfo
     !isa(kinfo.config.quadrature,Vector)&&return nothing
     ds = [(kinfo.config.quadrature[2*i] - kinfo.config.quadrature[2*i-1]) /
     kinfo.config.vs_trees_num[i] for i in 1:DIM]
     va_flags = va_data.va_flags
     id = 0
-    mode = kinfo.config.solver.ADAPT_VS_MODE
-    lohner = mode === :lohner
-    lsr = mode === :lsr
-    indexed = lohner || lsr
     vmin = ntuple(d -> kinfo.config.quadrature[2*d-1], DIM)
     ds0 = ntuple(d -> ds[d], DIM)
     vstn = kinfo.config.vs_trees_num
     maxlevel = kinfo.config.solver.AMR_VS_MAXLEVEL
-    τL = kinfo.config.solver.ADAPT_COEFFI_VS_LOHNER
     τR = kinfo.config.solver.ADAPT_COEFFI_VS_LSR
     lsr_floor = kinfo.config.solver.ADAPT_COEFFI_VS_LSR_FLOOR
-    vsidx = indexed ? VsNeighborIndex{DIM}() : nothing
+    vsidx = VsNeighborIndex{DIM}()
     refine_flags = Bool[]
     cdf_i = Vector{Float64}(undef, NDF)
     mid_i = Vector{Float64}(undef, DIM)
@@ -58,26 +57,20 @@ function vs_refine!(va_data::Velocity_Adaptive_Data, ka::KA{DIM,NDF}) where{DIM,
             U = @view(ps_data.prim[2:1+DIM])
             n = vs_data.vs_num
             s1 = 0.0; s2 = 0.0
-            if indexed
-                build_vs_index!(vsidx, vs_data, vmin, ds0, vstn, maxlevel)
-                s1, s2 = vs_lohner_scales(vs_data)
-            end
+            build_vs_index!(vsidx, vs_data, vmin, ds0, vstn, maxlevel)
+            s1, s2 = vs_lsr_scales(vs_data)
             resize!(refine_flags, n)
             @inbounds for c in 1:n
                 _criterion_cell!(cdf_i, mid_i, vs_data, ps_data.ds, c)
-                if lohner
-                    base = vs_lohner_indicator(vs_data, vsidx, c, s1, s2) > τL ||
-                           local_contribution_refine_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo)
-                elseif lsr
-                    η = vs_lsr_indicator(vs_data, vsidx, c, s1, s2, lsr_neighbors, lsr_normal, lsr_rhs, lsr_x)
-                    ratio = local_contribution_ratio(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo)
-                    base = η > τR && ratio > lsr_floor
-                else
-                    base = contribution_refine_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], va_data.vr, kinfo)
-                end
+                η = vs_lsr_indicator(vs_data, vsidx, c, s1, s2, lsr_neighbors, lsr_normal, lsr_rhs, lsr_x)
+                ratio = local_contribution_ratio(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo)
+                base = η > τR && ratio > lsr_floor
                 refine_flags[c] = vs_data.level[c] < maxlevel && base
             end
-            refine_grid_stream!(vs_data, refine_flags, ds) && (va_flags[id] = true)
+            changed = linear_reconstruction ?
+                      refine_grid_stream_linear!(vs_data, refine_flags, ds, vsidx) :
+                      refine_grid_stream!(vs_data, refine_flags, ds)
+            changed && (va_flags[id] = true)
         end
     end
     return nothing
@@ -91,18 +84,13 @@ function vs_coarsen!(va_data::Velocity_Adaptive_Data,ka::KA{DIM,NDF})where{DIM,N
     kinfo.config.vs_trees_num[i] for i in 1:DIM]
     va_flags = va_data.va_flags
     id = 0
-    mode = kinfo.config.solver.ADAPT_VS_MODE
-    lohner = mode === :lohner
-    lsr = mode === :lsr
-    indexed = lohner || lsr
     vmin = ntuple(d -> kinfo.config.quadrature[2*d-1], DIM)
     ds0 = ntuple(d -> ds[d], DIM)
     vstn = kinfo.config.vs_trees_num
     maxlevel = kinfo.config.solver.AMR_VS_MAXLEVEL
-    τc = VS_LOHNER_COARSEN_RATIO * kinfo.config.solver.ADAPT_COEFFI_VS_LOHNER
-    τr_c = VS_LOHNER_COARSEN_RATIO * kinfo.config.solver.ADAPT_COEFFI_VS_LSR
+    τr_c = VS_LSR_COARSEN_RATIO * kinfo.config.solver.ADAPT_COEFFI_VS_LSR
     lsr_floor = kinfo.config.solver.ADAPT_COEFFI_VS_LSR_FLOOR
-    vsidx = indexed ? VsNeighborIndex{DIM}() : nothing
+    vsidx = VsNeighborIndex{DIM}()
     coarsen_ok = Bool[]
     cdf_i = Vector{Float64}(undef, NDF)
     mid_i = Vector{Float64}(undef, DIM)
@@ -119,25 +107,14 @@ function vs_coarsen!(va_data::Velocity_Adaptive_Data,ka::KA{DIM,NDF})where{DIM,N
             U = @view(ps_data.prim[2:1+DIM])
             n = vs_data.vs_num
             s1 = 0.0; s2 = 0.0
-            if indexed
-                build_vs_index!(vsidx, vs_data, vmin, ds0, vstn, maxlevel)
-                s1, s2 = vs_lohner_scales(vs_data)
-            end
+            build_vs_index!(vsidx, vs_data, vmin, ds0, vstn, maxlevel)
+            s1, s2 = vs_lsr_scales(vs_data)
             resize!(coarsen_ok, n)
             @inbounds for c in 1:n
                 _criterion_cell!(cdf_i, mid_i, vs_data, ps_data.ds, c)
-                if lohner
-                    coarsen_ok[c] = vs_lohner_indicator(vs_data, vsidx, c, s1, s2) < τc &&
-                                    local_contribution_coarsen_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo)
-                elseif lsr
-                    η = vs_lsr_indicator(vs_data, vsidx, c, s1, s2, lsr_neighbors, lsr_normal, lsr_rhs, lsr_x)
-                    ratio = local_contribution_ratio(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo)
-                    coarsen_ok[c] = ((η < τr_c && ratio < lsr_floor) || ratio < 0.5 * lsr_floor) &&
-                                    local_contribution_coarsen_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo)
-                else
-                    coarsen_ok[c] = local_contribution_coarsen_flag(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo) &&
-                                    global_contribution_coarsen_flag(U, mid_i, cdf_i, vs_data.weight[c], va_data.vr, kinfo)
-                end
+                η = vs_lsr_indicator(vs_data, vsidx, c, s1, s2, lsr_neighbors, lsr_normal, lsr_rhs, lsr_x)
+                ratio = local_contribution_ratio(ps_data.w, U, mid_i, cdf_i, vs_data.weight[c], kinfo)
+                coarsen_ok[c] = (η < τr_c && ratio < lsr_floor) || ratio < 0.5 * lsr_floor
             end
             coarsen_grid_stream!(vs_data, coarsen_ok, ds, maxlevel) && (va_flags[id] = true)
         end
@@ -158,49 +135,48 @@ function vs_conserved_correction!(va_data::Velocity_Adaptive_Data,ka)
             ps_data = trees.data[i][j]
             (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0)&&continue
             vs_data = ps_data.vs_data
-            conserved_I_porjection!(vs_data,ps_data.w,ps_data.qf)
+            conserved_I_projection!(vs_data,ps_data.w)
         end
     end
 end
 
-function vs_resolution(ka)
-    trees = ka.kdata.field.trees
-    vs_resolution(trees,ka.kinfo)
-end
-function vs_resolution(trees::PsTrees,kinfo)
-    density_res = 0.;energy_res = 0.
-    @inbounds for tree in trees.data
-        for ps_data in tree
-            (isa(ps_data,InsideSolidData)||ps_data.bound_enc<0)&&continue
-            density_res_i,energy_res_i = vs_resolution(ps_data,kinfo)
-            density_res = max(density_res_i,density_res)
-            energy_res = max(energy_res_i,energy_res)
-        end
-    end
-    density_res = MPI.Allreduce(density_res, MPI.MAX, MPI.COMM_WORLD)
-    energy_res = MPI.Allreduce(energy_res, MPI.MAX, MPI.COMM_WORLD)
-    return Velocity_Resolution(density_res,energy_res)
-end
-function vs_resolution(ps_data::PsData{DIM,NDF},kinfo) where{DIM,NDF}
-    vs_data = ps_data.vs_data
-    U = ps_data.prim[2:DIM+1]
-    density_max = maximum(vs_data.df)
-    c2 = @views [sum((U-u).^2) for u in eachrow(vs_data.midpoint)]
-    energy_max = NDF==1 ? 0.5*maximum(vs_data.df.*c2) : 0.5*maximum(@view(vs_data.df[:,1]).*c2+@view(vs_data.df[:,2]))
-    vs_trees_num = kinfo.config.vs_trees_num
-    quadrature = kinfo.config.quadrature
-    du = [quadrature[2*i]-quadrature[2*i-1] for i in 1:DIM]
-    weight = reduce(*,du)/reduce(*,vs_trees_num)/2^(DIM*(kinfo.config.solver.AMR_VS_MAXLEVEL))
-    return density_max*weight,energy_max*weight
-end
 """
 $(TYPEDSIGNATURES)
 """
-function vs_adaptive_mesh_refinement!(ka;vs_balance = false)
-    vr = vs_resolution(ka)
+function _record_vs_counts!(counts::AbstractVector{Int}, trees::PsTrees)
+    id = 0
+    @inbounds for tree in trees.data
+        for ps_data in tree
+            id += 1
+            counts[id] = isa(ps_data, InsideSolidData) ? 0 : ps_data.vs_data.vs_num
+        end
+    end
+    return counts
+end
+
+function _max_vs_count_change_ratio(before::AbstractVector{Int}, trees::PsTrees)
+    id = 0
+    ratio = 0.0
+    @inbounds for tree in trees.data
+        for ps_data in tree
+            id += 1
+            isa(ps_data, InsideSolidData) && continue
+            n0 = before[id]
+            n0 > 0 || continue
+            n1 = ps_data.vs_data.vs_num
+            ratio = max(ratio, abs(n1 - n0) / n0)
+        end
+    end
+    return ratio
+end
+
+function _vs_adaptive_mesh_refinement_result!(ka;vs_balance = false)
+    trees = ka.kdata.field.trees
     fp = PointerWrapper(ka.kinfo.forest.p4est)
+    before = Vector{Int}(undef, fp.local_num_quadrants[])
+    _record_vs_counts!(before, trees)
     va_flags = zeros(Bool,fp.local_num_quadrants[])
-    va_data = Velocity_Adaptive_Data(vr,va_flags)
+    va_data = Velocity_Adaptive_Data(va_flags)
     vs_refine!(va_data,ka)
     vs_coarsen!(va_data,ka)
     changed = any(va_flags)
@@ -208,7 +184,14 @@ function vs_adaptive_mesh_refinement!(ka;vs_balance = false)
         changed |= vs_balance!(ka)
     end
     vs_conserved_correction!(va_data,ka)
-    return Bool(MPI.Allreduce(Int(changed), +, MPI.COMM_WORLD) > 0)
+    change_ratio = _max_vs_count_change_ratio(before, trees)
+    return Bool(MPI.Allreduce(Int(changed), +, MPI.COMM_WORLD) > 0),
+           MPI.Allreduce(change_ratio, MPI.MAX, MPI.COMM_WORLD)
+end
+
+function vs_adaptive_mesh_refinement!(ka;vs_balance = false)
+    changed, _ = _vs_adaptive_mesh_refinement_result!(ka; vs_balance = vs_balance)
+    return changed
 end
 
 function initial_vs_adaptive_mesh_refinement!(prim::AbstractVector{<:Real},vs_data,kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
@@ -241,4 +224,3 @@ function initial_vs_adaptive_mesh_refinement!(prims,vs_data,kinfo::KInfo{DIM,NDF
     refine_grid_stream!(vs_data, refine_flags, ds)
     return nothing
 end
-

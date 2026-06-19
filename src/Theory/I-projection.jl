@@ -228,16 +228,38 @@ function _solve_I_projection_newton(
     return lambda, Psi
 end
 
-function _apply_I_projection!(f::AbstractVector, λ::AbstractVector, Ψ::AbstractMatrix)
+function _apply_I_projection!(f::AbstractVector, λ::AbstractVector, Ψ::AbstractMatrix,
+                              weight = nothing; correction_norm::Bool = false)
     N, M = size(Ψ)
+    if !correction_norm
+        @inbounds for i in 1:N
+            dot_lp = zero(eltype(Ψ))
+            for j in 1:M
+                dot_lp += λ[j] * Ψ[i, j]
+            end
+            f[i] *= exp(dot_lp)
+        end
+        return 0.0
+    end
+    weight === nothing &&
+        throw(ArgumentError("`weight` is required when `correction_norm=true`."))
+    correction2 = zero(eltype(Ψ))
+    scale2 = zero(eltype(Ψ))
     @inbounds for i in 1:N
         dot_lp = zero(eltype(Ψ))
         for j in 1:M
             dot_lp += λ[j] * Ψ[i, j]
         end
-        f[i] *= exp(dot_lp)
+        old = f[i]
+        new = old * exp(dot_lp)
+        delta = new - old
+        correction2 += weight[i] * delta * delta
+        scale2 += weight[i] * old * old
+        f[i] = new
     end
-    return f
+    correction = sqrt(correction2)
+    scale = sqrt(scale2)
+    return scale > EPS ? correction / scale : correction
 end
 
 function _heat_flux_h_system_2D2F(
@@ -269,30 +291,34 @@ function _heat_flux_h_system_2D2F(
 end
 
 
-function conserved_I_porjection!(vs_data::VsData{2,2},w::AbstractVector)
+function conserved_I_projection!(vs_data::VsData{2,2},w::AbstractVector;
+                                 correction_norm::Bool = false)
     e_int = @views dot(vs_data.weight,vs_data.df[:,2])/2
     w_trans = copy(w);w_trans[end]-=e_int
     h = @view vs_data.df[:,1]
     λ,Ψ = solve_I_projection(vs_data.midpoint,h,w_trans,vs_data.weight)
-    _apply_I_projection!(h,λ,Ψ)
+    return _apply_I_projection!(h,λ,Ψ,vs_data.weight; correction_norm = correction_norm)
 end
 
-function conserved_I_porjection!(vs_data::VsData{2,2},w::AbstractVector,qf::AbstractVector)
+function conserved_I_projection!(vs_data::VsData{2,2},w::AbstractVector,qf::AbstractVector;
+                                 correction_norm::Bool = false)
     h = @view vs_data.df[:,1]
     b = @view vs_data.df[:,2]
     Ψ,W = _heat_flux_h_system_2D2F(vs_data.midpoint,b,w,qf,vs_data.weight)
     λ,Ψ = _solve_I_projection(Ψ,h,W,vs_data.weight)
-    _apply_I_projection!(h,λ,Ψ)
+    return _apply_I_projection!(h,λ,Ψ,vs_data.weight; correction_norm = correction_norm)
 end
 
-function conserved_I_porjection!(vs_data::VsData{3,1},w::AbstractVector)
+function conserved_I_projection!(vs_data::VsData{3,1},w::AbstractVector;
+                                 correction_norm::Bool = false)
     h = @view vs_data.df[:,1]
     λ,Ψ = solve_I_projection(vs_data.midpoint,h,w,vs_data.weight)
-    _apply_I_projection!(h,λ,Ψ)
+    return _apply_I_projection!(h,λ,Ψ,vs_data.weight; correction_norm = correction_norm)
 end
 
-conserved_I_porjection!(vs_data::VsData{3,1},w::AbstractVector,::AbstractVector) =
-    conserved_I_porjection!(vs_data,w)
+conserved_I_projection!(vs_data::VsData{3,1},w::AbstractVector,::AbstractVector;
+                        correction_norm::Bool = false) =
+    conserved_I_projection!(vs_data,w; correction_norm = correction_norm)
 
 
 function iterate!(::Type{CIP_Marching},ka::KA)
@@ -300,6 +326,7 @@ function iterate!(::Type{CIP_Marching},ka::KA)
     gas = kinfo.config.gas
     trees = ka.kdata.field.trees
     Δt = kinfo.status.Δt
+    local_projection_correction_norm = 0.0
     for i in eachindex(trees.data)
         @inbounds for j in eachindex(trees.data[i])
             ps_data = trees.data[i][j]
@@ -315,7 +342,11 @@ function iterate!(::Type{CIP_Marching},ka::KA)
             F_c = discrete_maxwell(vs_data.midpoint, prim_c, kinfo)
             ps_data.qf .= qf = calc_qf(vs_data, prim_c) # Heatflux after convection
             F_c .+= shakhov_part(vs_data.midpoint, F_c, prim_c, qf, kinfo) # g^{S,n+1}
-            conserved_I_porjection!(vs_data,ps_data.w,ps_data.qf)
+            projection_correction_norm =
+                conserved_I_projection!(vs_data,ps_data.w; correction_norm = true)
+            isfinite(projection_correction_norm) &&
+                (local_projection_correction_norm =
+                    max(local_projection_correction_norm, projection_correction_norm))
             # Collision process
             τ = get_τ(prim_c, gas.μᵣ, gas.ω) # τ^{n+1}
             f .*= τ/(τ+Δt)
@@ -326,5 +357,6 @@ function iterate!(::Type{CIP_Marching},ka::KA)
             vs_data.flux .= 0.0
         end
     end
+    kinfo.status.cip_projection_correction_norm = local_projection_correction_norm
     return nothing
 end

@@ -149,9 +149,30 @@ abstract type InterpolatedOutflow <: AbstractBoundCond end
 abstract type AxisSymmetric <: AbstractBoundCond end
 """
 $(TYPEDEF)
+
+Domain-boundary condition that blends several component [`Domain`](@ref) boundary fluxes.
+
+Use it with [`CompositeBC`](@ref):
+
+```julia
+Domain(Composite, 1, CompositeBC(weights, component_domain_1, component_domain_2, ...))
+```
+
+At each domain face, KitAMR evaluates the component boundary fluxes and forms the
+non-negative, normalized weighted sum. This is useful when a single Cartesian domain edge
+contains different physical boundary behaviour, such as a prescribed inlet aperture surrounded
+by an open outflow region.
+"""
+abstract type Composite <: AbstractBoundCond end
+"""
+$(TYPEDEF)
 """
 abstract type Period <: AbstractBoundCond end
-const AbstractBCType = Union{AbstractVector,Function}
+"""
+Abstract supertype for structured boundary-condition payloads stored in [`Domain`](@ref).
+"""
+abstract type AbstractBCData end
+const AbstractBCType = Union{AbstractVector,Function,AbstractBCData}
 
 """
 $(TYPEDEF)
@@ -167,7 +188,7 @@ include("../Boundary/Types.jl")
 include("../Solver/Types.jl")
 include("../IO/Types.jl")
 
-export SuperSonicInflow, SuperSonicOutflow, UniformOutflow, InterpolatedOutflow, Period, Maxwellian
+export SuperSonicInflow, SuperSonicOutflow, UniformOutflow, InterpolatedOutflow, Composite, Period, Maxwellian
 export AbstractInitCond, AbstractBoundCond, AbstractBoundary
 export Pixel, Voxel, Triangle, Tetra
 export AbstractPsData, AbstractFace

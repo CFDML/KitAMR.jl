@@ -12,8 +12,6 @@ solver = Solver(;
     flux = CAIDVM,
     time_marching = CAIDVM_Marching,
     ADAPT_COEFFI_PS = 0.5,
-    ADAPT_COEFFI_VS_LOCAL = 0.05,
-    ADAPT_COEFFI_VS_GLOBAL = 0.25,
     max_sim_time = 20.,
 )
 gas = Gas(;
@@ -50,4 +48,3 @@ solve!(p4est, ka;
 save_result(p4est,ka)
 finalize!(p4est,ka)
 MPI.Finalize()
-

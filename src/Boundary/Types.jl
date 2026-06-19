@@ -32,6 +32,47 @@ struct DomainFace{DIM,NDF,T}<:BoundaryFace
     ps_data::PsData{DIM,NDF}
 end
 
+"""
+$(TYPEDEF)
+
+Composite domain-boundary data. `weights` may be a vector or a function returning one weight
+per component domain. The weights are normalized before use, so `[a, 1-a]` gives a convex blend
+of the component boundary fluxes.
+
+Component domains must use the same boundary `id` as the outer `Domain(Composite, id, ...)`.
+Each component must also be supported by the selected numerical flux. Components without a
+primitive boundary state, such as `UniformOutflow`, are skipped when boundary primitive states are
+sampled for initial velocity-space refinement and boundary AMR indicators.
+
+Accepted `weights` forms:
+
+- a vector or tuple with one non-negative value per component domain;
+- a function accepting `(face, ka)`, `(midpoint, kinfo)`, `(midpoint)`, or keyword `midpoint`.
+
+# Example
+
+```julia
+aperture(midpoint) = (a = jet_profile(midpoint[2]); (a, 1 - a))
+left = Domain(Composite, 1,
+    CompositeBC(aperture,
+        Domain(SuperSonicInflow, 1, [1.0, 6.0, 0.0, 0.5]),
+        Domain(UniformOutflow, 1)))
+```
+"""
+struct CompositeBC{W,D<:Tuple} <: AbstractBCData
+    "Constant weights or a coordinate-dependent weight function."
+    weights::W
+    "Component domain boundaries that are blended at this boundary face."
+    domains::D
+    function CompositeBC(weights::W, domains::D) where {W,D<:Tuple}
+        !isempty(domains) || error("CompositeBC requires at least one component Domain.")
+        all(domain -> domain isa Domain, domains) ||
+            error("CompositeBC components must be Domain objects.")
+        return new{W,D}(weights, domains)
+    end
+end
+CompositeBC(weights, domains::Domain...) = CompositeBC(weights, domains)
+
 # Immersed boundary
 """
 $(TYPEDEF)

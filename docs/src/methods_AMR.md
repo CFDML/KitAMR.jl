@@ -73,15 +73,9 @@ Compared with the AMR in physical space, the conservation is not automatically m
 vs_conserved_correction!
 ```
 
-The refinement and coarsening in velocity space are decided according to the relative contribution of the velocity cell to the macroscopic quantities. Currently, mass and energy are considered.
-```@docs
-contribution_refine_flag
-```
-```@docs
-contribution_coarsen_flag
-```
-
- The contribution is measured from two points of view. The global one is related to the globally maximum resolution of a velocity cell. The local one tells the proportion in the conserved variables in the local physical cell.
+The refinement and coarsening in velocity space use the local linear least-squares residual
+indicator on the distribution function, gated by the relative local mass, energy, and heat-flux
+contribution of the velocity cell.
 
 ---
 

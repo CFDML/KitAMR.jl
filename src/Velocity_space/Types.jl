@@ -125,12 +125,6 @@ function Gauss_Hermite(;NP=28)
     end
 end
 
-struct Velocity_Resolution
-    density::Float64
-    energy::Float64
-end
-
 struct Velocity_Adaptive_Data
-    vr::Velocity_Resolution
     va_flags::Vector{Bool}
 end

@@ -29,18 +29,19 @@ arguments, not here.)
 AMR / load balancing (forwarded to [`adaptive_mesh_refinement!`](@ref) each step):
 - `ps_interval=:auto`, `vs_interval=:auto`, `partition_interval=:auto`
 - `ps_interval` and `vs_interval` accept `:auto`, a positive integer, or a custom function.
-- `:auto` starts from short cached intervals and refreshes them only after AMR/recovery using
-  kinetic transport statistics; this lets early AMR react quickly while avoiding an MPI-wide
-  statistic every step.
-- Tune the automatic interval policy through `Solver` fields
-  `AUTO_AMR_PS_TRAVEL_FRACTION`, `AUTO_AMR_VS_TRAVEL_FRACTION`,
-  `AUTO_AMR_PS_MAX_INTERVAL`, and `AUTO_AMR_VS_MAX_INTERVAL`.
-- The automatic transport statistic only samples cells in a physical-space sensor band
-  (`AUTO_AMR_PS_SENSOR_FRACTION * ADAPT_COEFFI_PS`) and uses a contribution-weighted
-  `AUTO_AMR_RATE_QUANTILE`, so isolated fast velocity-tail cells do not dominate the schedule.
-- With the default `AUTO_AMR_ALIGN_INTERVALS=true`, automatic PS/VS intervals are adjusted to an
-  integer-multiple pair and are co-triggered only when both are due, avoiding standalone recovery
-  passes.
+- `:auto` starts from short cached intervals and refreshes them only after AMR/partition events
+  or VS-AMR checks using cached diagnostics; this lets early AMR react quickly while avoiding an
+  MPI-wide statistic every step.
+- Automatic PS-AMR uses the kinetic physical-propagation estimate controlled by
+  `AUTO_AMR_PS_TRAVEL_FRACTION`, with fixed internal defaults for the sensor gate (`0.5`) and
+  contribution quantile (`0.8`). Automatic VS-AMR does not use that physical-propagation estimate;
+  it uses the relative norm of the last CIP I-projection correction. A correction norm of `0.10`
+  maps to `AUTO_AMR_VS_TRAVEL_FRACTION`, and smaller norms relax the interval proportionally. The
+  VS interval is also shortened to 1 when the last VS-AMR pass changed any physical cell's
+  velocity-grid count by at least 10%; low-change checks gradually relax that mesh-change interval.
+  Automatic intervals are capped at 50 steps.
+- Automatic intervals are adjusted to an integer-multiple cadence whenever at least one PS/VS
+  interval is `:auto`; fixed integer intervals are kept unchanged.
 - Positive integers recover fixed spacing, e.g. `ps_interval=40, vs_interval=80`.
 - Function-valued intervals may use `(p4est, ka, kind)`, `(p4est, ka)`, `(ka, kind)`, or `(ka)`,
   where `kind` is `:ps` or `:vs`; return a positive integer or `:auto`.

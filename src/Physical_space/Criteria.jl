@@ -77,19 +77,7 @@ function _ps_domain_for_face(kinfo::KInfo, faceid::Integer)
 end
 
 function _ps_domain_bc_prim(domain::Domain, midpoint::AbstractVector, kinfo::KInfo)
-    isdefined(domain, :bc) || return nothing
-    bc = domain.bc
-    if bc isa AbstractVector
-        return Float64.(collect(bc))
-    elseif bc isa Function
-        if applicable(bc, midpoint, kinfo)
-            return Float64.(collect(bc(midpoint, kinfo)))
-        elseif applicable(bc, midpoint)
-            return Float64.(collect(bc(midpoint)))
-        end
-        return Float64.(collect(bc(; midpoint)))
-    end
-    return nothing
+    return domain_bc_prim(domain, midpoint, kinfo)
 end
 
 function _ps_boundary_sample_point!(

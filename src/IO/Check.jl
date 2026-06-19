@@ -67,6 +67,8 @@ function check_for_save!(p4est::P_pxest_t,ka;rank=0)
     return nothing
 end
 
+_next_anim_step(output) = max(output.anim_index + 1, 1)
+
 """
 $(TYPEDSIGNATURES)
 Write one animation frame to `path` when the current `sim_time` has reached the next frame time
@@ -76,8 +78,6 @@ write their velocity space is controlled by `output.vs_output_criterion` (see [`
 Custom time loops usually call this after [`iterate!`](@ref); [`solve!`](@ref) also calls it once
 before the loop so animation output starts from `step0` at `t = 0`.
 """
-_next_anim_step(output) = max(output.anim_index + 1, 1)
-
 function check_for_animsave!(p4est::P_pxest_t,ka;path="./animation")
     output = ka.kinfo.config.output
     output.anim_dt <= 0. && return nothing   # animation disabled; safe no-op

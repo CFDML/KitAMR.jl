@@ -24,6 +24,8 @@ struct StatusForSave
     ps_interval_cached::Int
     vs_interval_cached::Int
     amr_transport_rate::Float64
+    cip_projection_correction_norm::Float64
+    vs_amr_nochange_count::Int
 end
 function ConfigureForSave(config::Configure{DIM,NDF}) where{DIM,NDF}
     return ConfigureForSave{DIM,NDF}(
@@ -39,7 +41,8 @@ function StatusForSave(status::Status)
         status.gradmax,status.max_vs_num,status.total_phase_num,
         status.Δt,status.Δt_ξ,status.sim_time,status.step,
         status.ps_adapt_step,status.vs_adapt_step,status.partition_step,
-        status.ps_interval_cached,status.vs_interval_cached,status.amr_transport_rate
+        status.ps_interval_cached,status.vs_interval_cached,status.amr_transport_rate,
+        status.cip_projection_correction_norm,status.vs_amr_nochange_count
     )
 end
 function Status(status::StatusForSave, DIM::Int)
@@ -48,6 +51,7 @@ function Status(status::StatusForSave, DIM::Int)
         status.Δt,status.Δt_ξ,status.sim_time,status.step,
         status.ps_adapt_step,status.vs_adapt_step,status.partition_step,
         status.ps_interval_cached,status.vs_interval_cached,status.amr_transport_rate,
+        status.cip_projection_correction_norm,status.vs_amr_nochange_count,
         Residual(DIM),Ref(false),MPI.Request[]
     )
 end

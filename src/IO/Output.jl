@@ -327,6 +327,25 @@ per-type files are written side by side without overwriting each other.
 celltype_outputs(celltype) = celltype isa AbstractVector ?
     [(ct, celltype_suffix(ct)) for ct in celltype] : [(celltype, "")]
 
+function pvtu_piece_info(p4est::P_pxest_t)
+    pp = PointerWrapper(p4est)
+    gfq = Base.unsafe_wrap(
+        Vector{Int},
+        pointer(pp.global_first_quadrant),
+        MPI.Comm_size(MPI.COMM_WORLD) + 1,
+    )
+    rank = MPI.Comm_rank(MPI.COMM_WORLD)
+    nparts = 0
+    part = 0
+    for i in 1:MPI.Comm_size(MPI.COMM_WORLD)
+        if gfq[i + 1] > gfq[i]
+            nparts += 1
+            i == rank + 1 && (part = nparts)
+        end
+    end
+    return part, nparts, part > 0
+end
+
 function save_pvtu(dir_path::String,p4est::P_pxest_t,ka,celltypes::AbstractVector)
     for ct in celltypes
         save_pvtu(dir_path*celltype_suffix(ct),p4est,ka,ct)
@@ -334,17 +353,10 @@ function save_pvtu(dir_path::String,p4est::P_pxest_t,ka,celltypes::AbstractVecto
     return nothing
 end
 function save_pvtu(dir_path::String,p4est::Ptr{p4est_t},ka,celltype::Type)
-    pp = PointerWrapper(p4est)
-    gfq = Base.unsafe_wrap(
-        Vector{Int},
-        pointer(pp.global_first_quadrant),
-        MPI.Comm_size(MPI.COMM_WORLD) + 1,
-    )
-    nums = [gfq[i]-gfq[i-1] for i in 2:MPI.Comm_size(MPI.COMM_WORLD)+1]
-    nparts = length(findall(x->x>0,nums));part = length(findall(x->x>0,nums[1:MPI.Comm_rank(MPI.COMM_WORLD)+1]))
+    part, nparts, has_part = pvtu_piece_info(p4est)
     vertices,cells,point_solutions,solutions = pvtu_data(p4est,ka,celltype)
     ranks = ones(Int,size(solutions,1))*MPI.Comm_rank(MPI.COMM_WORLD)
-    if length(ranks)>0
+    if has_part && length(ranks)>0
         pvtk_grid(dir_path,vertices,cells;part = part,nparts = nparts) do pvtk
             pvtk["rho"] = @views solutions[:,1]
             pvtk["velocity"] = @views (solutions[:,2],solutions[:,3])
@@ -359,17 +371,10 @@ function save_pvtu(dir_path::String,p4est::Ptr{p4est_t},ka,celltype::Type)
     end
 end
 function save_pvtu(dir_path::String,p4est::Ptr{p8est_t},ka,celltype::Type)
-    pp = PointerWrapper(p4est)
-    gfq = Base.unsafe_wrap(
-        Vector{Int},
-        pointer(pp.global_first_quadrant),
-        MPI.Comm_size(MPI.COMM_WORLD) + 1,
-    )
-    nums = [gfq[i]-gfq[i-1] for i in 2:MPI.Comm_size(MPI.COMM_WORLD)+1]
-    nparts = length(findall(x->x>0,nums));part = length(findall(x->x>0,nums[1:MPI.Comm_rank(MPI.COMM_WORLD)+1]))
+    part, nparts, has_part = pvtu_piece_info(p4est)
     vertices,cells,point_solutions,solutions = pvtu_data(p4est,ka,celltype)
     ranks = ones(Int,size(solutions,1))*MPI.Comm_rank(MPI.COMM_WORLD)
-    if size(solutions,1)>0
+    if has_part && size(solutions,1)>0
         pvtk_grid(dir_path,vertices,cells;part = part,nparts = nparts) do pvtk
             pvtk["rho"] = @views solutions[:,1]
             pvtk["velocity"] = @views (solutions[:,2],solutions[:,3],solutions[:,4])
@@ -933,18 +938,20 @@ requested, each one gets its own `full_simulation<suffix>.pvd` / `step<step><suf
 becomes `step!=first_step`).
 """
 function save_anim_field(path,p4est,ka,celltype,step,sim_time,first_step,suffix)
+    part, nparts, has_part = pvtu_piece_info(p4est)
+    has_part || return nothing
     vertices,cells,point_solutions,solutions = pvtu_data(p4est,ka,celltype)
     ranks = ones(Int,size(solutions,1))*MPI.Comm_rank(MPI.COMM_WORLD)
-    if MPI.Comm_rank(MPI.COMM_WORLD)==0
+    if part == 1
         paraview_collection(path*"/full_simulation"*suffix;append=step!=first_step) do pvd
-            pvtk_grid(path*"/step$step"*suffix,vertices,cells;part = MPI.Comm_rank(MPI.COMM_WORLD)+1,nparts = MPI.Comm_size(MPI.COMM_WORLD)) do pvtk
+            pvtk_grid(path*"/step$step"*suffix,vertices,cells;part = part,nparts = nparts) do pvtk
                 write_anim_field_data!(pvtk,solutions,point_solutions,ranks,ka)
                 pvd[sim_time] = pvtk
                 close(pvd)
             end
         end
     else
-        pvtk_grid(path*"/step$step"*suffix,vertices,cells;part = MPI.Comm_rank(MPI.COMM_WORLD)+1,nparts = MPI.Comm_size(MPI.COMM_WORLD)) do pvtk
+        pvtk_grid(path*"/step$step"*suffix,vertices,cells;part = part,nparts = nparts) do pvtk
             write_anim_field_data!(pvtk,solutions,point_solutions,ranks,ka)
         end
     end
