@@ -2,11 +2,8 @@
 # this file refreshes the cache from scheduler diagnostics and may relax it.
 const AUTO_AMR_MIN_INTERVAL = 1
 const AUTO_AMR_MAX_INTERVAL = 50
-const AUTO_AMR_VS_REFERENCE_CORRECTION_NORM = 0.10
-const AUTO_AMR_VS_CHANGE_RATIO = 0.10
 const AUTO_AMR_PS_SENSOR_FRACTION = 0.5
 const AUTO_AMR_RATE_QUANTILE = 0.8
-const AUTO_AMR_ALIGN_INTERVALS = true
 const AUTO_AMR_RATE_BINS_PER_OCTAVE = 8
 const AUTO_AMR_RATE_HIST_OCTAVES = 32
 const AUTO_AMR_RATE_HIST_BINS = AUTO_AMR_RATE_BINS_PER_OCTAVE * AUTO_AMR_RATE_HIST_OCTAVES
@@ -72,81 +69,16 @@ function _partition_interval_value(interval, ps_interval::Integer)
     error("`partition_interval` must be a positive integer or `:auto`; got $(repr(interval)).")
 end
 
-@inline _auto_amr_both_auto(ps_interval, vs_interval) =
-    ps_interval === :auto && vs_interval === :auto
-
-@inline function _auto_amr_should_align_intervals(ka::KA, ps_interval, vs_interval)
-    solver = ka.kinfo.config.solver
-    return AUTO_AMR_ALIGN_INTERVALS &&
-           solver.PS_DYNAMIC_AMR &&
-           solver.VS_DYNAMIC_AMR &&
-           (ps_interval === :auto || vs_interval === :auto)
-end
-
-@inline function _auto_amr_multiple_pair(ps_interval::Integer, vs_interval::Integer)
-    # Keep the two automatic estimates distinct, but make the longer one an integer multiple of
-    # the shorter one.  Use the lower multiple so the transport-based interval estimate is never
-    # relaxed by alignment; the scheduler can then co-trigger the two AMR stages without adding
-    # standalone recovery passes.
-    ps = Int(ps_interval)
-    vs = Int(vs_interval)
-    ps == vs && return ps, vs
-    if ps > vs
-        return max(vs, (ps ÷ vs) * vs), vs
-    else
-        return ps, max(ps, (vs ÷ ps) * ps)
-    end
-end
-
-function _auto_amr_align_auto_to_fixed(auto_interval::Integer, fixed_interval::Integer)
-    auto = Int(auto_interval)
-    fixed = Int(fixed_interval)
-    (auto % fixed == 0 || fixed % auto == 0) && return auto
-    auto > fixed && return (auto ÷ fixed) * fixed
-
-    # Pick the largest divisor of the fixed interval that does not relax the automatic estimate.
-    best = 1
-    for d in 2:auto
-        fixed % d == 0 && (best = d)
-    end
-    return best
-end
-
-function _auto_amr_align_cached_intervals!(ka::KA, ps_interval, vs_interval)
-    _auto_amr_should_align_intervals(ka, ps_interval, vs_interval) || return nothing
-    status = ka.kinfo.status
-    if _auto_amr_both_auto(ps_interval, vs_interval)
-        ps, vs = _auto_amr_multiple_pair(status.ps_interval_cached, status.vs_interval_cached)
-        status.ps_interval_cached = ps
-        status.vs_interval_cached = vs
-    elseif ps_interval === :auto && vs_interval isa Integer && vs_interval > 0
-        status.ps_interval_cached =
-            _auto_amr_align_auto_to_fixed(status.ps_interval_cached, vs_interval)
-    elseif vs_interval === :auto && ps_interval isa Integer && ps_interval > 0
-        status.vs_interval_cached =
-            _auto_amr_align_auto_to_fixed(status.vs_interval_cached, ps_interval)
-    end
-    return nothing
-end
-
 @inline function _should_adapt(step::Integer, interval::Integer, converge_ratio::Integer)
     return step > interval * converge_ratio
 end
 
 function _should_adapt_pair(ka::KA, ps_interval::Integer, vs_interval::Integer,
-                            converge_ratio::Integer, ps_auto, vs_auto)
-    ps_due = ka.kinfo.config.solver.PS_DYNAMIC_AMR &&
+                            converge_ratio::Integer)
+    ps_due = ka.kinfo.config.solver.AMR_PS_DYNAMIC &&
              _should_adapt(ka.kinfo.status.ps_adapt_step, ps_interval, converge_ratio)
-    vs_due = ka.kinfo.config.solver.VS_DYNAMIC_AMR &&
+    vs_due = ka.kinfo.config.solver.AMR_VS_DYNAMIC &&
              _should_adapt(ka.kinfo.status.vs_adapt_step, vs_interval, converge_ratio)
-    if _auto_amr_should_align_intervals(ka, ps_auto, vs_auto) &&
-        _auto_amr_both_auto(ps_auto, vs_auto)
-        # In aligned-auto mode, a short-period AMR pass waits for the matching long-period pass.
-        # This preserves separate PS/VS interval estimates while ensuring recovery is paid once
-        # for the joint event instead of once for each staggered event.
-        joint_due = ps_due && vs_due
-        return joint_due, joint_due
-    end
     return ps_due, vs_due
 end
 
@@ -188,24 +120,22 @@ end
 
 function _should_partition(ka::KA, interval::Integer, converge_ratio::Integer)
     _should_adapt(ka.kinfo.status.partition_step, interval, converge_ratio) || return false
-    threshold = ka.kinfo.config.solver.PARTITION_IMBALANCE_THRESHOLD
-    threshold <= 0.0 && return true
-    return partition_load_imbalance(ka) > threshold
+    return partition_load_imbalance(ka) > PARTITION_IMBALANCE_THRESHOLD
 end
 
 @inline function _auto_amr_target_ds(kinfo::KInfo{DIM}) where {DIM}
-    level = kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL
+    level = kinfo.config.solver.AMR_PS_DYNAMIC_MAXLEVEL
     return ntuple(d -> (kinfo.config.geometry[2d] - kinfo.config.geometry[2d - 1]) /
                       kinfo.config.trees_num[d] / 2.0^level, DIM)
 end
 
 @inline function _auto_amr_impact_floor(kinfo::KInfo)
     # Use the same local relative mass/energy/heat-flux floor as the LSR VS-AMR criterion.
-    return kinfo.config.solver.ADAPT_COEFFI_VS_LSR_FLOOR
+    return kinfo.config.solver.AMR_VS_CONTRI_FLOOR
 end
 
 @inline function _auto_amr_ps_sensor_threshold(kinfo::KInfo)
-    return AUTO_AMR_PS_SENSOR_FRACTION * kinfo.config.solver.ADAPT_COEFFI_PS
+    return AUTO_AMR_PS_SENSOR_FRACTION * kinfo.config.solver.AMR_PS_THRES
 end
 
 @inline _auto_amr_active_ps_cell(ps_data, kinfo) = false
@@ -432,12 +362,11 @@ end
 """
 $(TYPEDSIGNATURES)
 Estimate the relevant physical-space transport rate carried by the current velocity grids. This
-is the kinetic transport statistic used by automatic PS-AMR intervals.  Automatic VS-AMR
-intervals do not use this physical-propagation estimate.
+is the kinetic transport statistic used by the shared automatic AMR interval.
 
 The estimate deliberately does **not** use the single fastest velocity cell in the whole domain.
 It first restricts the physical cells to the current PS-AMR active band,
-`ps_sensor > 0.5 * ADAPT_COEFFI_PS`; smooth cells are ignored because their
+`ps_sensor > 0.5 * AMR_PS_THRES`; smooth cells are ignored because their
 fast velocity tails do not need to schedule near-term physical refinement.  Inside those active
 cells, each velocity node `ξ` contributes a rate `max(abs(ξ[d]) / Δx_target[d])`, weighted by its
 relative contribution to local mass/internal-energy/heat-flux moments.  The statistic first takes
@@ -483,45 +412,14 @@ function _auto_interval_from_rate(rate::Real, Δt::Real, travel_fraction::Real, 
     return clamp(interval, AUTO_AMR_MIN_INTERVAL, Int(max_interval))
 end
 
-function _auto_interval_from_correction_norm(norm::Real, reference_interval::Real,
-                                             max_interval::Integer)
-    if !(isfinite(norm) && isfinite(reference_interval)) || norm <= 0.0 ||
-       reference_interval <= 0.0
-        return Int(max_interval)
-    end
-    interval = floor(Int, reference_interval * AUTO_AMR_VS_REFERENCE_CORRECTION_NORM / norm)
-    return clamp(interval, AUTO_AMR_MIN_INTERVAL, Int(max_interval))
-end
-
-function _auto_interval_from_vs_change_count(count::Integer)
-    value = AUTO_AMR_MIN_INTERVAL
-    for _ in 1:max(0, Int(count))
-        value = min(2 * value, AUTO_AMR_MAX_INTERVAL)
-        value >= AUTO_AMR_MAX_INTERVAL && return value
-    end
-    return value
-end
-
-function cip_projection_correction_norm(ka::KA)
-    local_norm = ka.kinfo.status.cip_projection_correction_norm
-    local_norm = isfinite(local_norm) ? max(local_norm, 0.0) : 0.0
-    return MPI.Allreduce(local_norm, MPI.MAX, MPI.COMM_WORLD)
-end
-
 """
 $(TYPEDSIGNATURES)
 Refresh cached automatic AMR intervals in `ka.kinfo.status`.
 
 This is a lightweight scheduling helper for [`adaptive_mesh_refinement!`](@ref). If neither
-`ps_interval` nor `vs_interval` is `:auto`, it returns immediately.  For `ps_interval = :auto`,
-the cached interval is estimated from [`kinetic_amr_transport_rate`](@ref).  For
-`vs_interval = :auto`, the physical-propagation estimate is intentionally not used; the cached
-interval is estimated from the MPI-wide maximum relative norm of the last CIP I-projection
-correction.  A correction norm of `0.10` maps to `AUTO_AMR_VS_TRAVEL_FRACTION`, and smaller norms
-relax the interval proportionally.  The interval also reacts to the last VS-AMR mesh change:
-if any physical cell's velocity-grid count changed by at least 10%, the mesh-change interval is
-1; otherwise it doubles after each low-change VS-AMR check up to 50.  The cached VS interval is
-the smaller of the CIP interval and this mesh-change interval.
+`ps_interval` nor `vs_interval` is `:auto`, it returns immediately.  Otherwise one shared cached
+interval is estimated from [`kinetic_amr_transport_rate`](@ref) and copied to both PS and VS auto
+caches.  This keeps automatic PS/VS scheduling on the same physical-propagation cadence.
 """
 function refresh_auto_amr_intervals!(ka::KA; ps_interval = :auto, vs_interval = :auto)
     ps_auto = ps_interval === :auto
@@ -529,25 +427,12 @@ function refresh_auto_amr_intervals!(ka::KA; ps_interval = :auto, vs_interval = 
     (ps_auto || vs_auto) || return nothing
     status = ka.kinfo.status
     solver = ka.kinfo.config.solver
-    if ps_auto
-        rate = kinetic_amr_transport_rate(ka)
-        status.amr_transport_rate = rate
-        status.ps_interval_cached =
-            _auto_interval_from_rate(rate, status.Δt_ξ, solver.AUTO_AMR_PS_TRAVEL_FRACTION,
-                                     AUTO_AMR_MAX_INTERVAL)
-    else
-        status.amr_transport_rate = 0.0
-    end
-    if vs_auto
-        correction_norm = cip_projection_correction_norm(ka)
-        status.cip_projection_correction_norm = correction_norm
-        cip_interval = _auto_interval_from_correction_norm(correction_norm,
-                                                           solver.AUTO_AMR_VS_TRAVEL_FRACTION,
-                                                           AUTO_AMR_MAX_INTERVAL)
-        mesh_interval = _auto_interval_from_vs_change_count(status.vs_amr_nochange_count)
-        status.vs_interval_cached = min(cip_interval, mesh_interval)
-    end
-    _auto_amr_align_cached_intervals!(ka, ps_interval, vs_interval)
+    rate = kinetic_amr_transport_rate(ka)
+    interval = _auto_interval_from_rate(rate, status.Δt_ξ, solver.AUTO_AMR_PS_TRAVEL_FRACTION,
+                                       AUTO_AMR_MAX_INTERVAL)
+    status.amr_transport_rate = rate
+    status.ps_interval_cached = interval
+    status.vs_interval_cached = interval
     return nothing
 end
 
@@ -571,15 +456,9 @@ For `ps_interval` and `vs_interval`, accepted forms are:
 
 - `:auto` (default): use cached automatic intervals. The cache starts short and is refreshed only
   after AMR/partition events or VS-AMR checks, avoiding an MPI-wide statistic at every step.
-  Automatic PS-AMR uses the kinetic physical-propagation estimate controlled by
+  Automatic PS-AMR and VS-AMR use the same kinetic physical-propagation estimate controlled by
   `AUTO_AMR_PS_TRAVEL_FRACTION`, with fixed internal defaults for the sensor gate (`0.5`) and
-  contribution quantile (`0.8`).  Automatic VS-AMR does not use the physical-propagation estimate;
-  it is driven by the relative norm of the last CIP I-projection correction and
-  `AUTO_AMR_VS_TRAVEL_FRACTION`, then shortened when the last VS-AMR pass changed any physical
-  cell's velocity-grid count by at least 10%.  Automatic intervals are capped at 50 steps, and
-  low-change VS-AMR checks back off the mesh-change interval by powers of two.
-  Automatic cached intervals are adjusted to an integer-multiple cadence whenever at least one
-  PS/VS interval is `:auto`; fixed integer intervals are kept unchanged.
+  contribution quantile (`0.8`). Automatic intervals are capped at 50 steps.
 - Positive integer: fixed number of steps between AMR checks, matching the legacy behavior.
 - Function: custom interval policy. Accepted call signatures are `(p4est, ka, kind)`,
   `(p4est, ka)`, `(ka, kind)`, or `(ka)`, where `kind` is `:ps` or `:vs`. The function may return
@@ -588,8 +467,7 @@ For `ps_interval` and `vs_interval`, accepted forms are:
 Partitioning is checked only after a physical-space or velocity-space AMR pass has actually run.
 If no AMR occurred in the current scheduler call, no load balancing is attempted even when
 `partition_step` is larger than the resolved partition interval.  A due partition is also gated by
-`PARTITION_IMBALANCE_THRESHOLD`: the weighted load imbalance must exceed this threshold before
-`ps_partition!` is called.  Set the threshold to `0` to recover the old interval-only behavior.
+the default weighted load-imbalance threshold before `ps_partition!` is called.
 
 The convergence safeguard used by the previous scheduler is preserved: the effective interval is
 multiplied by a residual-dependent `converge_ratio` near convergence.
@@ -603,18 +481,15 @@ function adaptive_mesh_refinement!(p4est::P_pxest_t,ka::KA;ps_interval=:auto,vs_
     ka.kinfo.status.residual.redundant_step>0&&(return nothing)
     res = maximum(ka.kinfo.status.residual.residual)
     converge_ratio = res/ka.kinfo.config.solver.TOLERANCE>100 ? 1 : Int(floor(100*ka.kinfo.config.solver.TOLERANCE/res))
-    _auto_amr_align_cached_intervals!(ka, ps_interval, vs_interval)
     ps_interval_value = _interval_value(ps_interval, p4est, ka, :ps)
     vs_interval_value = _interval_value(vs_interval, p4est, ka, :vs)
     partition_interval_value = _partition_interval_value(partition_interval, ps_interval_value)
     ps_changed = false
     vs_changed = false
-    vs_change_ratio = 0.0
     vs_checked = false
     partition_changed = false
     ps_due, vs_due =
-        _should_adapt_pair(ka, ps_interval_value, vs_interval_value, converge_ratio,
-                           ps_interval, vs_interval)
+        _should_adapt_pair(ka, ps_interval_value, vs_interval_value, converge_ratio)
     if ps_due
         ps_adaptive_mesh_refinement!(p4est,ka;recursive = ps_recursive)
         ps_changed = true;ka.kinfo.status.ps_adapt_step = 1
@@ -625,14 +500,8 @@ function adaptive_mesh_refinement!(p4est::P_pxest_t,ka::KA;ps_interval=:auto,vs_
             update_ghost!(p4est,ka)
             update_neighbor!(p4est,ka)
         end
-        vs_changed, vs_change_ratio =
-            _vs_adaptive_mesh_refinement_result!(ka;vs_balance = vs_balance)
+        vs_changed = _vs_adaptive_mesh_refinement_result!(ka;vs_balance = vs_balance)
         ka.kinfo.status.vs_adapt_step=1
-        if vs_change_ratio >= AUTO_AMR_VS_CHANGE_RATIO
-            ka.kinfo.status.vs_amr_nochange_count = 0
-        else
-            ka.kinfo.status.vs_amr_nochange_count += 1
-        end
     end
     if (ps_changed || vs_changed) &&
         _should_partition(ka, partition_interval_value, converge_ratio)

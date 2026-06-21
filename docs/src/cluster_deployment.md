@@ -138,7 +138,7 @@ using KitAMR, MPI
 MPI.Init()
 ic(mp, kinfo) = [1.0, 0.0, 0.0, 1.0]                 # any valid IC; only the types matter
 solver = Solver(; DIM=2, NDF=2, CFL=0.4, AMR_PS_MAXLEVEL=1, AMR_VS_MAXLEVEL=3,
-    PS_DYNAMIC_AMR=true, VS_DYNAMIC_AMR=true, flux=CAIDVM,
+    AMR_PS_DYNAMIC=true, AMR_VS_DYNAMIC=true, flux=CAIDVM,
     time_marching=CIP_Marching, max_sim_time=1.0)
 gas = Gas(; K=1.0, Kn=1e-3, ω=0.81, ωᵣ=0.81)
 config = Configure(solver; geometry=[0.,1.,0.,1.], trees_num=[8,8],

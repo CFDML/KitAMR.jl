@@ -5,13 +5,13 @@ MPI.Init()
 solver = Solver(;
     DIM = 3, NDF = 1,
     AMR_PS_MAXLEVEL = 4,
-    AMR_DYNAMIC_PS_MAXLEVEL = 3,
+    AMR_PS_DYNAMIC_MAXLEVEL = 3,
     AMR_VS_MAXLEVEL = 3,
-    PS_DYNAMIC_AMR = true,
-    VS_DYNAMIC_AMR = true,
+    AMR_PS_DYNAMIC = true,
+    AMR_VS_DYNAMIC = true,
     flux = CAIDVM,
     time_marching = CAIDVM_Marching,
-    ADAPT_COEFFI_PS = 0.5,
+    AMR_PS_THRES = 0.5,
     max_sim_time = 20.,
 )
 gas = Gas(;

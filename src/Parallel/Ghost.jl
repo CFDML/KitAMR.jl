@@ -931,7 +931,7 @@ end
 """
 $(TYPEDSIGNATURES)
 Exchange a single Bool-as-Float per mirror cell: whether its physical-space
-AMR sensor exceeds `ADAPT_COEFFI_PS`. Returns a map keyed by ghost-object
+AMR sensor exceeds `AMR_PS_THRES`. Returns a map keyed by ghost-object
 identity, with `true` for ghosts whose owner-side cell is above threshold.
 Caller must have already filled `ps_data.lohner` on all local cells.
 `GhostInsideSolidData` ghosts are left out of the map.
@@ -940,7 +940,7 @@ function lohner_flag_exchange!(p4est::P_pxest_t, ka::KA{DIM,NDF}) where{DIM,NDF}
     ghost_flags = Dict{UInt64, Bool}()
     MPI.Comm_size(MPI.COMM_WORLD) == 1 && return ghost_flags
     ghost     = ka.kinfo.forest.ghost
-    threshold = ka.kinfo.config.solver.ADAPT_COEFFI_PS
+    threshold = ka.kinfo.config.solver.AMR_PS_THRES
 
     gp = PointerWrapper(ghost)
     pp = PointerWrapper(p4est)

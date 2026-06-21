@@ -32,23 +32,16 @@ AMR / load balancing (forwarded to [`adaptive_mesh_refinement!`](@ref) each step
 - `:auto` starts from short cached intervals and refreshes them only after AMR/partition events
   or VS-AMR checks using cached diagnostics; this lets early AMR react quickly while avoiding an
   MPI-wide statistic every step.
-- Automatic PS-AMR uses the kinetic physical-propagation estimate controlled by
+- Automatic PS-AMR and VS-AMR use the same kinetic physical-propagation estimate controlled by
   `AUTO_AMR_PS_TRAVEL_FRACTION`, with fixed internal defaults for the sensor gate (`0.5`) and
-  contribution quantile (`0.8`). Automatic VS-AMR does not use that physical-propagation estimate;
-  it uses the relative norm of the last CIP I-projection correction. A correction norm of `0.10`
-  maps to `AUTO_AMR_VS_TRAVEL_FRACTION`, and smaller norms relax the interval proportionally. The
-  VS interval is also shortened to 1 when the last VS-AMR pass changed any physical cell's
-  velocity-grid count by at least 10%; low-change checks gradually relax that mesh-change interval.
-  Automatic intervals are capped at 50 steps.
-- Automatic intervals are adjusted to an integer-multiple cadence whenever at least one PS/VS
-  interval is `:auto`; fixed integer intervals are kept unchanged.
+  contribution quantile (`0.8`). Automatic intervals are capped at 50 steps.
 - Positive integers recover fixed spacing, e.g. `ps_interval=40, vs_interval=80`.
 - Function-valued intervals may use `(p4est, ka, kind)`, `(p4est, ka)`, `(ka, kind)`, or `(ka)`,
   where `kind` is `:ps` or `:vs`; return a positive integer or `:auto`.
 - `partition_interval=:auto` means partition every two resolved physical-space AMR intervals;
   pass a positive integer to fix it explicitly. Partitioning is checked only after PS- or VS-AMR
   has actually run in the current scheduler call, and is skipped unless the weighted load
-  imbalance exceeds `PARTITION_IMBALANCE_THRESHOLD` (`0.10` by default).
+  imbalance exceeds the default threshold.
 - `ps_recursive::Bool=false`, `vs_balance::Bool=false`
 
 Loop control:

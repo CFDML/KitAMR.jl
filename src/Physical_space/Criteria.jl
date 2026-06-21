@@ -162,7 +162,7 @@ function update_Lohner_boundary_ps!(
     _ps_average_neighbor_prim!(ws_interior, interior_data, ps_data, dir, ds_interior, kinfo)
     dsL = boundary_on_left ? ds_boundary : ds_interior
     dsR = boundary_on_left ? ds_interior : ds_boundary
-    eps_l = 0.2 * ps_data.ds[dir]
+    eps_l = kinfo.config.solver.AMR_PS_SMOOTH * ps_data.ds[dir]
 
     ps_data.lohner[:, dir] .= 0.0
     face_midpoint = similar(ps_data.midpoint)
@@ -198,11 +198,11 @@ function ps_refine_flag(
     if ps_data.bound_enc!=0||domain_flag(kinfo,ps_data.midpoint,ps_data.ds)
         return Cint(1)
     end
-    level>kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL-1&&return Cint(0)
+    level>kinfo.config.solver.AMR_PS_DYNAMIC_MAXLEVEL-1&&return Cint(0)
     kinfo.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,kinfo,level) && return Cint(1)
     dflag = kinfo.config.user_defined.dynamic_ps_refine_flag==null_udf ? true : kinfo.config.user_defined.dynamic_ps_refine_flag(ps_data,level,ka)
     !dflag&&return Cint(0)
-    return Cint(ps_sensor(ps_data)>kinfo.config.solver.ADAPT_COEFFI_PS)
+    return Cint(ps_sensor(ps_data)>kinfo.config.solver.AMR_PS_THRES)
 end
 
 """
@@ -210,8 +210,8 @@ $(TYPEDSIGNATURES)
 """
 function ps_coarsen_flag(ps_datas::Vector{PsData}, levels::Vector{Int}, ka::KA{DIM,NDF}) where{DIM,NDF}
     kinfo = ka.kinfo
-    levels[1]>kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL&&return Cint(0)
-    threshold = PS_COARSEN_SENSOR_RATIO * kinfo.config.solver.ADAPT_COEFFI_PS
+    levels[1]>kinfo.config.solver.AMR_PS_DYNAMIC_MAXLEVEL&&return Cint(0)
+    threshold = PS_COARSEN_SENSOR_RATIO * kinfo.config.solver.AMR_PS_THRES
     for i = 1:2^DIM
         ps_data = ps_datas[i]
         (ps_data.bound_enc!=0||domain_flag(kinfo,ps_data.midpoint,ps_data.ds)) && return Cint(0)
@@ -274,7 +274,7 @@ function update_Lohner_inner_ps!(
     omega = vorticity(ps_data.sw, ps_data.prim, Val(DIM))
     use_vorticity = vorticity_amplitude_ok(omegaL, omega, omegaR, ps_data.prim, max(dsL, dsR))
 
-    eps_l = 0.2*ps_data.ds[dir]
+    eps_l = kinfo.config.solver.AMR_PS_SMOOTH * ps_data.ds[dir]
     @inbounds for j in eachindex(ws_swL)
         if j == 2
             ps_data.lohner[j, dir] = use_vorticity ?

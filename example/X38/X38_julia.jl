@@ -12,10 +12,10 @@ Configuration by directly construct `Configure` struct.
 solver = Solver(;
     DIM = 3, NDF = 1,
     AMR_PS_MAXLEVEL = 4,
-    AMR_DYNAMIC_PS_MAXLEVEL = 4,
+    AMR_PS_DYNAMIC_MAXLEVEL = 4,
     AMR_VS_MAXLEVEL = 3,
-    PS_DYNAMIC_AMR = true,
-    VS_DYNAMIC_AMR = true,
+    AMR_PS_DYNAMIC = true,
+    AMR_VS_DYNAMIC = true,
     flux = CAIDVM,
     time_marching = CAIDVM_Marching,
     max_sim_time = 20.,

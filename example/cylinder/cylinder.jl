@@ -5,12 +5,12 @@ MPI.Init()
 solver = Solver(;
     DIM = 2, NDF = 2,
     AMR_PS_MAXLEVEL = 7,
-    AMR_DYNAMIC_PS_MAXLEVEL = 4,
-    AMR_VS_MAXLEVEL = 3,
-    PS_DYNAMIC_AMR = true,
-    VS_DYNAMIC_AMR = true,
+    AMR_PS_DYNAMIC_MAXLEVEL =5,
+    AMR_VS_MAXLEVEL = 4,
+    AMR_PS_DYNAMIC = true,
+    AMR_VS_DYNAMIC = true,
     flux = CAIDVM,
-    time_marching = CAIDVM_Marching,
+    time_marching = CIP_Marching,
     max_sim_time = 20.,
 )
 gas = Gas(;
@@ -28,15 +28,15 @@ udf = UDF(;
 )
 config = Configure(solver;
     geometry = [-16.,16.,-16.,16.],
-    trees_num = [25,25],
+    trees_num = [16,16],
     quadrature = [-10.,10.,-10.,10.],
-    vs_trees_num = [16,16],
+    vs_trees_num = [8,8],
     IC = PCoordFn(cylinder_buffer_IC),
     domain = [
             Domain(SuperSonicInflow,1,[1.,5.0*sqrt(5/6),0.,1.]),Domain(UniformOutflow,2),
             Domain(UniformOutflow,3),Domain(UniformOutflow,4)
         ],
-    IB = [Circle(Maxwellian,[0.,0.],1.,true,4.0,[1.,0.,0.,1.])],
+    IB = [Circle(Maxwellian,[0.,0.],1.,true,3.,[1.,0.,0.,1.])],
     output = output,
     gas = gas,
     user_defined = udf
@@ -44,7 +44,7 @@ config = Configure(solver;
 
 
 p4est,ka = initialize(config; prerefine_steps = 0);
-solve!(p4est, ka; ps_interval = 40, partition_interval = 40)
+solve!(p4est, ka)
 save_result(p4est,ka)
 finalize!(p4est,ka)
 MPI.Finalize()

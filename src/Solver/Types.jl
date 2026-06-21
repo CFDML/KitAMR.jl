@@ -62,7 +62,7 @@ struct Solver{DIM,NDF}
     "Maximum level of the (static) AMR in physical space. **Mandatory**."
     AMR_PS_MAXLEVEL::Int
     "Maximum level of the dynamic AMR in physical space. In most cases, it should be smaller than the static one. Default is equal to `AMR_PS_MAXLEVEL`."
-    AMR_DYNAMIC_PS_MAXLEVEL::Int
+    AMR_PS_DYNAMIC_MAXLEVEL::Int
     "Maximum level of the AMR in velocity space. **Mandatory**."
     AMR_VS_MAXLEVEL::Int
     "Numerical flux type. **Mandatory**."
@@ -70,23 +70,21 @@ struct Solver{DIM,NDF}
     "Time-marching scheme. **Mandatory**."
     time_marching::Type{Tt} where {Tt<:AbstractTimeMarchingType}
     "Dynamic AMR in physical space is open or not. Default is `true`."
-    PS_DYNAMIC_AMR::Bool
+    AMR_PS_DYNAMIC::Bool
     "Dynamic AMR in velocity space is open or not. Default is `true`."
-    VS_DYNAMIC_AMR::Bool
+    AMR_VS_DYNAMIC::Bool
     "Criterion of AMR in L\"ohner criterion of physical space. Default is `0.2`."
-    ADAPT_COEFFI_PS::Float64
-    "Threshold of the analytic Maxwellian quadrature-error criterion used during initial velocity-space refinement. Default is `0.1`."
-    ADAPT_COEFFI_VS_INIT::Float64
+    AMR_PS_THRES::Float64
+    "Smoothing coefficient in the physical-space Löhner sensor denominator. The local smoothing length is `AMR_PS_SMOOTH * Δx`. Default is `0.2`."
+    AMR_PS_SMOOTH::Float64
+    "Velocity-space dynamic AMR criterion mode. `:contribution` uses only relative contribution; `:lsr` uses the LSR indicator gated by the contribution threshold. Default is `:contribution`."
+    AMR_VS_MODE::Symbol
     "Threshold of the local linear least-squares residual indicator (in `[0,1]`) for dynamic velocity-space refinement. Default is `0.16`."
-    ADAPT_COEFFI_VS_LSR::Float64
-    "Minimum relative local mass/energy/heat-flux contribution required before the LSR residual is allowed to refine a velocity cell. Default is `1e-5`."
-    ADAPT_COEFFI_VS_LSR_FLOOR::Float64
-    "Fraction of a finest physical-space cell that a relevant kinetic wave may cross between automatic PS-AMR checks. Smaller values check PS-AMR more often. Default is `2.0`."
+    AMR_VS_LSR_THRES::Float64
+    "Relative local mass/energy/heat-flux contribution threshold used by VS contribution refinement and coarsening hysteresis. Default is `1e-5`."
+    AMR_VS_CONTRI_FLOOR::Float64
+    "Fraction of a finest physical-space cell that a relevant kinetic wave may cross between automatic AMR checks. Smaller values check AMR more often. Default is `2.0`."
     AUTO_AMR_PS_TRAVEL_FRACTION::Float64
-    "Reference interval used for automatic VS-AMR checks. For `CIP_Marching`, a relative I-projection correction norm of `0.10` maps to this interval; smaller norms relax the interval proportionally. Default is `1.0`."
-    AUTO_AMR_VS_TRAVEL_FRACTION::Float64
-    "Minimum weighted MPI load imbalance required before a due partition is executed. The metric is `max(local_weight) / mean(local_weight) - 1`; set `0` to partition whenever the interval is due. Default is `0.10`."
-    PARTITION_IMBALANCE_THRESHOLD::Float64
     "Tolerance for convergence judgement. Default is `1e-6`."
     TOLERANCE::Float64
     "Number of steps between two checks of status. Default is `100`."
@@ -106,36 +104,38 @@ function _solver_nonnegative_float(value, name::Symbol)
     x >= 0 || error("`$name` must be non-negative; got $x.")
     return x
 end
+function _solver_vs_mode(value)
+    mode = Symbol(value)
+    mode in (:lsr, :contribution) ||
+        error("`AMR_VS_MODE` must be `:lsr` or `:contribution`; got $(repr(value)).")
+    return mode
+end
 function Solver(config::Dict)
-    ADAPT_COEFFI_PS = haskey(config,:ADAPT_COEFFI_PS) ? config[:ADAPT_COEFFI_PS] : 0.25
-    ADAPT_COEFFI_VS_INIT = haskey(config,:ADAPT_COEFFI_VS_INIT) ? config[:ADAPT_COEFFI_VS_INIT] : 0.1
-    ADAPT_COEFFI_VS_LSR = haskey(config,:ADAPT_COEFFI_VS_LSR) ? config[:ADAPT_COEFFI_VS_LSR] : 0.16
-    ADAPT_COEFFI_VS_LSR_FLOOR = haskey(config,:ADAPT_COEFFI_VS_LSR_FLOOR) ? config[:ADAPT_COEFFI_VS_LSR_FLOOR] : 1e-5
+    AMR_PS_THRES = haskey(config,:AMR_PS_THRES) ? config[:AMR_PS_THRES] : 0.25
+    AMR_PS_SMOOTH =
+        _solver_nonnegative_float(haskey(config,:AMR_PS_SMOOTH) ? config[:AMR_PS_SMOOTH] : 0.2,
+                                  :AMR_PS_SMOOTH)
+    AMR_VS_MODE = _solver_vs_mode(haskey(config,:AMR_VS_MODE) ? config[:AMR_VS_MODE] : :contribution)
+    AMR_VS_LSR_THRES = haskey(config,:AMR_VS_LSR_THRES) ? config[:AMR_VS_LSR_THRES] : 0.16
+    AMR_VS_CONTRI_FLOOR = haskey(config,:AMR_VS_CONTRI_FLOOR) ? config[:AMR_VS_CONTRI_FLOOR] : 1e-5
     AUTO_AMR_PS_TRAVEL_FRACTION =
         _solver_positive_float(haskey(config,:AUTO_AMR_PS_TRAVEL_FRACTION) ? config[:AUTO_AMR_PS_TRAVEL_FRACTION] : 2.0,
                                :AUTO_AMR_PS_TRAVEL_FRACTION)
-    AUTO_AMR_VS_TRAVEL_FRACTION =
-        _solver_positive_float(haskey(config,:AUTO_AMR_VS_TRAVEL_FRACTION) ? config[:AUTO_AMR_VS_TRAVEL_FRACTION] : 1.0,
-                               :AUTO_AMR_VS_TRAVEL_FRACTION)
-    PARTITION_IMBALANCE_THRESHOLD =
-        _solver_nonnegative_float(haskey(config,:PARTITION_IMBALANCE_THRESHOLD) ? config[:PARTITION_IMBALANCE_THRESHOLD] : 0.10,
-                                  :PARTITION_IMBALANCE_THRESHOLD)
     TOLERANCE = haskey(config,:TOLERANCE) ? config[:TOLERANCE] : 1e-6
     ST_CHECK_INTERVAL = haskey(config,:ST_CHECK_INTERVAL) ? config[:ST_CHECK_INTERVAL] : 100
     REDUNDANT_STEPS_NUM = haskey(config,:REDUNDANT_STEPS_NUM) ? config[:REDUNDANT_STEPS_NUM] : 100
     max_sim_time = haskey(config,:max_sim_time) ? config[:max_sim_time] : Inf
     return Solver{config[:DIM],config[:NDF]}(config[:CFL],config[:AMR_PS_MAXLEVEL],
-        haskey(config,:AMR_DYNAMIC_PS_MAXLEVEL) ? config[:AMR_DYNAMIC_PS_MAXLEVEL] : config[:AMR_PS_MAXLEVEL],
+        haskey(config,:AMR_PS_DYNAMIC_MAXLEVEL) ? config[:AMR_PS_DYNAMIC_MAXLEVEL] : config[:AMR_PS_MAXLEVEL],
         config[:AMR_VS_MAXLEVEL],config[:flux],config[:time_marching],
-        (haskey(config,:PS_DYNAMIC_AMR) ? config[:PS_DYNAMIC_AMR] : true),
-        (haskey(config,:VS_DYNAMIC_AMR) ? config[:VS_DYNAMIC_AMR] : true),
-        ADAPT_COEFFI_PS,
-        ADAPT_COEFFI_VS_INIT,
-        ADAPT_COEFFI_VS_LSR,
-        ADAPT_COEFFI_VS_LSR_FLOOR,
+        (haskey(config,:AMR_PS_DYNAMIC) ? config[:AMR_PS_DYNAMIC] : true),
+        (haskey(config,:AMR_VS_DYNAMIC) ? config[:AMR_VS_DYNAMIC] : true),
+        AMR_PS_THRES,
+        AMR_PS_SMOOTH,
+        AMR_VS_MODE,
+        AMR_VS_LSR_THRES,
+        AMR_VS_CONTRI_FLOOR,
         AUTO_AMR_PS_TRAVEL_FRACTION,
-        AUTO_AMR_VS_TRAVEL_FRACTION,
-        PARTITION_IMBALANCE_THRESHOLD,
         TOLERANCE,
         ST_CHECK_INTERVAL,
         REDUNDANT_STEPS_NUM,
@@ -144,37 +144,33 @@ function Solver(config::Dict)
 end
 function Solver(;kwargs...)
     CFL = haskey(kwargs,:CFL) ? kwargs[:CFL] : 0.4
-    AMR_DYNAMIC_PS_MAXLEVEL = haskey(kwargs,:AMR_DYNAMIC_PS_MAXLEVEL) ? kwargs[:AMR_DYNAMIC_PS_MAXLEVEL] : kwargs[:AMR_PS_MAXLEVEL]
-    PS_DYNAMIC_AMR = haskey(kwargs,:PS_DYNAMIC_AMR) ? kwargs[:PS_DYNAMIC_AMR] : true
-    VS_DYNAMIC_AMR = haskey(kwargs,:VS_DYNAMIC_AMR) ? kwargs[:VS_DYNAMIC_AMR] : true
-    ADAPT_COEFFI_PS = haskey(kwargs,:ADAPT_COEFFI_PS) ? kwargs[:ADAPT_COEFFI_PS] : 0.25
-    ADAPT_COEFFI_VS_INIT = haskey(kwargs,:ADAPT_COEFFI_VS_INIT) ? kwargs[:ADAPT_COEFFI_VS_INIT] : 0.1
-    ADAPT_COEFFI_VS_LSR = haskey(kwargs,:ADAPT_COEFFI_VS_LSR) ? kwargs[:ADAPT_COEFFI_VS_LSR] : 0.16
-    ADAPT_COEFFI_VS_LSR_FLOOR = haskey(kwargs,:ADAPT_COEFFI_VS_LSR_FLOOR) ? kwargs[:ADAPT_COEFFI_VS_LSR_FLOOR] : 1e-5
+    AMR_PS_DYNAMIC_MAXLEVEL = haskey(kwargs,:AMR_PS_DYNAMIC_MAXLEVEL) ? kwargs[:AMR_PS_DYNAMIC_MAXLEVEL] : kwargs[:AMR_PS_MAXLEVEL]
+    AMR_PS_DYNAMIC = haskey(kwargs,:AMR_PS_DYNAMIC) ? kwargs[:AMR_PS_DYNAMIC] : true
+    AMR_VS_DYNAMIC = haskey(kwargs,:AMR_VS_DYNAMIC) ? kwargs[:AMR_VS_DYNAMIC] : true
+    AMR_PS_THRES = haskey(kwargs,:AMR_PS_THRES) ? kwargs[:AMR_PS_THRES] : 0.25
+    AMR_PS_SMOOTH =
+        _solver_nonnegative_float(haskey(kwargs,:AMR_PS_SMOOTH) ? kwargs[:AMR_PS_SMOOTH] : 0.2,
+                                  :AMR_PS_SMOOTH)
+    AMR_VS_MODE = _solver_vs_mode(haskey(kwargs,:AMR_VS_MODE) ? kwargs[:AMR_VS_MODE] : :contribution)
+    AMR_VS_LSR_THRES = haskey(kwargs,:AMR_VS_LSR_THRES) ? kwargs[:AMR_VS_LSR_THRES] : 0.16
+    AMR_VS_CONTRI_FLOOR = haskey(kwargs,:AMR_VS_CONTRI_FLOOR) ? kwargs[:AMR_VS_CONTRI_FLOOR] : 1e-5
     AUTO_AMR_PS_TRAVEL_FRACTION =
         _solver_positive_float(haskey(kwargs,:AUTO_AMR_PS_TRAVEL_FRACTION) ? kwargs[:AUTO_AMR_PS_TRAVEL_FRACTION] : 2.0,
                                :AUTO_AMR_PS_TRAVEL_FRACTION)
-    AUTO_AMR_VS_TRAVEL_FRACTION =
-        _solver_positive_float(haskey(kwargs,:AUTO_AMR_VS_TRAVEL_FRACTION) ? kwargs[:AUTO_AMR_VS_TRAVEL_FRACTION] : 1.0,
-                               :AUTO_AMR_VS_TRAVEL_FRACTION)
-    PARTITION_IMBALANCE_THRESHOLD =
-        _solver_nonnegative_float(haskey(kwargs,:PARTITION_IMBALANCE_THRESHOLD) ? kwargs[:PARTITION_IMBALANCE_THRESHOLD] : 0.10,
-                                  :PARTITION_IMBALANCE_THRESHOLD)
     TOLERANCE = haskey(kwargs,:TOLERANCE) ? kwargs[:TOLERANCE] : 1e-6
     ST_CHECK_INTERVAL = haskey(kwargs,:ST_CHECK_INTERVAL) ? kwargs[:ST_CHECK_INTERVAL] : 100
     REDUNDANT_STEPS_NUM = haskey(kwargs,:REDUNDANT_STEPS_NUM) ? kwargs[:REDUNDANT_STEPS_NUM] : 100
     max_sim_time = haskey(kwargs,:max_sim_time) ? kwargs[:max_sim_time] : Inf
     return Solver{kwargs[:DIM],kwargs[:NDF]}(
-        CFL,kwargs[:AMR_PS_MAXLEVEL],AMR_DYNAMIC_PS_MAXLEVEL,
+        CFL,kwargs[:AMR_PS_MAXLEVEL],AMR_PS_DYNAMIC_MAXLEVEL,
         kwargs[:AMR_VS_MAXLEVEL],kwargs[:flux],kwargs[:time_marching],
-        PS_DYNAMIC_AMR,VS_DYNAMIC_AMR,
-        ADAPT_COEFFI_PS,
-        ADAPT_COEFFI_VS_INIT,
-        ADAPT_COEFFI_VS_LSR,
-        ADAPT_COEFFI_VS_LSR_FLOOR,
+        AMR_PS_DYNAMIC,AMR_VS_DYNAMIC,
+        AMR_PS_THRES,
+        AMR_PS_SMOOTH,
+        AMR_VS_MODE,
+        AMR_VS_LSR_THRES,
+        AMR_VS_CONTRI_FLOOR,
         AUTO_AMR_PS_TRAVEL_FRACTION,
-        AUTO_AMR_VS_TRAVEL_FRACTION,
-        PARTITION_IMBALANCE_THRESHOLD,
         TOLERANCE,
         ST_CHECK_INTERVAL,
         REDUNDANT_STEPS_NUM,
@@ -522,14 +518,12 @@ mutable struct Status
     partition_step::Int
     "Cached physical-space AMR interval used when `ps_interval = :auto`; initialized short and refreshed after AMR."
     ps_interval_cached::Int
-    "Cached velocity-space AMR interval used when `vs_interval = :auto`; initialized short and refreshed after AMR."
+    "Cached velocity-space AMR interval used when `vs_interval = :auto`; initialized short and refreshed from the shared auto-AMR estimate."
     vs_interval_cached::Int
-    "Last MPI-wide kinetic transport-rate estimate used by automatic PS-AMR intervals."
+    "Last MPI-wide kinetic transport-rate estimate used by automatic AMR intervals."
     amr_transport_rate::Float64
-    "Last relative norm of the CIP I-projection correction used by automatic VS-AMR intervals."
+    "Last relative norm of the CIP I-projection correction recorded as a diagnostic."
     cip_projection_correction_norm::Float64
-    "Number of consecutive velocity-space AMR checks whose maximum per-cell velocity-grid count change stayed below 10%."
-    vs_amr_nochange_count::Int
     "Residual of conserved variables defined by [`Residual`](@ref)."
     residual::Residual
     "Flag indicating whether to save."
@@ -551,7 +545,7 @@ function Status(config::Dict)
     # Automatic AMR intervals intentionally start short.  When the user passes
     # `ps_interval = :auto` or `vs_interval = :auto`, the first AMR pass refreshes these cached
     # values and can then relax them.  Use a shared 1-step startup cadence.
-    return Status(zeros(DIM+2), 0,0,Δt_ξ,Δt_ξ,0.,0,1,1,1,1,1,0.0,0.0,0,Residual(DIM),Ref(false),MPI.Request[])
+    return Status(zeros(DIM+2), 0,0,Δt_ξ,Δt_ξ,0.,0,1,1,1,1,1,0.0,0.0,Residual(DIM),Ref(false),MPI.Request[])
 end
 function Status(config::Configure{DIM,NDF}) where{DIM,NDF}
     trees_num = config.trees_num
@@ -566,7 +560,7 @@ function Status(config::Configure{DIM,NDF}) where{DIM,NDF}
     # Automatic AMR intervals intentionally start short.  When the user passes
     # `ps_interval = :auto` or `vs_interval = :auto`, the first AMR pass refreshes these cached
     # values and can then relax them.  Use a shared 1-step startup cadence.
-    return Status(zeros(DIM+2), 0,0,Δt_ξ,Δt_ξ,0.,0,1,1,1,1,1,0.0,0.0,0,Residual(DIM),Ref(false),MPI.Request[])
+    return Status(zeros(DIM+2), 0,0,Δt_ξ,Δt_ξ,0.,0,1,1,1,1,1,0.0,0.0,Residual(DIM),Ref(false),MPI.Request[])
 end
 
 """

@@ -321,7 +321,7 @@ strictly one layer thick. Ghost neighbours' flags are synced via
 """
 function apply_amr_buffer!(ka::KA{DIM,NDF}) where{DIM,NDF}
     trees = ka.kdata.field.trees
-    threshold = ka.kinfo.config.solver.ADAPT_COEFFI_PS
+    threshold = ka.kinfo.config.solver.AMR_PS_THRES
     inflate = 2.0 * threshold
 
     ghost_flags = lohner_flag_exchange!(ka.kinfo.forest.p4est, ka)
@@ -796,7 +796,7 @@ function ps_refine!(p4est::Ptr{p4est_t},ka::KA; recursive = 0)
     p4est_refine_ext(
         p4est,
         recursive,
-        ka.kinfo.config.solver.AMR_DYNAMIC_PS_MAXLEVEL,
+        ka.kinfo.config.solver.AMR_PS_DYNAMIC_MAXLEVEL,
         @cfunction(
             ps_refine_flag,
             Cint,

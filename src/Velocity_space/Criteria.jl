@@ -122,8 +122,9 @@ $(TYPEDSIGNATURES)
 Analytic initial-grid refine flag for velocity cell with center `midpoint`, size `du`.  Mirrors
 the dynamic criterion using exact Maxwellian quantities: refine if the relative mass *or*
 energy contribution exceeds [`MAXWELLIAN_INIT_FLOOR`](@ref), or if the analytic Maxwellian
-quadrature error exceeds `ADAPT_COEFFI_VS_INIT`.  This initialization criterion is independent
-of the dynamic velocity-space AMR pass.  `I0buf`/`I2buf` are reused length-`DIM` scratch vectors.
+quadrature error exceeds the internal `ADAPT_COEFFI_VS_INIT` default.  This initialization
+criterion is independent of the dynamic velocity-space AMR pass.  `I0buf`/`I2buf` are reused
+length-`DIM` scratch vectors.
 """
 function maxwellian_refine_flag(midpoint, du, U, prim, kinfo::KInfo{DIM,NDF}, I0buf, I2buf) where {DIM,NDF}
     λ = prim[end]; ρ = prim[1]
@@ -154,7 +155,7 @@ function maxwellian_refine_flag(midpoint, du, U, prim, kinfo::KInfo{DIM,NDF}, I0
         Eint = ρ * DIM / (4λ)
     end
     max(dρ / ρ, dE / Eint) > MAXWELLIAN_INIT_FLOOR && return true
-    return maxwellian_quad_error(dρ, midpoint, du, U, prim, Val(DIM)) > kinfo.config.solver.ADAPT_COEFFI_VS_INIT
+    return maxwellian_quad_error(dρ, midpoint, du, U, prim, Val(DIM)) > ADAPT_COEFFI_VS_INIT
 end
 
 # Velocity-cell size along dimension `d`.

@@ -21,6 +21,9 @@ const pxest_iter_volume_info_ts = [p4est_iter_volume_info_t,p8est_iter_volume_in
 const pxest_iter_face_info_ts = [p4est_iter_face_info_t,p8est_iter_face_info_t]
 const pxest_iter_face_side_ts = [p4est_iter_face_side_t,p8est_iter_face_side_t]
 
+const ADAPT_COEFFI_VS_INIT = 0.1
+const PARTITION_IMBALANCE_THRESHOLD = 0.10
+
 pxest_t = Union{p4est_t,p8est_t}
 pxest_ghost_t = Union{p4est_ghost_t,p8est_ghost_t}
 pxest_mesh_t = Union{p4est_mesh_t,p8est_mesh_t}

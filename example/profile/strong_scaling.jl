@@ -5,8 +5,8 @@ solver = Solver(;
     DIM = 3, NDF = 1,
     AMR_PS_MAXLEVEL = 0,
     AMR_VS_MAXLEVEL = 0,
-    PS_DYNAMIC_AMR = false,
-    VS_DYNAMIC_AMR = false,
+    AMR_PS_DYNAMIC = false,
+    AMR_VS_DYNAMIC = false,
     flux = CAIDVM,
     time_marching = CAIDVM_Marching,
 )

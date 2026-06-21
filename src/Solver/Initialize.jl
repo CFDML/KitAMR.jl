@@ -582,11 +582,12 @@ $(TYPEDSIGNATURES)
 Initialize everthing according to `config` dictionary.
 """
 # Initial mesh pre-refinement, run at the end of `initialize`: apply `ps_adaptive_mesh_refinement!`
-# `steps` times (each followed by `amr_recover!` to rebuild ghost/neighbor/face data), optionally
-# re-applying the initial condition after each pass so newly refined cells get the exact IC.
+# `steps` times. Each pass is partitioned before `amr_recover!` rebuilds ghost/neighbor/face
+# data, optionally re-applying the initial condition so newly refined cells get the exact IC.
 function _prerefine!(p4est::P_pxest_t, ka::KA, steps::Integer, recursive::Bool, reinit_ic::Bool)
     for _ in 1:steps
         ps_adaptive_mesh_refinement!(p4est, ka; recursive = recursive)
+        ps_partition!(p4est, ka)
         amr_recover!(p4est, ka)
         if reinit_ic
             reinitialize_initial_condition!(ka)
@@ -596,7 +597,7 @@ function _prerefine!(p4est::P_pxest_t, ka::KA, steps::Integer, recursive::Bool, 
     return nothing
 end
 function initialize(config::Dict;
-        prerefine_steps::Integer = Solver(config).AMR_DYNAMIC_PS_MAXLEVEL,
+        prerefine_steps::Integer = Solver(config).AMR_PS_DYNAMIC_MAXLEVEL,
         prerefine_recursive::Bool = false, prerefine_reinit_ic::Bool = true)
     kinfo = KInfo(config)
     p4est, trees = initialize_trees!(kinfo)
@@ -634,7 +635,7 @@ Pass both to [`solve!`](@ref) (or to the individual per-step driver functions), 
 [`save_result`](@ref) and [`finalize!`](@ref).
 
 # Keyword arguments — initial mesh pre-refinement
-- `prerefine_steps::Integer = solver.AMR_DYNAMIC_PS_MAXLEVEL` — number of
+- `prerefine_steps::Integer = solver.AMR_PS_DYNAMIC_MAXLEVEL` — number of
   [`ps_adaptive_mesh_refinement!`](@ref) passes applied after the base setup; the default builds
   the mesh up to the dynamic physical-space max level. Pass `0` to skip.
 - `prerefine_recursive::Bool = false` — `recursive` flag for those passes.
@@ -643,7 +644,7 @@ Pass both to [`solve!`](@ref) (or to the individual per-step driver functions), 
   exact IC (recommended for sharp initial conditions, e.g. Riemann / blast waves).
 """
 function initialize(config::Configure{DIM,NDF};
-        prerefine_steps::Integer = config.solver.AMR_DYNAMIC_PS_MAXLEVEL,
+        prerefine_steps::Integer = config.solver.AMR_PS_DYNAMIC_MAXLEVEL,
         prerefine_recursive::Bool = false, prerefine_reinit_ic::Bool = true) where{DIM,NDF}
     kinfo = KInfo(config)
     p4est, trees = initialize_trees!(kinfo)
