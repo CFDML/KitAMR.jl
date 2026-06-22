@@ -52,7 +52,7 @@ const YC1 = GEOM[4]
 const YMID = 0.5 * (YC0 + YC1)
 
 const PS_BASE = envi("VJE_PS_BASE", 16)
-const PS_LMAX = envi("VJE_PS_LMAX", 3)
+const PS_LMAX = envi("VJE_PS_LMAX", 5)
 const VS_BASE = envi("VJE_VS_BASE", 8)
 const CFL = envf("VJE_CFL", 0.4)
 const MAX_T = envf("VJE_MAX_SIM_TIME", 0.2)

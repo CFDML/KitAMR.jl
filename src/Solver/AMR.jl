@@ -62,7 +62,7 @@ function _partition_interval_value(interval::Integer, ps_interval::Integer)
     return _positive_interval(interval, :partition_interval)
 end
 function _partition_interval_value(interval::Symbol, ps_interval::Integer)
-    interval === :auto && return 2 * ps_interval
+    interval === :auto && return ps_interval
     error("`partition_interval` must be a positive integer or `:auto`; got $(repr(interval)).")
 end
 function _partition_interval_value(interval, ps_interval::Integer)
@@ -448,8 +448,8 @@ If no interval is due, the function returns without changing the mesh.
 
 - `ps_interval=:auto`: physical-space AMR interval.
 - `vs_interval=:auto`: velocity-space AMR interval.
-- `partition_interval=:auto`: load-balancing interval. The default means twice the currently
-  resolved `ps_interval` (for example, `ps_interval=20` gives `partition_interval=40`). A positive
+- `partition_interval=:auto`: load-balancing interval. The default matches the currently
+  resolved `ps_interval` (for example, `ps_interval=20` gives `partition_interval=20`). A positive
   integer fixes the interval explicitly.
 
 For `ps_interval` and `vs_interval`, accepted forms are:

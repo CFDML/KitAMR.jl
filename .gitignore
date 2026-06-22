@@ -26,3 +26,4 @@ LocalPreferences.toml
 dev
 *.so
 tmp
+*copy

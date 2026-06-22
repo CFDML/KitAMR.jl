@@ -2,7 +2,7 @@ using KitAMR,MPI
 MPI.Init()
 function Sod_init(midpoint,kinfo)
     if midpoint[1]<0.
-        return [1.,0.,0.,0.5]
+        return [1.,0.,0.,1.]
     else
         return [0.125,0.,0.,0.625]
     end
@@ -12,21 +12,18 @@ end
 solver = Solver(;
     DIM = 2, NDF = 2,
     CFL = 0.4,
-    AMR_PS_MAXLEVEL = 3,
-    AMR_VS_MAXLEVEL = 3,
+    AMR_PS_MAXLEVEL = 4,
+    AMR_VS_MAXLEVEL = 4,
     AMR_PS_DYNAMIC = true,
-    AMR_PS_THRES = 0.3,
+    AMR_PS_THRES = 0.25,
     AMR_VS_DYNAMIC = true,
     flux = CAIDVM,
-    # flux = DVM,
-    # time_marching = CIP_Marching,
-    time_marching = Euler,
-    # time_marching = CAIDVM_Marching,
-    max_sim_time = 20.,
+    time_marching = CIP_Marching,
+    max_sim_time = 0.5,
 )
 gas = Gas(;
     K = 1.0,
-    Kn = 0.001,
+    Kn = 1e3,
     ω = 0.81,
     ωᵣ = 0.81,
 )
@@ -50,9 +47,8 @@ config = Configure(solver;
     user_defined = udf
 )
 
-p4est,ka = initialize(config; prerefine_steps = 1, prerefine_recursive = true);
-solve!(p4est, ka;
-    ps_interval = 20, vs_interval = 20, partition_interval = 20)
+p4est,ka = initialize(config);
+solve!(p4est, ka)
 save_result(p4est,ka)
 finalize!(p4est,ka)
 MPI.Finalize()

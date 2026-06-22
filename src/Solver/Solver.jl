@@ -38,7 +38,7 @@ AMR / load balancing (forwarded to [`adaptive_mesh_refinement!`](@ref) each step
 - Positive integers recover fixed spacing, e.g. `ps_interval=40, vs_interval=80`.
 - Function-valued intervals may use `(p4est, ka, kind)`, `(p4est, ka)`, `(ka, kind)`, or `(ka)`,
   where `kind` is `:ps` or `:vs`; return a positive integer or `:auto`.
-- `partition_interval=:auto` means partition every two resolved physical-space AMR intervals;
+- `partition_interval=:auto` means partition on the resolved physical-space AMR interval;
   pass a positive integer to fix it explicitly. Partitioning is checked only after PS- or VS-AMR
   has actually run in the current scheduler call, and is skipped unless the weighted load
   imbalance exceeds the default threshold.

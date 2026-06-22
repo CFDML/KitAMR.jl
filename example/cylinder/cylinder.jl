@@ -45,7 +45,7 @@ config = Configure(solver;
 
 p4est,ka = initialize(config; prerefine_steps = 0);
 solve!(p4est, ka)
-save_result(p4est,ka)
+save_for_restart(p4est,ka;dir_path="cylinder_restart")
 finalize!(p4est,ka)
 MPI.Finalize()
 
