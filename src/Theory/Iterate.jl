@@ -10,6 +10,7 @@ function iterate!(p4est::P_pxest_t,ka::KA)
     ka.kinfo.status.step += 1
     ka.kinfo.status.ps_adapt_step += 1
     ka.kinfo.status.vs_adapt_step += 1
+    ka.kinfo.status.vs_lmax_adapt_step += 1
     ka.kinfo.status.partition_step += 1
     ka.kinfo.status.sim_time+=ka.kinfo.status.Δt
     return nothing

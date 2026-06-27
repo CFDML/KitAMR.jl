@@ -648,7 +648,49 @@ function pvtu_data(p4est,ka,::Type{T}) where{T<:Voxel}
     end
     return vertices,cells,point_solutions,solutions
 end
-function save_surfaces_pvtu(::String,::Vector{Boundary_Solution},ka::KA{2})
+function save_surfaces_pvtu(dir_path::String,boundary_results::Vector{Boundary_Solution},ka::KA{2})
+    np = MPI.Comm_size(MPI.COMM_WORLD)
+    rflags = [Ref(false) for _ in 1:np]
+    rank = MPI.Comm_rank(MPI.COMM_WORLD)
+    surface_path = dir_path*"/vtk"
+    for i in eachindex(boundary_results)
+        boundary_solutions = boundary_results[i]
+        rflags[rank+1][] = !isempty(boundary_solutions.ps_solutions)
+        reqs = Vector{MPI.Request}(undef,0)
+        for i in 1:np
+            i-1==rank&&continue
+            sreq = MPI.Isend(rflags[rank+1],MPI.COMM_WORLD;dest = i-1,tag = COMM_DATA_TAG+rank)
+            push!(reqs,sreq)
+        end
+        for i in 1:np
+            i-1==rank&&continue
+            rreq = MPI.Irecv!(
+                rflags[i],
+                MPI.COMM_WORLD;
+                source = i-1,
+                tag = COMM_DATA_TAG+i-1
+            )
+            push!(reqs,rreq)
+        end
+        MPI.Waitall(reqs)
+        if rflags[rank+1][]
+            nparts = length(findall(x->x[],rflags));part = length(findall(x->x[],rflags[1:rank+1]))
+            points = [boundary_solutions.midpoints[i][j] for i in eachindex(boundary_solutions.midpoints), j in 1:2] |> permutedims
+            cells = [MeshCell(VTKCellTypes.VTK_VERTEX,[i]) for i in eachindex(boundary_solutions.midpoints)]
+            pvtk_grid(surface_path*"/surface_"*string(i),points,cells;part = part,nparts = nparts) do pvtk
+                pvtk["rho"] = [x.prim[1] for x in boundary_solutions.ps_solutions]
+                pvtk["U"] = [x.prim[2] for x in boundary_solutions.ps_solutions]
+                pvtk["V"] = [x.prim[3] for x in boundary_solutions.ps_solutions]
+                pvtk["T"] = [1.0/x.prim[4] for x in boundary_solutions.ps_solutions]
+                pvtk["qf"] = ([x.qf[1] for x in boundary_solutions.ps_solutions],
+                    [x.qf[2] for x in boundary_solutions.ps_solutions])
+                pvtk["p11"] = [x.p[1] for x in boundary_solutions.ps_solutions]
+                pvtk["p12"] = [x.p[2] for x in boundary_solutions.ps_solutions]
+                pvtk["p22"] = [x.p[3] for x in boundary_solutions.ps_solutions]
+                pvtk["normal"] = ([x[1] for x in boundary_solutions.normal],[x[2] for x in boundary_solutions.normal])
+            end
+        end
+    end
     return nothing
 end
 function save_surfaces_pvtu(dir_path::String,boundary_results::Vector{Boundary_Solution},ka::KA{3})
@@ -686,6 +728,9 @@ function save_surfaces_pvtu(dir_path::String,boundary_results::Vector{Boundary_S
                 pvtk["V"] = [x.prim[3] for x in boundary_solutions.ps_solutions]
                 pvtk["W"] = [x.prim[4] for x in boundary_solutions.ps_solutions]
                 pvtk["T"] = [1.0/x.prim[5] for x in boundary_solutions.ps_solutions]
+                pvtk["qf"] = ([x.qf[1] for x in boundary_solutions.ps_solutions],
+                    [x.qf[2] for x in boundary_solutions.ps_solutions],
+                    [x.qf[3] for x in boundary_solutions.ps_solutions])
                 pvtk["p11"] = [x.p[1] for x in boundary_solutions.ps_solutions]
                 pvtk["p12"] = [x.p[2] for x in boundary_solutions.ps_solutions]
                 pvtk["p13"] = [x.p[3] for x in boundary_solutions.ps_solutions]

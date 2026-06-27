@@ -280,60 +280,40 @@ function partition!(p4est::Ptr{p8est_t},weight::Union{Ptr{Nothing},Base.CFunctio
     return src_gfq, gfq, src_flt, src_llt
 end
 function get_receive_send(src_gfq::Vector, dest_gfq::Vector)
-    is_receives = falses(MPI.Comm_size(MPI.COMM_WORLD))
-    receive_nums = Vector{Int}(undef, MPI.Comm_size(MPI.COMM_WORLD))
-    is_sends = falses(MPI.Comm_size(MPI.COMM_WORLD))
-    send_nums = Vector{Int}(undef, MPI.Comm_size(MPI.COMM_WORLD))
-    lnqs = [src_gfq[i+1] - src_gfq[i] for i = 1:MPI.Comm_size(MPI.COMM_WORLD)]
-    nlnqs = [dest_gfq[i+1] - dest_gfq[i] for i = 1:MPI.Comm_size(MPI.COMM_WORLD)]
-    lfq = dest_gfq[MPI.Comm_rank(MPI.COMM_WORLD)+1]
-    llq = dest_gfq[MPI.Comm_rank(MPI.COMM_WORLD)+2] - 1
-    r1 = MPI.Comm_rank(MPI.COMM_WORLD) == 0 ? 0 : findfirst(x -> x > lfq, src_gfq) - 2
-    r2 =
-        MPI.Comm_rank(MPI.COMM_WORLD) == MPI.Comm_size(MPI.COMM_WORLD) - 1 ?
-        MPI.Comm_size(MPI.COMM_WORLD) - 1 : findfirst(x -> x > llq, src_gfq) - 2
-    is_receives[r1+1:r2+1] .= true
-    is_receives[MPI.Comm_rank(MPI.COMM_WORLD)+1] = false
-    if r1 == r2
-        receive_nums[r1+1] = llq - lfq + 1
-    else
-        for i in eachindex(is_receives)
-            if is_receives[i]
-                receive_nums[i] = min(src_gfq[i+1] - lfq, lnqs[i])
-                if i == r2 + 1
-                    receive_nums[i] = min(llq - src_gfq[i] + 1, llq - lfq + 1)
-                end
+    mpisize = MPI.Comm_size(MPI.COMM_WORLD)
+    rank = MPI.Comm_rank(MPI.COMM_WORLD) + 1
+    receives = Int[]
+    receive_nums = Int[]
+    sends = Int[]
+    send_nums = Int[]
+
+    # Work with half-open global-quadrant intervals so empty ranks
+    # (`gfq[r] == gfq[r+1]`) naturally produce no communication.
+    dst_first = dest_gfq[rank]
+    dst_last = dest_gfq[rank + 1]
+    if dst_first < dst_last
+        for r in 1:mpisize
+            r == rank && continue
+            overlap = min(dst_last, src_gfq[r + 1]) - max(dst_first, src_gfq[r])
+            if overlap > 0
+                push!(receives, r)
+                push!(receive_nums, overlap)
             end
         end
     end
-    lfq = src_gfq[MPI.Comm_rank(MPI.COMM_WORLD)+1]
-    llq = src_gfq[MPI.Comm_rank(MPI.COMM_WORLD)+2] - 1
-    s1 = MPI.Comm_rank(MPI.COMM_WORLD) == 0 ? 0 : findfirst(x -> x > lfq, dest_gfq) - 2
-    s2 =
-        MPI.Comm_rank(MPI.COMM_WORLD) == MPI.Comm_size(MPI.COMM_WORLD) - 1 ?
-        MPI.Comm_size(MPI.COMM_WORLD) - 1 : findfirst(x -> x > llq, dest_gfq) - 2
-    is_sends[s1+1:s2+1] .= true
-    is_sends[MPI.Comm_rank(MPI.COMM_WORLD)+1] = false
-    if s1 == s2
-        send_nums[s1+1] = llq - lfq + 1
-    else
-        for i in eachindex(is_sends)
-            if is_sends[i]
-                send_nums[i] = min(dest_gfq[i+1] - lfq, nlnqs[i])
-                if i == s2 + 1
-                    send_nums[i] = min(llq - dest_gfq[i] + 1, llq - lfq + 1)
-                end
+
+    src_first = src_gfq[rank]
+    src_last = src_gfq[rank + 1]
+    if src_first < src_last
+        for r in 1:mpisize
+            r == rank && continue
+            overlap = min(src_last, dest_gfq[r + 1]) - max(src_first, dest_gfq[r])
+            if overlap > 0
+                push!(sends, r)
+                push!(send_nums, overlap)
             end
         end
     end
-    singular = findall(x->x==0,receive_nums)
-    is_receives[singular] .= false
-    receives = findall(is_receives)
-    singular = findall(x->x==0,send_nums)
-    is_sends[singular] .= false
-    sends = findall(is_sends)
-    receive_nums = receive_nums[is_receives]
-    send_nums = send_nums[is_sends]
     return receives, sends, receive_nums, send_nums
 end
 function up_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::Vector)
@@ -344,6 +324,7 @@ function up_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::Vec
     up_num = length(sends)
     encs = Vector{Int}(undef, 0)
     ws = Vector{Float64}(undef, 0)
+    vs_local_maxlevels = Vector{Int8}(undef, 0)
     vs_levels = Vector{Int8}(undef, 0)
     vs_midpoints = Vector{Float64}(undef, 0)
     vs_df = Vector{Float64}(undef, 0)
@@ -356,11 +337,13 @@ function up_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::Vec
                 push!(encs,ps_data.bound_enc)
                 append!(encs,zeros(Int,SOLID_CELL_ID_NUM))
                 append!(ws,zeros(DIM+2))
+                push!(vs_local_maxlevels, Int8(0))
                 s_vs_nums[index] = 0
             else
                 push!(encs,ps_data.bound_enc)
                 append!(encs,ps_data.solid_cell_index)
                 append!(ws, ps_data.w)
+                push!(vs_local_maxlevels, ps_data.vs_data.local_maxlevel)
                 append!(vs_levels, ps_data.vs_data.level)
                 append!(vs_midpoints, reshape(ps_data.vs_data.midpoint, :))
                 append!(vs_df, reshape(ps_data.vs_data.df, :))
@@ -368,13 +351,15 @@ function up_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::Vec
             end
             index += 1
             if index > send_nums[send_index]
-                push!(s_datas, TransferData{DIM,NDF}(encs, ws, vs_levels, vs_midpoints, vs_df))
+                push!(s_datas, TransferData{DIM,NDF}(encs, ws, vs_local_maxlevels,
+                                                     vs_levels, vs_midpoints, vs_df))
                 push!(s_vs_numss, s_vs_nums)
                 index = 1
                 send_index += 1
                 send_index > up_num && break
                 encs = Vector{Int}(undef, 0)
                 ws = Vector{Float64}(undef, 0)
+                vs_local_maxlevels = Vector{Int8}(undef, 0)
                 vs_levels = Vector{Int8}(undef, 0)
                 vs_midpoints = Vector{Float64}(undef, 0)
                 vs_df = Vector{Float64}(undef, 0)
@@ -393,6 +378,7 @@ function down_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::V
     index = send_nums[send_index]
     encs = Vector{Int}(undef, 0)
     ws = Vector{Float64}(undef, 0)
+    vs_local_maxlevels = Vector{Int8}(undef, 0)
     vs_levels = Vector{Int8}(undef, 0)
     vs_midpoints = Vector{Float64}(undef, 0)
     vs_df = Vector{Float64}(undef, 0)
@@ -405,11 +391,13 @@ function down_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::V
                 prepend!(encs,zeros(SOLID_CELL_ID_NUM))
                 pushfirst!(encs,ps_data.bound_enc)
                 prepend!(ws,zeros(DIM+2))
+                pushfirst!(vs_local_maxlevels, Int8(0))
                 s_vs_nums[index] = 0
             else
                 prepend!(encs,ps_data.solid_cell_index)
                 pushfirst!(encs, ps_data.bound_enc)
                 prepend!(ws, ps_data.w)
+                pushfirst!(vs_local_maxlevels, ps_data.vs_data.local_maxlevel)
                 prepend!(vs_levels, ps_data.vs_data.level)
                 prepend!(vs_midpoints, reshape(ps_data.vs_data.midpoint, :))
                 prepend!(vs_df, reshape(ps_data.vs_data.df, :))
@@ -417,13 +405,15 @@ function down_transfer_wrap(DIM::Integer,NDF::Integer,sends, send_nums, trees::V
             end
             index -= 1
             if index < 1
-                pushfirst!(s_datas, TransferData{DIM,NDF}(encs, ws, vs_levels, vs_midpoints, vs_df))
+                pushfirst!(s_datas, TransferData{DIM,NDF}(encs, ws, vs_local_maxlevels,
+                                                          vs_levels, vs_midpoints, vs_df))
                 pushfirst!(s_vs_numss, s_vs_nums)
                 send_index -= 1
                 send_index < 1 && break
                 index = send_nums[send_index]
                 encs = Vector{Int}(undef, 0)
                 ws = Vector{Float64}(undef, 0)
+                vs_local_maxlevels = Vector{Int8}(undef, 0)
                 vs_levels = Vector{Int8}(undef, 0)
                 vs_midpoints = Vector{Float64}(undef, 0)
                 vs_df = Vector{Float64}(undef, 0)
@@ -538,6 +528,13 @@ function transfer(
         )
         push!(reqs, sreq)
         sreq = MPI.Isend(
+            s_datas[i].vs_local_maxlevels,
+            MPI.COMM_WORLD;
+            dest = sends[i] - 1,
+            tag = COMM_DATA_TAG + MPI.Comm_rank(MPI.COMM_WORLD),
+        )
+        push!(reqs, sreq)
+        sreq = MPI.Isend(
             s_datas[i].vs_levels,
             MPI.COMM_WORLD;
             dest = sends[i] - 1,
@@ -572,6 +569,13 @@ function transfer(
         push!(reqs, rreq)
         rreq = MPI.Irecv!(
             r_data.w,
+            MPI.COMM_WORLD;
+            source = receives[i] - 1,
+            tag = COMM_DATA_TAG + receives[i] - 1,
+        )
+        push!(reqs, rreq)
+        rreq = MPI.Irecv!(
+            r_data.vs_local_maxlevels,
             MPI.COMM_WORLD;
             source = receives[i] - 1,
             tag = COMM_DATA_TAG + receives[i] - 1,
@@ -644,6 +648,7 @@ function unpack_data(vs_nums, data, ka::KA{DIM,NDF}) where{DIM,NDF}
             vs_weight = @. tree_weight / 2.0^(DIM * vs_levels)
             vs_data = VsData{DIM,NDF}(
                 vs_num,
+                data.vs_local_maxlevels[i],
                 vs_levels,
                 vs_weight,
                 vs_midpoints,

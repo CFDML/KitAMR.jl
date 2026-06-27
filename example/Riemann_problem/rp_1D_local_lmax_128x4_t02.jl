@@ -12,19 +12,20 @@ end
 solver = Solver(;
     DIM = 2, NDF = 2,
     CFL = 0.4,
-    AMR_PS_MAXLEVEL = 4,
+    AMR_PS_MAXLEVEL = 0,
     AMR_VS_MAXLEVEL = 4,
-    AMR_PS_DYNAMIC = true,
+    AMR_PS_DYNAMIC = false,
     AMR_PS_THRES = 0.25,
     AMR_VS_DYNAMIC = true,
     AMR_VS_LOCAL_LMAX = true,
+    AMR_VS_MODE = :haar,
     flux = CAIDVM,
     time_marching = CIP_Marching,
     max_sim_time = 0.2,
 )
 gas = Gas(;
     K = 1.0,
-    Kn = 1e-3,
+    Kn = 1e3,
     ω = 0.81,
     ωᵣ = 0.81,
 )
@@ -35,7 +36,7 @@ udf = UDF(;
 )
 config = Configure(solver;
     geometry = [-2.,2.,-0.5,0.5],
-    trees_num = [32,8],
+    trees_num = [128,4],
     quadrature = [-7.,7.,-7.,7.],
     vs_trees_num = [8,8],
     IC = PCoordFn(Sod_init),

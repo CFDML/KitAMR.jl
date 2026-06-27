@@ -107,13 +107,8 @@ function calc_flux(::Type{CAIDVM},here_vs,there_vs,flux_data::Union{FullFace,Flu
     @inbounds @views begin
         dx = [midpoint[j]-here_mid[i,j]*Δt-here_ps_mid[j] for i in axes(here_mid,1),j in axes(here_mid,2)]
         ndx = [midpoint[j]-there_mid[i,j]*Δt-there_ps_mid[j] for i in axes(there_mid,1),j in axes(there_mid,2)]
-        if there_data.bound_enc<0
-            here_micro = [(here_df[i,j]+dot(dx[i,:],here_sdf[i,j,:]))*here_vn[i] for i in axes(here_df,1),j in axes(here_df,2)]
-            there_micro = [there_df[i,j]*there_vn[i] for i in axes(there_df,1),j in axes(there_df,2)]
-        else
-            here_micro = positivity_preserving_reconstruct(here_df,here_sdf,here_data.ds,dx,here_vn)
-            there_micro = positivity_preserving_reconstruct(there_df,there_sdf,there_data.ds,ndx,there_vn)
-        end
+        here_micro = positivity_preserving_reconstruct(here_df,here_sdf,here_data.ds,dx,here_vn)
+        there_micro = positivity_preserving_reconstruct(there_df,there_sdf,there_data.ds,ndx,there_vn)
     end
     here_weight = here_vs.weight;there_weight = there_vs.weight
     fw = micro_to_macro(here_micro,here_mid,here_weight,here_data.vs_data)+micro_to_macro(there_micro,there_mid,there_weight,there_data.vs_data)

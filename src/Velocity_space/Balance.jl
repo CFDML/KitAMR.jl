@@ -55,6 +55,8 @@ function vs_balance_pair!(
         refine_grid_stream!(vs_local, refine_flags, ds)
         changed = true
     end
+    changed && (vs_local.local_maxlevel =
+        Int8(max(Int(vs_local.local_maxlevel), maximum(Int.(vs_local.level)))))
     return changed
 end
 

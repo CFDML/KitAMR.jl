@@ -30,35 +30,54 @@ end
 function IB_prim(circle::AbstractCircle,aux_point::AbstractVector,ρw::Real)
     IB_prim(circle.bc,aux_point,ρw)
 end
-function calc_intersect(f_midpoint,s_midpoint,::Vector,::Int,circle::Circle)
-    c = circle.center;r = circle.radius
-    if abs(f_midpoint[1]-s_midpoint[1])<EPS
-        t = acos((f_midpoint[1]-c[1])/r)
-        if f_midpoint[2]>c[2]
-            ap = [r*cos(t),r*sin(t)];n=ap./(circle.solid ? r : -r)
-        else
-            ap = [r*cos(t),-r*sin(t)];n = ap./(circle.solid ? r : -r)
-        end
-    else
-        t = asin((f_midpoint[2]-c[2])/r)
-        if f_midpoint[1]>c[1]
-            ap = [r*cos(t),r*sin(t)];n = ap./ (circle.solid ? r : -r)
-        else
-            ap = [-r*cos(t),r*sin(t)];n = ap./ (circle.solid ? r : -r)
+function _axis_aligned_radial_intersect(f_midpoint, s_midpoint, dir::Int, center, radius, solid::Bool)
+    r = Float64(radius)
+    radial_sq = r^2
+    for d in eachindex(f_midpoint)
+        d == dir && continue
+        radial_sq -= (f_midpoint[d] - center[d])^2
+    end
+    if radial_sq < 0.0
+        radial_sq < -sqrt(eps(Float64)) * max(r^2, 1.0) &&
+            error("No axis-aligned immersed-boundary intersection between fluid center $f_midpoint and solid center $s_midpoint.")
+        radial_sq = 0.0
+    end
+
+    radial = sqrt(radial_sq)
+    candidates = (center[dir] - radial, center[dir] + radial)
+    fdir = f_midpoint[dir]
+    sdir = s_midpoint[dir]
+    dsdir = sdir - fdir
+    abs(dsdir) <= EPS && error("Expected an axis-aligned fluid-solid segment in direction $dir.")
+
+    scale = max(abs(fdir), abs(sdir), abs(center[dir]), radial, 1.0)
+    tol = sqrt(eps(Float64)) * scale
+    lo = min(fdir, sdir) - tol
+    hi = max(fdir, sdir) + tol
+    best_t = Inf
+    best_x = candidates[1]
+    for x in candidates
+        lo <= x <= hi || continue
+        t = clamp((x - fdir) / dsdir, 0.0, 1.0)
+        if t < best_t
+            best_t = t
+            best_x = x
         end
     end
-    return ap,n
+    isfinite(best_t) ||
+        error("No immersed-boundary intersection lies between fluid center $f_midpoint and solid center $s_midpoint.")
+
+    ap = copy(f_midpoint)
+    ap[dir] = best_x
+    n = (ap .- center) ./ (solid ? r : -r)
+    return ap, n
 end
-function calc_intersect(f_midpoint,s_midpoint,::Vector,::Int,circle::Sphere)
-    c = circle.center;r = circle.radius
-    dir = findfirst(x->x>EPS,abs.(f_midpoint-s_midpoint))
-    r_midpoint = f_midpoint-c
-    x = r_midpoint[dir%3+1]; y =r_midpoint[(dir+1)%3+1]
-    ap = copy(f_midpoint);n = copy(f_midpoint)
-    rz = sqrt(r^2-x^2-y^2)
-    dz = abs((rz-r_midpoint[dir])/(s_midpoint[dir]-f_midpoint[dir])) < 1 ? rz-r_midpoint[dir] : -rz-r_midpoint[dir]
-    ap[dir] = dz+f_midpoint[dir];n[dir] = dz+r_midpoint[dir];n/=(circle.solid ? r : -r)
-    return ap,n
+
+function calc_intersect(f_midpoint,s_midpoint,::Vector,dir::Int,circle::Circle)
+    _axis_aligned_radial_intersect(f_midpoint, s_midpoint, dir, circle.center, circle.radius, circle.solid)
+end
+function calc_intersect(f_midpoint,s_midpoint,::Vector,dir::Int,circle::Sphere)
+    _axis_aligned_radial_intersect(f_midpoint, s_midpoint, dir, circle.center, circle.radius, circle.solid)
 end
 
 

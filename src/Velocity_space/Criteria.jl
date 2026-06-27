@@ -38,6 +38,26 @@ function local_contribution_ratio(w::AbstractVector, U::AbstractVector, midpoint
         w, U, c2, df[1] * weight, 0.5 * c2 * df[1] * weight)
     return max(mass, energy, heatflux)
 end
+function local_heatflux_contribution_ratio(w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, ::KInfo{DIM,2}) where{DIM}
+    c2 = 0.0
+    @inbounds for d in 1:DIM
+        c = midpoint[d] - U[d]
+        c2 += c^2
+    end
+    _, _, heatflux = _relative_moment_ratios(
+        w, U, c2, df[1] * weight, 0.5 * (c2 * df[1] + df[2]) * weight)
+    return heatflux
+end
+function local_heatflux_contribution_ratio(w::AbstractVector, U::AbstractVector, midpoint::AbstractVector, df::AbstractVector, weight::Float64, ::KInfo{DIM,1}) where{DIM}
+    c2 = 0.0
+    @inbounds for d in 1:DIM
+        c = midpoint[d] - U[d]
+        c2 += c^2
+    end
+    _, _, heatflux = _relative_moment_ratios(
+        w, U, c2, df[1] * weight, 0.5 * c2 * df[1] * weight)
+    return heatflux
+end
 
 function macro_estimate_refine_flag(prim::AbstractVector,U,midpoint,ds,level)
     return false
@@ -191,6 +211,243 @@ end
 
 "Coarsen-eligibility fraction of the LSR refine threshold (hysteresis)."
 const VS_LSR_COARSEN_RATIO = 0.3
+
+@inline function _vs_root_ds(kinfo::KInfo{DIM}) where {DIM}
+    return ntuple(d -> (kinfo.config.quadrature[2*d] - kinfo.config.quadrature[2*d - 1]) /
+                      kinfo.config.vs_trees_num[d], DIM)
+end
+
+@inline _vs_local_lmax_floor(maxlevel::Integer) = maxlevel > 0 ? 1 : 0
+
+function _maxwellian_haar_1d_max_rel(λ::Real, h_parent::Real)
+    λ > 0 || return Inf
+    h_parent > 0 || return 0.0
+    σ = 1.0 / sqrt(2.0 * λ)
+    a = 0.25 * h_parent
+    xmax = max(8.0 * σ, 4.0 * h_parent)
+    max_rel = 0.0
+    # The density/prefactor cancels because the coefficient is normalized by the peak.
+    @inbounds for i in 0:512
+        x = xmax * i / 512
+        rel = 0.5 * abs(exp(-λ * (x - a)^2) - exp(-λ * (x + a)^2))
+        rel > max_rel && (max_rel = rel)
+    end
+    return max_rel
+end
+
+@inline vs_local_lmax_haar_threshold(::KInfo) = AMR_VS_HAAR_THRESHOLD
+
+function analytic_maxwellian_local_lmax(prim::AbstractVector, kinfo::KInfo)
+    maxlevel = kinfo.config.solver.AMR_VS_MAXLEVEL
+    maxlevel <= 0 && return 0
+    threshold = vs_local_lmax_haar_threshold(kinfo)
+    floor_level = _vs_local_lmax_floor(maxlevel)
+    ds0 = maximum(_vs_root_ds(kinfo))
+    λ = prim[end]
+    λ > 0 || return maxlevel
+    for level in floor_level:maxlevel
+        level == 0 && return 0
+        h_parent = ds0 / 2.0^(level - 1)
+        _maxwellian_haar_1d_max_rel(λ, h_parent) <= threshold && return level
+    end
+    return maxlevel
+end
+
+@inline function _vs_same_level_group(vs_data::AbstractVsData, first::Int, level::Int, nc::Int)
+    first + nc - 1 <= vs_data.vs_num || return false
+    @inbounds for g in 1:nc-1
+        Int(vs_data.level[first + g]) == level || return false
+    end
+    return true
+end
+
+function _vs_sibling_groups(vs_data::AbstractVsData{DIM}, maxlevel::Integer) where {DIM}
+    groups = Tuple{Int,Int}[]
+    maxlevel <= 0 && return groups
+    nc = 2^DIM
+    align = zeros(Float64, maxlevel)
+    index = 1
+    @inbounds while index <= vs_data.vs_num
+        level = Int(vs_data.level[index])
+        if level > 0
+            aligned = abs(mod(align[level], 1.0)) < 1.0e-12
+            if aligned && _vs_same_level_group(vs_data, index, level, nc)
+                push!(groups, (index, level))
+                index += nc
+                if level > 1
+                    for l in 1:level-1
+                        align[l] += 1 / 2^(DIM * (level - l))
+                    end
+                end
+            else
+                for l in 1:level
+                    align[l] += 1 / 2^(DIM * (level - l + 1))
+                end
+                index += 1
+            end
+        else
+            index += 1
+        end
+    end
+    return groups
+end
+
+function _vs_component_scales(vs_data::AbstractVsData{DIM,NDF}) where {DIM,NDF}
+    scales = Vector{Float64}(undef, NDF)
+    @inbounds for k in 1:NDF
+        s = 0.0
+        for i in 1:vs_data.vs_num
+            a = abs(vs_data.df[i, k])
+            a > s && (s = a)
+        end
+        scales[k] = max(s, EPS)
+    end
+    return scales
+end
+
+@inline function _haar_child_sign(::Val{DIM}, child::Integer, mask::Integer) where {DIM}
+    s = 1
+    @inbounds for d in 1:DIM
+        if (mask & (1 << (d - 1))) != 0
+            s *= RMT[DIM][child][d]
+        end
+    end
+    return s
+end
+
+function _vs_haar_group_rel_detail(vs_data::AbstractVsData{DIM,NDF}, first::Int,
+                                   scales::AbstractVector) where {DIM,NDF}
+    nc = 2^DIM
+    max_rel = 0.0
+    @inbounds for k in 1:NDF
+        sumsq = 0.0
+        for mask in 1:nc-1
+            coeff = 0.0
+            for child in 1:nc
+                coeff += _haar_child_sign(Val(DIM), child, mask) *
+                         vs_data.df[first + child - 1, k]
+            end
+            coeff /= nc
+            sumsq += coeff * coeff
+        end
+        rel = sqrt(sumsq) / scales[k]
+        rel > max_rel && (max_rel = rel)
+    end
+    return max_rel
+end
+
+@inline function _vs_heatflux_energy_density(vs_data::AbstractVsData{DIM,NDF},
+                                             i::Integer,
+                                             c2::Real) where {DIM,NDF}
+    if NDF == 2
+        return 0.5 * (c2 * vs_data.df[i, 1] + vs_data.df[i, 2])
+    else
+        return 0.5 * c2 * vs_data.df[i, 1]
+    end
+end
+
+@inline function _vs_heatflux_integrand(vs_data::AbstractVsData{DIM,NDF},
+                                        i::Integer,
+                                        U::AbstractVector,
+                                        dir::Integer) where {DIM,NDF}
+    cdir = 0.0
+    c2 = 0.0
+    @inbounds for d in 1:DIM
+        c = vs_data.midpoint[i, d] - U[d]
+        d == dir && (cdir = c)
+        c2 += c * c
+    end
+    return cdir * _vs_heatflux_energy_density(vs_data, i, c2)
+end
+
+function _vs_heatflux_scales(vs_data::AbstractVsData{DIM,NDF},
+                             U::AbstractVector) where {DIM,NDF}
+    scales = Vector{Float64}(undef, DIM)
+    @inbounds for d in 1:DIM
+        s = 0.0
+        for i in 1:vs_data.vs_num
+            a = abs(_vs_heatflux_integrand(vs_data, i, U, d))
+            a > s && (s = a)
+        end
+        scales[d] = max(s, EPS)
+    end
+    return scales
+end
+
+function _vs_heatflux_haar_group_rel_detail(vs_data::AbstractVsData{DIM,NDF},
+                                            first::Int,
+                                            scales::AbstractVector,
+                                            U::AbstractVector) where {DIM,NDF}
+    nc = 2^DIM
+    max_rel = 0.0
+    @inbounds for d in 1:DIM
+        sumsq = 0.0
+        for mask in 1:nc-1
+            coeff = 0.0
+            for child in 1:nc
+                coeff += _haar_child_sign(Val(DIM), child, mask) *
+                         _vs_heatflux_integrand(vs_data, first + child - 1, U, d)
+            end
+            coeff /= nc
+            sumsq += coeff * coeff
+        end
+        rel = sqrt(sumsq) / scales[d]
+        rel > max_rel && (max_rel = rel)
+    end
+    return max_rel
+end
+
+function vs_haar_level_max_rel_detail(vs_data::AbstractVsData{DIM,NDF},
+                                      level::Integer) where {DIM,NDF}
+    level <= 0 && return 0.0
+    walk_maxlevel = max(Int(level), maximum(Int.(vs_data.level)))
+    scales = _vs_component_scales(vs_data)
+    max_rel = 0.0
+    for (first, group_level) in _vs_sibling_groups(vs_data, walk_maxlevel)
+        group_level == level || continue
+        rel = _vs_haar_group_rel_detail(vs_data, first, scales)
+        rel > max_rel && (max_rel = rel)
+    end
+    return max_rel
+end
+
+function vs_heatflux_haar_level_max_rel_detail(vs_data::AbstractVsData{DIM,NDF},
+                                               prim::AbstractVector,
+                                               level::Integer) where {DIM,NDF}
+    level <= 0 && return 0.0
+    walk_maxlevel = max(Int(level), maximum(Int.(vs_data.level)))
+    U = @view(prim[2:1+DIM])
+    scales = _vs_heatflux_scales(vs_data, U)
+    max_rel = 0.0
+    for (first, group_level) in _vs_sibling_groups(vs_data, walk_maxlevel)
+        group_level == level || continue
+        rel = _vs_heatflux_haar_group_rel_detail(vs_data, first, scales, U)
+        rel > max_rel && (max_rel = rel)
+    end
+    return max_rel
+end
+
+function vs_haar_virtual_coarsened_level_detail(vs_data::VsData{DIM,NDF}, ds,
+                                                maxlevel::Integer,
+                                                target_lmax::Integer) where {DIM,NDF}
+    target_lmax <= 0 && return 0.0
+    tmp = deepcopy(vs_data)
+    coarsen_ok = [Int(level) > target_lmax for level in tmp.level]
+    any(coarsen_ok) && coarsen_grid_stream!(tmp, coarsen_ok, ds, maxlevel)
+    return vs_haar_level_max_rel_detail(tmp, target_lmax)
+end
+
+function vs_heatflux_haar_virtual_coarsened_level_detail(vs_data::VsData{DIM,NDF},
+                                                        prim::AbstractVector,
+                                                        ds,
+                                                        maxlevel::Integer,
+                                                        target_lmax::Integer) where {DIM,NDF}
+    target_lmax <= 0 && return 0.0
+    tmp = deepcopy(vs_data)
+    coarsen_ok = [Int(level) > target_lmax for level in tmp.level]
+    any(coarsen_ok) && coarsen_grid_stream!(tmp, coarsen_ok, ds, maxlevel)
+    return vs_heatflux_haar_level_max_rel_detail(tmp, prim, target_lmax)
+end
 
 @inline function _push_lsr_neighbor!(buf::Vector{Int}, nb::Integer, center::Integer)
     nb == 0 && return nothing

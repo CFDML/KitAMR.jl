@@ -20,11 +20,11 @@ struct StatusForSave
     step::Int
     ps_adapt_step::Int
     vs_adapt_step::Int
+    vs_lmax_adapt_step::Int
     partition_step::Int
     ps_interval_cached::Int
     vs_interval_cached::Int
     amr_transport_rate::Float64
-    cip_projection_correction_norm::Float64
 end
 function ConfigureForSave(config::Configure{DIM,NDF}) where{DIM,NDF}
     return ConfigureForSave{DIM,NDF}(
@@ -39,18 +39,19 @@ function StatusForSave(status::Status)
     return StatusForSave(
         status.gradmax,status.max_vs_num,status.total_phase_num,
         status.Δt,status.Δt_ξ,status.sim_time,status.step,
-        status.ps_adapt_step,status.vs_adapt_step,status.partition_step,
-        status.ps_interval_cached,status.vs_interval_cached,status.amr_transport_rate,
-        status.cip_projection_correction_norm
+        status.ps_adapt_step,status.vs_adapt_step,status.vs_lmax_adapt_step,
+        status.partition_step,
+        status.ps_interval_cached,status.vs_interval_cached,status.amr_transport_rate
     )
 end
 function Status(status::StatusForSave, DIM::Int)
     return Status(
         status.gradmax,status.max_vs_num,status.total_phase_num,
         status.Δt,status.Δt_ξ,status.sim_time,status.step,
-        status.ps_adapt_step,status.vs_adapt_step,status.partition_step,
+        status.ps_adapt_step,status.vs_adapt_step,status.vs_lmax_adapt_step,
+        status.partition_step,
         status.ps_interval_cached,status.vs_interval_cached,status.amr_transport_rate,
-        status.cip_projection_correction_norm,Residual(DIM),Ref(false),MPI.Request[]
+        Residual(DIM),Ref(false),MPI.Request[]
     )
 end
 struct SolverSet

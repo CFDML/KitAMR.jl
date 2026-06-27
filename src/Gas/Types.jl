@@ -30,8 +30,8 @@ function Gas(;kwargs...)
     ω = haskey(kwargs,:ω) ? kwargs[:ω] : 0.5
     αᵣ = haskey(kwargs,:αᵣ) ? kwargs[:αᵣ] : 1.0
     ωᵣ = haskey(kwargs,:ωᵣ) ? kwargs[:ωᵣ] : 0.81
-    μᵣ = haskey(kwargs,:μᵣ) ? kwargs[:μᵣ] : ref_vhs_vis(Kn,αᵣ,ωᵣ)
     T_ref = haskey(kwargs,:T_ref) ? kwargs[:T_ref] : 1.0
+    μᵣ = haskey(kwargs,:μᵣ) ? kwargs[:μᵣ] : ref_vhs_vis(Kn,ωᵣ,αᵣ,T_ref)
     return Gas(
         Kn,Pr,K,γ,ω,αᵣ,ωᵣ,μᵣ,T_ref
     )

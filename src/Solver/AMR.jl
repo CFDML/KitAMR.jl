@@ -82,6 +82,14 @@ function _should_adapt_pair(ka::KA, ps_interval::Integer, vs_interval::Integer,
     return ps_due, vs_due
 end
 
+function _should_adjust_vs_local_lmax(ka::KA, vs_interval::Integer, converge_ratio::Integer)
+    solver = ka.kinfo.config.solver
+    (solver.AMR_VS_LOCAL_LMAX && solver.AMR_VS_DYNAMIC &&
+     isa(ka.kinfo.config.quadrature, Vector)) || return false
+    interval = AMR_VS_LOCAL_LMAX_INTERVAL_RATIO * vs_interval
+    return _should_adapt(ka.kinfo.status.vs_lmax_adapt_step, interval, converge_ratio)
+end
+
 @inline _partition_work_weight(::InsideSolidData) = 0.0
 @inline function _partition_work_weight(ps_data::PsData)
     vs_num = ps_data.vs_data.vs_num
@@ -499,6 +507,10 @@ function adaptive_mesh_refinement!(p4est::P_pxest_t,ka::KA;ps_interval=:auto,vs_
         if vs_balance && ps_changed
             update_ghost!(p4est,ka)
             update_neighbor!(p4est,ka)
+        end
+        if _should_adjust_vs_local_lmax(ka, vs_interval_value, converge_ratio)
+            adjust_local_vs_maxlevels!(ka)
+            ka.kinfo.status.vs_lmax_adapt_step = 1
         end
         vs_changed = _vs_adaptive_mesh_refinement_result!(ka;vs_balance = vs_balance)
         ka.kinfo.status.vs_adapt_step=1

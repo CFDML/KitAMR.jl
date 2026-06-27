@@ -23,6 +23,13 @@ const pxest_iter_face_side_ts = [p4est_iter_face_side_t,p8est_iter_face_side_t]
 
 const ADAPT_COEFFI_VS_INIT = 0.1
 const PARTITION_IMBALANCE_THRESHOLD = 0.10
+const AMR_VS_LOCAL_LMAX_INTERVAL_RATIO = 3
+const AMR_VS_LOCAL_LMAX_SIGMA_CELLS = 3.0
+const AMR_VS_LOCAL_LMAX_COARSEN_RATIO = 0.5
+# Calibrated by 1D standard Maxwellian (λ = 0.5, σ = 1) with σ resolved by 3 cells.
+const AMR_VS_HAAR_THRESHOLD = 0.05042741053179117
+# Calibrated from the 1D heat-flux integrand 0.5*c*(c^2+1)*exp(-c^2/2) at the same scale.
+const AMR_VS_HAAR_HEATFLUX_THRESHOLD = 0.0714685928957633
 
 pxest_t = Union{p4est_t,p8est_t}
 pxest_ghost_t = Union{p4est_ghost_t,p8est_ghost_t}

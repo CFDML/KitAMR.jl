@@ -18,20 +18,22 @@ function save_boundary_result!(ib::AbstractBoundary,ps_data,solid_neighbor::Soli
     solid_cell = solid_neighbor.solid_cell;s_vs_data = solid_cell.vs_data
     vn = @views [dot(v,n) for v in eachrow(ps_data.vs_data.midpoint)]
     aux_df = zeros(vs_data.vs_num,NDF)
-    ib_point = aux_point+ps_data.midpoint-solid_cell.midpoint
-    ib_df = image_df(ps_data,ib_point,ka)
+    shift_point = aux_point+(ps_data.midpoint-solid_cell.midpoint)*0.5
+    sp_df = @views vs_data.df+(shift_point[dir]-ps_data.midpoint[dir])*vs_data.sdf[:,:,dir]
     Θ = heaviside.(vn)
     ssdf = @views solid_neighbor.vs_data.sdf[:,:,dir]
-    boundary_slope!(ssdf,vs_data.level,s_vs_data.level,ib_df,vs_data.df,
-        s_vs_data.df,ib_point[dir]-ps_data.midpoint[dir],ps_data.midpoint[dir]-solid_neighbor.midpoint[dir],ka)
-    dxL = aux_point[dir]-ib_point[dir]
+    boundary_slope!(ssdf,vs_data.level,s_vs_data.level,sp_df,s_vs_data.df,shift_point[dir]-solid_cell.midpoint[dir],ka)
+    dxL = aux_point[dir]-shift_point[dir]
     for j in axes(ssdf,2)
         for i in axes(ssdf,1)
             # positivity-preserving
-            ssdf[i,j] = min(abs((ib_df[i,j]-eps())/(ssdf[i,j]*dxL+eps())),1.0)*ssdf[i,j]
+            delta_f = ssdf[i,j] * dxL
+            if delta_f < 0.0
+                ssdf[i,j] = min(abs((sp_df[i,j]-eps())/(delta_f+eps())),1.0)*ssdf[i,j]
+            end
         end
     end
-    @. aux_df = ib_df+ssdf*dxL
+    @. aux_df = sp_df+ssdf*dxL
     cvc_gas_correction!(aux_df,solid_neighbor)
     aux_prim = get_bc(ib.bc;intersect_point=aux_point,ib);aux_prim[1] = 1.
     M = discrete_maxwell(vs_data.midpoint,aux_prim,kinfo)
@@ -289,6 +291,7 @@ function initialize_solid_neighbor!(ps_data::PsData{DIM,NDF},ka::KA{DIM,NDF}) wh
         aux_point,normal = calc_intersect(ps_data.midpoint,solid_cell.midpoint,ps_data.ds,get_dir(i),ib)
         svsdata = VsData{DIM,NDF}(
             vs_data.vs_num,
+            vs_data.local_maxlevel,
             vs_data.level,
             vs_data.weight,
             vs_data.midpoint,
@@ -329,6 +332,41 @@ function vs_interpolate!(f_df::AbstractMatrix,f_level::AbstractVector{Int8},fx,s
         end
     end
 end
+function boundary_slope!(sdf::AbstractMatrix,level,level_n,sp_df,sc_df,dxs::Float64,::KA{DIM,NDF}) where{DIM,NDF}
+    index = 1
+    flag = 0.0
+    df = sp_df
+    dfn = sc_df
+    fill!(sdf,0.)
+    @inbounds for i in axes(sdf,1)
+        if level[i] == level_n[index]
+            for j = 1:NDF
+                sdf[i, j] = (df[i, j] - dfn[index, j]) / dxs
+            end
+            index += 1
+        elseif level[i] < level_n[index]
+            while flag != 1.0
+                for j = 1:NDF
+                    sdf[i, j] +=
+                        (df[i, j] - dfn[index, j]) / 2^(DIM * (level_n[index] - level[i])) /
+                        dxs
+                end
+                flag += 1 / 2^(DIM * (level_n[index] - level[i]))
+                index += 1
+            end
+            flag = 0.0
+        else
+            for j = 1:NDF
+                sdf[i, j] += (df[i, j] - dfn[index, j]) / dxs
+            end
+            flag += 1 / 2^(DIM * (level[i] - level_n[index]))
+            if flag == 1.0
+                index += 1
+                flag = 0.0
+            end
+        end
+    end
+end
 function cvc_gas_correction!(aux_df,solid_neighbor::SolidNeighbor{DIM,NDF}) where{DIM,NDF}
     cvc = solid_neighbor.cvc
     for i in eachindex(cvc.indices)
@@ -364,75 +402,6 @@ function cvc_correction!(aux_df,F::AbstractMatrix,solid_neighbor,ka)
         @views @. aux_df[cvc.indices[i],:] = (cvc.gas_weights[i]*cvc.gas_dfs[i,:]+cvc.solid_weights[i]*cvc.solid_dfs[i,:])/(cvc.gas_weights[i]+cvc.solid_weights[i])
     end
 end
-function image_df(ps_data,ip,ka::KA{DIM,NDF}) where{DIM,NDF}
-    fluid_dirs = findall(x->!isnothing(x[1])&&!isa(x[1],AbstractInsideSolidData)&&x[1].bound_enc>=0,ps_data.neighbor.data)
-    fluid_cells = Vector{AbstractPsData{DIM,NDF}}(undef,length(fluid_dirs)+1)
-    for i in eachindex(fluid_dirs)
-        fluid_cells[i] = ps_data.neighbor.data[fluid_dirs[i]][1]
-    end
-    fluid_cells[end]=ps_data
-    image_df(ps_data,fluid_cells,ip,ka)
-end
-function image_df(ps_data::PsData{DIM,NDF},fluid_cells,ip,ka) where{DIM,NDF}
-    vs_data = ps_data.vs_data
-    image_df = zeros(vs_data.vs_num,NDF)
-    weights = Matrix{Float64}(undef,vs_data.vs_num,length(fluid_cells))
-    for i in eachindex(fluid_cells)
-        l = ip-fluid_cells[i].midpoint;l/=norm(l)
-        weights[:,i] .= [max(0.,dot(u,l)/norm(u))^2 for u in eachrow(vs_data.midpoint)]
-    end
-    weight_i = Vector{Float64}(undef,vs_data.vs_num)
-    weight_sum = sum(weights,dims=2)
-    for i in eachindex(fluid_cells)
-        f_vs_data = fluid_cells[i].vs_data
-        for j in eachindex(weight_i)
-            weight_i[j] = weight_sum[j]==0. ? 1.0/length(fluid_cells) : weights[j,i]/weight_sum[j]
-        end
-        fdf = f_vs_data.df;fsdf = f_vs_data.sdf;dx = ip-fluid_cells[i].midpoint
-        vs_extrapolate!(fdf,fsdf,f_vs_data.level,image_df,vs_data.level,dx,weight_i,ka)
-    end
-    return image_df
-end
-function boundary_slope!(sdf::AbstractMatrix,level,level_n,sp_df,dc_df,sc_df,dxf::Float64,dxs::Float64,::KA{DIM,NDF}) where{DIM,NDF}
-    sL = zeros(size(sdf,1),NDF)
-    index = 1
-    flag = 0.0
-    df = dc_df
-    dfn = sc_df
-    @inbounds for i in axes(sL,1)
-        if level[i] == level_n[index]
-            for j = 1:NDF
-                sL[i, j] = (df[i, j] - dfn[index, j]) / dxs
-            end
-            index += 1
-        elseif level[i] < level_n[index]
-            while flag != 1.0
-                for j = 1:NDF
-                    sL[i, j] +=
-                        (df[i, j] - dfn[index, j]) / 2^(DIM * (level_n[index] - level[i])) /
-                        dxs
-                end
-                flag += 1 / 2^(DIM * (level_n[index] - level[i]))
-                index += 1
-            end
-            flag = 0.0
-        else
-            for j = 1:NDF
-                sL[i, j] += (df[i, j] - dfn[index, j]) / dxs
-            end
-            flag += 1 / 2^(DIM * (level[i] - level_n[index]))
-            if flag == 1.0
-                index += 1
-                flag = 0.0
-            end
-        end
-    end
-    for j in axes(sdf,2)
-        for i in axes(sdf,1)
-            sdf[i,j] = minmod(sL[i,j],(sp_df[i,j]-dc_df[i,j])/dxf)
-        end
-    end
-end
 function update_solid_neighbor!(::Type{T},ps_data::PsData{DIM,NDF},solid_neighbor::SolidNeighbor{DIM,NDF},ka::KA) where{DIM,NDF,T<:AbstractFluxType}
     kinfo = ka.kinfo;ib = kinfo.config.IB[ps_data.bound_enc]
     vs_data = ps_data.vs_data
@@ -442,20 +411,22 @@ function update_solid_neighbor!(::Type{T},ps_data::PsData{DIM,NDF},solid_neighbo
     solid_cell = solid_neighbor.solid_cell;s_vs_data = solid_cell.vs_data
     vn = @views [dot(v,n) for v in eachrow(ps_data.vs_data.midpoint)]
     aux_df = zeros(vs_data.vs_num,NDF)
-    ib_point = aux_point+ps_data.midpoint-solid_cell.midpoint
-    ib_df = image_df(ps_data,ib_point,ka)
+    shift_point = aux_point+(ps_data.midpoint-solid_cell.midpoint)*0.5
+    sp_df = @views vs_data.df+(shift_point[dir]-ps_data.midpoint[dir])*vs_data.sdf[:,:,dir]
     Θ = heaviside.(vn)
     ssdf = @views solid_neighbor.vs_data.sdf[:,:,dir]
-    boundary_slope!(ssdf,vs_data.level,s_vs_data.level,ib_df,vs_data.df,
-        s_vs_data.df,ib_point[dir]-ps_data.midpoint[dir],ps_data.midpoint[dir]-solid_neighbor.midpoint[dir],ka)
-    dxL = aux_point[dir]-ib_point[dir]
+    boundary_slope!(ssdf,vs_data.level,s_vs_data.level,sp_df,s_vs_data.df,shift_point[dir]-solid_cell.midpoint[dir],ka)
+    dxL = aux_point[dir]-shift_point[dir]
     for j in axes(ssdf,2)
         for i in axes(ssdf,1)
             # positivity-preserving
-            ssdf[i,j] = min(abs((ib_df[i,j]-eps())/(ssdf[i,j]*dxL+eps())),1.0)*ssdf[i,j]
+            delta_f = ssdf[i,j] * dxL
+            if delta_f < 0.0
+                ssdf[i,j] = min(abs((sp_df[i,j]-eps())/(delta_f+eps())),1.0)*ssdf[i,j]
+            end
         end
     end
-    @. aux_df = ib_df+ssdf*dxL
+    @. aux_df = sp_df+ssdf*dxL
     cvc_gas_correction!(aux_df,solid_neighbor)
     aux_prim = get_bc(ib.bc;intersect_point=aux_point,ib);aux_prim[1] = 1.
     M = discrete_maxwell(vs_data.midpoint,aux_prim,kinfo)
@@ -471,15 +442,14 @@ function update_solid_neighbor!(::Type{T},ps_data::PsData{DIM,NDF},solid_neighbo
         end
     end
     cvc_correction!(aux_df,M,solid_neighbor,ka)
+    @inbounds for j in axes(ssdf,2)
+        for i in axes(ssdf,1)
+            ssdf[i,j] = (aux_df[i,j]-sp_df[i,j])/(aux_point[dir]-shift_point[dir]) # Recalculate slope for first-order positive part
+        end
+    end
     @. solid_neighbor.vs_data.df = aux_df # Positive part
-    @. solid_neighbor.vs_data.flux = ssdf*(solid_neighbor.midpoint[dir]-aux_point[dir]) # Reconstruction perturbance
-    # for i in axes(ssdf,1)
-    #     for j in axes(ssdf,2)
-    #         ssdf[i,j] = vs_data.sdf[i,j,dir] # Symmetric slope
-    #     end
-    # end
-    # solid_neighbor.w = calc_w0(vs_data.midpoint,solid_neighbor.vs_data.df,vs_data.weight,kinfo)
-    # solid_neighbor.sw[:,dir] .= (solid_neighbor.w-ps_data.w)./(solid_neighbor.midpoint[dir]-ps_data.midpoint[dir])
+    @. solid_neighbor.vs_data.flux = ssdf*(solid_neighbor.midpoint[dir]-aux_point[dir]) # Reconstruction perturbance (defined at cell interface)
+    ssdf.=0. # Reset slope for first-order positive part
 end
 function update_solid_neighbor!(ps_data::PsData{DIM,NDF},ka::KA{DIM,NDF}) where{DIM,NDF}
     solid_neighbors = findall(x->isa(x[1],SolidNeighbor),ps_data.neighbor.data)

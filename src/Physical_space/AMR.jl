@@ -616,6 +616,106 @@ function ps_copy(data::PsData{DIM,NDF}) where{DIM,NDF}
     return p
 end
 
+function _empty_vs_data(::KInfo{DIM,NDF}) where{DIM,NDF}
+    return VsData{DIM,NDF}(
+        0,
+        Int8[],
+        Float64[],
+        zeros(0, DIM),
+        zeros(0, NDF),
+        zeros(0, NDF, DIM),
+        zeros(0, NDF),
+    )
+end
+
+function _initial_ps_data(
+    kinfo::KInfo{DIM,NDF},
+    midpoint::AbstractVector,
+    ds::AbstractVector,
+) where{DIM,NDF}
+    for i in eachindex(kinfo.config.IB)
+        ib = kinfo.config.IB[i]
+        is_solid = solid_flag(ib, midpoint)
+        in_search_radius = search_radius_flag(ib, midpoint, ds)
+        if is_solid && !(in_search_radius && ghost_cell_flag(ib, midpoint, ds))
+            return InsideSolidData{DIM,NDF}(-i, copy(midpoint), copy(ds))
+        end
+        in_search_radius || continue
+        return PsData(DIM,NDF; bound_enc = is_solid ? -i : i,
+                      midpoint = copy(midpoint), ds = copy(ds))
+    end
+    return PsData(DIM,NDF; midpoint = copy(midpoint), ds = copy(ds))
+end
+
+function _reset_initial_macro_state!(ps_data::PsData{DIM,NDF}, kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
+    ps_data.prim .= initial_prim(kinfo.config.IC; midpoint = ps_data.midpoint, kinfo = kinfo)
+    ps_data.w .= get_conserved(ps_data.prim, kinfo)
+    fill!(ps_data.qf, 0.0)
+    fill!(ps_data.flux, 0.0)
+    fill!(ps_data.sw, 0.0)
+    fill!(ps_data.lohner, 0.0)
+    ps_data.vs_data = _empty_vs_data(kinfo)
+    return ps_data
+end
+
+function initial_ps_replace!(::Val{1}, out_quad, in_quads, which_tree, ka::KA{DIM,NDF}) where{DIM,NDF}
+    fp = PointerWrapper(ka.kinfo.forest.p4est)
+    trees = ka.kdata.field.trees
+    treeid = Int(which_tree) - trees.offset
+    datas = trees.data[treeid]
+    pw_out_quad = PointerWrapper(out_quad[1])
+    Odata = unsafe_pointer_to_objref(
+        pointer(PointerWrapper(P4estPsData, pw_out_quad.p.user_data[]).ps_data),
+    )
+    index = findfirst(x -> x === Odata, datas)
+    deleteat!(datas, index)
+    for i = 1:2^DIM
+        pw_in_quad = PointerWrapper(in_quads[i])
+        dp = PointerWrapper(P4estPsData, pw_in_quad.p.user_data[])
+        ds, midpoint = quad_to_cell(fp, which_tree, pw_in_quad)
+        ps_data = _initial_ps_data(ka.kinfo, midpoint, ds)
+        isa(ps_data, PsData) && _reset_initial_macro_state!(ps_data, ka.kinfo)
+        insert!(datas, index - 1 + i, ps_data)
+        dp[] = P4estPsData(pointer_from_objref(ps_data))
+    end
+    return nothing
+end
+
+function initial_ps_replace!(::ChildNum, out_quad, in_quads, which_tree, ka::KA{DIM,NDF}) where{DIM,NDF}
+    fp = PointerWrapper(ka.kinfo.forest.p4est)
+    trees = ka.kdata.field.trees
+    treeid = Int(which_tree) - trees.offset
+    datas = trees.data[treeid]
+    pw_in_quad = PointerWrapper(in_quads[1])
+    dp = PointerWrapper(P4estPsData, pw_in_quad.p.user_data[])
+    ds, midpoint = quad_to_cell(fp, which_tree, pw_in_quad)
+    ps_data = _initial_ps_data(ka.kinfo, midpoint, ds)
+    isa(ps_data, PsData) && _reset_initial_macro_state!(ps_data, ka.kinfo)
+    Odatas = Vector{AbstractPsData{DIM,NDF}}(undef, length(out_quad))
+    for i in eachindex(out_quad)
+        pw_out_quad = PointerWrapper(out_quad[i])
+        Odatas[i] = unsafe_pointer_to_objref(
+            pointer(PointerWrapper(P4estPsData, pw_out_quad.p.user_data[]).ps_data),
+        )
+    end
+    index = findfirst(x -> x === Odatas[1], datas)
+    deleteat!(datas, index:index + length(out_quad) - 1)
+    insert!(datas, index, ps_data)
+    dp[] = P4estPsData(pointer_from_objref(ps_data))
+    return nothing
+end
+
+function initial_p4est_replace(forest::T1, which_tree, num_out, out_quads::Ptr{T2}, num_in, in_quads) where{T1<:P_pxest_t,T2<:P_pxest_quadrant_t}
+    GC.@preserve forest which_tree num_out out_quads num_in in_quads begin
+        fp = PointerWrapper(forest)
+        ka = unsafe_pointer_to_objref(pointer(fp.user_pointer))
+        out_quads_wrap = unsafe_wrap(Vector{T2}, out_quads, num_out)
+        in_quads_wrap = unsafe_wrap(Vector{T2}, in_quads, num_in)
+        initial_ps_replace!(Val(Int(num_out)), out_quads_wrap, in_quads_wrap, which_tree, ka)
+        return nothing
+    end
+end
+
 function ps_merge(Odatas::Vector,index::Int,kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
     data = Odatas[index]
     vs_data = data.vs_data;vs_num = vs_data.vs_num
@@ -628,7 +728,9 @@ function ps_merge(Odatas::Vector,index::Int,kinfo::KInfo{DIM,NDF}) where{DIM,NDF
             prim = get_prim(w_new,kinfo),
             sw = [sum([x.sw[i,j] for x in Odatas]) for i in 1:DIM+2,j in 1:DIM]./2^DIM,
             flux = [sum([x.flux[i] for x in Odatas]) for i in 1:DIM+2]./2^DIM,
-            vs_data = VsData{DIM,NDF}(vs_num,copy(vs_data.level),copy(vs_data.weight),copy(vs_data.midpoint),
+            vs_data = VsData{DIM,NDF}(vs_num,
+                maximum(x -> x.vs_data.local_maxlevel, Odatas),
+                copy(vs_data.level),copy(vs_data.weight),copy(vs_data.midpoint),
                 zeros(vs_num,NDF),zeros(vs_num,NDF,DIM),zeros(vs_num,NDF))
         )
     p.neighbor.state[1] = BALANCE_FLAG
@@ -833,6 +935,58 @@ function ps_refine!(p4est::Ptr{p8est_t},ka::KA; recursive = 0)
         C_NULL,
         @cfunction(
             p4est_replace,
+            Cvoid,
+            (
+                Ptr{p8est_t},
+                p4est_topidx_t,
+                Cint,
+                Ptr{Ptr{p8est_quadrant_t}},
+                Cint,
+                Ptr{Ptr{p8est_quadrant_t}},
+            )
+        )
+    )
+end
+
+function initial_ps_refine!(p4est::Ptr{p4est_t}, ka::KA; recursive = 0)
+    p4est_refine_ext(
+        p4est,
+        recursive,
+        ka.kinfo.config.solver.AMR_PS_DYNAMIC_MAXLEVEL,
+        @cfunction(
+            ps_refine_flag,
+            Cint,
+            (Ptr{p4est_t}, p4est_topidx_t, Ptr{p4est_quadrant_t})
+        ),
+        C_NULL,
+        @cfunction(
+            initial_p4est_replace,
+            Cvoid,
+            (
+                Ptr{p4est_t},
+                p4est_topidx_t,
+                Cint,
+                Ptr{Ptr{p4est_quadrant_t}},
+                Cint,
+                Ptr{Ptr{p4est_quadrant_t}},
+            )
+        )
+    )
+end
+
+function initial_ps_refine!(p4est::Ptr{p8est_t}, ka::KA; recursive = 0)
+    p8est_refine_ext(
+        p4est,
+        recursive,
+        ka.kinfo.config.solver.AMR_PS_MAXLEVEL,
+        @cfunction(
+            ps_refine_flag,
+            Cint,
+            (Ptr{p8est_t}, p4est_topidx_t, Ptr{p8est_quadrant_t})
+        ),
+        C_NULL,
+        @cfunction(
+            initial_p4est_replace,
             Cvoid,
             (
                 Ptr{p8est_t},
@@ -1068,6 +1222,44 @@ function ps_balance!(p4est::Ptr{p8est_t})
         )
     )
 end
+function initial_ps_balance!(p4est::Ptr{p4est_t})
+    p4est_balance_ext(
+        p4est,
+        P4EST_CONNECT_FULL,
+        C_NULL,
+        @cfunction(
+            initial_p4est_replace,
+            Cvoid,
+            (
+                Ptr{p4est_t},
+                p4est_topidx_t,
+                Cint,
+                Ptr{Ptr{p4est_quadrant_t}},
+                Cint,
+                Ptr{Ptr{p4est_quadrant_t}},
+            )
+        )
+    )
+end
+function initial_ps_balance!(p4est::Ptr{p8est_t})
+    p8est_balance_ext(
+        p4est,
+        P8EST_CONNECT_FULL,
+        C_NULL,
+        @cfunction(
+            initial_p4est_replace,
+            Cvoid,
+            (
+                Ptr{p8est_t},
+                p4est_topidx_t,
+                Cint,
+                Ptr{Ptr{p8est_quadrant_t}},
+                Cint,
+                Ptr{Ptr{p8est_quadrant_t}},
+            )
+        )
+    )
+end
 function pre_ps_balance!(p4est::Ptr{p4est_t})
     p4est_balance_ext(p4est, P4EST_CONNECT_FULL, C_NULL,
         @cfunction(
@@ -1142,5 +1334,18 @@ function ps_adaptive_mesh_refinement!(p4est::P_pxest_t,ka::KA;recursive = false)
     ps_refine!(p4est,ka;recursive = recursive ? 1 : 0)
     ps_coarsen!(p4est; recursive = recursive ? 1 : 0)
     ps_balance!(p4est)
+    return nothing
+end
+
+"""
+$(TYPEDSIGNATURES)
+Initial physical-space pre-refinement before real velocity grids are allocated.
+Only macroscopic fields are used; velocity-space data stays as an empty placeholder.
+"""
+function initial_ps_adaptive_mesh_refinement!(p4est::P_pxest_t, ka::KA; recursive = false)
+    macro_slope!(p4est, ka)
+    update_criterion!(ka)
+    initial_ps_refine!(p4est, ka; recursive = recursive ? 1 : 0)
+    initial_ps_balance!(p4est)
     return nothing
 end

@@ -81,6 +81,7 @@ function save_for_restart(p4est::P_pxest_t, ka::KA{DIM,NDF}; dir_path::String = 
     # First pass: per-cell scalars + total velocity-cell count.
     vs_nums = Vector{Int}(undef, N)
     bound_encs = Vector{Int}(undef, N)
+    vs_local_maxlevels = zeros(Int8, N)
     ws = zeros(Float64, N, DIM + 2)
     index = 1
     for tree in trees
@@ -91,6 +92,7 @@ function save_for_restart(p4est::P_pxest_t, ka::KA{DIM,NDF}; dir_path::String = 
             else
                 vs_nums[index] = ps_data.vs_data.vs_num
                 bound_encs[index] = ps_data.bound_enc
+                vs_local_maxlevels[index] = ps_data.vs_data.local_maxlevel
                 ws[index, :] .= ps_data.w
             end
             index += 1
@@ -117,7 +119,7 @@ function save_for_restart(p4est::P_pxest_t, ka::KA{DIM,NDF}; dir_path::String = 
     end
 
     # Size estimate (raw, uncompressed) and optional confirmation.
-    local_bytes = sizeof(vs_nums) + sizeof(bound_encs) + sizeof(ws) +
+    local_bytes = sizeof(vs_nums) + sizeof(bound_encs) + sizeof(vs_local_maxlevels) + sizeof(ws) +
                   sizeof(vs_levels) + sizeof(vs_midpoints) + sizeof(vs_df)
     total_bytes = MPI.Reduce(local_bytes, +, 0, comm)
     proceed = true
@@ -175,11 +177,11 @@ function save_for_restart(p4est::P_pxest_t, ka::KA{DIM,NDF}; dir_path::String = 
             f["gradmax"] = status.gradmax
             f["ps_adapt_step"] = status.ps_adapt_step
             f["vs_adapt_step"] = status.vs_adapt_step
+            f["vs_lmax_adapt_step"] = status.vs_lmax_adapt_step
             f["partition_step"] = status.partition_step
             f["ps_interval_cached"] = status.ps_interval_cached
             f["vs_interval_cached"] = status.vs_interval_cached
             f["amr_transport_rate"] = status.amr_transport_rate
-            f["cip_projection_correction_norm"] = status.cip_projection_correction_norm
         end
         jldopen(dir * "manifest.jld2", "w") do f
             f["format_version"] = RESTART_FORMAT_VERSION
@@ -197,6 +199,7 @@ function save_for_restart(p4est::P_pxest_t, ka::KA{DIM,NDF}; dir_path::String = 
     jldopen(dir * "restart_" * string(rank) * ".jld2", "w"; compress = true) do f
         f["vs_nums"] = vs_nums
         f["bound_encs"] = bound_encs
+        f["vs_local_maxlevels"] = vs_local_maxlevels
         f["ws"] = ws
         f["vs_levels"] = vs_levels
         f["vs_midpoints"] = vs_midpoints
@@ -282,6 +285,7 @@ function _restart_build_ps_list(dir::String, kinfo::KInfo{DIM,NDF}, gfq_old::Vec
     last_old = searchsortedlast(gfq_old, G1 - 1) - 1       # old rank owning global cell G1-1
 
     vs_nums = Int[]; bound_encs = Int[]
+    vs_local_maxlevels = Int8[]
     ws = Matrix{Float64}(undef, 0, DIM + 2)
     vs_levels = Int8[]
     vs_midpoints = Matrix{Float64}(undef, 0, DIM)
@@ -289,6 +293,12 @@ function _restart_build_ps_list(dir::String, kinfo::KInfo{DIM,NDF}, gfq_old::Vec
     for r in first_old:last_old
         d = load(dir * "restart_" * string(r) * ".jld2")
         append!(vs_nums, d["vs_nums"]); append!(bound_encs, d["bound_encs"])
+        if haskey(d, "vs_local_maxlevels")
+            append!(vs_local_maxlevels, Int8.(d["vs_local_maxlevels"]))
+        else
+            append!(vs_local_maxlevels,
+                    fill(Int8(kinfo.config.solver.AMR_VS_MAXLEVEL), length(d["vs_nums"])))
+        end
         ws = vcat(ws, d["ws"])
         append!(vs_levels, d["vs_levels"])
         vs_midpoints = vcat(vs_midpoints, d["vs_midpoints"])
@@ -320,7 +330,8 @@ function _restart_build_ps_list(dir::String, kinfo::KInfo{DIM,NDF}, gfq_old::Vec
             mids = vs_midpoints[voff+1:voff+vn, :]
             df = vs_df[voff+1:voff+vn, :]
             weight = @. tree_weight / 2.0^(DIM * levels)
-            vs_data = VsData{DIM,NDF}(vn, levels, weight, mids, df, zeros(vn, NDF, DIM), zeros(vn, NDF))
+            vs_data = VsData{DIM,NDF}(vn, vs_local_maxlevels[ci], levels, weight, mids, df,
+                                      zeros(vn, NDF, DIM), zeros(vn, NDF))
             ps_list[i] = PsData(DIM, NDF; bound_enc = bound_encs[ci], w = w, prim = get_prim(w, kinfo), vs_data = vs_data)
         end
         voff += vn
@@ -426,11 +437,11 @@ function restart(dir_path::String; config = nothing, check_integrity::Bool = tru
     status.gradmax = st["gradmax"]
     status.ps_adapt_step = st["ps_adapt_step"]
     status.vs_adapt_step = st["vs_adapt_step"]
+    status.vs_lmax_adapt_step = get(st, "vs_lmax_adapt_step", 1)
     status.partition_step = st["partition_step"]
     status.ps_interval_cached = get(st, "ps_interval_cached", 1)
     status.vs_interval_cached = get(st, "vs_interval_cached", 1)
     status.amr_transport_rate = get(st, "amr_transport_rate", 0.0)
-    status.cip_projection_correction_norm = get(st, "cip_projection_correction_norm", 0.0)
 
     MPI.Comm_rank(comm) == 0 && println("Restarted from $(dir) at step $(status.step), sim_time $(status.sim_time).")
     execute_check!(p4est, ka)

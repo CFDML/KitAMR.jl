@@ -34,6 +34,7 @@ function initialize_vs_data(
     sdf = zeros(vs_num, NDF, DIM)
     flux = zeros(vs_num, NDF)
     vs_data = VsData{DIM,NDF}(vs_num, zeros(Int, vs_num), weight, midpoint, df, sdf, flux)
+    initialize_vs_local_maxlevel!(vs_data, refine_prims, kinfo)
     for _ in 1:kinfo.config.solver.AMR_VS_MAXLEVEL
         initial_vs_adaptive_mesh_refinement!(refine_prims,vs_data,kinfo)
     end
@@ -57,7 +58,8 @@ function initialize_vs_data(prim::AbstractVector,kinfo::KInfo{2,NDF},quadrature:
     df = haskey(kwargs,:df) ? kwargs[:df] : discrete_maxwell(midpoint, prim, kinfo)
     sdf = zeros(vs_num, NDF, DIM)
     flux = zeros(vs_num, NDF)
-    return VsData{DIM,NDF}(vs_num, zeros(Int, vs_num), weight, midpoint, df, sdf, flux)
+    return VsData{DIM,NDF}(vs_num, Int8(kinfo.config.solver.AMR_VS_MAXLEVEL),
+                           zeros(Int, vs_num), weight, midpoint, df, sdf, flux)
 end
 
 function initialize_vs_data(prim::AbstractVector,kinfo::KInfo{3,NDF},quadrature::Gauss_Hermite{NP};kwargs...) where{NDF,NP}
@@ -78,5 +80,6 @@ function initialize_vs_data(prim::AbstractVector,kinfo::KInfo{3,NDF},quadrature:
     df = haskey(kwargs,:df) ? kwargs[:df] : discrete_maxwell(midpoint, prim, kinfo)
     sdf = zeros(vs_num, NDF, DIM)
     flux = zeros(vs_num, NDF)
-    return VsData{DIM,NDF}(vs_num, zeros(Int, vs_num), weight, midpoint, df, sdf, flux)
+    return VsData{DIM,NDF}(vs_num, Int8(kinfo.config.solver.AMR_VS_MAXLEVEL),
+                           zeros(Int, vs_num), weight, midpoint, df, sdf, flux)
 end

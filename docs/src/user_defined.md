@@ -7,13 +7,14 @@ They fall into three groups:
 | Callback | Configured via | Purpose |
 |---|---|---|
 | Initial condition | [`PCoordFn`](@ref) (in `Configure(; IC = …)`) | the primitive state at each cell centre |
-| Refinement flags | [`UDF`](@ref) (in `Configure(; user_defined = …)`) | steer adaptive mesh refinement |
+| Refinement hooks | [`UDF`](@ref) (in `Configure(; user_defined = …)`) | steer adaptive mesh refinement |
 | Velocity-space output | [`Output`](@ref) (in `Configure(; output = …)`) | choose which cells dump their velocity space |
 
-All callbacks are **optional**: every field defaults to a no-op, so a uniform run needs none of
-them. They are collected here because they share conventions (the primitive-variable ordering,
-the cell objects passed in) and because getting their signatures right is the only non-obvious
-part of writing a case.
+All callbacks are **optional**: flags default to no-ops, and the dynamic physical-space criterion
+defaults to KitAMR's built-in Löhner sensor, so a uniform run needs no user callbacks. They are
+collected here because they share conventions (the primitive-variable ordering, the cell objects
+passed in) and because getting their signatures right is the only non-obvious part of writing a
+case.
 
 ## The primitive-variable vector
 
@@ -59,11 +60,11 @@ end
 config = Configure(solver; IC = PCoordFn(cylinder_buffer_IC), ...)
 ```
 
-## Refinement flags ([`UDF`](@ref))
+## Refinement hooks ([`UDF`](@ref))
 
-Two flags steer physical-space adaptive mesh refinement. Supply either or both via
-`UDF(; static_ps_refine_flag = …, dynamic_ps_refine_flag = …)` and pass it as
-`Configure(; user_defined = udf)`.
+Three hooks steer physical-space adaptive mesh refinement. Supply any of them via
+`UDF(; static_ps_refine_flag = …, dynamic_ps_refine_flag = …,
+dynamic_ps_adapt_criterion = …)` and pass it as `Configure(; user_defined = udf)`.
 
 ### `static_ps_refine_flag` — geometry-driven, applied once at setup
 
@@ -89,6 +90,21 @@ Löhner sensor. Return `false` to forbid dynamic refinement of `ps_data` (e.g. t
 outside a region of interest); `true` lets the sensor decide. The cell object exposes
 `ps_data.midpoint`, `ps_data.ds`, `ps_data.prim`, … Default: always allow.
 
+### `dynamic_ps_adapt_criterion` — solution-driven, replaces the dynamic criterion
+
+```julia
+dynamic_ps_adapt_criterion(ps_data::AbstractPsData, level::Int, ka::KA) -> Real
+```
+
+Evaluated every refinement step after the built-in Löhner sensor has been updated. Return a scalar
+sensor value for the cell. Refinement compares it with `solver.AMR_PS_THRES`; coarsening uses the
+same value with KitAMR's built-in hysteresis factor. If this hook is not supplied, KitAMR uses the
+current default criterion, equivalent to `KitAMR.ps_sensor(ps_data)`.
+
+A Bool return is also accepted for simple user rules: `true` refines the cell and protects it from
+coarsening, while `false` means the dynamic criterion does not request refinement. The older
+`dynamic_ps_refine_flag` still applies first as a region gate.
+
 ```julia
 # from example/cylinder
 shock_wave_region(midpoint, ds, kinfo, level) =
@@ -100,6 +116,15 @@ amr_region(ps_data, level, ka) =
 udf = UDF(; static_ps_refine_flag = shock_wave_region,
             dynamic_ps_refine_flag = amr_region)
 config = Configure(solver; user_defined = udf, ...)
+```
+
+```julia
+# Custom scalar criterion; omitting this hook keeps the current default.
+function density_jump_criterion(ps_data, level, ka)
+    return maximum(abs, @view ps_data.sw[1, :]) / max(abs(ps_data.prim[1]), eps())
+end
+
+udf = UDF(; dynamic_ps_adapt_criterion = density_jump_criterion)
 ```
 
 !!! note
@@ -148,7 +173,8 @@ config = Configure(solver; output = output, ...)
 
 ```julia
 udf    = UDF(; static_ps_refine_flag = shock_wave_region,
-               dynamic_ps_refine_flag = amr_region)
+               dynamic_ps_refine_flag = amr_region,
+               dynamic_ps_adapt_criterion = density_jump_criterion)
 output = Output(solver; vs_output_criterion = vs_output_flag)
 config = Configure(solver;
     IC           = PCoordFn(cylinder_buffer_IC),   # initial condition callback

@@ -22,6 +22,28 @@ end
     )
 end
 
+@inline function default_dynamic_ps_adapt_criterion(ps_data::PsData, level::Integer, ka::KA)
+    return ps_sensor(ps_data)
+end
+
+@inline function _ps_adapt_criterion_exceeds(value, threshold::Real)
+    value isa Bool && return value
+    value isa Real ||
+        error("`dynamic_ps_adapt_criterion` must return a Real or Bool value; got $(typeof(value)).")
+    return value > threshold
+end
+
+@inline function ps_dynamic_refine_criterion(ps_data::PsData, level::Integer, ka::KA)
+    value = ka.kinfo.config.user_defined.dynamic_ps_adapt_criterion(ps_data, level, ka)
+    return _ps_adapt_criterion_exceeds(value, ka.kinfo.config.solver.AMR_PS_THRES)
+end
+
+@inline function ps_dynamic_coarsen_protected(ps_data::PsData, level::Integer, ka::KA)
+    value = ka.kinfo.config.user_defined.dynamic_ps_adapt_criterion(ps_data, level, ka)
+    threshold = PS_COARSEN_SENSOR_RATIO * ka.kinfo.config.solver.AMR_PS_THRES
+    return _ps_adapt_criterion_exceeds(value, threshold)
+end
+
 @inline function lohner_value(left::Real, center::Real, right::Real, dsL::Real, dsR::Real, eps::Real)
     scale = dsR * abs(left) + (dsL + dsR) * abs(center) + dsL * abs(right)
     scale <  PS_LOHNER_ABS_FLOOR*min(dsL,dsR) && return 0.0
@@ -202,7 +224,7 @@ function ps_refine_flag(
     kinfo.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,kinfo,level) && return Cint(1)
     dflag = kinfo.config.user_defined.dynamic_ps_refine_flag==null_udf ? true : kinfo.config.user_defined.dynamic_ps_refine_flag(ps_data,level,ka)
     !dflag&&return Cint(0)
-    return Cint(ps_sensor(ps_data)>kinfo.config.solver.AMR_PS_THRES)
+    return Cint(ps_dynamic_refine_criterion(ps_data, level, ka))
 end
 
 """
@@ -211,12 +233,11 @@ $(TYPEDSIGNATURES)
 function ps_coarsen_flag(ps_datas::Vector{PsData}, levels::Vector{Int}, ka::KA{DIM,NDF}) where{DIM,NDF}
     kinfo = ka.kinfo
     levels[1]>kinfo.config.solver.AMR_PS_DYNAMIC_MAXLEVEL&&return Cint(0)
-    threshold = PS_COARSEN_SENSOR_RATIO * kinfo.config.solver.AMR_PS_THRES
     for i = 1:2^DIM
         ps_data = ps_datas[i]
         (ps_data.bound_enc!=0||domain_flag(kinfo,ps_data.midpoint,ps_data.ds)) && return Cint(0)
         kinfo.config.user_defined.static_ps_refine_flag(ps_data.midpoint,ps_data.ds,kinfo,levels[i]-1) && return Cint(0)
-        ps_sensor(ps_data)>threshold && return Cint(0)
+        ps_dynamic_coarsen_protected(ps_data, levels[i], ka) && return Cint(0)
     end
     return Cint(1)
 end

@@ -299,6 +299,27 @@ function initial_vs_refine_prims(prim::AbstractVector{Float64}, midpoint::Abstra
     return length(prims) == 1 ? (prim,) : prims
 end
 
+function _set_initial_vs_data!(ps_data::PsData, kinfo::KInfo; init_vs::Bool)
+    if init_vs
+        refine_prims = initial_vs_refine_prims(ps_data.prim, ps_data.midpoint, ps_data.ds, kinfo)
+        ps_data.vs_data = initialize_vs_data(ps_data.prim, kinfo; refine_prims)
+    else
+        ps_data.vs_data = _empty_vs_data(kinfo)
+    end
+    return ps_data
+end
+
+function initialize_velocity_space!(ka::KA{DIM,NDF}) where{DIM,NDF}
+    kinfo = ka.kinfo
+    for tree in ka.kdata.field.trees.data
+        for ps_data in tree
+            isa(ps_data, PsData) || continue
+            _set_initial_vs_data!(ps_data, kinfo; init_vs = true)
+        end
+    end
+    return nothing
+end
+
 function re_init_vs4est!(trees, kinfo)
     for i in eachindex(trees.data)
         for j in eachindex(trees.data[i])
@@ -315,10 +336,10 @@ end
 $(TYPEDSIGNATURES)
 Reapply the configured initial condition on the current physical mesh.
 
-This is intended for initial physical-space AMR: after refinement creates
-children from interpolated parent data and the topology is recovered, call this
-so new fine cells receive the exact initial state at their own cell centers
-while keeping the velocity grid inherited from their parent cell.
+This is intended for initial physical-space AMR: after refinement changes the
+current physical mesh, call this so new fine cells receive the exact initial
+state at their own cell centers without touching velocity-space data when it
+has not been allocated yet.
 """
 function reinitialize_initial_condition!(ka::KA{DIM,NDF}) where{DIM,NDF}
     kinfo = ka.kinfo
@@ -333,9 +354,11 @@ function reinitialize_initial_condition!(ka::KA{DIM,NDF}) where{DIM,NDF}
             fill!(ps_data.flux, 0.0)
             fill!(ps_data.sw, 0.0)
             fill!(ps_data.lohner, 0.0)
-            ps_data.vs_data.df .= discrete_maxwell(ps_data.vs_data.midpoint, ps_data.prim, kinfo)
-            fill!(ps_data.vs_data.sdf, 0.0)
-            fill!(ps_data.vs_data.flux, 0.0)
+            if isdefined(ps_data, :vs_data) && ps_data.vs_data.vs_num > 0
+                ps_data.vs_data.df .= discrete_maxwell(ps_data.vs_data.midpoint, ps_data.prim, kinfo)
+                fill!(ps_data.vs_data.sdf, 0.0)
+                fill!(ps_data.vs_data.flux, 0.0)
+            end
         end
     end
     return nothing
@@ -407,7 +430,7 @@ end
 """
 $(TYPEDSIGNATURES)
 """
-function initialize_ps!(p4est::Ptr{p4est_t},kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
+function initialize_ps!(p4est::Ptr{p4est_t},kinfo::KInfo{DIM,NDF}; init_vs::Bool = true) where{DIM,NDF}
     fp = PointerWrapper(p4est)
     trees_data =
         Vector{Vector{AbstractPsData{DIM,NDF}}}(undef, fp.last_local_tree[] - fp.first_local_tree[] + 1)
@@ -432,8 +455,7 @@ function initialize_ps!(p4est::Ptr{p4est_t},kinfo::KInfo{DIM,NDF}) where{DIM,NDF
             ps_data.midpoint .= midpoint
             ps_data.prim .= initial_prim(ic;midpoint = ps_data.midpoint,kinfo = kinfo)
             ps_data.w .= get_conserved(ps_data, kinfo)
-            refine_prims = initial_vs_refine_prims(ps_data.prim, ps_data.midpoint, ps_data.ds, kinfo)
-            ps_data.vs_data = initialize_vs_data(ps_data.prim, kinfo; refine_prims)
+            _set_initial_vs_data!(ps_data, kinfo; init_vs)
             if mesh_data.is_ghost_cell
                 ps_data.bound_enc = -mesh_data.in_search_radius
             end
@@ -450,7 +472,7 @@ end
 """
 $(TYPEDSIGNATURES)
 """
-function initialize_ps!(p4est::Ptr{p8est_t},kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
+function initialize_ps!(p4est::Ptr{p8est_t},kinfo::KInfo{DIM,NDF}; init_vs::Bool = true) where{DIM,NDF}
     fp = PointerWrapper(p4est)
     trees_data = [AbstractPsData{DIM,NDF}[] for _ in 1:fp.last_local_tree[] - fp.first_local_tree[] + 1]
     trees = PsTrees{DIM,NDF}(trees_data, fp.first_local_tree[] - 1)
@@ -471,8 +493,7 @@ function initialize_ps!(p4est::Ptr{p8est_t},kinfo::KInfo{DIM,NDF}) where{DIM,NDF
             ps_data.midpoint .= midpoint
             ps_data.prim .= initial_prim(ic;midpoint = ps_data.midpoint,kinfo)
             ps_data.w .= get_conserved(ps_data, kinfo)
-            refine_prims = initial_vs_refine_prims(ps_data.prim, ps_data.midpoint, ps_data.ds, kinfo)
-            ps_data.vs_data = initialize_vs_data(ps_data.prim, kinfo; refine_prims)
+            _set_initial_vs_data!(ps_data, kinfo; init_vs)
             if mesh_data.is_ghost_cell
                 ps_data.bound_enc = -mesh_data.in_search_radius
             end
@@ -490,7 +511,7 @@ end
 $(TYPEDSIGNATURES)
 Initialize field for 2D case.
 """
-function initialize_trees!(kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
+function initialize_trees!(kinfo::KInfo{DIM,NDF}; init_vs::Bool = true) where{DIM,NDF}
     GC.@preserve kinfo begin
         connectivity_ps = set_connectivity(kinfo)
         p4est = AMR_4est_new(
@@ -502,7 +523,7 @@ function initialize_trees!(kinfo::KInfo{DIM,NDF}) where{DIM,NDF}
         kinfo.forest.p4est = p4est
         mesh_tree = pre_refine!(p4est,kinfo)
         GC.@preserve mesh_tree begin
-            trees = initialize_ps!(p4est,kinfo)
+            trees = initialize_ps!(p4est,kinfo; init_vs)
         end
         return p4est, trees
     end
@@ -512,7 +533,7 @@ end
 $(TYPEDSIGNATURES)
 Initialize field for 3D case.
 """
-function initialize_trees!(kinfo::KInfo{3,NDF}) where{NDF}
+function initialize_trees!(kinfo::KInfo{3,NDF}; init_vs::Bool = true) where{NDF}
     GC.@preserve kinfo begin
         connectivity_ps = set_connectivity(kinfo)
         p4est = AMR_4est_new(
@@ -524,7 +545,7 @@ function initialize_trees!(kinfo::KInfo{3,NDF}) where{NDF}
         kinfo.forest.p4est = p4est
         mesh_tree = pre_refine!(p4est,kinfo)
         GC.@preserve mesh_tree begin
-            trees = initialize_ps!(p4est,kinfo)
+            trees = initialize_ps!(p4est,kinfo; init_vs)
         end
         return p4est, trees
     end
@@ -569,11 +590,22 @@ function _balance_initial_vs!(p4est::P_pxest_t, ka::KA)
     return nothing
 end
 
-function _exchange_reinitialized_vs!(p4est::P_pxest_t, ka::KA)
-    if MPI.Comm_size(MPI.COMM_WORLD) > 1
-        vs_ghost_exchange!(p4est, ka)
-        update_faces!(p4est, ka)
-    end
+function _recover_initial_prerefine!(p4est::P_pxest_t, ka::KA)
+    update_ghost!(p4est, ka)
+    update_neighbor!(p4est, ka)
+    return nothing
+end
+
+function _finish_initial_velocity_space!(p4est::P_pxest_t, ka::KA)
+    initialize_velocity_space!(ka)
+    initialize_solid_neighbor!(ka)
+    ps_partition!(p4est, ka)
+    update_ghost!(p4est, ka)
+    update_neighbor!(p4est, ka)
+    initialize_solid_neighbor!(ka)
+    initialize_faces!(p4est, ka)
+    initialize_immersed_boundaries!(ka)
+    _balance_initial_vs!(p4est, ka)
     return nothing
 end
 
@@ -581,18 +613,13 @@ end
 $(TYPEDSIGNATURES)
 Initialize everthing according to `config` dictionary.
 """
-# Initial mesh pre-refinement, run at the end of `initialize`: apply `ps_adaptive_mesh_refinement!`
-# `steps` times. Each pass is partitioned before `amr_recover!` rebuilds ghost/neighbor/face
-# data, optionally re-applying the initial condition so newly refined cells get the exact IC.
+# Initial physical-space pre-refinement. These passes use only macroscopic data;
+# real velocity grids are allocated afterwards, once the physical mesh is final.
 function _prerefine!(p4est::P_pxest_t, ka::KA, steps::Integer, recursive::Bool, reinit_ic::Bool)
     for _ in 1:steps
-        ps_adaptive_mesh_refinement!(p4est, ka; recursive = recursive)
-        ps_partition!(p4est, ka)
-        amr_recover!(p4est, ka)
-        if reinit_ic
-            reinitialize_initial_condition!(ka)
-            _exchange_reinitialized_vs!(p4est, ka)
-        end
+        initial_ps_adaptive_mesh_refinement!(p4est, ka; recursive = recursive)
+        reinit_ic && reinitialize_initial_condition!(ka)
+        _recover_initial_prerefine!(p4est, ka)
     end
     return nothing
 end
@@ -600,19 +627,15 @@ function initialize(config::Dict;
         prerefine_steps::Integer = Solver(config).AMR_PS_DYNAMIC_MAXLEVEL,
         prerefine_recursive::Bool = false, prerefine_reinit_ic::Bool = true)
     kinfo = KInfo(config)
-    p4est, trees = initialize_trees!(kinfo)
+    p4est, trees = initialize_trees!(kinfo; init_vs = false)
     kdata = KData(trees)
     ka = KA(kinfo,kdata)
     PointerWrapper(p4est).user_pointer = pointer_from_objref(ka)
-    ps_partition!(p4est, ka)
     initialize_forest!(p4est,kinfo)
     kdata.ghost = initialize_ghost(p4est, kinfo)
     initialize_neighbor_data!(p4est, ka)
-    initialize_solid_neighbor!(ka)
-    initialize_faces!(p4est, ka)
-    initialize_immersed_boundaries!(ka)
-    _balance_initial_vs!(p4est, ka)
     _prerefine!(p4est, ka, prerefine_steps, prerefine_recursive, prerefine_reinit_ic)
+    _finish_initial_velocity_space!(p4est, ka)
     execute_check!(p4est, ka)   # report the status once initialization (incl. pre-refinement) is complete
     return p4est,ka
 end
@@ -622,10 +645,10 @@ Build the full solver state from a [`Configure`](@ref) and return `(p4est, ka)`.
 entry point of every run and must be called before any time stepping.
 
 It creates the `p4est` forest, generates and geometry-adaptively refines the physical mesh,
-builds the velocity-space grids, initializes the field from the configuration's initial
-condition, sets up ghost layers, neighbor maps, faces and immersed boundaries, performs the
-first load-balancing partition, runs the solution-driven initial mesh pre-refinement (see the
-keyword arguments below), and finally reports the initial status.
+initializes the macroscopic field from the configuration's initial condition, sets up ghost
+layers and neighbor maps, runs the solution-driven initial physical-space pre-refinement
+(see the keyword arguments below), then builds and balances the velocity-space grids,
+faces and immersed boundaries before reporting the initial status.
 
 Returns `(p4est, ka)`:
 - `p4est` — opaque pointer to the p4est forest (the parallel mesh topology);
@@ -636,8 +659,9 @@ Pass both to [`solve!`](@ref) (or to the individual per-step driver functions), 
 
 # Keyword arguments — initial mesh pre-refinement
 - `prerefine_steps::Integer = solver.AMR_PS_DYNAMIC_MAXLEVEL` — number of
-  [`ps_adaptive_mesh_refinement!`](@ref) passes applied after the base setup; the default builds
-  the mesh up to the dynamic physical-space max level. Pass `0` to skip.
+  [`initial_ps_adaptive_mesh_refinement!`](@ref) passes applied before velocity-space
+  allocation; the default builds the mesh up to the dynamic physical-space max level.
+  Pass `0` to skip.
 - `prerefine_recursive::Bool = false` — `recursive` flag for those passes.
 - `prerefine_reinit_ic::Bool = true` — re-apply the initial condition
   ([`reinitialize_initial_condition!`](@ref)) after each pass, so newly refined cells get the
@@ -647,19 +671,15 @@ function initialize(config::Configure{DIM,NDF};
         prerefine_steps::Integer = config.solver.AMR_PS_DYNAMIC_MAXLEVEL,
         prerefine_recursive::Bool = false, prerefine_reinit_ic::Bool = true) where{DIM,NDF}
     kinfo = KInfo(config)
-    p4est, trees = initialize_trees!(kinfo)
+    p4est, trees = initialize_trees!(kinfo; init_vs = false)
     kdata = KData(trees)
     ka = KA(kinfo,kdata)
     PointerWrapper(p4est).user_pointer = pointer_from_objref(ka)
-    ps_partition!(p4est, ka)
     initialize_forest!(p4est,kinfo)
     kdata.ghost = initialize_ghost(p4est, kinfo)
     initialize_neighbor_data!(p4est, ka)
-    initialize_solid_neighbor!(ka)
-    initialize_faces!(p4est, ka)
-    initialize_immersed_boundaries!(ka)
-    _balance_initial_vs!(p4est, ka)
     _prerefine!(p4est, ka, prerefine_steps, prerefine_recursive, prerefine_reinit_ic)
+    _finish_initial_velocity_space!(p4est, ka)
     execute_check!(p4est, ka)   # report the status once initialization (incl. pre-refinement) is complete
     return p4est,ka
 end

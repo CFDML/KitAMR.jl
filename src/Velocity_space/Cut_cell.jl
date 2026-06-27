@@ -8,72 +8,93 @@ function gaussian_area(A::AbstractMatrix) # DIMxN
 end
 
 """
-2D cut cell.
+2D cut cell. `gas_weight` is the area in `dot(v,n)<0`; `solid_weight` is
+the area in `dot(v,n)>0`.
 """
-function cut_rect(n::Vector{Float64},vertices::Vector{Vector{Float64}}) # The splitting line at the boundary with normal direction n. Return the areas of the two part. The former one locates at the direction n.
-    # The cases where n is oriented to along the axes are excluded in advance.
-    #=
-    y
-#     7(8)|-----6-----|5(6)
-#         |     |     |
-#         8-----|-----4
-#         |     |     |
-#     1(2)|-----2-----|3(4) x
-    =#
-    points = Vector{Float64}[];indices = Int[];i = 0
-    xmin,xmax,ymin,ymax = vertices[1][1],vertices[2][1],vertices[1][2],vertices[3][2]
-    y = -n[1]/n[2]*xmin
-    if y<ymax&&y>ymin
-        push!(points,[xmin,y])
-        push!(indices,8)
-        i+=1
+function _same_cut_point(x1::Float64,y1::Float64,x2::Float64,y2::Float64,tol::Float64)
+    return abs(x1-x2) <= tol && abs(y1-y2) <= tol
+end
+function _append_cut_point(count::Int,area2::Float64,first_x::Float64,first_y::Float64,last_x::Float64,last_y::Float64,x::Float64,y::Float64,tol::Float64)
+    if count == 0
+        count = 1
+        first_x = x;first_y = y
+        last_x = x;last_y = y
+    elseif !_same_cut_point(last_x,last_y,x,y,tol)
+        area2 += last_x*y-last_y*x
+        count += 1
+        last_x = x;last_y = y
     end
-    y = -n[1]/n[2]*xmax
-    if y<ymax&&y>ymin
-        push!(points,[xmax,y])
-        push!(indices,4)
-        i+=1
+    return count,area2,first_x,first_y,last_x,last_y
+end
+function _cut_rect_tol(n::Vector{Float64},vertices::Vector{Vector{Float64}})
+    scale = 1.0
+    for vertex in vertices
+        for x in vertex
+            scale = max(scale,abs(x))
+        end
     end
-    x = -n[2]/n[1]*ymin
-    if x<xmax&&x>xmin
-        push!(points,[x,ymin])
-        push!(indices,2)
-        i+=1
+    return max(EPS,128.0*eps(Float64)*max(sqrt(n[1]*n[1]+n[2]*n[2]),1.0)*scale)
+end
+function _rect_area(vertices::Vector{Vector{Float64}})
+    area = 0.0
+    @inbounds for i in 1:4
+        j = i == 4 ? 1 : i+1
+        area += vertices[i][1]*vertices[j][2]-vertices[i][2]*vertices[j][1]
     end
-    x = -n[2]/n[1]*ymax
-    if x<xmax&&x>xmin
-        push!(points,[x,ymax])
-        push!(indices,6)
-        i+=1
+    return 0.5*abs(area)
+end
+function _clip_rect_negative_halfplane_area(n::Vector{Float64},vertices::Vector{Vector{Float64}},tol::Float64)
+    count = 0
+    area2 = 0.0
+    first_x = 0.0;first_y = 0.0
+    last_x = 0.0;last_y = 0.0
+    n1 = n[1];n2 = n[2]
+    prev = vertices[4]
+    prev_x = prev[1];prev_y = prev[2]
+    dprev = n1*prev_x+n2*prev_y
+    prev_inside = dprev <= tol
+    @inbounds for i in 1:4
+        curr = vertices[i]
+        curr_x = curr[1];curr_y = curr[2]
+        dcurr = n1*curr_x+n2*curr_y
+        curr_inside = dcurr <= tol
+        if curr_inside != prev_inside
+            denom = dprev-dcurr
+            if abs(denom) > tol
+                theta = clamp(dprev/denom,0.0,1.0)
+                count,area2,first_x,first_y,last_x,last_y = _append_cut_point(
+                    count,area2,first_x,first_y,last_x,last_y,
+                    prev_x+theta*(curr_x-prev_x),prev_y+theta*(curr_y-prev_y),tol
+                )
+            end
+        end
+        if curr_inside
+            count,area2,first_x,first_y,last_x,last_y = _append_cut_point(
+                count,area2,first_x,first_y,last_x,last_y,curr_x,curr_y,tol
+            )
+        end
+        prev_x = curr_x;prev_y = curr_y
+        dprev = dcurr
+        prev_inside = curr_inside
     end
-    clp = findall(x->dot(x,n)==0.,vertices) # Number of vertices lying on the discontinuity
-    if length(clp)+i<2
+    if count>1&&!_same_cut_point(first_x,first_y,last_x,last_y,tol)
+        area2 += last_x*first_y-last_y*first_x
+    end
+    return count,0.5*abs(area2)
+end
+function cut_rect(n::Vector{Float64},vertices::Vector{Vector{Float64}})
+    total_weight = _rect_area(vertices)
+    total_weight <= 0.0&&return false,0.,0.
+    tol = _cut_rect_tol(n,vertices)
+    count,gas_weight = _clip_rect_negative_halfplane_area(n,vertices,tol)
+    count<3&&return false,0.,0.
+    gas_weight = clamp(gas_weight,0.0,total_weight)
+    solid_weight = total_weight-gas_weight
+    area_tol = max(tol*tol,128.0*eps(Float64)*max(total_weight,1.0))
+    if gas_weight <= area_tol||solid_weight <= area_tol
         return false,0.,0.
-    else
-        append!(points,vertices)
-        append!(indices,CLP) # CLP is defined in dim.jl
-        sid = sortperm(indices)
-        indices = indices[sid]
-        points = points[sid]
-        aid = findfirst(x->iseven(x)||in(x,CLP[clp]),indices)
-        bid = findlast(x->iseven(x)||in(x,CLP[clp]),indices)
-        A = Matrix{Float64}(undef,2,bid-aid+1);B = Matrix{Float64}(undef,2,length(indices)-(bid-aid)+1)
-        for i in aid:bid
-            A[:,i-aid+1] .= points[i]
-        end
-        for i in 0:length(indices)-(bid-aid)
-            index = bid+i>length(indices) ? (bid+i)%length(indices) : bid+i
-            B[:,i+1] .= points[index]
-        end
-        l = points[bid]-points[aid]
-        if n[1]*l[2]-n[2]*l[1]<0
-            gas_weight = gaussian_area(A)
-            return true,gas_weight,((xmax-xmin)*(ymax-ymin))-gas_weight # solid first
-        else
-            solid_weight = gaussian_area(A)
-            return true,((xmax-xmin)*(ymax-ymin))-solid_weight,solid_weight
-        end
     end
+    return true,gas_weight,solid_weight
 end
 
 """
@@ -123,24 +144,28 @@ function vertices_sweep!(midpoint,ddu,vertices) # Clean the eps in vertices.
     end
     return nothing
 end
+const CUT_CUBE_EDGE_VERTICES = ((1,2),(3,4),(7,8),(5,6),(1,3),(2,4),(6,8),(5,7),(1,5),(2,6),(4,8),(3,7))
 function cut_cube(n::Vector{Float64},C::Matrix{Float64},midpoint::Vector{Float64},ddu::Vector{Float64},vertices::Matrix{Float64}) # 3.627 μs (215 allocations: 8.45 KiB). Acceptable?
     vertices_sweep!(midpoint,ddu,vertices)
-    vltable = [[1,2],[3,4],[7,8],[5,6],[1,3],[2,4],[6,8],[5,7],[1,5],[2,6],[4,8],[3,7]] # vertices-edges table
     points = Vector{Vector{Float64}}(undef,6);index = 1
-    dirs = permutedims(vertices)*n # what if vertices[i]=0.?
-    for i in eachindex(vltable)
-        d1 = dirs[vltable[i][1]]; d2 = dirs[vltable[i][2]]
+    dirs = MVector{8,Float64}(undef)
+    @inbounds for i in 1:8
+        dirs[i] = vertices[1,i]*n[1]+vertices[2,i]*n[2]+vertices[3,i]*n[3]
+    end
+    for i in eachindex(CUT_CUBE_EDGE_VERTICES)
+        edge = CUT_CUBE_EDGE_VERTICES[i]
+        d1 = dirs[edge[1]]; d2 = dirs[edge[2]]
         flag = d1*d2 # flag==0: cut any end of the edge; flag<0: cut the edge; flag>0: not cut the edge
         if min(abs(d1),abs(d2))<3.0*eps()
             if cld(i,4)==1 # avoid redundancy
-                if abs(dirs[vltable[i][1]])<3.0*eps() # end A intersects
-                    points[index] = vertices[:,vltable[i][1]];index+=1
+                if abs(dirs[edge[1]])<3.0*eps() # end A intersects
+                    points[index] = vertices[:,edge[1]];index+=1
                 else # end B intersects
-                    points[index] = vertices[:,vltable[i][2]];index+=1
+                    points[index] = vertices[:,edge[2]];index+=1
                 end
             end
         elseif flag<0 # intersects between the two ends
-            point = vertices[:,vltable[i][1]]
+            point = vertices[:,edge[1]]
             dir = cld(i,4);point[dir]=0.
             point[dir] = -dot(point,n)/(n[dir])
             points[index] = point;index+=1

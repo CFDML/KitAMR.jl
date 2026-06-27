@@ -15,14 +15,21 @@ function positivity_preserving_ib!(ps_data::PsData{DIM,NDF},volume,Δt) where{DI
             nheavi = [x>0. for x in rot*@views vs_data.midpoint[:,dir]]
             ndf = @views solid_neighbor.vs_data.flux[nheavi,:]
             there_mid = @views vs_data.midpoint[nheavi,:]
-            ndx = [f_midpoint[j]-there_mid[i,j]*Δt-solid_neighbor.midpoint[j] for i in axes(there_mid,1),j in axes(there_mid,2)]
+            ndx = [f_midpoint[dir]-there_mid[i,dir]*Δt-solid_neighbor.midpoint[dir] for i in axes(there_mid,1)]
             vn = @views there_mid[:,dir]
             area = rot*reduce(*,ps_data.ds[FAT[DIM-1][dir]])
             micro = @views micros[nheavi,:,i]
-            sdf = @views solid_neighbor.vs_data.sdf[nheavi,:,:]
+            sdf = @views solid_neighbor.vs_data.sdf[nheavi,:,dir]
+            df = @views ps_data.vs_data.df[nheavi,:]
+            ndf1 = @views solid_neighbor.vs_data.df[nheavi,:]
+            for j in axes(df,2)
+                for i in axes(df,1)
+                    sdf[i,j] = (df[i,j]-ndf[i,j]-ndf1[i,j])/(ps_data.midpoint[dir]-solid_neighbor.midpoint[dir])
+                end
+            end
             for j in axes(micro,2)
                 for i in axes(micro,1)
-                    micro[i,j] = @views (ndf[i,j]+dot(ndx[i,:],sdf[i,j,:]))*vn[i]*area
+                    micro[i,j] = @views (ndf[i,j]+ndx[i]*sdf[i,j])*vn[i]*area
                 end
             end
             we .+= @views micro_to_macro(micros[:,:,i],vs_data.midpoint,vs_data.weight,vs_data)
@@ -36,6 +43,9 @@ function positivity_preserving_ib!(ps_data::PsData{DIM,NDF},volume,Δt) where{DI
         γ = sum(abs2,rue)/(2*wb[1])
         θe = min(1.,2*(1-δ)*eb/(√(ee^2+4*γ*(1-δ)*eb)-ee+eps()))
         θ = min(θρ,θe)
+        if θ!=1.
+            @show θ ps_data.w
+        end
         wb .+= θ*we
         for i in axes(micros,3)
             vs_data.flux .+= @views θ*micros[:,:,i]

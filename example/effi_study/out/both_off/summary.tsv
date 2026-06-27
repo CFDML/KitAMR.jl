@@ -1,0 +1,2 @@
+label	mode	np	steps	wall_s	core_h	PS	phase	maxVS	data_sum_GB	data_max_GB	mem_sum_GB	mem_max_GB	mass	energy
+both_off	both_off	1024	640	10849.701	3086.137123	131072	8589934592	65536	1389.099579	1.394107	2814.422062	4.122822	1.92825611e-01	3.93630959e+00

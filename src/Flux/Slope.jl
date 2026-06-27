@@ -816,6 +816,79 @@ function update_slope!(ka::KA{DIM,NDF}) where{DIM,NDF}
     end
 end
 
+function update_slope_ps!(
+    ps_data::PsData{DIM,NDF},
+    kinfo::KInfo{DIM,NDF},
+    Ldata::AbstractVector,
+    Rdata::AbstractVector,
+    dir::Integer,
+    ws_swL::Vector{Float64},
+    ws_swR::Vector{Float64},
+) where {DIM,NDF}
+    has_left = !isempty(Ldata)
+    has_right = !isempty(Rdata)
+    if !has_left && !has_right
+        ps_data.sw[:, dir] .= 0.0
+        return nothing
+    end
+
+    left_solid = has_left && Ldata[1].bound_enc < 0
+    right_solid = has_right && Rdata[1].bound_enc < 0
+    if left_solid && right_solid
+        ps_data.sw[:, dir] .= 0.0
+    elseif left_solid || !has_left
+        right_solid && (ps_data.sw[:, dir] .= 0.0; return nothing)
+        dsR = ps_data.midpoint[dir] - Rdata[1].midpoint[dir]
+        update_slope_bound_ps!(ps_data, Rdata, dsR, dir, ws_swL)
+    elseif right_solid || !has_right
+        left_solid && (ps_data.sw[:, dir] .= 0.0; return nothing)
+        dsL = ps_data.midpoint[dir] - Ldata[1].midpoint[dir]
+        update_slope_bound_ps!(ps_data, Ldata, dsL, dir, ws_swL)
+    else
+        dsL = ps_data.midpoint[dir] - Ldata[1].midpoint[dir]
+        dsR = ps_data.midpoint[dir] - Rdata[1].midpoint[dir]
+        update_slope_inner_ps!(ps_data, Ldata, Rdata, dsL, dsR, dir, ws_swL, ws_swR)
+    end
+    return nothing
+end
+
+"""
+$(TYPEDSIGNATURES)
+Reconstruct only physical-space macroscopic slopes. This is used by initial
+physical-space pre-refinement before real velocity grids are allocated.
+"""
+function macro_slope!(ka::KA{DIM,NDF}) where{DIM,NDF}
+    trees = ka.kdata.field.trees
+    kinfo = ka.kinfo
+    ws_swL = zeros(Float64, DIM + 2)
+    ws_swR = zeros(Float64, DIM + 2)
+
+    @inbounds for i in eachindex(trees.data)
+        @inbounds for j in eachindex(trees.data[i])
+            ps_data = trees.data[i][j]
+            isa(ps_data,InsideSolidData) && continue
+            ps_data.bound_enc < 0 && continue
+            neighbor = ps_data.neighbor
+            for dir = 1:DIM
+                iL = 2 * dir - 1
+                iR = 2 * dir
+                Ldata = neighbor.state[iL] == 0 ? AbstractPsData{DIM,NDF}[] : neighbor.data[iL]
+                Rdata = neighbor.state[iR] == 0 ? AbstractPsData{DIM,NDF}[] : neighbor.data[iR]
+                update_slope_ps!(
+                    ps_data, kinfo, Ldata, Rdata, dir, ws_swL, ws_swR,
+                )
+            end
+        end
+    end
+    return nothing
+end
+
+function macro_slope!(p4est::P_pxest_t, ka::KA)
+    macro_slope!(ka)
+    sw_exchange!(p4est, ka)
+    return nothing
+end
+
 """
 $(TYPEDSIGNATURES)
 Physical-space refinement level of `ps_data`, reconstructed from its `ds[1]`.

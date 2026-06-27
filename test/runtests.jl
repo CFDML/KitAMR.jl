@@ -1,4 +1,5 @@
 using KitAMR, MPI
+include("cut_cell_tests.jl")
 MPI.Init()
 
 solver = Solver(;

@@ -73,11 +73,13 @@ struct Solver{DIM,NDF}
     AMR_PS_DYNAMIC::Bool
     "Dynamic AMR in velocity space is open or not. Default is `true`."
     AMR_VS_DYNAMIC::Bool
+    "Adaptive local velocity-space maximum refinement level is open or not. Default is `false`."
+    AMR_VS_LOCAL_LMAX::Bool
     "Criterion of AMR in L\"ohner criterion of physical space. Default is `0.2`."
     AMR_PS_THRES::Float64
     "Smoothing coefficient in the physical-space Löhner sensor denominator. The local smoothing length is `AMR_PS_SMOOTH * Δx`. Default is `0.2`."
     AMR_PS_SMOOTH::Float64
-    "Velocity-space dynamic AMR criterion mode. `:contribution` uses only relative contribution; `:lsr` uses the LSR indicator gated by the contribution threshold. Default is `:contribution`."
+    "Velocity-space dynamic AMR criterion mode. `:contribution` uses only relative contribution; `:lsr` uses the LSR indicator gated by the contribution threshold; `:haar` uses the calibrated Haar indicator gated by the contribution floor. Default is `:contribution`."
     AMR_VS_MODE::Symbol
     "Threshold of the local linear least-squares residual indicator (in `[0,1]`) for dynamic velocity-space refinement. Default is `0.16`."
     AMR_VS_LSR_THRES::Float64
@@ -104,14 +106,23 @@ function _solver_nonnegative_float(value, name::Symbol)
     x >= 0 || error("`$name` must be non-negative; got $x.")
     return x
 end
+function _solver_bool(value, name::Symbol)
+    value isa Bool || error("`$name` must be a Bool; got $(repr(value)).")
+    return value
+end
 function _solver_vs_mode(value)
     mode = Symbol(value)
-    mode in (:lsr, :contribution) ||
-        error("`AMR_VS_MODE` must be `:lsr` or `:contribution`; got $(repr(value)).")
+    mode in (:lsr, :contribution, :haar) ||
+        error("`AMR_VS_MODE` must be `:lsr`, `:contribution`, or `:haar`; got $(repr(value)).")
     return mode
 end
 function Solver(config::Dict)
     AMR_PS_THRES = haskey(config,:AMR_PS_THRES) ? config[:AMR_PS_THRES] : 0.25
+    AMR_PS_DYNAMIC = haskey(config,:AMR_PS_DYNAMIC) ? config[:AMR_PS_DYNAMIC] : true
+    AMR_VS_DYNAMIC = haskey(config,:AMR_VS_DYNAMIC) ? config[:AMR_VS_DYNAMIC] : true
+    AMR_VS_LOCAL_LMAX =
+        _solver_bool(haskey(config,:AMR_VS_LOCAL_LMAX) ? config[:AMR_VS_LOCAL_LMAX] : false,
+                     :AMR_VS_LOCAL_LMAX)
     AMR_PS_SMOOTH =
         _solver_nonnegative_float(haskey(config,:AMR_PS_SMOOTH) ? config[:AMR_PS_SMOOTH] : 0.2,
                                   :AMR_PS_SMOOTH)
@@ -128,8 +139,9 @@ function Solver(config::Dict)
     return Solver{config[:DIM],config[:NDF]}(config[:CFL],config[:AMR_PS_MAXLEVEL],
         haskey(config,:AMR_PS_DYNAMIC_MAXLEVEL) ? config[:AMR_PS_DYNAMIC_MAXLEVEL] : config[:AMR_PS_MAXLEVEL],
         config[:AMR_VS_MAXLEVEL],config[:flux],config[:time_marching],
-        (haskey(config,:AMR_PS_DYNAMIC) ? config[:AMR_PS_DYNAMIC] : true),
-        (haskey(config,:AMR_VS_DYNAMIC) ? config[:AMR_VS_DYNAMIC] : true),
+        AMR_PS_DYNAMIC,
+        AMR_VS_DYNAMIC,
+        AMR_VS_LOCAL_LMAX,
         AMR_PS_THRES,
         AMR_PS_SMOOTH,
         AMR_VS_MODE,
@@ -147,6 +159,9 @@ function Solver(;kwargs...)
     AMR_PS_DYNAMIC_MAXLEVEL = haskey(kwargs,:AMR_PS_DYNAMIC_MAXLEVEL) ? kwargs[:AMR_PS_DYNAMIC_MAXLEVEL] : kwargs[:AMR_PS_MAXLEVEL]
     AMR_PS_DYNAMIC = haskey(kwargs,:AMR_PS_DYNAMIC) ? kwargs[:AMR_PS_DYNAMIC] : true
     AMR_VS_DYNAMIC = haskey(kwargs,:AMR_VS_DYNAMIC) ? kwargs[:AMR_VS_DYNAMIC] : true
+    AMR_VS_LOCAL_LMAX =
+        _solver_bool(haskey(kwargs,:AMR_VS_LOCAL_LMAX) ? kwargs[:AMR_VS_LOCAL_LMAX] : false,
+                     :AMR_VS_LOCAL_LMAX)
     AMR_PS_THRES = haskey(kwargs,:AMR_PS_THRES) ? kwargs[:AMR_PS_THRES] : 0.25
     AMR_PS_SMOOTH =
         _solver_nonnegative_float(haskey(kwargs,:AMR_PS_SMOOTH) ? kwargs[:AMR_PS_SMOOTH] : 0.2,
@@ -165,6 +180,7 @@ function Solver(;kwargs...)
         CFL,kwargs[:AMR_PS_MAXLEVEL],AMR_PS_DYNAMIC_MAXLEVEL,
         kwargs[:AMR_VS_MAXLEVEL],kwargs[:flux],kwargs[:time_marching],
         AMR_PS_DYNAMIC,AMR_VS_DYNAMIC,
+        AMR_VS_LOCAL_LMAX,
         AMR_PS_THRES,
         AMR_PS_SMOOTH,
         AMR_VS_MODE,
@@ -186,9 +202,10 @@ end
 $(TYPEDEF)
 
 Container for the optional user-supplied callbacks that steer adaptive mesh refinement.
-Construct with `UDF(; static_ps_refine_flag = …, dynamic_ps_refine_flag = …)`; any field left
-unset defaults to a no-op. See the [User-defined functions](@ref) page for the full convention
-and worked examples.
+Construct with `UDF(; static_ps_refine_flag = …, dynamic_ps_refine_flag = …,
+dynamic_ps_adapt_criterion = …)`; optional flag fields default to no-ops, while the dynamic
+physical-space criterion defaults to KitAMR's built-in Löhner sensor. See the
+[User-defined functions](@ref) page for the full convention and worked examples.
 
 ## Fields
 
@@ -218,17 +235,44 @@ mutable struct UDF
     region of interest); `true` lets the sensor decide. Default (unset): always allow.
     """
     dynamic_ps_refine_flag::Function
+    """
+    Dynamic physical-space AMR criterion. Evaluated every refinement step
+    ([`adaptive_mesh_refinement!`](@ref)) after slopes and the built-in Löhner sensor are
+    updated. Signature
+
+        dynamic_ps_adapt_criterion(ps_data::AbstractPsData, level::Int, ka::KA) -> Real
+
+    Return a scalar sensor value. Refinement uses `solver.AMR_PS_THRES`; coarsening uses
+    `PS_COARSEN_SENSOR_RATIO * solver.AMR_PS_THRES`, matching the built-in hysteresis. A Bool
+    return is also accepted as a direct refine/protect-from-coarsening flag. Default: the current
+    built-in physical-space criterion.
+    """
+    dynamic_ps_adapt_criterion::Function
     "Reserved for a static velocity-space refinement flag. **Currently unused** — the field is stored but never invoked."
     static_vs_refine_flag::Function
 end
 null_udf(args...;kwargs...) = false
+function UDF(
+    static_ps_refine_flag::Function,
+    dynamic_ps_refine_flag::Function,
+    static_vs_refine_flag::Function,
+)
+    return UDF(
+        static_ps_refine_flag,
+        dynamic_ps_refine_flag,
+        default_dynamic_ps_adapt_criterion,
+        static_vs_refine_flag,
+    )
+end
 function UDF(;kwargs...)
     static_ps_refine_flag = haskey(kwargs,:static_ps_refine_flag) ? kwargs[:static_ps_refine_flag] : null_udf
     dynamic_ps_refine_flag = haskey(kwargs,:dynamic_ps_refine_flag) ? kwargs[:dynamic_ps_refine_flag] : null_udf
+    dynamic_ps_adapt_criterion = haskey(kwargs,:dynamic_ps_adapt_criterion) ? kwargs[:dynamic_ps_adapt_criterion] : default_dynamic_ps_adapt_criterion
     static_vs_refine_flag = haskey(kwargs,:static_vs_refine_flag) ? kwargs[:static_vs_refine_flag] : null_udf
     return UDF(
         static_ps_refine_flag,
         dynamic_ps_refine_flag,
+        dynamic_ps_adapt_criterion,
         static_vs_refine_flag
     )
 end
@@ -395,14 +439,13 @@ function Configure(config::Dict)
     for i in eachindex(IB)
         IB[i] = config_IB(IB[i],config)
     end
-    user_defined = UDF()
+    user_defined_kwargs = Dict{Symbol,Any}()
     for i in fieldnames(UDF)
         if haskey(config,i)
-            setfield!(user_defined,i,config[i])
-        else
-            setfield!(user_defined,i,null_udf)
+            user_defined_kwargs[i] = config[i]
         end
     end
+    user_defined = UDF(; user_defined_kwargs...)
     check_vs_setting(config[:quadrature], config[:vs_trees_num], config[:DIM])
     return Configure{config[:DIM],config[:NDF]}(config[:geometry],config[:trees_num],
         config[:quadrature],config[:vs_trees_num],config[:IC],config[:domain],IB,
@@ -514,6 +557,8 @@ mutable struct Status
     ps_adapt_step::Int
     "Number of steps after last AMR in velocity space."
     vs_adapt_step::Int
+    "Number of steps after last local velocity-space Maxlevel adjustment."
+    vs_lmax_adapt_step::Int
     "Number of steps after last partition."
     partition_step::Int
     "Cached physical-space AMR interval used when `ps_interval = :auto`; initialized short and refreshed after AMR."
@@ -522,8 +567,6 @@ mutable struct Status
     vs_interval_cached::Int
     "Last MPI-wide kinetic transport-rate estimate used by automatic AMR intervals."
     amr_transport_rate::Float64
-    "Last relative norm of the CIP I-projection correction recorded as a diagnostic."
-    cip_projection_correction_norm::Float64
     "Residual of conserved variables defined by [`Residual`](@ref)."
     residual::Residual
     "Flag indicating whether to save."
@@ -545,7 +588,7 @@ function Status(config::Dict)
     # Automatic AMR intervals intentionally start short.  When the user passes
     # `ps_interval = :auto` or `vs_interval = :auto`, the first AMR pass refreshes these cached
     # values and can then relax them.  Use a shared 1-step startup cadence.
-    return Status(zeros(DIM+2), 0,0,Δt_ξ,Δt_ξ,0.,0,1,1,1,1,1,0.0,0.0,Residual(DIM),Ref(false),MPI.Request[])
+    return Status(zeros(DIM+2), 0,0,Δt_ξ,Δt_ξ,0.,0,1,1,1,1,1,1,0.0,Residual(DIM),Ref(false),MPI.Request[])
 end
 function Status(config::Configure{DIM,NDF}) where{DIM,NDF}
     trees_num = config.trees_num
@@ -560,7 +603,7 @@ function Status(config::Configure{DIM,NDF}) where{DIM,NDF}
     # Automatic AMR intervals intentionally start short.  When the user passes
     # `ps_interval = :auto` or `vs_interval = :auto`, the first AMR pass refreshes these cached
     # values and can then relax them.  Use a shared 1-step startup cadence.
-    return Status(zeros(DIM+2), 0,0,Δt_ξ,Δt_ξ,0.,0,1,1,1,1,1,0.0,0.0,Residual(DIM),Ref(false),MPI.Request[])
+    return Status(zeros(DIM+2), 0,0,Δt_ξ,Δt_ξ,0.,0,1,1,1,1,1,1,0.0,Residual(DIM),Ref(false),MPI.Request[])
 end
 
 """
@@ -738,6 +781,7 @@ end
 struct TransferData{DIM,NDF}
     encs::Vector{Int}
     w::Vector{Float64}
+    vs_local_maxlevels::Vector{Int8}
     vs_levels::Vector{Int8}
     vs_midpoints::Vector{Float64}
     vs_df::Vector{Float64}
@@ -746,6 +790,7 @@ function TransferData(DIM::Integer,NDF::Integer,ps_num::Integer,total_vs_num::In
     return TransferData{DIM,NDF}(
         Vector{Int}(undef, (SOLID_CELL_ID_NUM+1)*ps_num),
         Vector{Float64}(undef, (DIM+2) * ps_num),
+        Vector{Int8}(undef, ps_num),
         Vector{Int8}(undef, total_vs_num),
         Vector{Float64}(undef, DIM * total_vs_num),
         Vector{Float64}(undef, NDF * total_vs_num)

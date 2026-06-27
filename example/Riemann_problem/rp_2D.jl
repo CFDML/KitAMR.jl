@@ -27,28 +27,28 @@ solver = Solver(;
     DIM = 2,
     NDF = 2,
     CFL = 0.4,
-    AMR_PS_MAXLEVEL = 5,
-    AMR_VS_MAXLEVEL = 3,
+    AMR_PS_MAXLEVEL = 4,
+    AMR_VS_MAXLEVEL = 5,
     AMR_PS_DYNAMIC = true,
-    AMR_PS_THRES = 0.3,
     AMR_VS_DYNAMIC = true,
+    AMR_VS_MODE = :haar,
     flux = CAIDVM,
-    # flux = DVM,
     time_marching = CIP_Marching,
-    # time_marching = Euler,
-    # time_marching = CAIDVM_Marching,
     max_sim_time = 0.25,
 )
 
 gas = Gas(;
     K = 1.0,
-    Kn = 0.001,
+    Kn = 1e3,
     ω = 0.81,
     ωᵣ = 0.81,
 )
 
 output = Output(
     solver;
+    vtk_celltype = [Pixel, Triangle],
+    vs_vtk_celltype = Pixel,
+    anim_dt = 0.01
 )
 
 udf = UDF(;
@@ -61,18 +61,17 @@ config = Configure(solver;
     vs_trees_num = [8, 8],
     IC = PCoordFn(Riemann_2D_init),
     domain = [
-        Domain(UniformOutflow, 1), Domain(UniformOutflow, 2),
-        Domain(UniformOutflow, 3), Domain(UniformOutflow, 4),
+        Domain(Period, 1), Domain(Period, 2),
+        Domain(Period, 3), Domain(Period, 4),
     ],
     output = output,
     gas = gas,
     user_defined = udf,
 )
 
-p4est, ka = initialize(config; prerefine_steps = 5, prerefine_reinit_ic = true)
+p4est, ka = initialize(config)
 
-solve!(p4est, ka;
-    ps_interval = 40, vs_interval = 40, partition_interval = 40)
+solve!(p4est, ka)
 save_result(p4est, ka)
 finalize!(p4est, ka)
 MPI.Finalize()

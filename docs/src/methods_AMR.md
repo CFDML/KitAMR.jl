@@ -46,7 +46,10 @@ ps_refine_flag(::PsData{DIM},level::Int8, ::KA{DIM}) where{DIM}
 ps_coarsen_flag(::Vector{PsData},::Vector{Int},::KA{DIM,NDF}) where{DIM,NDF}
 ```
 
-Currently, KitAMR.jl decides according to the relative macroscopic gradient. To compute this, a globally maximum gradient is obtained by
+By default, KitAMR.jl decides according to the physical-space Löhner sensor computed from
+macroscopic variables. The dynamic criterion can be replaced with
+`UDF(; dynamic_ps_adapt_criterion = ...)`; when the hook is omitted, the default Löhner criterion
+is used. To compute older gradient diagnostics, a globally maximum gradient is obtained by
 
 ```@docs
 update_gradmax!

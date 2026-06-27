@@ -5,6 +5,8 @@ $(TYPEDFIELDS)
 mutable struct VsData{DIM,NDF} <: AbstractVsData{DIM,NDF}
     "Number of velocity cells."
     vs_num::Int
+    "Local maximum refinement level allowed for this physical cell's velocity space."
+    local_maxlevel::Int8
     "Refinement level of velocity cells."
     level::Vector{Int8} # vs_num
     "Quadrature weight of velocity cells."
@@ -17,6 +19,19 @@ mutable struct VsData{DIM,NDF} <: AbstractVsData{DIM,NDF}
     sdf::Array{Float64,3} # vs_num x NDF x DIM
     "Numerical flux of distribution function."
     flux::Matrix{Float64} # vs_num x NDF
+end
+
+function VsData{DIM,NDF}(
+    vs_num,
+    level,
+    weight,
+    midpoint,
+    df,
+    sdf,
+    flux,
+) where {DIM,NDF}
+    local_maxlevel = isempty(level) ? Int8(0) : Int8(maximum(level))
+    return VsData{DIM,NDF}(vs_num, local_maxlevel, level, weight, midpoint, df, sdf, flux)
 end
 
 """
