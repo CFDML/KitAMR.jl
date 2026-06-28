@@ -21,6 +21,11 @@ using Test
     @test gas ≈ 2.0
     @test solid ≈ 2.0
 
+    flag,gas,solid = run_cut([0,1],rect(-1,1,-0.5,0.75))
+    @test flag
+    @test gas ≈ 1.0
+    @test solid ≈ 1.5
+
     @test run_cut([1,1],rect(0,1,0,1))[1] == false
     @test run_cut([1,1],rect(-1,0,-1,0))[1] == false
 
@@ -53,4 +58,26 @@ end
     @test flag
     @test gas ≈ 0.5
     @test solid ≈ 0.5
+
+    n = [1.0,0.0,0.0]
+    midpoint = [0.2,0.0,0.0]
+    ddu = [1.0,2.0,3.0]
+    flag,gas,solid = KitAMR.cut_cube(n,KitAMR.cut_cube_rotate(n),midpoint,ddu,cube_vertices(midpoint,ddu))
+    @test flag
+    @test gas ≈ 1.8
+    @test solid ≈ 4.2
+
+    n = [1.0,1.0,0.0]
+    n ./= sqrt(sum(abs2,n))
+    midpoint = [0.1,-0.2,0.05]
+    ddu = [1.2,0.7,0.9]
+    flag,gas,solid = KitAMR.cut_cube(n,KitAMR.cut_cube_rotate(n),midpoint,ddu,cube_vertices(midpoint,ddu))
+    @test flag
+    @test gas ≈ 0.441
+    @test solid ≈ 0.315
+
+    n = [1.0,0.0,0.0]
+    midpoint = [2.0,0.0,0.0]
+    ddu = [1.0,1.0,1.0]
+    @test KitAMR.cut_cube(n,KitAMR.cut_cube_rotate(n),midpoint,ddu,cube_vertices(midpoint,ddu))[1] == false
 end

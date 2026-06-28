@@ -4,11 +4,12 @@ MPI.Init()
 
 solver = Solver(;
     DIM = 2, NDF = 2,
-    AMR_PS_MAXLEVEL = 8,
+    AMR_PS_MAXLEVEL = 7,
     AMR_PS_DYNAMIC_MAXLEVEL = 5,
     AMR_VS_MAXLEVEL = 4,
     AMR_PS_DYNAMIC = true,
     AMR_VS_DYNAMIC = true,
+    AMR_VS_MODE = :haar,
     AMR_PS_THRES = 0.2,
     flux = CAIDVM,
     time_marching = CIP_Marching,
