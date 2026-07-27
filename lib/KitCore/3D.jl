@@ -15,7 +15,8 @@ function get_prim_3D(w::AbstractVector, γ::Real)
     @inbounds prim[2] = w[2] / w[1]
     @inbounds prim[3] = w[3] / w[1]
     @inbounds prim[4] = w[4] / w[1]
-    @inbounds prim[5] = 0.5 * w[1] / (γ - 1.0) / (w[5] - 0.5 * (w[2]^2 + w[3]^2 + w[4]^2) / w[1])
+    @inbounds prim[5] =
+        0.5 * w[1] / (γ - 1.0) / (w[5] - 0.5 * (w[2]^2 + w[3]^2 + w[4]^2) / w[1])
     return prim
 end
 function micro_slope_3D(sw::AbstractVector{T}, prim::AbstractVector, K::Real) where {T}
@@ -34,8 +35,8 @@ function micro_slope_3D(sw::AbstractVector{T}, prim::AbstractVector, K::Real) wh
         0.5 * (prim[2]^2 + prim[3]^2 + prim[4]^2 + 0.5 * (K + 3.0) / prim[5]) * a[5]
     return a
 end
-function pressure_3D(u::AbstractVector{T},v,w,h,weight) where{T}
-    p = Vector{T}(undef,6)
+function pressure_3D(u::AbstractVector{T}, v, w, h, weight) where {T}
+    p = Vector{T}(undef, 6)
     p[1] = sum(@. u^2*h*weight) # p11
     p[2] = sum(@. u*v*h*weight) # p12
     p[3] = sum(@.u*w*h*weight)  # p13

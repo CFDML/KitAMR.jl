@@ -13,8 +13,8 @@ using Reexport
 using CSV
 using DataFrames
 using Statistics
-using FileIO,NearestNeighbors,AbstractTrees
-using GeometryBasics:Mesh
+using FileIO, NearestNeighbors, AbstractTrees
+using GeometryBasics: Mesh
 using StructArrays
 using P4est
 using ProgressMeter
@@ -49,7 +49,8 @@ function __init__()
     # variable, set to an `SC_LP_*` integer threshold — e.g. `6` (SC_LP_PRODUCTION) to restore
     # the per-operation chatter, `8` (SC_LP_ERROR, the default here), `9` (SC_LP_SILENT) to mute
     # everything including errors.
-    threshold = something(tryparse(Cint, get(ENV, "KITAMR_P4EST_LOG", "")), Cint(SC_LP_ERROR))
+    threshold =
+        something(tryparse(Cint, get(ENV, "KITAMR_P4EST_LOG", "")), Cint(SC_LP_ERROR))
     p4est_init(C_NULL, threshold)
 end
 
