@@ -27,24 +27,44 @@ as `NTuple{3,Cdouble}`. Writing through it mutates the underlying C memory.
 """
 function unsafe_vertices(c::Connectivity)
     cs = PointerWrapper(c.pointer)
-    v = unsafe_wrap(Matrix{Cdouble}, pointer(cs.vertices), (3, Int(cs.num_vertices[])), own = false)
+    v = unsafe_wrap(
+        Matrix{Cdouble},
+        pointer(cs.vertices),
+        (3, Int(cs.num_vertices[])),
+        own = false,
+    )
     return reinterpret(reshape, NTuple{3,Cdouble}, v)
 end
 function unsafe_trees(c::Connectivity{X}) where {X}
     cs = PointerWrapper(c.pointer)
-    ttv = unsafe_wrap(Matrix{p4est_topidx_t}, pointer(cs.tree_to_vertex), (X, Int(cs.num_trees[])), own = false)
+    ttv = unsafe_wrap(
+        Matrix{p4est_topidx_t},
+        pointer(cs.tree_to_vertex),
+        (X, Int(cs.num_trees[])),
+        own = false,
+    )
     return reinterpret(reshape, NTuple{X,p4est_topidx_t}, ttv)
 end
 function unsafe_tree_to_tree(c::Connectivity{X}) where {X}
     cs = PointerWrapper(c.pointer)
     sides = X == 4 ? 4 : 6
-    ttt = unsafe_wrap(Matrix{p4est_topidx_t}, pointer(cs.tree_to_tree), (sides, Int(cs.num_trees[])), own = false)
+    ttt = unsafe_wrap(
+        Matrix{p4est_topidx_t},
+        pointer(cs.tree_to_tree),
+        (sides, Int(cs.num_trees[])),
+        own = false,
+    )
     return reinterpret(reshape, NTuple{sides,p4est_topidx_t}, ttt)
 end
 function unsafe_tree_to_face(c::Connectivity{X}) where {X}
     cs = PointerWrapper(c.pointer)
     sides = X == 4 ? 4 : 6
-    ttf = unsafe_wrap(Matrix{Int8}, pointer(cs.tree_to_face), (sides, Int(cs.num_trees[])), own = false)
+    ttf = unsafe_wrap(
+        Matrix{Int8},
+        pointer(cs.tree_to_face),
+        (sides, Int(cs.num_trees[])),
+        own = false,
+    )
     return reinterpret(reshape, NTuple{sides,Int8}, ttf)
 end
 
@@ -61,10 +81,12 @@ for 3D hexes. Self-connecting faces are filled in and `complete!` resolves the t
 function Connectivity{X}(vertices::AbstractVector, cells::AbstractVector) where {X}
     if X == 4
         conn = GC.@preserve vertices cells Connectivity{X}(
-            p4est_connectivity_new(length(vertices), length(cells), 0, 0))
+            p4est_connectivity_new(length(vertices), length(cells), 0, 0),
+        )
     elseif X == 8
         conn = GC.@preserve vertices cells Connectivity{X}(
-            p8est_connectivity_new(length(vertices), length(cells), 0, 0, 0, 0))
+            p8est_connectivity_new(length(vertices), length(cells), 0, 0, 0, 0),
+        )
     else
         throw(error("Unsupported cells."))
     end
@@ -79,7 +101,8 @@ function Connectivity{X}(vertices::AbstractVector, cells::AbstractVector) where 
         tree_to_face[i] = ntuple(j -> (j - 1), NUM_FACES)
     end
     for i in eachindex(cvertices, vertices)
-        cvertices[i] = ntuple(j -> (j ≤ length(vertices[i]) ? Float64(vertices[i][j]) : 0.0), Val(3))
+        cvertices[i] =
+            ntuple(j -> (j ≤ length(vertices[i]) ? Float64(vertices[i][j]) : 0.0), Val(3))
     end
     complete!(conn)
     return conn
@@ -105,8 +128,8 @@ function Cartesian_connectivity(Nx, Ny, xmin, xmax, ymin, ymax)
     vertices_C = Array{NTuple{2,Float64}}(undef, Nx + 1, Ny + 1)
     dx = (xmax - xmin) / Nx
     dy = (ymax - ymin) / Ny
-    for j = 1:Ny+1
-        for i = 1:Nx+1
+    for j = 1:(Ny+1)
+        for i = 1:(Nx+1)
             vertices_C[i, j] = (xmin + (i - 1) * dx, ymin + (j - 1) * dy)
         end
     end
@@ -121,15 +144,16 @@ function Cartesian_connectivity(Nx, Ny, xmin, xmax, ymin, ymax)
     cells = reshape(cell2ver, :)
     connectivity = GC.@preserve vertices cells Connectivity{4}(vertices, cells)
 end
-function Cartesian_connectivity(Nx,Ny,Nz,xmin,xmax,ymin,ymax,zmin,zmax)
+function Cartesian_connectivity(Nx, Ny, Nz, xmin, xmax, ymin, ymax, zmin, zmax)
     vertices_C = Array{NTuple{3,Float64}}(undef, Nx + 1, Ny + 1, Nz + 1)
     dx = (xmax - xmin) / Nx
     dy = (ymax - ymin) / Ny
     dz = (zmax - zmin) / Nz
-    for k = 1:Nz+1
-        for j = 1:Ny+1
-            for i = 1:Nx+1
-                vertices_C[i, j, k] = (xmin + (i - 1) * dx, ymin + (j - 1) * dy, zmin + (k - 1) * dz)
+    for k = 1:(Nz+1)
+        for j = 1:(Ny+1)
+            for i = 1:(Nx+1)
+                vertices_C[i, j, k] =
+                    (xmin + (i - 1) * dx, ymin + (j - 1) * dy, zmin + (k - 1) * dz)
             end
         end
     end
@@ -139,33 +163,45 @@ function Cartesian_connectivity(Nx,Ny,Nz,xmin,xmax,ymin,ymax,zmin,zmax)
     for k in axes(cell2ver, 3)
         for j in axes(cell2ver, 2)
             for i in axes(cell2ver, 1)
-                cell2ver[i, j, k] = (vL[i, j, k], vL[i+1, j, k], vL[i, j+1, k], vL[i+1, j+1, k],
-                                     vL[i, j, k+1], vL[i+1, j, k+1], vL[i, j+1, k+1], vL[i+1, j+1, k+1])
+                cell2ver[i, j, k] = (
+                    vL[i, j, k],
+                    vL[i+1, j, k],
+                    vL[i, j+1, k],
+                    vL[i+1, j+1, k],
+                    vL[i, j, k+1],
+                    vL[i+1, j, k+1],
+                    vL[i, j+1, k+1],
+                    vL[i+1, j+1, k+1],
+                )
             end
         end
     end
     cells = reshape(cell2ver, :)
     connectivity = GC.@preserve vertices cells Connectivity{8}(vertices, cells)
 end
-function set_connectivity(kinfo::KInfo{DIM}) where{DIM}
+function set_connectivity(kinfo::KInfo{DIM}) where {DIM}
     domain = kinfo.config.domain
 
-    periodic_dirs = ntuple(i -> begin
-        first_boundary = (i-1)*2 + 1  # 1, 3, 5 for i = 1, 2, 3
-        second_boundary = first_boundary + 1  # 3, 5, 7 for i = 1, 2, 3
-        nameof(typeof(domain[first_boundary]).parameters[1]) == :Period &&
-        nameof(typeof(domain[second_boundary]).parameters[1]) == :Period
-    end, DIM)
-    
+    periodic_dirs = ntuple(
+        i -> begin
+            first_boundary = (i-1)*2 + 1  # 1, 3, 5 for i = 1, 2, 3
+            second_boundary = first_boundary + 1  # 3, 5, 7 for i = 1, 2, 3
+            nameof(typeof(domain[first_boundary]).parameters[1]) == :Period &&
+                nameof(typeof(domain[second_boundary]).parameters[1]) == :Period
+        end,
+        DIM,
+    )
+
     if periodic_dirs != ntuple(_ -> false, DIM)
         connectivity_ps = set_periodic_connectivity(kinfo, periodic_dirs)
     else
-        connectivity_ps = Cartesian_connectivity(kinfo.config.trees_num..., kinfo.config.geometry...)
+        connectivity_ps =
+            Cartesian_connectivity(kinfo.config.trees_num..., kinfo.config.geometry...)
     end
     return connectivity_ps
 end
 
-function set_periodic_connectivity(kinfo::KInfo{DIM}, periodic_dirs) where{DIM}
+function set_periodic_connectivity(kinfo::KInfo{DIM}, periodic_dirs) where {DIM}
     geometry = kinfo.config.geometry
     bounds = if DIM == 2
         ntuple(i -> begin
@@ -184,22 +220,23 @@ function set_periodic_connectivity(kinfo::KInfo{DIM}, periodic_dirs) where{DIM}
             (geometry[min_idx], geometry[max_idx])  # (xmin,xmax), (ymin,ymax), (zmin,zmax)
         end, 3)
     end
-    
-    connectivity_ps = brick(
-        Tuple(kinfo.config.trees_num),
-        periodic_dirs
-    )
+
+    connectivity_ps = brick(Tuple(kinfo.config.trees_num), periodic_dirs)
     vertices = unsafe_vertices(connectivity_ps)
     for i in eachindex(vertices)
         normalized_coords = vertices[i]
-        
-        vertices[i] = ntuple(j -> begin
-            if j <= DIM
-                normalized_coords[j] * (bounds[j][2] - bounds[j][1])/kinfo.config.trees_num[j] + bounds[j][1]
-            else
-                0.0
-            end
-        end, 3)
+
+        vertices[i] = ntuple(
+            j -> begin
+                if j <= DIM
+                    normalized_coords[j] * (bounds[j][2] - bounds[j][1])/kinfo.config.trees_num[j] +
+                    bounds[j][1]
+                else
+                    0.0
+                end
+            end,
+            3,
+        )
     end
     return connectivity_ps
 end

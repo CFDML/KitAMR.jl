@@ -40,29 +40,24 @@ solver = Solver(;
     max_sim_time = 0.25,
 )
 
-gas = Gas(;
-    K = 1.0,
-    Kn = 0.001,
-    ω = 0.81,
-    ωᵣ = 0.81,
-)
+gas = Gas(; K = 1.0, Kn = 0.001, ω = 0.81, ωᵣ = 0.81)
 
-output = Output(
+output = Output(solver;)
+
+udf = UDF(;)
+
+config = Configure(
     solver;
-)
-
-udf = UDF(;
-)
-
-config = Configure(solver;
     geometry = [-0.5, 0.5, -0.5, 0.5],
     trees_num = [16, 16],
     quadrature = [-5.0, 5.0, -5.0, 5.0],
     vs_trees_num = [8, 8],
     IC = PCoordFn(Riemann_2D_init),
     domain = [
-        Domain(UniformOutflow, 1), Domain(UniformOutflow, 2),
-        Domain(UniformOutflow, 3), Domain(UniformOutflow, 4),
+        Domain(UniformOutflow, 1),
+        Domain(UniformOutflow, 2),
+        Domain(UniformOutflow, 3),
+        Domain(UniformOutflow, 4),
     ],
     output = output,
     gas = gas,
@@ -71,8 +66,7 @@ config = Configure(solver;
 
 p4est, ka = initialize(config; prerefine_steps = 5, prerefine_reinit_ic = true)
 
-solve!(p4est, ka;
-    ps_interval = 40, vs_interval = 40, partition_interval = 40)
+solve!(p4est, ka; ps_interval = 40, vs_interval = 40, partition_interval = 40)
 save_result(p4est, ka)
 finalize!(p4est, ka)
 MPI.Finalize()
