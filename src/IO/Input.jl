@@ -7,7 +7,7 @@ function read_config(filename::AbstractString)
         @info "reading config from $filename"
         println("--------------------------------------------------------------")
     end
-    f = open(filename,"r";lock = false)
+    f = open(filename, "r"; lock = false)
     config_dict = Dict{Symbol,Any}()
     for line in eachline(f)
         if length(line) == 0 || line[1] == '#'
