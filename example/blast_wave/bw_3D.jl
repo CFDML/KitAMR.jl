@@ -47,30 +47,26 @@ solver = Solver(;
     max_sim_time = 0.25,
 )
 
-gas = Gas(;
-    K = 0.,
-    Kn = 1e-3,
-    ω = 0.81,
-    ωᵣ = 0.81,
-)
+gas = Gas(; K = 0.0, Kn = 1e-3, ω = 0.81, ωᵣ = 0.81)
 
-output = Output(
+output = Output(solver;)
+
+udf = UDF(;)
+
+config = Configure(
     solver;
-)
-
-udf = UDF(;
-)
-
-config = Configure(solver;
     geometry = [0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
     trees_num = [16, 16, 16],
     quadrature = [-32.0, 32.0, -32.0, 32.0, -32.0, 32.0],
     vs_trees_num = [8, 8, 8],
     IC = PCoordFn(blast_wave_init),
     domain = [
-        Domain(Period, 1), Domain(Period, 2),
-        Domain(Period, 3), Domain(Period, 4),
-        Domain(Period, 5), Domain(Period, 6),
+        Domain(Period, 1),
+        Domain(Period, 2),
+        Domain(Period, 3),
+        Domain(Period, 4),
+        Domain(Period, 5),
+        Domain(Period, 6),
     ],
     output = output,
     gas = gas,
@@ -78,8 +74,7 @@ config = Configure(solver;
 )
 
 p4est, ka = initialize(config; prerefine_steps = 3, prerefine_reinit_ic = true)
-solve!(p4est, ka;
-    ps_interval = 40, vs_interval = 40, partition_interval = 40)
+solve!(p4est, ka; ps_interval = 40, vs_interval = 40, partition_interval = 40)
 save_result(p4est, ka)
 finalize!(p4est, ka)
 MPI.Finalize()
