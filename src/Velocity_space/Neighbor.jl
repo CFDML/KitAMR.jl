@@ -31,35 +31,67 @@ Reusable point-location / face-neighbor index over a single velocity grid.
 $(TYPEDFIELDS)
 """
 mutable struct VsNeighborIndex{DIM}
-    "Lower corner of the velocity domain per dimension."
+    """
+    Lower corner of the velocity domain per dimension.
+    """
     vmin::NTuple{DIM,Float64}
-    "Finest-level cell size per dimension."
+    """
+    Finest-level cell size per dimension.
+    """
     h_fine::NTuple{DIM,Float64}
-    "Number of root cells per dimension (any positive integers)."
+    """
+    Number of root cells per dimension (any positive integers).
+    """
     vs_trees_num::NTuple{DIM,Int}
-    "Row-major strides over the root grid (`rootstride[1] = 1`)."
+    """
+    Row-major strides over the root grid (`rootstride[1] = 1`).
+    """
     rootstride::NTuple{DIM,Int}
-    "Maximum velocity-space refinement level."
+    """
+    Maximum velocity-space refinement level.
+    """
     maxlevel::Int
-    "Bits of the intra-root Morton code, `DIM * maxlevel`."
+    """
+    Bits of the intra-root Morton code, `DIM * maxlevel`.
+    """
     mortonbits::Int
-    "Sorted packed keys `(cellkey << INDEX_BITS) | leaf`; only the first `n` are valid."
+    """
+    Sorted packed keys `(cellkey << INDEX_BITS) | leaf`; only the first `n` are valid.
+    """
     keys::Vector{UInt64}
-    "Reusable scratch buffer for the in-place sort (avoids per-build radix allocation)."
+    """
+    Reusable scratch buffer for the in-place sort (avoids per-build radix allocation).
+    """
     scratch::Vector{UInt64}
-    "Number of valid entries in `keys`."
+    """
+    Number of valid entries in `keys`.
+    """
     n::Int
 end
 
 function VsNeighborIndex{DIM}() where {DIM}
     z = ntuple(_ -> 0, DIM)
     return VsNeighborIndex{DIM}(
-        ntuple(_ -> 0.0, DIM), ntuple(_ -> 0.0, DIM), z, z, 0, 0, UInt64[], UInt64[], 0,
+        ntuple(_ -> 0.0, DIM),
+        ntuple(_ -> 0.0, DIM),
+        z,
+        z,
+        0,
+        0,
+        UInt64[],
+        UInt64[],
+        0,
     )
 end
 
 # Finest-level global integer coordinate of a leaf's lower corner from its center and level.
-@inline function _corner_index(mid::Float64, level, vmin_d::Float64, h_fine_d::Float64, maxlevel::Int)
+@inline function _corner_index(
+    mid::Float64,
+    level,
+    vmin_d::Float64,
+    h_fine_d::Float64,
+    maxlevel::Int,
+)
     cell = h_fine_d * (1 << (maxlevel - level))        # cell size along this dim
     return round(Int, (mid - 0.5 * cell - vmin_d) / h_fine_d)
 end
@@ -84,7 +116,7 @@ function build_vs_index!(
     vstn = ntuple(d -> Int(vs_trees_num[d]), Val(DIM))
     rootstride = ntuple(Val(DIM)) do d
         s = 1
-        for e in 1:d-1
+        for e = 1:(d-1)
             s *= vstn[e]
         end
         s
@@ -93,12 +125,13 @@ function build_vs_index!(
 
     # Bit budget: cellkey (root_lin << mortonbits | morton) plus the leaf id must fit in 64 bits.
     prod_roots = 1
-    @inbounds for d in 1:DIM
+    @inbounds for d = 1:DIM
         prod_roots *= vstn[d]
     end
     rootbits = prod_roots <= 1 ? 0 : (sizeof(Int) * 8 - leading_zeros(prod_roots - 1))
-    rootbits + mortonbits + _VS_INDEX_BITS > 64 &&
-        error("VsNeighborIndex: cellkey ($(rootbits + mortonbits)) + index ($_VS_INDEX_BITS) bits exceed 64.")
+    rootbits + mortonbits + _VS_INDEX_BITS > 64 && error(
+        "VsNeighborIndex: cellkey ($(rootbits + mortonbits)) + index ($_VS_INDEX_BITS) bits exceed 64.",
+    )
     N = vs.vs_num
     N > (1 << _VS_INDEX_BITS) - 1 &&
         error("VsNeighborIndex: $N leaves exceed the $_VS_INDEX_BITS-bit index field.")
@@ -107,23 +140,27 @@ function build_vs_index!(
     resize!(idx.keys, N)
     length(idx.scratch) < N && resize!(idx.scratch, N)
     keys = idx.keys
-    @inbounds for i in 1:N
+    @inbounds for i = 1:N
         L = vs.level[i]
         root_lin = 0
         morton = UInt64(0)
-        for d in 1:DIM                     # inline; no tuple, no closure
+        for d = 1:DIM                     # inline; no tuple, no closure
             g = _corner_index(vs.midpoint[i, d], L, vmin[d], h_fine[d], maxlevel)
             root_lin += (g >> maxlevel) * rootstride[d]
             q = g & mask
-            for b in 0:maxlevel-1
+            for b = 0:(maxlevel-1)
                 morton |= (UInt64((q >> b) & 1)) << (b * DIM + (d - 1))
             end
         end
         cellkey = (UInt64(root_lin) << mortonbits) | morton
         keys[i] = (cellkey << _VS_INDEX_BITS) | UInt64(i)
     end
-    sort!(keys; alg = Base.Sort.DEFAULT_UNSTABLE, order = Base.Order.Forward,
-          scratch = idx.scratch)
+    sort!(
+        keys;
+        alg = Base.Sort.DEFAULT_UNSTABLE,
+        order = Base.Order.Forward,
+        scratch = idx.scratch,
+    )
 
     idx.vmin = vmin
     idx.h_fine = h_fine
@@ -136,7 +173,11 @@ function build_vs_index!(
 end
 
 # Locate the leaf owning `cellkey` (predecessor + interval containment check).  No allocation.
-@inline function _vs_locate_code(idx::VsNeighborIndex{DIM}, vs::AbstractVsData{DIM}, code::UInt64) where {DIM}
+@inline function _vs_locate_code(
+    idx::VsNeighborIndex{DIM},
+    vs::AbstractVsData{DIM},
+    code::UInt64,
+) where {DIM}
     packed = (code << _VS_INDEX_BITS) | _VS_INDEX_MASK
     k = searchsortedlast(idx.keys, packed, 1, idx.n, Base.Order.Forward)
     k == 0 && return 0
@@ -155,16 +196,20 @@ $(TYPEDSIGNATURES)
 Return the leaf containing velocity-space `point`, or `0` if `point` lies outside the
 velocity domain.  `vs` is the grid the index was built over (used to verify containment).
 """
-function vs_locate(idx::VsNeighborIndex{DIM}, vs::AbstractVsData{DIM}, point::NTuple{DIM,Float64}) where {DIM}
+function vs_locate(
+    idx::VsNeighborIndex{DIM},
+    vs::AbstractVsData{DIM},
+    point::NTuple{DIM,Float64},
+) where {DIM}
     mask = (1 << idx.maxlevel) - 1
     root_lin = 0
     morton = UInt64(0)
-    @inbounds for d in 1:DIM
+    @inbounds for d = 1:DIM
         g = floor(Int, (point[d] - idx.vmin[d]) / idx.h_fine[d])
         (g < 0 || g >= idx.vs_trees_num[d] << idx.maxlevel) && return 0
         root_lin += (g >> idx.maxlevel) * idx.rootstride[d]
         q = g & mask
-        for b in 0:idx.maxlevel-1
+        for b = 0:(idx.maxlevel-1)
             morton |= (UInt64((q >> b) & 1)) << (b * DIM + (d - 1))
         end
     end
@@ -178,7 +223,13 @@ and direction `dir` (`+1` / `-1`).  Returns `0` when the face is on the velocity
 boundary (treat as vacuum, `f = 0`).  Reusable primitive for Löhner indicators and
 finite-difference velocity derivatives.
 """
-function vs_face_neighbor(idx::VsNeighborIndex{DIM}, vs::AbstractVsData{DIM}, i::Integer, dim::Integer, dir::Integer) where {DIM}
+function vs_face_neighbor(
+    idx::VsNeighborIndex{DIM},
+    vs::AbstractVsData{DIM},
+    i::Integer,
+    dim::Integer,
+    dir::Integer,
+) where {DIM}
     mask = (1 << idx.maxlevel) - 1
     root_lin = 0
     morton = UInt64(0)
@@ -186,14 +237,14 @@ function vs_face_neighbor(idx::VsNeighborIndex{DIM}, vs::AbstractVsData{DIM}, i:
         L = vs.level[i]
         cell = idx.h_fine[dim] * (1 << (idx.maxlevel - L))
         # Probe just across the face, at the face-centre line in the other dimensions.
-        for d in 1:DIM
+        for d = 1:DIM
             coord = vs.midpoint[i, d]
             d == dim && (coord += dir * (0.5 * cell + 0.5 * idx.h_fine[d]))
             g = floor(Int, (coord - idx.vmin[d]) / idx.h_fine[d])
             (g < 0 || g >= idx.vs_trees_num[d] << idx.maxlevel) && return 0
             root_lin += (g >> idx.maxlevel) * idx.rootstride[d]
             q = g & mask
-            for b in 0:idx.maxlevel-1
+            for b = 0:(idx.maxlevel-1)
                 morton |= (UInt64((q >> b) & 1)) << (b * DIM + (d - 1))
             end
         end
